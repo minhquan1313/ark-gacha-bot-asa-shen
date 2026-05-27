@@ -29,7 +29,7 @@ def mod_menu():
     return recon_utils.check_template_no_bounds("req_mods",0.7)
     
 def join_button():
-    return recon_utils.check_template("join_button",0.7)
+    return recon_utils.check_template_no_bounds("join_button",0.7)
 
 def search_bar_search(server:str):
     if is_open():
