@@ -112,8 +112,13 @@ class SettingsGUI:
 
         row += 1
 
-        ttk.Button(left_frame, text="Start Program",
-                   command=self.start_program).grid(row=row, column=0, columnspan=2, pady=5)
+        self.start_btn = ttk.Button(
+            left_frame, text="Start Program", command=self.start_program
+        )
+        self.start_btn.grid(row=row, column=0, columnspan=2, pady=5)
+        root.after(2000, self.start_btn.invoke)
+        # ttk.Button(left_frame, text="Start Program",
+        #            command=self.start_program).grid(row=row, column=0, columnspan=2, pady=5)
 
         row += 1
 
