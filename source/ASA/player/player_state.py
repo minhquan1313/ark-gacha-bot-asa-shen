@@ -56,7 +56,7 @@ def check_disconnected():
         windows.hwnd = main.main_loop(str(settings.server_number))
         tribelog.close()
         logs.logger.critical("joined back into the server waiting 30 seconds to render everything ")
-        time.sleep(60)# letting everything load back in
+        time.sleep(30)# letting everything load back in
         utils.set_yaw(settings.station_yaw)
         
 
