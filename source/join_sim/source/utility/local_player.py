@@ -5,7 +5,7 @@ from pathlib import Path
 import time 
 
 def path(process_name):
-    print("finding path now ")
+    print("finding path now sim " + process_name)
     for proc in psutil.process_iter(attrs=[ 'name', 'exe']):
         
         if proc.info['name'] == process_name:
