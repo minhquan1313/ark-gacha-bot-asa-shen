@@ -77,7 +77,7 @@ def vault_deposit(items, metadata):
         inventory.open()
     if template.template_await_true(template.check_template,1,"inventory",0.7):
         time.sleep(0.1*settings.lag_offset)
-        if template.check_template_no_bounds("vault_full",0.9):
+        if False:
             logs.logger.info("your vault is full skipping adding items")
         else:
             for x in range(len(items)):
