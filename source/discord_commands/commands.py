@@ -54,28 +54,31 @@ class discord_commands(commands.Cog):
         task.add_task(pause_task)
         await interaction.response.send_message(f"pause task added will now pause for {time} seconds once the next task finishes")
 
-
-    @app_commands.command()
-    async def start(self,interaction: discord.Interaction):
+    async def start_bot_core(self, notify_interaction=None, wait=5):
         self.start_time = time.time()
         logchn = self.bot.get_channel(int(settings.log_channel_gacha))
         if logchn:
-            await logchn.send(f'bot starting up now')
-        
-        # resetting log files
-        with open("source/logs/logs.txt", 'w') as file:
-            file.write(f"")
+            await logchn.send("bot starting up now")
+
+        with open("source/logs/logs.txt", "w") as file:
+            file.write("")
+
         self.bot.loop.create_task(self.send_new_logs())
-        
-        
-        await interaction.response.send_message(f"starting up bot now you have 5 seconds before start")
-        time.sleep(5)
+        if notify_interaction:
+            await notify_interaction.response.send_message(
+                f"starting up bot now you have {wait} seconds before start"
+            )
+        await asyncio.sleep(wait)
         asyncio.create_task(botoptions.task_manager_start())
         while task_manager.started == False:
             await asyncio.sleep(1)
         self.bot.loop.create_task(self.embed_send("active_queue"))
         self.bot.loop.create_task(self.embed_send("waiting_queue"))
-    
+
+    @app_commands.command()
+    async def start(self, interaction: discord.Interaction):
+        await self.start_bot_core(interaction)
+
     async def get_time_diffrence(self,inital):
         time_difference = time.time() - inital
         days = time_difference / 86400
