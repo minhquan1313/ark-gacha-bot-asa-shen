@@ -28,9 +28,11 @@ class discord_commands(commands.Cog):
                 if new_logs:
                     if len(new_logs) >= 1999:
                         await log_channel.send(f"New logs:\n```log limit reached 2000 skipping```")
+                        open("source/logs/logs.txt", "w").close()
+                        last_position = 0
                     else:
                         await log_channel.send(f"New logs:\n```{new_logs}```")
-                    last_position = file.tell()
+                        last_position = file.tell()
             await asyncio.sleep(5)
 
     async def embed_send(self,queue_type):
