@@ -1,3 +1,4 @@
+import ctypes
 import os
 import subprocess
 import sys
@@ -9,7 +10,17 @@ try:
 except ImportError:
     psutil = None
 
-from PySide6.QtCore import QEasingCurve, QObject, Qt, QTimer, QVariantAnimation, Signal
+from PySide6.QtCore import (
+    QEasingCurve,
+    QObject,
+    QPoint,
+    QRect,
+    QSize,
+    Qt,
+    QTimer,
+    QVariantAnimation,
+    Signal,
+)
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -24,7 +35,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QScrollArea,
-    QSizeGrip,
+    QSizePolicy,
     QStackedWidget,
     QTextEdit,
     QVBoxLayout,
@@ -41,11 +52,14 @@ from source.launcher.constants import (
     BUTTON_TRANSITION_MS,
     COLORS,
     DEFAULT_SETTINGS,
+    ENABLE_NATIVE_CUSTOM_CHROME,
     FONT_SIZES,
     GAME_WINDOW_TITLE,
     PHONE_MINIMUM_SIZE,
     SETTINGS_GROUPS,
     SUPPORTED_GAME_RESOLUTIONS,
+    TITLE_BAR_HEIGHT,
+    WINDOW_RESIZE_BORDER_PX,
 )
 from source.launcher.settings_store import load_settings, save_settings
 from source.launcher.system import (
@@ -60,6 +74,31 @@ class LogBridge(QObject):
     line = Signal(str)
 
 
+class WindowsMSG(ctypes.Structure):
+    _fields_ = [
+        ("hwnd", ctypes.c_void_p),
+        ("message", ctypes.c_uint),
+        ("wParam", ctypes.c_size_t),
+        ("lParam", ctypes.c_ssize_t),
+        ("time", ctypes.c_uint),
+        ("pt_x", ctypes.c_long),
+        ("pt_y", ctypes.c_long),
+    ]
+
+
+WM_NCHITTEST = 0x0084
+HTCLIENT = 1
+HTCAPTION = 2
+HTLEFT = 10
+HTRIGHT = 11
+HTTOP = 12
+HTTOPLEFT = 13
+HTTOPRIGHT = 14
+HTBOTTOM = 15
+HTBOTTOMLEFT = 16
+HTBOTTOMRIGHT = 17
+
+
 class ClickableTextEdit(QTextEdit):
     copied = Signal()
 
@@ -68,6 +107,108 @@ class ClickableTextEdit(QTextEdit):
         self.copy()
         self.copied.emit()
         super().mouseDoubleClickEvent(event)
+
+
+class CyberSwitch(QCheckBox):
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setMinimumHeight(24)
+        self.setMinimumWidth(58)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setFont(QFont("Segoe UI", FONT_SIZES["form"]))
+
+    def sizeHint(self):
+        text_width = self.fontMetrics().horizontalAdvance(self.text())
+        return QSize(max(58, 58 + text_width), 28)
+
+    def hitButton(self, pos):
+        return self.rect().contains(pos)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        track = QRect(0, 3, 50, 22)
+        checked = self.isChecked()
+        track_color = QColor("#0E3A4D" if checked else "#101820")
+        border_color = QColor(COLORS["cyan"] if checked else COLORS["border"])
+        knob_color = QColor(COLORS["cyan"] if checked else COLORS["muted"])
+
+        painter.setPen(QPen(border_color, 1.5))
+        painter.setBrush(track_color)
+        painter.drawRoundedRect(track, 10, 10)
+
+        knob_x = 27 if checked else 4
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(knob_color)
+        painter.drawEllipse(knob_x, 7, 14, 14)
+
+        if self.text():
+            painter.setPen(QColor(COLORS["text"]))
+            painter.setFont(self.font())
+            painter.drawText(62, 0, self.width() - 62, self.height(), Qt.AlignVCenter, self.text())
+
+
+class MeterBar(QWidget):
+    def __init__(self, accent=None, parent=None):
+        super().__init__(parent)
+        self.percent = 0
+        self.accent = accent or COLORS["green"]
+        self.setFixedHeight(11)
+
+    def set_percent(self, percent):
+        self.percent = max(0, min(100, int(percent)))
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect()
+        width = rect.width()
+        used_width = int(width * self.percent / 100)
+        painter.setPen(Qt.NoPen)
+
+        rail_y = (rect.height() - 5) // 2
+        total_rect = QRect(0, rail_y, width, 5)
+        painter.setBrush(QColor("#24566A"))
+        painter.drawRoundedRect(total_rect, 2, 2)
+
+        used_rect = QRect(0, rail_y, used_width, 5)
+        painter.setBrush(QColor(COLORS["yellow"] if self.percent >= 80 else self.accent))
+        painter.drawRoundedRect(used_rect, 2, 2)
+
+
+class PasswordField(QFrame):
+    def __init__(self, value):
+        super().__init__()
+        self.setObjectName("PasswordField")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self.input = QLineEdit(str(value))
+        self.input.setObjectName("PasswordInput")
+        self.input.setEchoMode(QLineEdit.Password)
+        self.toggle = QPushButton("EYE")
+        self.toggle.setObjectName("PasswordToggle")
+        self.toggle.setCursor(Qt.PointingHandCursor)
+        self.toggle.setFixedSize(44, 30)
+        self.toggle.clicked.connect(self.toggle_visibility)
+
+        layout.addWidget(self.input, 1)
+        layout.addWidget(self.toggle)
+
+    def text(self):
+        return self.input.text()
+
+    def setText(self, value):
+        self.input.setText(value)
+
+    def toggle_visibility(self):
+        is_hidden = self.input.echoMode() == QLineEdit.Password
+        self.input.setEchoMode(QLineEdit.Normal if is_hidden else QLineEdit.Password)
+        self.toggle.setText("OFF" if is_hidden else "EYE")
 
 
 class AnimatedButton(QPushButton):
@@ -87,6 +228,11 @@ class AnimatedButton(QPushButton):
             state = "disabled"
         self._state = state
         self._animate_to(BUTTON_STYLES[self.variant][state])
+
+    def set_variant(self, variant):
+        self.variant = variant
+        self._colors = BUTTON_STYLES[variant]["normal"].copy()
+        self.set_state("normal")
 
     def setObjectName(self, name):
         super().setObjectName(name)
@@ -150,10 +296,12 @@ class AnimatedButton(QPushButton):
         selector = (
             f"QPushButton#{self.objectName()}" if self.objectName() else "QPushButton"
         )
+        min_height = "0px" if self.variant in ("chrome", "close") else "34px"
+        padding = "0px" if self.variant in ("chrome", "close") else "5px 16px"
         self.setStyleSheet(f"""
             {selector} {{
-                min-height: 34px;
-                padding: 5px 16px;
+                min-height: {min_height};
+                padding: {padding};
                 background: {self._colors["bg"]};
                 color: {self._colors["fg"]};
                 border: 1px solid {self._colors["border"]};
@@ -190,7 +338,7 @@ class ChromeIconButton(AnimatedButton):
         variant = "close" if icon_name == "close" else "chrome"
         super().__init__("", variant, parent)
         self.icon_name = icon_name
-        self.setFixedSize(34, 28)
+        self.setFixedSize(46, TITLE_BAR_HEIGHT)
         self.setObjectName("ChromeIconButton")
         self.set_state("normal")
 
@@ -198,19 +346,19 @@ class ChromeIconButton(AnimatedButton):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        pen = QPen(QColor(self._colors["fg"]), 2)
+        pen = QPen(QColor(self._colors["fg"]), 2.4)
         painter.setPen(pen)
         center_y = self.height() // 2
         if self.icon_name == "minimize":
-            painter.drawLine(10, center_y + 5, self.width() - 10, center_y + 5)
+            painter.drawLine(14, center_y + 7, self.width() - 14, center_y + 7)
         elif self.icon_name == "maximize":
-            painter.drawRect(10, 8, self.width() - 20, self.height() - 16)
+            painter.drawRect(14, 13, self.width() - 28, self.height() - 26)
         elif self.icon_name == "restore":
-            painter.drawRect(8, 11, self.width() - 20, self.height() - 16)
-            painter.drawRect(12, 7, self.width() - 20, self.height() - 16)
+            painter.drawRect(12, 16, self.width() - 30, self.height() - 27)
+            painter.drawRect(17, 11, self.width() - 30, self.height() - 27)
         elif self.icon_name == "close":
-            painter.drawLine(10, 8, self.width() - 10, self.height() - 8)
-            painter.drawLine(self.width() - 10, 8, 10, self.height() - 8)
+            painter.drawLine(15, 12, self.width() - 15, self.height() - 12)
+            painter.drawLine(self.width() - 15, 12, 15, self.height() - 12)
 
     def set_icon(self, icon_name):
         self.icon_name = icon_name
@@ -223,11 +371,11 @@ class TitleBar(QFrame):
         self.window = window
         self.drag_position = None
         self.setObjectName("TitleBar")
-        self.setFixedHeight(42)
+        self.setFixedHeight(TITLE_BAR_HEIGHT)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 0, 10, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(14, 0, 0, 0)
+        layout.setSpacing(8)
 
         title = QLabel(APP_TITLE)
         title.setObjectName("ChromeTitle")
@@ -240,6 +388,7 @@ class TitleBar(QFrame):
         layout.addWidget(version)
         layout.addStretch()
         layout.addWidget(status)
+        layout.addSpacing(10)
 
         self.minimize_button = ChromeIconButton("minimize")
         self.maximize_button = ChromeIconButton("maximize")
@@ -252,22 +401,18 @@ class TitleBar(QFrame):
         layout.addWidget(self.close_button)
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            if self.window.isMaximized():
-                ratio = event.position().x() / max(1, self.width())
-                self.window.showNormal()
-                restored_width = self.window.width()
-                self.window.move(
-                    event.globalPosition().toPoint().x() - int(restored_width * ratio),
-                    8,
-                )
+        if event.button() == Qt.LeftButton and self.window.is_custom_maximized:
+            ratio = event.position().x() / max(1, self.width())
+            self.window.start_drag_from_custom_maximized(
+                event.globalPosition().toPoint(), ratio
+            )
             self.drag_position = (
                 event.globalPosition().toPoint() - self.window.frameGeometry().topLeft()
             )
             event.accept()
 
     def mouseMoveEvent(self, event):
-        if self.drag_position and event.buttons() & Qt.LeftButton:
+        if getattr(self, "drag_position", None) and event.buttons() & Qt.LeftButton:
             self.window.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
 
@@ -282,7 +427,7 @@ class TitleBar(QFrame):
 
     def sync_maximize_icon(self):
         self.maximize_button.set_icon(
-            "restore" if self.window.isMaximized() else "maximize"
+            "restore" if self.window.is_custom_maximized else "maximize"
         )
 
 
@@ -436,6 +581,8 @@ class SettingsGUI(QMainWindow):
         self.last_activity = "--:--:--"
         self._cpu_times = get_cpu_times()
         self.is_narrow_layout = False
+        self.is_custom_maximized = False
+        self.normal_geometry = None
 
         self._build_ui()
         self._build_timer()
@@ -478,9 +625,6 @@ class SettingsGUI(QMainWindow):
         for page in self.pages.values():
             self.stack.addWidget(page)
 
-        self.size_grip = QSizeGrip(root)
-        self.size_grip.setFixedSize(18, 18)
-        self.size_grip.raise_()
         self._apply_responsive_layout()
 
     def _build_sidebar(self):
@@ -554,25 +698,119 @@ class SettingsGUI(QMainWindow):
         self.timer.start(1000)
 
     def toggle_max_restore(self):
-        if self.isMaximized():
-            self.showNormal()
+        if self.is_custom_maximized:
+            self.restore_custom_window()
         else:
-            self.showMaximized()
+            self.maximize_custom_window()
+
+    def maximize_custom_window(self):
+        self.normal_geometry = self.geometry()
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen:
+            self.setGeometry(screen.availableGeometry())
+        self.is_custom_maximized = True
+        self.title_bar.sync_maximize_icon()
+
+    def restore_custom_window(self):
+        if self.normal_geometry:
+            self.setGeometry(self.normal_geometry)
+        self.is_custom_maximized = False
+        self.title_bar.sync_maximize_icon()
+
+    def start_drag_from_custom_maximized(self, global_pos, title_x_ratio):
+        if not self.is_custom_maximized:
+            return
+
+        restore_geometry = self.normal_geometry or self.geometry()
+        restored_width = restore_geometry.width()
+        restored_height = restore_geometry.height()
+        new_x = global_pos.x() - int(restored_width * title_x_ratio)
+        new_y = 8
+        self.setGeometry(new_x, new_y, restored_width, restored_height)
+        self.is_custom_maximized = False
         self.title_bar.sync_maximize_icon()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, "size_grip"):
-            self.size_grip.move(
-                self.width() - self.size_grip.width(),
-                self.height() - self.size_grip.height(),
-            )
         self._apply_responsive_layout()
 
     def changeEvent(self, event):
         super().changeEvent(event)
         if hasattr(self, "title_bar"):
-            self.title_bar.sync_maximize_icon()
+            QTimer.singleShot(0, self.title_bar.sync_maximize_icon)
+
+    def nativeEvent(self, event_type, message):
+        if not ENABLE_NATIVE_CUSTOM_CHROME or sys.platform != "win32":
+            return super().nativeEvent(event_type, message)
+
+        msg = WindowsMSG.from_address(int(message))
+        if msg.message != WM_NCHITTEST:
+            return super().nativeEvent(event_type, message)
+
+        global_pos = self._global_pos_from_lparam(msg.lParam)
+        local_pos = self.mapFromGlobal(global_pos)
+
+        if not self.is_custom_maximized:
+            hit_test = self._resize_hit_test(local_pos)
+            if hit_test is not None:
+                return True, hit_test
+
+        if self._is_title_bar_caption(global_pos, local_pos):
+            if self.is_custom_maximized:
+                return True, HTCLIENT
+            return True, HTCAPTION
+
+        return True, HTCLIENT
+
+    @staticmethod
+    def _global_pos_from_lparam(lparam):
+        x = ctypes.c_short(lparam & 0xFFFF).value
+        y = ctypes.c_short((lparam >> 16) & 0xFFFF).value
+        return QPoint(x, y)
+
+    def _resize_hit_test(self, local_pos):
+        border = WINDOW_RESIZE_BORDER_PX
+        on_left = local_pos.x() <= border
+        on_right = local_pos.x() >= self.width() - border
+        on_top = local_pos.y() <= border
+        on_bottom = local_pos.y() >= self.height() - border
+
+        if on_top and on_left:
+            return HTTOPLEFT
+        if on_top and on_right:
+            return HTTOPRIGHT
+        if on_bottom and on_left:
+            return HTBOTTOMLEFT
+        if on_bottom and on_right:
+            return HTBOTTOMRIGHT
+        if on_left:
+            return HTLEFT
+        if on_right:
+            return HTRIGHT
+        if on_top:
+            return HTTOP
+        if on_bottom:
+            return HTBOTTOM
+        return None
+
+    def _is_title_bar_caption(self, global_pos, local_pos):
+        if not hasattr(self, "title_bar"):
+            return False
+        if not (0 <= local_pos.y() < self.title_bar.height()):
+            return False
+        return not any(
+            self._global_rect_for_widget(button).contains(global_pos)
+            for button in (
+                self.title_bar.minimize_button,
+                self.title_bar.maximize_button,
+                self.title_bar.close_button,
+            )
+        )
+
+    @staticmethod
+    def _global_rect_for_widget(widget):
+        top_left = widget.mapToGlobal(QPoint(0, 0))
+        return QRect(top_left, widget.size())
 
     def _apply_responsive_layout(self):
         if not hasattr(self, "is_narrow_layout"):
@@ -633,6 +871,25 @@ class SettingsGUI(QMainWindow):
         button_variant = "secondary" if variant == "ghost" else variant
         return AnimatedButton(text, button_variant)
 
+    def toggle_program(self):
+        if self.is_program_running():
+            self.stop_program()
+        else:
+            self.start_program()
+
+    def is_program_running(self):
+        return self.process is not None and self.process.poll() is None
+
+    def _update_start_stop_button(self):
+        if not hasattr(self, "start_stop_button"):
+            return
+        if self.is_program_running():
+            self.start_stop_button.setText("STOP PROGRAM")
+            self.start_stop_button.set_variant("danger")
+        else:
+            self.start_stop_button.setText("START PROGRAM")
+            self.start_stop_button.set_variant("primary")
+
     def _welcome_page(self):
         page, layout = self._page("WelcomePage")
         row = QHBoxLayout()
@@ -659,7 +916,7 @@ class SettingsGUI(QMainWindow):
             "Save settings before starting",
         ]:
             checklist_layout.addWidget(QLabel(f"- {item}"))
-        checkbox = QCheckBox("Do not show again")
+        checkbox = CyberSwitch("Do not show again")
         start = self._button("GET STARTED  >", "primary")
         start.clicked.connect(lambda: self.show_page("dashboard"))
         left.addStretch()
@@ -700,9 +957,10 @@ class SettingsGUI(QMainWindow):
 
         actions, action_layout = self._panel("QUICK ACTIONS")
         actions.setFixedWidth(300)
+        self.start_stop_button = self._button("START PROGRAM", "primary")
+        self.start_stop_button.clicked.connect(self.toggle_program)
+        action_layout.addWidget(self.start_stop_button)
         for text, variant, slot in [
-            ("START PROGRAM", "primary", self.start_program),
-            ("STOP PROGRAM", "danger", self.stop_program),
             ("SAVE SETTINGS", "secondary", self.confirm_save),
             ("TEST CONSOLE COLOURS", "secondary", self.check_colours),
         ]:
@@ -723,11 +981,16 @@ class SettingsGUI(QMainWindow):
         footer = QGridLayout()
         footer.setSpacing(8)
         layout.addLayout(footer)
-        self.memory_value = self._footer_stat(footer, 0, "MEMORY USAGE")
-        self.cpu_value = self._footer_stat(footer, 1, "CPU USAGE")
+        self.memory_value, self.memory_meter = self._footer_stat(
+            footer, 0, "MEMORY USAGE", True, COLORS["green"]
+        )
+        self.cpu_value, self.cpu_meter = self._footer_stat(
+            footer, 1, "CPU USAGE", True, COLORS["cyan"]
+        )
         self.discord_value = self._footer_stat(footer, 2, "DISCORD")
         self.activity_value = self._footer_stat(footer, 3, "LAST ACTIVITY")
         self.clock_value = self._footer_stat(footer, 4, "SYSTEM TIME")
+        self._update_start_stop_button()
         return page
 
     def _stat_card(self, layout, column, label, sublabel):
@@ -744,7 +1007,7 @@ class SettingsGUI(QMainWindow):
         layout.addWidget(panel, 0, column)
         return value
 
-    def _footer_stat(self, layout, column, label):
+    def _footer_stat(self, layout, column, label, meter=False, accent=None):
         panel, panel_layout = self._panel()
         panel_layout.setContentsMargins(12, 8, 12, 8)
         title = QLabel(label)
@@ -752,9 +1015,18 @@ class SettingsGUI(QMainWindow):
         value = QLabel("--")
         value.setObjectName("FooterValue")
         panel_layout.addWidget(title)
-        panel_layout.addWidget(value)
+        if meter:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            bar = MeterBar(accent)
+            row.addWidget(bar, 1)
+            row.addWidget(value)
+            panel_layout.addLayout(row)
+        else:
+            bar = None
+            panel_layout.addWidget(value)
         layout.addWidget(panel, 0, column)
-        return value
+        return (value, bar) if meter else value
 
     def _setup_page(self):
         page, layout = self._page("SetupPage")
@@ -839,7 +1111,9 @@ class SettingsGUI(QMainWindow):
         tabs.setSpacing(6)
         tab_frame = QFrame()
         tab_frame.setObjectName("SettingsTabs")
-        tab_frame.setFixedWidth(210)
+        tab_frame.setMinimumWidth(270)
+        tab_frame.setMaximumWidth(340)
+        tab_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         tab_frame.setLayout(tabs)
         content.addWidget(tab_frame)
 
@@ -901,13 +1175,14 @@ class SettingsGUI(QMainWindow):
             col = 0 if index % 2 else 2
             self.settings_form_layout.addWidget(label, row, col)
             if isinstance(default_value, bool):
-                field = QCheckBox()
+                field = CyberSwitch()
                 field.setChecked(bool(self.form_values.get(key, default_value)))
             else:
-                field = QLineEdit(str(self.form_values.get(key, default_value)))
                 if key == "discord_api_key":
-                    field.setEchoMode(QLineEdit.Password)
-            field.setObjectName("SettingField")
+                    field = PasswordField(self.form_values.get(key, default_value))
+                else:
+                    field = QLineEdit(str(self.form_values.get(key, default_value)))
+                    field.setObjectName("SettingField")
             self.fields[key] = field
             self.settings_form_layout.addWidget(field, row, col + 1)
 
@@ -1136,6 +1411,7 @@ class SettingsGUI(QMainWindow):
             )
             self.start_time = time.time()
             self.append_log("[INFO] Started main_program.py.\n")
+            self._update_start_stop_button()
             threading.Thread(target=self.read_output, daemon=True).start()
         except Exception as exc:
             self.dialog("Start Failed", str(exc), "error")
@@ -1145,6 +1421,7 @@ class SettingsGUI(QMainWindow):
             self.process.terminate()
             self.process = None
             self.append_log("[WARN] Program terminated by launcher.\n")
+            self._update_start_stop_button()
             self.dialog("Program Stopped", "Program terminated.", "warning")
         else:
             self.dialog(
@@ -1179,9 +1456,21 @@ class SettingsGUI(QMainWindow):
         full = self._format_log_lines(lines)
         preview = self._format_log_lines(lines[-18:])
         if hasattr(self, "full_log"):
-            self.full_log.setHtml(full)
+            self._set_console_html(self.full_log, full)
         if hasattr(self, "dashboard_log"):
-            self.dashboard_log.setHtml(preview)
+            self._set_console_html(self.dashboard_log, preview)
+
+    def _set_console_html(self, console, html):
+        console.setHtml(html)
+        console.moveCursor(console.textCursor().MoveOperation.End)
+        QTimer.singleShot(
+            0, lambda widget=console: self._scroll_console_to_bottom(widget)
+        )
+
+    @staticmethod
+    def _scroll_console_to_bottom(console):
+        scrollbar = console.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def _format_log_lines(self, lines):
         html = []
@@ -1287,6 +1576,7 @@ class SettingsGUI(QMainWindow):
 
     def _tick(self):
         if hasattr(self, "server_value"):
+            self._update_start_stop_button()
             server_number = self.form_values.get(
                 "server_number", self.settings.get("server_number", "0")
             )
@@ -1307,17 +1597,23 @@ class SettingsGUI(QMainWindow):
             memory_text = "N/A"
             if psutil:
                 memory = psutil.virtual_memory()
+                used_gb = memory.used / (1024**3)
+                total_gb = memory.total / (1024**3)
                 memory_text = (
-                    f"{memory.used / (1024**3):.1f}G / {memory.total / (1024**3):.1f}G"
+                    f"{used_gb:.1f}G / {total_gb:.1f}G"
                 )
+                self.memory_meter.set_percent((used_gb / total_gb) * 100)
             else:
                 memory = get_memory_usage_gb()
                 if memory:
                     memory_text = f"{memory[0]:.1f}G / {memory[1]:.1f}G"
+                    self.memory_meter.set_percent((memory[0] / memory[1]) * 100)
             self.memory_value.setText(memory_text)
 
             if psutil:
-                self.cpu_value.setText(f"{psutil.cpu_percent(interval=None):.0f}%")
+                cpu_percent = psutil.cpu_percent(interval=None)
+                self.cpu_value.setText(f"{cpu_percent:.0f}%")
+                self.cpu_meter.set_percent(cpu_percent)
             else:
                 current_times = get_cpu_times()
                 cpu_percent = calculate_cpu_percent(self._cpu_times, current_times)
@@ -1325,6 +1621,7 @@ class SettingsGUI(QMainWindow):
                 self.cpu_value.setText(
                     f"{cpu_percent:.0f}%" if cpu_percent is not None else "0%"
                 )
+                self.cpu_meter.set_percent(cpu_percent or 0)
 
             running = self.process and self.process.poll() is None
             self.discord_value.setText("CONNECTED" if running else "DISCONNECTED")
@@ -1372,7 +1669,7 @@ class SettingsGUI(QMainWindow):
         }}
         QFrame#Sidebar {{
             background: #050A10;
-            border-right: 1px solid {COLORS["border"]};
+            border: none;
         }}
         QLabel#SidebarBrand {{
             color: {COLORS["text"]};
@@ -1385,23 +1682,23 @@ class SettingsGUI(QMainWindow):
             padding-left: 18px;
             background: transparent;
             color: {COLORS["text"]};
-            border: 1px solid transparent;
+            border: none;
             font-size: {FONT_SIZES["nav"]}px;
             font-weight: 800;
         }}
         QPushButton#NavButton:hover {{
             background: rgba(0, 216, 255, 20);
-            border: 1px solid rgba(0, 216, 255, 46);
+            border: none;
         }}
         QPushButton#NavButton:checked {{
             background: rgba(0, 216, 255, 41);
             color: {COLORS["cyan"]};
-            border: 1px solid rgba(0, 216, 255, 115);
+            border: none;
         }}
         QPushButton#MusicButton {{
-            background: #06101A;
+            background: transparent;
             color: {COLORS["cyan"]};
-            border: 1px solid {COLORS["border"]};
+            border: 1px solid rgba(0, 216, 255, 36);
             min-height: 32px;
         }}
         QFrame#Panel, QFrame#HeroBanner, QFrame#StepItem {{
@@ -1503,6 +1800,30 @@ class SettingsGUI(QMainWindow):
             border: 1px solid {COLORS["border"]};
             padding: 2px 8px;
             font-family: Consolas;
+        }}
+        QFrame#PasswordField {{
+            background: transparent;
+            border: none;
+        }}
+        QLineEdit#PasswordInput {{
+            min-height: 26px;
+            background: #050A10;
+            color: {COLORS["text"]};
+            border: 1px solid {COLORS["border"]};
+            padding: 2px 10px;
+            font-family: Consolas;
+        }}
+        QPushButton#PasswordToggle {{
+            background: #07131D;
+            color: {COLORS["cyan"]};
+            border: 1px solid {COLORS["border"]};
+            font-size: 9px;
+            font-weight: 900;
+            padding: 0;
+        }}
+        QPushButton#PasswordToggle:hover {{
+            background: #0E3A4D;
+            border: 1px solid {COLORS["cyan"]};
         }}
         QCheckBox {{
             color: {COLORS["text"]};

@@ -4,10 +4,13 @@ APP_TITLE = APP_NAME.upper()
 APP_VERSION = "v1.0.0"
 SUPPORTED_GAME_RESOLUTIONS = {(1920, 1080)}
 GAME_WINDOW_TITLE = "ArkAscended"
-BUTTON_TRANSITION_MS = 300
+BUTTON_TRANSITION_MS = 200
 BREAKPOINT_NARROW_WIDTH = 720
 PC_MINIMUM_SIZE = (1180, 680)
 PHONE_MINIMUM_SIZE = (420, 640)
+TITLE_BAR_HEIGHT = 42
+WINDOW_RESIZE_BORDER_PX = 8
+ENABLE_NATIVE_CUSTOM_CHROME = True
 
 COLORS = {
     "bg": "#070A0F",
@@ -70,8 +73,8 @@ BUTTON_STYLES = {
     },
     "nav": {
         "normal": {"bg": "#050A10", "fg": COLORS["text"], "border": "#050A10"},
-        "hover": {"bg": "#0B1D2A", "fg": COLORS["cyan"], "border": COLORS["border"]},
-        "active": {"bg": "#102E40", "fg": COLORS["cyan"], "border": "#00A9C8"},
+        "hover": {"bg": "#07131D", "fg": COLORS["cyan"], "border": "#07131D"},
+        "active": {"bg": "#0D3449", "fg": COLORS["cyan"], "border": "#0D3449"},
         "disabled": {"bg": "#050A10", "fg": COLORS["dim"], "border": "#050A10"},
     },
     "chrome": {
