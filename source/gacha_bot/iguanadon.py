@@ -21,12 +21,17 @@ def berry_station():
     berry_collection()
     utils.turn_up(50)
 
+def transfer_berries_to_iguanodon(attempts=2):
+    for _ in range(attempts):
+        player_inventory.search_in_inventory(settings.berry_type) #iguanadon has 1450 weight for the 145 stacks of berries
+        player_inventory.transfer_all_inventory()
+        time.sleep(0.1*settings.lag_offset)
+
 def seed(type):
     if inventory.is_open():
         time.sleep(0.1*settings.lag_offset)
         inventory.transfer_all_from() # doing this should prevent the seed not appearing first try
-        player_inventory.search_in_inventory(settings.berry_type) #iguanadon has 1450 weight for the 145 stacks of berries
-        player_inventory.transfer_all_inventory()
+        transfer_berries_to_iguanodon()
         if type == 2:
             time.sleep(0.2*settings.lag_offset)
             player_inventory.drop_all_inv() #doing this second time round to drop everything else that is not needed by the bot
