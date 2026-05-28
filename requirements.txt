@@ -6,3 +6,5 @@ discord.py==2.3.2
 pywin32 
 psutil
 pytesseract
+Pillow
+PySide6
