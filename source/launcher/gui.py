@@ -591,6 +591,7 @@ class SettingsGUI(QMainWindow):
         self._build_ui()
         self._build_timer()
         self.show_page("dashboard")
+        self._schedule_auto_start()
 
     def _build_ui(self):
         self.setStyleSheet(self._style_sheet())
@@ -700,6 +701,20 @@ class SettingsGUI(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(1000)
+
+    def _schedule_auto_start(self):
+        if (
+            self.settings.get("auto_start_program", False)
+            and self._is_auto_start_allowed()
+        ):
+            self.append_log(
+                "[INFO] Auto start enabled. Starting program after launcher initialization.\n"
+            )
+            QTimer.singleShot(1000, self.start_program)
+        elif self.settings.get("auto_start_program", False):
+            self.append_log(
+                "[WARN] Auto start is enabled but server number is not configured.\n"
+            )
 
     def toggle_max_restore(self):
         if self.is_custom_maximized:
@@ -891,8 +906,45 @@ class SettingsGUI(QMainWindow):
             self.start_stop_button.setText("STOP PROGRAM")
             self.start_stop_button.set_variant("danger")
         else:
-            self.start_stop_button.setText("START PROGRAM")
-            self.start_stop_button.set_variant("primary")
+
+    def _is_auto_start_allowed(self):
+        cond = str(self.settings.get("server_number", "0")).strip() not in ("", "0")
+        return cond
+
+    def _update_auto_start_switch(self):
+        if not hasattr(self, "auto_start_switch"):
+            return
+
+        allowed = self._is_auto_start_allowed()
+        saved_value = bool(self.settings.get("auto_start_program", False))
+
+        self.auto_start_switch.blockSignals(True)
+        self.auto_start_switch.setEnabled(allowed)
+        self.auto_start_switch.setChecked(saved_value if allowed else False)
+        self.auto_start_switch.blockSignals(False)
+
+        self.auto_start_hint.setText(
+            "Start program when launcher opens"
+            if allowed
+            else "Set server number first"
+        )
+
+    def toggle_auto_start_program(self, checked):
+        if not self._is_auto_start_allowed():
+            self._update_auto_start_switch()
+            return
+
+        self.settings["auto_start_program"] = bool(checked)
+        self.form_values["auto_start_program"] = bool(checked)
+        field = self.fields.get("auto_start_program")
+        if field is not None:
+            field.blockSignals(True)
+            field.setChecked(bool(checked))
+            field.blockSignals(False)
+
+        save_settings(self.settings)
+        state = "enabled" if checked else "disabled"
+        self.append_log(f"[INFO] Auto start {state}.\n")
 
     def _welcome_page(self):
         page, layout = self._page("WelcomePage")
@@ -964,13 +1016,19 @@ class SettingsGUI(QMainWindow):
         self.start_stop_button = self._button("START PROGRAM", "primary")
         self.start_stop_button.clicked.connect(self.toggle_program)
         action_layout.addWidget(self.start_stop_button)
-        for text, variant, slot in [
-            ("SAVE SETTINGS", "secondary", self.confirm_save),
-            ("TEST CONSOLE COLOURS", "secondary", self.check_colours),
-        ]:
-            button = self._button(text, variant)
-            button.clicked.connect(slot)
-            action_layout.addWidget(button)
+
+        auto_start_box = QFrame()
+        auto_start_box.setObjectName("InlineSwitchBox")
+        auto_layout = QVBoxLayout(auto_start_box)
+        auto_layout.setContentsMargins(10, 8, 10, 8)
+        auto_layout.setSpacing(4)
+        self.auto_start_switch = CyberSwitch("AUTO START")
+        self.auto_start_switch.toggled.connect(self.toggle_auto_start_program)
+        self.auto_start_hint = QLabel("Start program when launcher opens")
+        self.auto_start_hint.setObjectName("MutedCopy")
+        auto_layout.addWidget(self.auto_start_switch)
+        auto_layout.addWidget(self.auto_start_hint)
+        action_layout.addWidget(auto_start_box)
         action_layout.addStretch()
         middle.addWidget(actions)
 
@@ -995,6 +1053,7 @@ class SettingsGUI(QMainWindow):
         self.activity_value = self._footer_stat(footer, 3, "LAST ACTIVITY")
         self.clock_value = self._footer_stat(footer, 4, "SYSTEM TIME")
         self._update_start_stop_button()
+        self._update_auto_start_switch()
         return page
 
     def _stat_card(self, layout, column, label, sublabel):
@@ -1333,6 +1392,7 @@ class SettingsGUI(QMainWindow):
         save_settings(new_data)
         self.settings = new_data
         self.form_values = new_data.copy()
+        self._update_auto_start_switch()
         self.append_log("[SUCCESS] Settings saved successfully.\n")
         self.dialog("Settings Saved", "Settings were saved successfully.", "success")
 
@@ -1806,6 +1866,10 @@ class SettingsGUI(QMainWindow):
         QFrame#PasswordField {{
             background: transparent;
             border: none;
+        }}
+        QFrame#InlineSwitchBox {{
+            background: rgba(18, 28, 42, 90);
+            border: 1px solid {COLORS["border"]};
         }}
         QLineEdit#PasswordInput {{
             min-height: 26px;

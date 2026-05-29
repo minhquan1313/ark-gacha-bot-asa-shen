@@ -15,6 +15,7 @@
     "height_grind": 3,
     "command_prefix": "%",
     "server_number": "0",
+  "auto_start_program": true,
     "singleplayer": false,
     "external_berry": false,
     "crafting": false,

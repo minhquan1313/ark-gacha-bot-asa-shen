@@ -114,6 +114,7 @@ DEFAULT_SETTINGS = {
     "height_grind": 3,
     "command_prefix": "%",
     "server_number": "0",
+    "auto_start_program": False,
     "singleplayer": False,
     "external_berry": False,
     "crafting": False,
@@ -133,6 +134,7 @@ SETTINGS_GROUPS = {
         "lag_offset",
         "command_prefix",
         "server_number",
+        "auto_start_program",
     ],
     "DINO / STATION NAMES": [
         "iguanadon",
