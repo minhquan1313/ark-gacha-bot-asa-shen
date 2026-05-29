@@ -1,7 +1,6 @@
 import logging
 
-
-""" FOR TEMPLATE DEBUGGING AS DEBUG WILL CAUSE DISCORDBOT TO STOP WORKING"""
+""" FOR TEMPLATE DEBUGGING """
 TEMPLATE_LEVEL = 5
 logging.addLevelName(TEMPLATE_LEVEL,"TEMPLATE")
 def template(self,message,*args,**kwargs):

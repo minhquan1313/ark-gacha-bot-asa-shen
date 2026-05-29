@@ -112,7 +112,6 @@ DEFAULT_SETTINGS = {
     "render_pushout": 0.0,
     "height_ele": 3,
     "height_grind": 3,
-    "command_prefix": "%",
     "server_number": "0",
     "auto_start_program": False,
     "singleplayer": False,
@@ -121,10 +120,6 @@ DEFAULT_SETTINGS = {
     "seeds_230": False,
     "side_crop_plot": False,
     "y_trap_bot": False,
-    "log_channel_gacha": "",
-    "log_active_queue": "",
-    "log_wait_queue": "",
-    "discord_api_key": "",
 }
 
 SETTINGS_GROUPS = {
@@ -132,7 +127,6 @@ SETTINGS_GROUPS = {
         "screen_resolution",
         "base_path",
         "lag_offset",
-        "command_prefix",
         "server_number",
         "auto_start_program",
     ],
@@ -157,12 +151,6 @@ SETTINGS_GROUPS = {
         "seeds_230",
         "side_crop_plot",
         "y_trap_bot",
-    ],
-    "DISCORD / QUEUE": [
-        "log_channel_gacha",
-        "log_active_queue",
-        "log_wait_queue",
-        "discord_api_key",
     ],
     "ADVANCED": list(DEFAULT_SETTINGS.keys()),
 }

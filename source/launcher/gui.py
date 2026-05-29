@@ -968,14 +968,14 @@ class SettingsGUI(QMainWindow):
         copy = QLabel(
             "AUTOMATE. MANAGE. DOMINATE.\n\n"
             f"{APP_NAME} is your compact companion for managing automation tasks, "
-            "queues, and Discord integrations with style."
+            "queues, and local offline runs with style."
         )
         copy.setObjectName("MutedCopy")
         copy.setWordWrap(True)
         checklist, checklist_layout = self._panel("BEFORE YOU START:")
         for item in [
             "Configure your settings",
-            "Set up your Discord channels",
+            "Review your station data",
             "Review the setup guide",
             "Save settings before starting",
         ]:
@@ -1057,7 +1057,7 @@ class SettingsGUI(QMainWindow):
         self.cpu_value, self.cpu_meter = self._footer_stat(
             footer, 1, "CPU USAGE", True, COLORS["cyan"]
         )
-        self.discord_value = self._footer_stat(footer, 2, "DISCORD")
+        self.runner_value = self._footer_stat(footer, 2, "RUNNER")
         self.activity_value = self._footer_stat(footer, 3, "LAST ACTIVITY")
         self.clock_value = self._footer_stat(footer, 4, "SYSTEM TIME")
         self._update_start_stop_button()
@@ -1109,10 +1109,10 @@ class SettingsGUI(QMainWindow):
         steps, steps_layout = self._panel()
         steps_layout.setSpacing(8)
         for number, text, state in [
-            ("01", "Configure Discord Token", "DONE"),
+            ("01", "Configure Local Settings", "DONE"),
             ("02", "Set Server Number", "DONE"),
             ("03", "Configure Gacha Names", "INCOMPLETE"),
-            ("04", "Setup Queue Channels", "PENDING"),
+            ("04", "Review Queue Data", "PENDING"),
             ("05", "Save Settings", "PENDING"),
             ("06", "Start Program", "PENDING"),
         ]:
@@ -1249,11 +1249,8 @@ class SettingsGUI(QMainWindow):
                 field = CyberSwitch()
                 field.setChecked(bool(self.form_values.get(key, default_value)))
             else:
-                if key == "discord_api_key":
-                    field = PasswordField(self.form_values.get(key, default_value))
-                else:
-                    field = QLineEdit(str(self.form_values.get(key, default_value)))
-                    field.setObjectName("SettingField")
+                field = QLineEdit(str(self.form_values.get(key, default_value)))
+                field.setObjectName("SettingField")
             self.fields[key] = field
             self.settings_form_layout.addWidget(field, row, col + 1)
 
@@ -1360,7 +1357,7 @@ class SettingsGUI(QMainWindow):
         author = QLabel('DEVELOPED BY\nShen\n\n"Code. Automate. Dominate."')
         author.setAlignment(Qt.AlignCenter)
         connect = QHBoxLayout()
-        for text in ["DISCORD", "GITHUB", "WEBSITE"]:
+        for text in ["GITHUB", "WEBSITE"]:
             button = self._button(text, "secondary")
             button.clicked.connect(
                 lambda checked=False, name=text: self.toast(
@@ -1482,7 +1479,7 @@ class SettingsGUI(QMainWindow):
                 bufsize=1,
             )
             self.start_time = time.time()
-            self.append_log("[INFO] Started main_program.py.\n")
+            self.append_log("[INFO] Started offline runner.\n")
             self._update_start_stop_button()
             threading.Thread(target=self.read_output, daemon=True).start()
         except Exception as exc:
@@ -1508,9 +1505,7 @@ class SettingsGUI(QMainWindow):
         self.log_bridge.line.emit("[WARN] Program output stream closed.\n")
 
     def append_log(self, text):
-        if "discord.gateway" in text or "logged in as" in text:
-            text = text.replace("logged in as", "[SUCCESS] Logged in as")
-        elif "Added task" in text and "[QUEUE]" not in text:
+        if "Added task" in text and "[QUEUE]" not in text:
             text = f"[QUEUE] {text}"
         elif "ERROR" in text.upper() and "[ERROR]" not in text:
             text = f"[ERROR] {text}"
@@ -1694,7 +1689,7 @@ class SettingsGUI(QMainWindow):
                 self.cpu_meter.set_percent(cpu_percent or 0)
 
             running = self.process and self.process.poll() is None
-            self.discord_value.setText("CONNECTED" if running else "DISCONNECTED")
+            self.runner_value.setText("RUNNING" if running else "STOPPED")
             self.activity_value.setText(self.last_activity)
             self.clock_value.setText(time.strftime("%I:%M:%S %p"))
 

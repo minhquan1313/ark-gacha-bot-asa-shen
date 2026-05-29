@@ -1,4 +1,3 @@
-
 {   
     "screen_resolution":"VALUE DOES NOT MATTER", 
     "base_path":"VALUE DOES NOT MATTER",
@@ -21,9 +20,5 @@
     "crafting": false,
     "seeds_230": false,
     "side_crop_plot": false,
-    "y_trap_bot": false,
-    "log_channel_gacha": "",
-    "log_active_queue": "",
-    "log_wait_queue": "",
-    "discord_api_key": ""
+    "y_trap_bot": false
 }

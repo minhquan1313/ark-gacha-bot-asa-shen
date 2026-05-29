@@ -22,7 +22,6 @@ render_pushout: float = data["render_pushout"]
 external_berry: bool = data["external_berry"]
 height_ele: int = data["height_ele"]
 height_grind: int = data["height_grind"]
-command_prefix: str = data["command_prefix"]
 singleplayer: bool = data["singleplayer"]
 server_number: str = data["server_number"]
 crafting: bool = data["crafting"]
@@ -30,11 +29,6 @@ seeds_230: bool = data["seeds_230"]
 side_crop_plot: bool = data["side_crop_plot"]
 y_trap_bot: bool = data["y_trap_bot"]
 
-#YOUR discord channel IDs and bot API key. To find channel IDs enable developer mode in discord and right click the channel to copy ID.
-log_channel_gacha = data["log_channel_gacha"]
-log_active_queue = data["log_active_queue"]
-log_wait_queue = data["log_wait_queue"]
-discord_api_key = data["discord_api_key"]
 
 
 if __name__ =="__main__":
