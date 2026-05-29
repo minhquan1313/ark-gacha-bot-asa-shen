@@ -76,6 +76,11 @@ def check_template(item:str, threshold:float) -> bool:
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
     image = cv2.imread(f"assets/icons{screen.screen_resolution}/{item}.png")
+    if item=="show_buff":
+        cv2.imshow("ROI", roi)
+        cv2.imshow("Template", image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv,lower_boundary,upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
