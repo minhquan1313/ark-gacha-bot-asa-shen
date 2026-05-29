@@ -234,6 +234,8 @@ class AnimatedButton(QPushButton):
         self._animate_to(BUTTON_STYLES[self.variant][state])
 
     def set_variant(self, variant):
+        if self.variant == variant:
+            return
         self.variant = variant
         self._colors = BUTTON_STYLES[variant]["normal"].copy()
         self.set_state("normal")
@@ -903,9 +905,15 @@ class SettingsGUI(QMainWindow):
         if not hasattr(self, "start_stop_button"):
             return
         if self.is_program_running():
-            self.start_stop_button.setText("STOP PROGRAM")
-            self.start_stop_button.set_variant("danger")
+            target_text = "STOP PROGRAM"
+            target_variant = "danger"
         else:
+            target_text = "START PROGRAM"
+            target_variant = "primary"
+
+        if self.start_stop_button.text() != target_text:
+            self.start_stop_button.setText(target_text)
+        self.start_stop_button.set_variant(target_variant)
 
     def _is_auto_start_allowed(self):
         cond = str(self.settings.get("server_number", "0")).strip() not in ("", "0")
