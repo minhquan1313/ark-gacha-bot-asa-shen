@@ -14,7 +14,7 @@ pyautogui.FAILSAFE = False
 focus_window_task = None
 
 
-def focus_window(window_title="ArkAscended", interval=5.0):
+def focus_window(window_title="ArkAscended", interval=5.0, is_repeat_once=False):
     global focus_window_task
 
     if focus_window_task and not focus_window_task.done():
@@ -33,6 +33,8 @@ def focus_window(window_title="ArkAscended", interval=5.0):
             except Exception as exc:
                 print(f"[ERROR] Error focusing window: {exc}")
             await asyncio.sleep(interval)
+            if is_repeat_once:
+                break
 
     focus_window_task = asyncio.create_task(callback())
 
@@ -46,7 +48,7 @@ async def main():
         )
     else:
         print("[INFO] ArkAscended auto-focus disabled.")
-    await asyncio.sleep(3)
+        focus_window("ArkAscended", is_repeat_once=True)
 
     import task_manager
 
