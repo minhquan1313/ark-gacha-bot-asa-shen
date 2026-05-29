@@ -11,7 +11,7 @@ class check_buffs:
     def __init__(self): ...
 
     def is_open(self):
-        return template.check_template("show_buff",0.7)
+        return template.check_template("show_buff", 0.5)
 
     def open(self):
         player_inventory.open()  # redundancy checks for if player inv is not already open
