@@ -33,6 +33,7 @@ from source.launcher.constants import (
     COLORS,
     DEFAULT_SETTINGS,
     ENABLE_NATIVE_CUSTOM_CHROME,
+    GACHA_LOG_FILE,
     GAME_WINDOW_TITLE,
     PHONE_MINIMUM_SIZE,
     SUPPORTED_GAME_RESOLUTIONS,
@@ -90,6 +91,9 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.nav_buttons = {}
         self.log_bridge = LogBridge()
         self.log_bridge.line.connect(self.append_log)
+        self.log_tail_stop = threading.Event()
+        self.log_tail_thread = None
+        self.log_file_position = 0
         self.active_count = 0
         self.waiting_count = 0
         self.start_time = None
@@ -580,12 +584,14 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.start_time = time.time()
             self.append_log("[INFO] Started offline runner.\n")
             self._update_start_stop_button()
+            self.start_log_tail()
             threading.Thread(target=self.read_output, daemon=True).start()
         except Exception as exc:
             self.dialog("Start Failed", str(exc), "error")
 
     def stop_program(self):
         if self.process and self.process.poll() is None:
+            self.stop_log_tail()
             self.process.terminate()
             self.process = None
             self.append_log("[WARN] Program terminated by launcher.\n")
@@ -601,13 +607,90 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             return
         for line in self.process.stdout:
             self.log_bridge.line.emit(line)
+        self.stop_log_tail()
         self.log_bridge.line.emit("[WARN] Program output stream closed.\n")
+
+    def start_log_tail(self):
+        self.stop_log_tail()
+        self.log_tail_stop = threading.Event()
+        self.log_file_position = self._log_file_size()
+        self.log_tail_thread = threading.Thread(target=self.tail_log_file, daemon=True)
+        self.log_tail_thread.start()
+
+    def stop_log_tail(self):
+        if self.log_tail_thread and self.log_tail_thread.is_alive():
+            self.log_tail_stop.set()
+            self.log_tail_thread.join(timeout=1)
+        self.log_tail_thread = None
+
+    def tail_log_file(self):
+        missing_logged = False
+        while not self.log_tail_stop.is_set():
+            try:
+                if not os.path.exists(GACHA_LOG_FILE):
+                    if not missing_logged:
+                        self.log_bridge.line.emit(
+                            f"[WARN] Log file not found yet: {GACHA_LOG_FILE}\n"
+                        )
+                        missing_logged = True
+                    time.sleep(1)
+                    continue
+
+                missing_logged = False
+                file_size = os.path.getsize(GACHA_LOG_FILE)
+                if file_size < self.log_file_position:
+                    self.log_file_position = 0
+
+                with open(GACHA_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+                    f.seek(self.log_file_position)
+                    lines = f.readlines()
+                    self.log_file_position = f.tell()
+
+                for line in lines:
+                    self.log_bridge.line.emit(self._normalize_file_log_line(line))
+            except Exception as exc:
+                self.log_bridge.line.emit(f"[ERROR] Unable to read live log file: {exc}\n")
+                time.sleep(2)
+                continue
+            time.sleep(1)
+
+    @staticmethod
+    def _log_file_size():
+        try:
+            return os.path.getsize(GACHA_LOG_FILE)
+        except OSError:
+            return 0
+
+    @staticmethod
+    def _normalize_file_log_line(line):
+        level_map = {
+            " - DEBUG - ": "DEBUG",
+            " - INFO - ": "INFO",
+            " - WARNING - ": "WARN",
+            " - ERROR - ": "ERROR",
+            " - CRITICAL - ": "CRITICAL",
+            " - TEMPLATE - ": "TEMPLATE",
+        }
+        if line.startswith("["):
+            return line
+        for marker, level in level_map.items():
+            if marker in line:
+                return f"[{level}] {line}"
+        return line
 
     def append_log(self, text):
         if "Added task" in text and "[QUEUE]" not in text:
             text = f"[QUEUE] {text}"
+        elif "CRITICAL" in text.upper() and "[CRITICAL]" not in text:
+            text = f"[CRITICAL] {text}"
         elif "ERROR" in text.upper() and "[ERROR]" not in text:
             text = f"[ERROR] {text}"
+        elif "WARNING" in text.upper() and "[WARN]" not in text:
+            text = f"[WARN] {text}"
+        elif "DEBUG" in text.upper() and "[DEBUG]" not in text:
+            text = f"[DEBUG] {text}"
+        elif "TEMPLATE" in text.upper() and "[TEMPLATE]" not in text:
+            text = f"[TEMPLATE] {text}"
 
         self.log_lines.append(text)
         self.last_activity = time.strftime("%H:%M:%S")
@@ -642,7 +725,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         html = []
         for line in lines:
             color = COLORS["text"]
-            if "[ERROR]" in line:
+            if "[CRITICAL]" in line or "[ERROR]" in line:
                 color = COLORS["red"]
             elif "[WARN]" in line:
                 color = COLORS["yellow"]
@@ -650,6 +733,10 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
                 color = COLORS["green"]
             elif "[INFO]" in line:
                 color = COLORS["cyan"]
+            elif "[DEBUG]" in line:
+                color = COLORS["text"]
+            elif "[TEMPLATE]" in line:
+                color = COLORS["dim"]
             elif "[QUEUE]" in line:
                 color = COLORS["muted"]
             html.append(

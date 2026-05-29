@@ -353,7 +353,16 @@ class LauncherPagesMixin:
         filter_row = QHBoxLayout()
         filter_row.setSpacing(6)
         layout.addLayout(filter_row)
-        for name in ["ALL", "INFO", "SUCCESS", "WARN", "ERROR", "QUEUE"]:
+        for name in [
+            "ALL",
+            "INFO",
+            "DEBUG",
+            "WARN",
+            "ERROR",
+            "CRITICAL",
+            "TEMPLATE",
+            "QUEUE",
+        ]:
             button = self._button(name, "secondary")
             button.clicked.connect(
                 lambda checked=False, value=name: self.set_log_filter(value)
