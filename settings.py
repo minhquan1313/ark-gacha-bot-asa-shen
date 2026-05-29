@@ -1,15 +1,19 @@
-import json 
+import json
 
-#TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
-#TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
-#TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
-#TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
+# TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
+# TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
+# TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
+# TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
 
-with open("json_files/settings.json", "r", encoding='utf-8') as f:
+with open("json_files/settings.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
-screen_resolution: str = data["screen_resolution"] # No longer in use. Just here cause people are thoughtless.
-base_path: str = data["base_path"] # No longer in use. Just here cause people are thoughtless.
+screen_resolution: str = data[
+    "screen_resolution"
+]  # No longer in use. Just here cause people are thoughtless.
+base_path: str = data[
+    "base_path"
+]  # No longer in use. Just here cause people are thoughtless.
 lag_offset: float = data["lag_offset"]
 iguanadon: str = data["iguanadon"]
 drop_off: str = data["drop_off"]
@@ -30,6 +34,5 @@ side_crop_plot: bool = data["side_crop_plot"]
 y_trap_bot: bool = data["y_trap_bot"]
 
 
-
-if __name__ =="__main__":
+if __name__ == "__main__":
     pass
