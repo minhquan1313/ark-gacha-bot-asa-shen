@@ -453,33 +453,40 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             field.setChecked(bool(checked))
             field.blockSignals(False)
 
-        save_settings(self.settings)
+        save_settings(self._collect_settings())
         state = "enabled" if checked else "disabled"
         self.append_log(f"[INFO] Auto start {state}.\n")
 
-    def confirm_save(self):
-        if not self.confirm(
-            "Save Settings",
-            "Write the current settings to json_files/settings.json?",
-            "SAVE",
-        ):
-            return
-        self.save()
+    def persist_single_setting(self, key, show_log=True, show_error=True):
+        field = self.fields.get(key)
+        if field is None:
+            return False
+        try:
+            self.form_values[key] = self._field_value(key, field)
+        except ValueError as exc:
+            if show_error:
+                self.append_log(f"[ERROR] Invalid setting {key}: {exc}\n")
+                self.dialog("Invalid Settings", str(exc), "error")
+            return False
+        return self.persist_settings_from_visible_fields(show_log, show_error)
 
-    def save(self):
+    def persist_settings_from_visible_fields(self, show_log=True, show_error=True):
         try:
             self._capture_visible_fields()
             new_data = self._collect_settings()
         except ValueError as exc:
-            self.dialog("Invalid Settings", str(exc), "error")
-            return
+            if show_error:
+                self.append_log(f"[ERROR] Invalid settings: {exc}\n")
+                self.dialog("Invalid Settings", str(exc), "error")
+            return False
 
         save_settings(new_data)
         self.settings = new_data
         self.form_values = new_data.copy()
         self._update_auto_start_switch()
-        self.append_log("[SUCCESS] Settings saved successfully.\n")
-        self.dialog("Settings Saved", "Settings were saved successfully.", "success")
+        if show_log:
+            self.append_log("[SUCCESS] Settings saved automatically.\n")
+        return True
 
     def _collect_settings(self):
         data = {}
@@ -497,15 +504,24 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
     def _capture_visible_fields(self):
         for key, field in self.fields.items():
-            if isinstance(DEFAULT_SETTINGS[key], bool):
-                self.form_values[key] = field.isChecked()
-            else:
-                self.form_values[key] = field.text()
+            self.form_values[key] = self._field_value(key, field)
+
+    def _field_value(self, key, field):
+        default_value = DEFAULT_SETTINGS[key]
+        if isinstance(default_value, bool):
+            return field.isChecked()
+
+        raw_value = field.text()
+        if isinstance(default_value, int):
+            return int(raw_value)
+        if isinstance(default_value, float):
+            return float(raw_value)
+        return raw_value
 
     def confirm_reset(self):
         if not self.confirm(
             "Reset Visible Settings",
-            "Reset all visible setting values to defaults? This will not write to disk until you save.",
+            "Reset all visible setting values to defaults and save immediately?",
             "RESET",
         ):
             return
@@ -514,15 +530,18 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def reset_visible_settings(self):
         for key, field in self.fields.items():
             value = DEFAULT_SETTINGS[key]
+            field.blockSignals(True)
             if isinstance(value, bool):
                 field.setChecked(value)
             else:
                 field.setText(str(value))
+            field.blockSignals(False)
             self.form_values[key] = value
-        self.append_log("[INFO] Visible settings reset to defaults.\n")
+        self.persist_settings_from_visible_fields(show_log=False)
+        self.append_log("[INFO] Visible settings reset to defaults and saved.\n")
         self.dialog(
             "Settings Reset",
-            "Visible settings were reset. Save to persist changes.",
+            "Visible settings were reset and saved.",
             "info",
         )
 

@@ -295,17 +295,14 @@ class LauncherPagesMixin:
         action_bar = QHBoxLayout()
         shell_layout.addLayout(action_bar)
         action_bar.addStretch()
-        save_button = self._button("SAVE SETTINGS", "primary")
         reset_button = self._button("RESET", "secondary")
-        save_button.clicked.connect(self.confirm_save)
         reset_button.clicked.connect(self.confirm_reset)
-        action_bar.addWidget(save_button)
         action_bar.addWidget(reset_button)
         self._render_settings_group("GENERAL")
         return page
 
     def _render_settings_group(self, group_name):
-        self._capture_visible_fields()
+        self.persist_settings_from_visible_fields(show_log=False, show_error=False)
         while self.settings_form_layout.count():
             item = self.settings_form_layout.takeAt(0)
             widget = item.widget()
@@ -327,10 +324,23 @@ class LauncherPagesMixin:
             self.settings_form_layout.addWidget(label, row, col)
             if isinstance(default_value, bool):
                 field = CyberSwitch()
+                field.blockSignals(True)
                 field.setChecked(bool(self.form_values.get(key, default_value)))
+                field.blockSignals(False)
+                field.toggled.connect(
+                    lambda checked=False, setting_key=key: self.persist_single_setting(
+                        setting_key
+                    )
+                )
             else:
                 field = QLineEdit(str(self.form_values.get(key, default_value)))
                 field.setObjectName("SettingField")
+                field.editingFinished.connect(
+                    lambda setting_key=key: self.persist_single_setting(setting_key)
+                )
+                field.returnPressed.connect(
+                    lambda setting_key=key: self.persist_single_setting(setting_key)
+                )
             self.fields[key] = field
             self.settings_form_layout.addWidget(field, row, col + 1)
 
