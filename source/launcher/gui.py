@@ -147,7 +147,9 @@ class CyberSwitch(QCheckBox):
         if self.text():
             painter.setPen(QColor(COLORS["text"]))
             painter.setFont(self.font())
-            painter.drawText(62, 0, self.width() - 62, self.height(), Qt.AlignVCenter, self.text())
+            painter.drawText(
+                62, 0, self.width() - 62, self.height(), Qt.AlignVCenter, self.text()
+            )
 
 
 class MeterBar(QWidget):
@@ -175,7 +177,9 @@ class MeterBar(QWidget):
         painter.drawRoundedRect(total_rect, 2, 2)
 
         used_rect = QRect(0, rail_y, used_width, 5)
-        painter.setBrush(QColor(COLORS["yellow"] if self.percent >= 80 else self.accent))
+        painter.setBrush(
+            QColor(COLORS["yellow"] if self.percent >= 80 else self.accent)
+        )
         painter.drawRoundedRect(used_rect, 2, 2)
 
 
@@ -1599,9 +1603,7 @@ class SettingsGUI(QMainWindow):
                 memory = psutil.virtual_memory()
                 used_gb = memory.used / (1024**3)
                 total_gb = memory.total / (1024**3)
-                memory_text = (
-                    f"{used_gb:.1f}G / {total_gb:.1f}G"
-                )
+                memory_text = f"{used_gb:.1f}G / {total_gb:.1f}G"
                 self.memory_meter.set_percent((used_gb / total_gb) * 100)
             else:
                 memory = get_memory_usage_gb()
