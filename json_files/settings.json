@@ -20,5 +20,7 @@
     "crafting": false,
     "seeds_230": false,
     "side_crop_plot": false,
-    "y_trap_bot": false
+    "y_trap_bot": false,
+    "allow_focus_ark_window": false,
+    "focus_ark_window_interval": 5.0
 }

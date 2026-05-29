@@ -120,6 +120,8 @@ DEFAULT_SETTINGS = {
     "seeds_230": False,
     "side_crop_plot": False,
     "y_trap_bot": False,
+    "allow_focus_ark_window": True,
+    "focus_ark_window_interval": 5.0,
 }
 
 SETTINGS_GROUPS = {
@@ -151,6 +153,8 @@ SETTINGS_GROUPS = {
         "seeds_230",
         "side_crop_plot",
         "y_trap_bot",
+        "allow_focus_ark_window",
+        "focus_ark_window_interval",
     ],
     "ADVANCED": list(DEFAULT_SETTINGS.keys()),
 }

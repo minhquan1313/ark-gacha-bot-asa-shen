@@ -32,6 +32,8 @@ crafting: bool = data["crafting"]
 seeds_230: bool = data["seeds_230"]
 side_crop_plot: bool = data["side_crop_plot"]
 y_trap_bot: bool = data["y_trap_bot"]
+allow_focus_ark_window: bool = data.get("allow_focus_ark_window", True)
+focus_ark_window_interval: float = float(data.get("focus_ark_window_interval", 5.0))
 
 
 if __name__ == "__main__":
