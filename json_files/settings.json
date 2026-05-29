@@ -1,7 +1,7 @@
 {   
-    "screen_resolution":"VALUE DOES NOT MATTER", 
-    "base_path":"VALUE DOES NOT MATTER",
-    "lag_offset": 1.0,
+    "screen_resolution": "VALUE DOES NOT MATTER",
+    "base_path": "VALUE DOES NOT MATTER",
+    "lag_offset": 2.0,
     "iguanadon": "GACHAIGUANADON",
     "drop_off": "GACHADEDI",
     "bed_spawn": "GACHARENDER",
@@ -12,15 +12,14 @@
     "render_pushout": 0.0,
     "height_ele": 3,
     "height_grind": 3,
-    "command_prefix": "%",
     "server_number": "0",
-  "auto_start_program": true,
+    "auto_start_program": false,
     "singleplayer": false,
     "external_berry": false,
     "crafting": false,
     "seeds_230": false,
     "side_crop_plot": false,
     "y_trap_bot": false,
-    "allow_focus_ark_window": false,
+    "allow_focus_ark_window": true,
     "focus_ark_window_interval": 5.0
 }
