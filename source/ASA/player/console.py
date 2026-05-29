@@ -80,13 +80,15 @@ def console_ccc():
             # When somehow console has some weird value command already there, and the compare function of is_open will never return true,
             # then we have to try and open the console with the key press then press Enter to clear that current command
             # so the command console will be clear and ready for the is_open to check again.
-            utils.press_key("ConsoleKeys") # Open console again
+            utils.press_key("ConsoleKeys")  # Open console again
             time.sleep(0.1)
-            utils.press_key("PauseMenu") # Clear current console value
-            time.sleep(0.1)
-            utils.press_key("PauseMenu") # Close console
-            break        
-    if data != None:    
+            utils.press_key(
+                "Enter"
+            )  # Enter current command to clear it and also close console
+            # utils.press_key("PauseMenu") # Clear current console value
+            # time.sleep(0.1)
+            # utils.press_key("PauseMenu") # Close console
+            break
     if data != None:
         ccc_data = data.split()
         return ccc_data
