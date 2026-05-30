@@ -62,6 +62,7 @@ class DepositHelperGuide(QDialog):
         self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.page_index = 0
         self.drag_position = None
+        self.mouse_inside = False
 
         shell = QFrame()
         shell.setObjectName("DepositHelperWindow")
@@ -158,6 +159,31 @@ class DepositHelperGuide(QDialog):
         self.next_button.setEnabled(self.page_index < len(self.PAGES) - 1)
         self.page_label.setText(f"{self.page_index + 1} / {len(self.PAGES)}")
 
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.ActivationChange:
+            self._sync_parent_opacity()
+
+    def enterEvent(self, event):
+        self.mouse_inside = True
+        self._sync_parent_opacity()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.mouse_inside = False
+        self._sync_parent_opacity()
+        super().leaveEvent(event)
+
+    def closeEvent(self, event):
+        self.mouse_inside = False
+        self._sync_parent_opacity()
+        super().closeEvent(event)
+
+    def _sync_parent_opacity(self):
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "sync_window_opacity"):
+            parent.sync_window_opacity()
+
     def eventFilter(self, watched, event):
         if watched not in (
             getattr(self, "header_frame", None),
@@ -195,6 +221,7 @@ class DepositRouteHelper(QWidget):
         self.row_widgets = []
         self.guide = None
         self.drag_position = None
+        self.mouse_inside = False
         self.hotkey_id = (id(self) & 0x3FFF) + 1
         self.hotkey_registered = False
 
@@ -321,6 +348,34 @@ class DepositRouteHelper(QWidget):
             return True, 0
         return super().nativeEvent(event_type, message)
 
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.ActivationChange:
+            self.sync_window_opacity()
+
+    def sync_window_opacity(self):
+        guide_active = self.guide is not None and self.guide.isActiveWindow()
+        guide_hovered = self.guide is not None and self.guide.mouse_inside
+        owner_active = self.owner is not None and self.owner.isActiveWindow()
+        keep_visible = (
+            self.mouse_inside
+            or guide_hovered
+            or self.isActiveWindow()
+            or guide_active
+            or owner_active
+        )
+        self.setWindowOpacity(1.0 if keep_visible else 0.3)
+
+    def enterEvent(self, event):
+        self.mouse_inside = True
+        self.sync_window_opacity()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.mouse_inside = False
+        self.sync_window_opacity()
+        super().leaveEvent(event)
+
     def eventFilter(self, watched, event):
         if watched not in (
             getattr(self, "header_frame", None),
@@ -365,6 +420,7 @@ class DepositRouteHelper(QWidget):
         self.guide.show()
         self.guide.raise_()
         self.guide.activateWindow()
+        self.sync_window_opacity()
 
     def route(self):
         key = (
@@ -438,7 +494,8 @@ class DepositRouteHelper(QWidget):
         self.save_and_refresh()
 
     def select_entry(self, kind, index):
-        self.selected = (kind, index)
+        target = (kind, index)
+        self.selected = None if self.selected == target else target
         for row in self.row_widgets:
             row.sync_selected()
 
@@ -454,6 +511,7 @@ class DepositRouteHelper(QWidget):
         self.refocus_helper()
         entry["location"]["yaw"] = yaw
         entry["location"]["pitch"] = pitch
+        self.selected = None
         self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
         self.save_and_refresh()
 
