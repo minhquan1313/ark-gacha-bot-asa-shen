@@ -89,7 +89,7 @@ class DepositHelperGuide(QDialog):
         close.clicked.connect(self.close)
         header.addWidget(self.header_title)
         header.addStretch()
-        header.addWidget(close)
+        header.addWidget(close, alignment=Qt.AlignTop)
         layout.addWidget(self.header_frame)
 
         self.stack = QStackedWidget()
