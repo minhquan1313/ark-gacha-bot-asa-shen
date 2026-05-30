@@ -212,6 +212,18 @@ def launcher_style_sheet():
             font-size: {FONT_SIZES["form"]}px;
             padding: 6px 0 0 0;
         }}
+        QWidget#HelperGuidePage {{
+            background: transparent;
+        }}
+        QLabel#HelperGuideImage {{
+            background: rgba(18, 28, 42, 120);
+            border: 1px solid {COLORS["border"]};
+        }}
+        QLabel#HelperGuideStepTitle {{
+            color: {COLORS["cyan"]};
+            font-weight: 900;
+            font-size: {FONT_SIZES["panel_title"]}px;
+        }}
         QScrollArea#HelperScroll {{
             background: transparent;
             border: none;

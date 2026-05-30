@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QScrollArea,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -29,13 +30,38 @@ WM_HOTKEY = 0x0312
 
 
 class DepositHelperGuide(QDialog):
+    PAGES = [
+        (
+            "STEP 1 / RENDER BED",
+            "Lay in the Gacha render bed first. This keeps the route setup aligned with the same starting flow the bot uses.",
+            "welcome",
+        ),
+        (
+            "STEP 2 / TELEPORT",
+            "Get out of bed and teleport to the route teleporter you are editing in the helper.",
+            "dashboard",
+        ),
+        (
+            "STEP 3 / AIM AT TARGET",
+            "Aim at the dedi, vault, or grinder until the in-game deposit/access prompt is visible.",
+            "logo",
+        ),
+        (
+            "STEP 4 / CAPTURE",
+            "Select the row in the helper and press capture. The helper focuses Ark, runs ccc through the existing console flow, then saves yaw and pitch.",
+            "logo_text",
+        ),
+    ]
+
     def __init__(self, parent):
         super().__init__(parent)
         self.setObjectName("DepositHelperGuide")
         self.setStyleSheet(parent.styleSheet())
         self.setWindowTitle("Deposit Helper Guide")
         self.setModal(False)
-        self.setWindowFlags(Qt.Tool | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.page_index = 0
+        self.drag_position = None
 
         shell = QFrame()
         shell.setObjectName("DepositHelperWindow")
@@ -47,41 +73,116 @@ class DepositHelperGuide(QDialog):
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(10)
 
-        header = QHBoxLayout()
-        title = QLabel("HELPER GUIDE")
-        title.setObjectName("HelperTitle")
+        self.header_frame = QFrame()
+        self.header_frame.setObjectName("HelperHeader")
+        self.header_frame.installEventFilter(self)
+        header = QHBoxLayout(self.header_frame)
+        header.setContentsMargins(0, 0, 0, 0)
+        self.header_title = QLabel("HELPER GUIDE")
+        self.header_title.setObjectName("HelperTitle")
+        self.header_title.installEventFilter(self)
         close = AnimatedButton("X", "danger")
         close.setObjectName("HelperIconButton")
         close.setFixedHeight(30)
         close.setMinimumWidth(36)
         close.clicked.connect(self.close)
-        header.addWidget(title)
+        header.addWidget(self.header_title)
         header.addStretch()
         header.addWidget(close)
-        layout.addLayout(header)
+        layout.addWidget(self.header_frame)
+
+        self.stack = QStackedWidget()
+        for title_text, body_text, asset_key in self.PAGES:
+            self.stack.addWidget(self._guide_page(title_text, body_text, asset_key))
+        layout.addWidget(self.stack, 1)
+
+        footer = QHBoxLayout()
+        self.prev_button = AnimatedButton("PREV", "secondary")
+        self.prev_button.clicked.connect(self.previous_page)
+        self.page_label = QLabel()
+        self.page_label.setObjectName("HelperHint")
+        self.next_button = AnimatedButton("NEXT", "primary")
+        self.next_button.clicked.connect(self.next_page)
+        footer.addWidget(self.prev_button)
+        footer.addStretch()
+        footer.addWidget(self.page_label)
+        footer.addStretch()
+        footer.addWidget(self.next_button)
+        layout.addLayout(footer)
+        self._sync_page_controls()
+
+        self.resize(420, 420)
+
+    def _guide_page(self, title_text, body_text, asset_key):
+        page = QWidget()
+        page.setObjectName("HelperGuidePage")
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
 
         image = QLabel()
+        image.setObjectName("HelperGuideImage")
         image.setAlignment(Qt.AlignCenter)
-        pixmap = QPixmap(ASSETS["welcome"])
+        image.setMinimumHeight(150)
+        pixmap = QPixmap(ASSETS.get(asset_key, ""))
         if pixmap.isNull():
             pixmap = QPixmap(ASSETS["logo"])
         if not pixmap.isNull():
             image.setPixmap(
-                pixmap.scaled(320, 120, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                pixmap.scaled(360, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         layout.addWidget(image)
 
-        body = QLabel(
-            "1. Lay in the Gacha render bed.\n"
-            "2. Get out and teleport to the desired teleporter.\n"
-            "3. Aim at the dedi, vault, or grinder until the in-game deposit/access prompt is visible.\n"
-            "4. Use the helper capture button to save yaw and pitch."
-        )
+        title = QLabel(title_text)
+        title.setObjectName("HelperGuideStepTitle")
+        layout.addWidget(title)
+
+        body = QLabel(body_text)
         body.setObjectName("MutedCopy")
         body.setWordWrap(True)
         layout.addWidget(body)
+        layout.addStretch()
+        return page
 
-        self.resize(380, 320)
+    def next_page(self):
+        self.page_index = min(self.page_index + 1, len(self.PAGES) - 1)
+        self._sync_page_controls()
+
+    def previous_page(self):
+        self.page_index = max(self.page_index - 1, 0)
+        self._sync_page_controls()
+
+    def _sync_page_controls(self):
+        self.stack.setCurrentIndex(self.page_index)
+        self.prev_button.setEnabled(self.page_index > 0)
+        self.next_button.setEnabled(self.page_index < len(self.PAGES) - 1)
+        self.page_label.setText(f"{self.page_index + 1} / {len(self.PAGES)}")
+
+    def eventFilter(self, watched, event):
+        if watched not in (
+            getattr(self, "header_frame", None),
+            getattr(self, "header_title", None),
+        ):
+            return super().eventFilter(watched, event)
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self.drag_position = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
+            event.accept()
+            return True
+        if (
+            event.type() == QEvent.MouseMove
+            and self.drag_position is not None
+            and event.buttons() & Qt.LeftButton
+        ):
+            self.move(event.globalPosition().toPoint() - self.drag_position)
+            event.accept()
+            return True
+        if event.type() == QEvent.MouseButtonRelease:
+            self.drag_position = None
+            event.accept()
+            return True
+        return super().eventFilter(watched, event)
 
 
 class DepositRouteHelper(QWidget):
@@ -347,12 +448,19 @@ class DepositRouteHelper(QWidget):
         try:
             yaw, pitch = capture_ccc_yaw_pitch()
         except Exception as exc:
+            self.refocus_helper()
             self.status.setText(f"Capture failed: {exc}")
             return
+        self.refocus_helper()
         entry["location"]["yaw"] = yaw
         entry["location"]["pitch"] = pitch
         self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
         self.save_and_refresh()
+
+    def refocus_helper(self):
+        self.show()
+        self.raise_()
+        self.activateWindow()
 
     def _capture_target(self, default_kind):
         if self.selected is not None:
