@@ -56,29 +56,51 @@ def _route_teleport_name(route):
 def _teleport_to_route(route):
     teleport_name = _route_teleport_name(route)
     metadata = custom_stations.get_station_metadata(teleport_name)
-    logs.logger.debug(f"teleporting to deposit route {teleport_name}")
+    logs.logger.debug(f"Teleporting to deposit route {teleport_name}")
     teleporter.teleport_not_default(metadata)
     return metadata
 
 
-def _restore_route_view(metadata):
-    player_state.human.reset_crouch()
-    utils.set_pitch(0)
-    utils.set_yaw(metadata.yaw)
+def _route_matches_metadata(route, metadata):
+    return metadata is not None and getattr(
+        metadata, "name", None
+    ) == _route_teleport_name(route)
+
+
+def _sync_route_view(metadata):
+    try:
+        yaw, pitch = utils.get_yaw_pitch()
+        utils.current_yaw = float(yaw)
+        utils.current_pitch = float(pitch)
+    except Exception as exc:
+        logs.logger.error(f"Unable to sync route view from CCC: {exc}")
+    _restore_route_view(metadata)
+
+
+def _restore_route_view(metadata, reset_crouch=True):
+    if reset_crouch:
+        player_state.human.reset_crouch()
+    utils.turn_to(metadata.yaw, 0)
+
+
+def _set_object_crouch(item):
+    crouched = item.get("crouched", False) if isinstance(item, dict) else False
+    if crouched:
+        if not player_state.human.crouched:
+            player_state.human.crouch()
+            time.sleep(0.2 * settings.lag_offset)
+    elif player_state.human.crouched:
+        player_state.human.reset_crouch()
+        time.sleep(0.2 * settings.lag_offset)
 
 
 def _turn_to_object(route_metadata, item):
     location = item.get("location", {}) if isinstance(item, dict) else {}
     yaw = _float_setting(location, "yaw", 0.0)
     pitch = _float_setting(location, "pitch", 0.0)
-    utils.set_pitch(0)
-    utils.set_yaw(route_metadata.yaw)
-    crouched = item.get("crouched", False) if isinstance(item, dict) else False
-    if crouched:
-        player_state.human.crouch()
-    else:
-        player_state.human.reset_crouch()
+    utils.turn_to(route_metadata.yaw, 0)
     utils.turn_to(yaw, pitch)
+    _set_object_crouch(item)
 
 
 def _open_inventory_template(
@@ -130,7 +152,7 @@ def _process_crystal_dedi(route, route_metadata, item, index):
     time.sleep(0.3 * settings.lag_offset)
     utils.press_key("Use")
     time.sleep(0.3 * settings.lag_offset)
-    _restore_route_view(route_metadata)
+    _restore_route_view(route_metadata, reset_crouch=False)
 
 
 def _process_vault(route, route_metadata, vault, index):
@@ -145,7 +167,7 @@ def _process_vault(route, route_metadata, vault, index):
     time.sleep(0.2 * settings.lag_offset)
 
     if not _open_inventory_template("vault", route, route_metadata, vault, label):
-        _restore_route_view(route_metadata)
+        _restore_route_view(route_metadata, reset_crouch=False)
         return
 
     if template.template_await_true(template.check_template, 1, "inventory", 0.7):
@@ -157,7 +179,7 @@ def _process_vault(route, route_metadata, vault, index):
     inventory.close()
     template.template_await_false(template.check_template, 1, "inventory", 0.7)
     time.sleep(0.2 * settings.lag_offset)
-    _restore_route_view(route_metadata)
+    _restore_route_view(route_metadata, reset_crouch=False)
 
 
 def _process_grinder(route, route_metadata):
@@ -169,7 +191,7 @@ def _process_grinder(route, route_metadata):
     time.sleep(0.5 * settings.lag_offset)
 
     if not _open_inventory_template("grinder", route, route_metadata, grinder, label):
-        _restore_route_view(route_metadata)
+        _restore_route_view(route_metadata, reset_crouch=False)
         return
 
     if template.check_template("grinder", 0.7):
@@ -180,23 +202,13 @@ def _process_grinder(route, route_metadata):
             variables.get_pixel_loc("dedi_withdraw_y"),
         )
         time.sleep(0.3 * settings.lag_offset)
-        inventory.close()
-
-    template.template_await_false(template.check_template, 1, "inventory", 0.7)
-    time.sleep(0.2 * settings.lag_offset)
-
-    if not _open_inventory_template("grinder", route, route_metadata, grinder, label):
-        _restore_route_view(route_metadata)
-        return
-
-    if template.check_template("grinder", 0.7):
         inventory.transfer_all_from()
         time.sleep(0.2 * settings.lag_offset)
         inventory.close()
 
     template.template_await_false(template.check_template, 1, "inventory", 0.7)
     time.sleep(0.2 * settings.lag_offset)
-    _restore_route_view(route_metadata)
+    _restore_route_view(route_metadata, reset_crouch=False)
 
 
 def _process_grindable_dedi(route, route_metadata, item, index):
@@ -207,11 +219,21 @@ def _process_grindable_dedi(route, route_metadata, item, index):
     time.sleep(0.3 * settings.lag_offset)
     utils.press_key("Use")
     time.sleep(0.3 * settings.lag_offset)
-    _restore_route_view(route_metadata)
+    _restore_route_view(route_metadata, reset_crouch=False)
 
 
-def _process_crystal_route(route, open_first_route_crystals=False):
-    route_metadata = _teleport_to_route(route)
+def _process_crystal_route(
+    route, open_first_route_crystals=False, current_metadata=None, skip_if_current=False
+):
+    if skip_if_current and _route_matches_metadata(route, current_metadata):
+        route_metadata = current_metadata
+        logs.logger.debug(
+            f"Already on deposit route {_route_teleport_name(route)}; skipping teleport"
+        )
+    else:
+        route_metadata = _teleport_to_route(route)
+    _sync_route_view(route_metadata)
+
     if open_first_route_crystals:
         logs.logger.debug("opening crystals")
         open_crystals()
@@ -247,20 +269,28 @@ def _process_grindable_routes(routes):
             "at the first grindable teleport and skipping grindable routes."
         )
         route_metadata = _teleport_to_route(routes[0])
+        _sync_route_view(route_metadata)
         drop_useless()
         _restore_route_view(route_metadata)
         return
 
     active_route = routes[active_index]
     route_metadata = _teleport_to_route(active_route)
+    _sync_route_view(route_metadata)
     _process_grinder(active_route, route_metadata)
     _process_grindable_route(active_route, route_metadata)
+    last_route_metadata = route_metadata
 
     for index, route in enumerate(routes):
         if index == active_index:
             continue
         route_metadata = _teleport_to_route(route)
+        _sync_route_view(route_metadata)
         _process_grindable_route(route, route_metadata)
+        last_route_metadata = route_metadata
+
+    drop_useless()
+    _restore_route_view(last_route_metadata)
 
 
 def deposit_all(metadata):
@@ -269,6 +299,11 @@ def deposit_all(metadata):
     grindable_routes = deposit_config["depositGrindableData"]
 
     for index, route in enumerate(crystal_routes):
-        _process_crystal_route(route, open_first_route_crystals=index == 0)
+        _process_crystal_route(
+            route,
+            open_first_route_crystals=index == 0,
+            current_metadata=metadata if index == 0 else None,
+            skip_if_current=index == 0,
+        )
 
     _process_grindable_routes(grindable_routes)
