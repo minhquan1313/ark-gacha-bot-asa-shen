@@ -6,31 +6,45 @@
         "items": [
           {
             "location": {
-              "yaw": 0.0,
-              "pitch": 0.0
+              "yaw": 33.0,
+              "pitch": 44.0
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": 0.0,
-              "pitch": 0.0
+              "yaw": -48.85,
+              "pitch": 18.73
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": 0.0,
-              "pitch": 0.0
+              "yaw": -109.97,
+              "pitch": -25.34
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": 0.0,
-              "pitch": 0.0
+              "yaw": -43.89,
+              "pitch": -26.56
             },
             "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -106.03,
+              "pitch": -32.91
+            },
+            "crouched": true
+          },
+          {
+            "location": {
+              "yaw": -48.3,
+              "pitch": -32.07
+            },
+            "crouched": true
           }
         ]
       },
@@ -38,19 +52,19 @@
         "items": [
           {
             "location": {
-              "yaw": 0.0,
-              "pitch": 0.0
+              "yaw": -177.79,
+              "pitch": -10.64
             },
-            "crouched": false,
-            "items": ["riot"]
+            "crouched": true,
+            "items": ["tree"]
           },
           {
             "location": {
-              "yaw": 0.0,
-              "pitch": 0.0
+              "yaw": 20.6,
+              "pitch": -11.27
             },
-            "crouched": false,
-            "items": ["assault", "gate", "tree", "riot"]
+            "crouched": true,
+            "items": ["assault", "tree", "gate", "riot"]
           }
         ]
       }
