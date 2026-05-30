@@ -178,6 +178,10 @@ def launcher_style_sheet():
             background: rgba(18, 28, 42, 90);
             border: 1px solid {COLORS["border"]};
         }}
+        QFrame#DepositRouteCard {{
+            background: rgba(18, 28, 42, 90);
+            border: 1px solid {COLORS["border"]};
+        }}
         QCheckBox {{
             color: {COLORS["text"]};
         }}

@@ -15,6 +15,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from source.gacha_bot.deposit_config import (
+    default_deposit_config,
+    default_crystal_route,
+    default_dedi_item,
+    default_grindable_route,
+    default_vault_item,
+    load_deposit_config,
+    save_deposit_config,
+)
 from source.launcher.constants import (
     APP_NAME,
     APP_TITLE,
@@ -302,6 +311,7 @@ class LauncherPagesMixin:
         return page
 
     def _render_settings_group(self, group_name):
+        self.current_settings_group = group_name
         self.persist_settings_from_visible_fields(show_log=False, show_error=False)
         while self.settings_form_layout.count():
             item = self.settings_form_layout.takeAt(0)
@@ -309,6 +319,10 @@ class LauncherPagesMixin:
             if widget:
                 widget.deleteLater()
         self.fields = {}
+
+        if group_name == "DEPOSIT ROUTES":
+            self._render_deposit_routes_group()
+            return
 
         heading = QLabel(f"{group_name} SETTINGS")
         heading.setObjectName("SectionHeading")
@@ -346,6 +360,374 @@ class LauncherPagesMixin:
 
         self.settings_form_layout.setColumnStretch(1, 1)
         self.settings_form_layout.setColumnStretch(3, 1)
+
+    def _render_deposit_routes_group(self):
+        self._ensure_deposit_config()
+        heading = QLabel("DEPOSIT ROUTES")
+        heading.setObjectName("SectionHeading")
+        self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(12)
+        self.settings_form_layout.addWidget(content, 1, 0, 1, 4)
+
+        crystal_heading = QLabel("CRYSTAL DEPOSIT ROUTES")
+        crystal_heading.setObjectName("PanelTitle")
+        content_layout.addWidget(crystal_heading)
+        for route_index, route in enumerate(self.deposit_config["depositCrystalData"]):
+            content_layout.addWidget(self._crystal_route_card(route, route_index))
+        add_crystal = self._button("ADD CRYSTAL ROUTE", "secondary")
+        add_crystal.clicked.connect(self.add_crystal_route)
+        content_layout.addWidget(add_crystal, alignment=Qt.AlignRight)
+
+        grindable_heading = QLabel("GRINDABLE ROUTES")
+        grindable_heading.setObjectName("PanelTitle")
+        content_layout.addWidget(grindable_heading)
+        for route_index, route in enumerate(
+            self.deposit_config["depositGrindableData"]
+        ):
+            content_layout.addWidget(self._grindable_route_card(route, route_index))
+        add_grindable = self._button("ADD GRINDABLE ROUTE", "secondary")
+        add_grindable.clicked.connect(self.add_grindable_route)
+        content_layout.addWidget(add_grindable, alignment=Qt.AlignRight)
+        content_layout.addStretch()
+
+    def _crystal_route_card(self, route, route_index):
+        card, layout = self._deposit_route_card(
+            f"CRYSTAL ROUTE {route_index + 1}",
+            lambda checked=False, index=route_index: self.remove_crystal_route(index),
+        )
+        self._add_route_teleport_field(layout, route)
+
+        self._add_deposit_subheading(layout, "DEDIS")
+        for item_index, item in enumerate(route["dedi"]["items"]):
+            layout.addLayout(
+                self._dedi_row(
+                    item,
+                    lambda checked=False, r=route_index, i=item_index: self.remove_crystal_dedi(
+                        r, i
+                    ),
+                )
+            )
+        add_dedi = self._button("ADD DEDI", "secondary")
+        add_dedi.clicked.connect(
+            lambda checked=False, index=route_index: self.add_crystal_dedi(index)
+        )
+        layout.addWidget(add_dedi, alignment=Qt.AlignRight)
+
+        self._add_deposit_subheading(layout, "VAULTS")
+        for vault_index, vault in enumerate(route["vault"]["items"]):
+            layout.addLayout(
+                self._vault_row(
+                    vault,
+                    lambda checked=False, r=route_index, i=vault_index: self.remove_crystal_vault(
+                        r, i
+                    ),
+                )
+            )
+        add_vault = self._button("ADD VAULT", "secondary")
+        add_vault.clicked.connect(
+            lambda checked=False, index=route_index: self.add_crystal_vault(index)
+        )
+        layout.addWidget(add_vault, alignment=Qt.AlignRight)
+        return card
+
+    def _grindable_route_card(self, route, route_index):
+        card, layout = self._deposit_route_card(
+            f"GRINDABLE ROUTE {route_index + 1}",
+            lambda checked=False, index=route_index: self.remove_grindable_route(index),
+        )
+        self._add_route_teleport_field(layout, route)
+
+        self._add_deposit_subheading(layout, "GRINDER")
+        grinder = route["grinder"]
+        grinder_row = QHBoxLayout()
+        grinder_row.setSpacing(8)
+        active = CyberSwitch("ACTIVE")
+        active.blockSignals(True)
+        active.setChecked(bool(grinder.get("active", False)))
+        active.blockSignals(False)
+        active.toggled.connect(
+            lambda checked, route_grinder=grinder: self.update_deposit_bool(
+                route_grinder, "active", checked
+            )
+        )
+        grinder_row.addWidget(active)
+        self._add_yaw_pitch_fields(grinder_row, grinder)
+        crouched = self._crouch_switch(grinder)
+        grinder_row.addWidget(crouched)
+        grinder_row.addStretch()
+        layout.addLayout(grinder_row)
+
+        self._add_deposit_subheading(layout, "DEDIS")
+        for item_index, item in enumerate(route["dedi"]["items"]):
+            layout.addLayout(
+                self._dedi_row(
+                    item,
+                    lambda checked=False, r=route_index, i=item_index: self.remove_grindable_dedi(
+                        r, i
+                    ),
+                )
+            )
+        add_dedi = self._button("ADD DEDI", "secondary")
+        add_dedi.clicked.connect(
+            lambda checked=False, index=route_index: self.add_grindable_dedi(index)
+        )
+        layout.addWidget(add_dedi, alignment=Qt.AlignRight)
+        return card
+
+    def _deposit_route_card(self, title, remove_handler):
+        card = QFrame()
+        card.setObjectName("DepositRouteCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+        header = QHBoxLayout()
+        label = QLabel(title)
+        label.setObjectName("PanelTitle")
+        remove = self._button("REMOVE ROUTE", "danger")
+        remove.clicked.connect(remove_handler)
+        header.addWidget(label)
+        header.addStretch()
+        header.addWidget(remove)
+        layout.addLayout(header)
+        return card, layout
+
+    def _add_route_teleport_field(self, layout, route):
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        label = QLabel("teleport")
+        label.setObjectName("FormLabel")
+        field = self._deposit_line_edit(route.get("teleport", ""))
+        field.editingFinished.connect(
+            lambda field=field, item=route: self.update_deposit_text(
+                item, "teleport", field
+            )
+        )
+        field.returnPressed.connect(
+            lambda field=field, item=route: self.update_deposit_text(
+                item, "teleport", field
+            )
+        )
+        row.addWidget(label)
+        row.addWidget(field, 1)
+        layout.addLayout(row)
+
+    def _add_deposit_subheading(self, layout, text):
+        label = QLabel(text)
+        label.setObjectName("FormLabel")
+        layout.addWidget(label)
+
+    def _dedi_row(self, item, remove_handler):
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self._add_yaw_pitch_fields(row, item)
+        row.addWidget(self._crouch_switch(item))
+        remove = self._button("REMOVE", "danger")
+        remove.clicked.connect(remove_handler)
+        row.addWidget(remove)
+        return row
+
+    def _vault_row(self, vault, remove_handler):
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self._add_yaw_pitch_fields(row, vault)
+        items_label = QLabel("items")
+        items_label.setObjectName("FormLabel")
+        items = self._deposit_line_edit(", ".join(vault.get("items", [])))
+        items.editingFinished.connect(
+            lambda field=items, item=vault: self.update_deposit_items(item, field)
+        )
+        items.returnPressed.connect(
+            lambda field=items, item=vault: self.update_deposit_items(item, field)
+        )
+        remove = self._button("REMOVE", "danger")
+        remove.clicked.connect(remove_handler)
+        row.addWidget(items_label)
+        row.addWidget(items, 1)
+        row.addWidget(remove)
+        return row
+
+    def _add_yaw_pitch_fields(self, row, item):
+        location = item["location"]
+        for key in ("yaw", "pitch"):
+            label = QLabel(key)
+            label.setObjectName("FormLabel")
+            field = self._deposit_line_edit(str(location.get(key, 0.0)))
+            field.editingFinished.connect(
+                lambda field=field, loc=location, name=key: self.update_deposit_float(
+                    loc, name, field
+                )
+            )
+            field.returnPressed.connect(
+                lambda field=field, loc=location, name=key: self.update_deposit_float(
+                    loc, name, field
+                )
+            )
+            row.addWidget(label)
+            row.addWidget(field)
+
+    def _crouch_switch(self, item):
+        switch = CyberSwitch("CROUCHED")
+        switch.blockSignals(True)
+        switch.setChecked(bool(item.get("crouched", False)))
+        switch.blockSignals(False)
+        switch.toggled.connect(
+            lambda checked, route_item=item: self.update_deposit_bool(
+                route_item, "crouched", checked
+            )
+        )
+        return switch
+
+    def _deposit_line_edit(self, value):
+        field = QLineEdit(str(value))
+        field.setObjectName("SettingField")
+        return field
+
+    def _ensure_deposit_config(self):
+        if hasattr(self, "deposit_config"):
+            return
+        try:
+            self.deposit_config = load_deposit_config(
+                crystal_teleport=self.settings.get("drop_off", ""),
+                grindable_teleport=self.settings.get("grindables", ""),
+            )
+        except ValueError as exc:
+            self.deposit_config = {
+                "depositCrystalData": [default_crystal_route()],
+                "depositGrindableData": [default_grindable_route()],
+            }
+            self.append_log(f"[ERROR] Invalid deposit route config: {exc}\n")
+            self.dialog("Invalid Deposit Routes", str(exc), "error")
+
+    def save_deposit_routes(self, show_log=True):
+        try:
+            save_deposit_config(self.deposit_config)
+        except ValueError as exc:
+            self.append_log(f"[ERROR] Invalid deposit route config: {exc}\n")
+            self.dialog("Invalid Deposit Routes", str(exc), "error")
+            return False
+        if show_log:
+            self.append_log("[SUCCESS] Deposit routes saved automatically.\n")
+        return True
+
+    def update_deposit_text(self, item, key, field):
+        item[key] = field.text()
+        self.save_deposit_routes()
+
+    def update_deposit_float(self, location, key, field):
+        previous = location.get(key, 0.0)
+        try:
+            location[key] = float(field.text())
+        except ValueError:
+            field.setText(str(previous))
+            self.append_log(f"[ERROR] Invalid deposit route {key}: must be a float.\n")
+            self.dialog(
+                "Invalid Deposit Route", f"{key} must be a float number.", "error"
+            )
+            return
+        if not self.save_deposit_routes():
+            location[key] = previous
+            field.setText(str(previous))
+
+    def update_deposit_bool(self, item, key, checked):
+        item[key] = bool(checked)
+        self.save_deposit_routes()
+
+    def update_deposit_items(self, vault, field):
+        vault["items"] = [
+            item.strip() for item in field.text().split(",") if item.strip()
+        ]
+        self.save_deposit_routes()
+
+    def add_crystal_route(self):
+        self.deposit_config["depositCrystalData"].append(default_crystal_route())
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def remove_crystal_route(self, route_index):
+        if len(self.deposit_config["depositCrystalData"]) <= 1:
+            self.dialog(
+                "Deposit Routes",
+                "At least one crystal deposit route is required.",
+                "warning",
+            )
+            return
+        del self.deposit_config["depositCrystalData"][route_index]
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def add_crystal_dedi(self, route_index):
+        self.deposit_config["depositCrystalData"][route_index]["dedi"]["items"].append(
+            default_dedi_item()
+        )
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def remove_crystal_dedi(self, route_index, item_index):
+        del self.deposit_config["depositCrystalData"][route_index]["dedi"]["items"][
+            item_index
+        ]
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def add_crystal_vault(self, route_index):
+        self.deposit_config["depositCrystalData"][route_index]["vault"]["items"].append(
+            default_vault_item()
+        )
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def remove_crystal_vault(self, route_index, item_index):
+        del self.deposit_config["depositCrystalData"][route_index]["vault"]["items"][
+            item_index
+        ]
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def add_grindable_route(self):
+        self.deposit_config["depositGrindableData"].append(default_grindable_route())
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def remove_grindable_route(self, route_index):
+        if len(self.deposit_config["depositGrindableData"]) <= 1:
+            self.dialog(
+                "Deposit Routes",
+                "At least one grindable route is required.",
+                "warning",
+            )
+            return
+        del self.deposit_config["depositGrindableData"][route_index]
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def add_grindable_dedi(self, route_index):
+        self.deposit_config["depositGrindableData"][route_index]["dedi"][
+            "items"
+        ].append(default_dedi_item())
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def remove_grindable_dedi(self, route_index, item_index):
+        del self.deposit_config["depositGrindableData"][route_index]["dedi"]["items"][
+            item_index
+        ]
+        self.save_deposit_routes()
+        self._render_settings_group("DEPOSIT ROUTES")
+
+    def reset_deposit_routes(self):
+        self.deposit_config = default_deposit_config()
+        self.save_deposit_routes(show_log=False)
+        self._render_settings_group("DEPOSIT ROUTES")
+        self.append_log("[INFO] Deposit routes reset to defaults and saved.\n")
+        self.dialog(
+            "Deposit Routes Reset",
+            "Deposit routes were reset and saved.",
+            "info",
+        )
 
     def _logs_page(self):
         page, layout = self._page("LogsPage")

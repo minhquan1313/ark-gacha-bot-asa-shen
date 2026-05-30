@@ -1,4 +1,4 @@
-import time 
+import time
 import settings
 import json
 from source.utility import utils ,template , windows ,variables ,screen ,local_player
@@ -6,13 +6,105 @@ from source.logs import gachalogs as logs
 from source.ASA.strucutres import teleporter , inventory
 from source.ASA.stations import custom_stations
 from source.ASA.player import player_inventory , player_state
-import source.gacha_bot.config 
-from source.gacha_bot.structures import dedi
+import source.gacha_bot.config
+from source.gacha_bot.deposit_config import DEDI_CONFIG_PATH
+from source.gacha_bot.deposit_config import load_deposit_config as load_route_config
 
-def load_resolution_data(file_path):
-    with open(file_path, 'r') as file:
-        data = json.load(file)
-    return data
+
+def load_deposit_config():
+    try:
+        return load_route_config(
+            DEDI_CONFIG_PATH,
+            crystal_teleport=settings.drop_off,
+            grindable_teleport=settings.grindables,
+            create_missing=True,
+            raise_on_missing=True,
+        )
+    except FileNotFoundError as exc:
+        message = str(exc)
+        logs.logger.error(message)
+        raise RuntimeError(message)
+    except ValueError as exc:
+        message = f"{DEDI_CONFIG_PATH} is invalid: {exc}"
+        logs.logger.error(message)
+        raise RuntimeError(message)
+
+
+def _items(container):
+    if not isinstance(container, dict):
+        return []
+    items = container.get("items", [])
+    if isinstance(items, list):
+        return items
+    return []
+
+
+def _float_setting(container, key, default=0.0):
+    try:
+        return float(container.get(key, default))
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _route_teleport_name(route):
+    teleport_name = route.get("teleport") if isinstance(route, dict) else None
+    if not teleport_name:
+        raise RuntimeError("Deposit route is missing a teleport name.")
+    return teleport_name
+
+
+def _teleport_to_route(route):
+    teleport_name = _route_teleport_name(route)
+    metadata = custom_stations.get_station_metadata(teleport_name)
+    logs.logger.debug(f"teleporting to deposit route {teleport_name}")
+    teleporter.teleport_not_default(metadata)
+    return metadata
+
+
+def _restore_route_view(metadata):
+    player_state.human.reset_crouch()
+    utils.set_pitch(0)
+    utils.set_yaw(metadata.yaw)
+
+
+def _turn_to_object(route_metadata, item):
+    location = item.get("location", {}) if isinstance(item, dict) else {}
+    yaw = _float_setting(location, "yaw", 0.0)
+    pitch = _float_setting(location, "pitch", 0.0)
+    utils.set_pitch(0)
+    utils.set_yaw(route_metadata.yaw)
+    crouched = item.get("crouched", False) if isinstance(item, dict) else False
+    if crouched:
+        player_state.human.crouch()
+    else:
+        player_state.human.reset_crouch()
+    utils.turn_to(yaw, pitch)
+
+
+def _open_inventory_template(
+    template_name, route, route_metadata, route_object, object_name
+):
+    teleport_name = _route_teleport_name(route)
+    inventory.open()
+    attempt = 0
+    while not template.template_await_true(
+        template.check_template, 1, template_name, 0.7
+    ):
+        attempt += 1
+        logs.logger.error(
+            f"{object_name} on teleport {teleport_name} was not opened; retrying"
+        )
+        inventory.close()
+        _restore_route_view(route_metadata)
+        _turn_to_object(route_metadata, route_object)
+        inventory.open()
+        if attempt >= source.gacha_bot.config.grinder_attempts:
+            logs.logger.error(
+                f"{object_name} on teleport {teleport_name} failed to open"
+            )
+            return False
+    return True
+
 
 def open_crystals():
     count = 0
@@ -21,73 +113,6 @@ def open_crystals():
             utils.press_key(f"UseItem{x+1}")
             count += 1
 
-def dedi_deposit(height):
-    if height == 3:
-        utils.turn_up(15)
-        utils.turn_left(10)
-        time.sleep(0.3*settings.lag_offset)
-        utils.press_key("Use")
-        time.sleep(0.3*settings.lag_offset)
-        utils.turn_right(40)
-        time.sleep(0.3*settings.lag_offset)
-        utils.press_key("Use")
-        time.sleep(0.3*settings.lag_offset)
-        utils.turn_left(30)
-        utils.turn_down(15)
-        time.sleep(0.3*settings.lag_offset)
-
-    utils.turn_left(10)
-    utils.press_key("Crouch")
-    time.sleep(0.3*settings.lag_offset)
-    utils.press_key("Use")
-    time.sleep(0.3*settings.lag_offset)
-    utils.turn_right(40)
-    time.sleep(0.3*settings.lag_offset)
-    utils.press_key("Use")
-    time.sleep(0.3*settings.lag_offset)
-    utils.turn_down(30)
-    time.sleep(0.3*settings.lag_offset)
-    utils.press_key("Use")
-    time.sleep(0.3*settings.lag_offset)
-    utils.turn_left(40)
-    time.sleep(0.3*settings.lag_offset)
-    utils.press_key("Use")
-    time.sleep(0.3*settings.lag_offset)
-    utils.press_key("Run")
-    utils.turn_up(30)
-    utils.turn_right(10)
-    time.sleep(0.1*settings.lag_offset)
-
-def vault_deposit(items, metadata):
-    side = metadata.side
-    if side == "right":
-        turn_constant = 1
-    else:
-        turn_constant = -1
-    utils.turn_right(90*turn_constant)
-    time.sleep(0.2*settings.lag_offset)
-    inventory.open()
-    if not template.template_await_true(template.check_template,1,"vault",0.7):
-        logs.logger.error(f"{side} vault was not opened retrying now ")
-        inventory.close()
-        utils.zero()
-        utils.set_yaw(metadata.yaw)
-        utils.turn_right(90*turn_constant)
-        time.sleep(0.2*settings.lag_offset)
-        inventory.open()
-    if template.template_await_true(template.check_template,1,"inventory",0.7):
-        time.sleep(0.1*settings.lag_offset)
-        if False:
-            logs.logger.info("your vault is full skipping adding items")
-        else:
-            for x in range(len(items)):
-                player_inventory.search_in_inventory(items[x])
-                player_inventory.transfer_all_inventory()
-                time.sleep(0.3*settings.lag_offset)
-        inventory.close()
-        time.sleep(0.2*settings.lag_offset)
-    utils.turn_left(90*turn_constant)
-    time.sleep(0.2*settings.lag_offset)
 
 def drop_useless():
     player_inventory.open()
@@ -96,101 +121,154 @@ def drop_useless():
         time.sleep(0.2*settings.lag_offset)
     player_inventory.close()
 
-def depo_grinder(metadata):
-    utils.turn_right(180)
-    time.sleep(0.5*settings.lag_offset)
-    inventory.open()
-    attempt = 0
-    while not template.template_await_true(template.check_template,1,"grinder",0.7):
-        attempt += 1
-        logs.logger.error("couldnt open up the grinder while trying to deposit")
-        inventory.close()
-        utils.zero()
-        utils.set_yaw(metadata.yaw)
-        utils.turn_right(180)
-        time.sleep(0.5*settings.lag_offset)
-        inventory.open()
-        if attempt >= source.gacha_bot.config.grinder_attempts:
-            logs.logger.error(f"while trying to deposit we couldnt access grinder")
-            break
 
-    if template.check_template("grinder",0.7):
-        player_inventory.transfer_all_inventory()
-        time.sleep(0.3*settings.lag_offset)
-        windows.click(variables.get_pixel_loc("dedi_withdraw_x"),variables.get_pixel_loc("dedi_withdraw_y")) #this is pressing the grind all button 
-        time.sleep(0.3*settings.lag_offset)
-        inventory.close()
-    template.template_await_false(template.check_template,1,"inventory",0.7)
-    time.sleep(0.2*settings.lag_offset)
-    utils.turn_right(180)
+def _process_crystal_dedi(route, route_metadata, item, index):
+    teleport_name = _route_teleport_name(route)
+    label = f"Crystal dedi {index} on teleport {teleport_name}"
+    logs.logger.debug(label)
+    _turn_to_object(route_metadata, item)
+    time.sleep(0.3 * settings.lag_offset)
+    utils.press_key("Use")
+    time.sleep(0.3 * settings.lag_offset)
+    _restore_route_view(route_metadata)
 
-def collect_grindables(metadata):
-    utils.turn_right(90)
-    time.sleep(0.3*settings.lag_offset) # sleep stops the grinder from opening the dedis on accident 
-    inventory.open()
-    attempt = 0
-    while not template.template_await_true(template.check_template,1,"grinder",0.7):
-        attempt += 1
-        logs.logger.error("couldnt open up the grinder while trying to deposit")
-        inventory.close()
-        utils.zero()
-        utils.set_yaw(metadata.yaw)
-        utils.turn_right(90)
-        time.sleep(0.5*settings.lag_offset)
-        inventory.open()
-        if attempt >= source.gacha_bot.config.grinder_attempts:
-            logs.logger.error(f"while trying to deposit we couldnt access grinder")
-            break
 
-    if template.check_template("grinder",0.7):
-        inventory.transfer_all_from()
-        time.sleep(0.2*settings.lag_offset)
-        inventory.close()
-    template.template_await_false(template.check_template,1,"inventory",0.7)
-    time.sleep(0.2*settings.lag_offset)
-    utils.turn_left(90)
-    time.sleep(0.5*settings.lag_offset) # stopping hitting E on the fabricator and turing it off
-    dedi.dedi_deposit("grindables",settings.height_grind)
-    time.sleep(0.2*settings.lag_offset)
-    if source.gacha_bot.config.linked_poly == True:
-        utils.turn_left(90)
-        utils.turn_down(40)
-        inventory.open()
-        if template.template_await_true(template.check_template,1,"inventory",0.7):
-            time.sleep(0.2*settings.lag_offset)
-            player_inventory.search_in_inventory("poly")
+def _process_vault(route, route_metadata, vault, index):
+    vault_items = _items(vault)
+    if len(vault_items) == 0:
+        return
+
+    teleport_name = _route_teleport_name(route)
+    label = f"Vault {index} on teleport {teleport_name}"
+    logs.logger.debug(label)
+    _turn_to_object(route_metadata, vault)
+    time.sleep(0.2 * settings.lag_offset)
+
+    if not _open_inventory_template("vault", route, route_metadata, vault, label):
+        _restore_route_view(route_metadata)
+        return
+
+    if template.template_await_true(template.check_template, 1, "inventory", 0.7):
+        time.sleep(0.1 * settings.lag_offset)
+        for item_name in vault_items:
+            player_inventory.search_in_inventory(item_name)
             player_inventory.transfer_all_inventory()
-            inventory.close()
-        template.template_await_false(template.check_template,1,"inventory",0.7)
-        time.sleep(0.2*settings.lag_offset)
-        utils.turn_right(90)
-        utils.turn_up(40)
-    drop_useless()
+            time.sleep(0.3 * settings.lag_offset)
+    inventory.close()
+    template.template_await_false(template.check_template, 1, "inventory", 0.7)
+    time.sleep(0.2 * settings.lag_offset)
+    _restore_route_view(route_metadata)
 
-def vaults(metadata):
-    vaults_data = load_resolution_data("json_files/vaults.json")
-    for entry_vaults in vaults_data:
-        name = entry_vaults["name"]
-        side = entry_vaults["side"]
-        items = entry_vaults["items"]
-        metadata.side = side
-        logs.logger.debug(f"openening up {name} on the {side} side to depo{items}")
-        vault_deposit(items,metadata)
+
+def _process_grinder(route, route_metadata):
+    teleport_name = _route_teleport_name(route)
+    label = f"Grinder on teleport {teleport_name}"
+    logs.logger.debug(label)
+    grinder = route.get("grinder", {})
+    _turn_to_object(route_metadata, grinder)
+    time.sleep(0.5 * settings.lag_offset)
+
+    if not _open_inventory_template("grinder", route, route_metadata, grinder, label):
+        _restore_route_view(route_metadata)
+        return
+
+    if template.check_template("grinder", 0.7):
+        player_inventory.transfer_all_inventory()
+        time.sleep(0.3 * settings.lag_offset)
+        windows.click(
+            variables.get_pixel_loc("dedi_withdraw_x"),
+            variables.get_pixel_loc("dedi_withdraw_y"),
+        )
+        time.sleep(0.3 * settings.lag_offset)
+        inventory.close()
+
+    template.template_await_false(template.check_template, 1, "inventory", 0.7)
+    time.sleep(0.2 * settings.lag_offset)
+
+    if not _open_inventory_template("grinder", route, route_metadata, grinder, label):
+        _restore_route_view(route_metadata)
+        return
+
+    if template.check_template("grinder", 0.7):
+        inventory.transfer_all_from()
+        time.sleep(0.2 * settings.lag_offset)
+        inventory.close()
+
+    template.template_await_false(template.check_template, 1, "inventory", 0.7)
+    time.sleep(0.2 * settings.lag_offset)
+    _restore_route_view(route_metadata)
+
+
+def _process_grindable_dedi(route, route_metadata, item, index):
+    teleport_name = _route_teleport_name(route)
+    label = f"Grindable dedi {index} on teleport {teleport_name}"
+    logs.logger.debug(label)
+    _turn_to_object(route_metadata, item)
+    time.sleep(0.3 * settings.lag_offset)
+    utils.press_key("Use")
+    time.sleep(0.3 * settings.lag_offset)
+    _restore_route_view(route_metadata)
+
+
+def _process_crystal_route(route, open_first_route_crystals=False):
+    route_metadata = _teleport_to_route(route)
+    if open_first_route_crystals:
+        logs.logger.debug("opening crystals")
+        open_crystals()
+
+    for index, item in enumerate(_items(route.get("dedi", {})), start=1):
+        _process_crystal_dedi(route, route_metadata, item, index)
+
+    for index, vault in enumerate(_items(route.get("vault", {})), start=1):
+        _process_vault(route, route_metadata, vault, index)
+
+    _restore_route_view(route_metadata)
+
+
+def _first_active_grinder_index(routes):
+    for index, route in enumerate(routes):
+        grinder = route.get("grinder", {}) if isinstance(route, dict) else {}
+        if grinder.get("active", False):
+            return index
+    return None
+
+
+def _process_grindable_route(route, route_metadata):
+    for index, item in enumerate(_items(route.get("dedi", {})), start=1):
+        _process_grindable_dedi(route, route_metadata, item, index)
+    _restore_route_view(route_metadata)
+
+
+def _process_grindable_routes(routes):
+    active_index = _first_active_grinder_index(routes)
+    if active_index is None:
+        logs.logger.error(
+            "No active grinder found in depositGrindableData; dropping useless inventory "
+            "at the first grindable teleport and skipping grindable routes."
+        )
+        route_metadata = _teleport_to_route(routes[0])
+        drop_useless()
+        _restore_route_view(route_metadata)
+        return
+
+    active_route = routes[active_index]
+    route_metadata = _teleport_to_route(active_route)
+    _process_grinder(active_route, route_metadata)
+    _process_grindable_route(active_route, route_metadata)
+
+    for index, route in enumerate(routes):
+        if index == active_index:
+            continue
+        route_metadata = _teleport_to_route(route)
+        _process_grindable_route(route, route_metadata)
+
 
 def deposit_all(metadata):
-    #utils.pitch_zero()
-    #utils.set_yaw(metadata.yaw) # its done this in the tp part to the dedis
-    logs.logger.debug("opening crystals")
-    open_crystals()
-    logs.logger.debug("depositing in ele dedi")
-    dedi.dedi_deposit("deposit",settings.height_ele)
-    vaults(metadata)
-    if settings.height_grind != 0:
-        logs.logger.debug("depositing in grinder")
-        depo_grinder(metadata)
-        grindables_metadata = custom_stations.get_station_metadata(settings.grindables)
-        teleporter.teleport_not_default(grindables_metadata)
-        logs.logger.debug("collecting grindables")
-        collect_grindables(grindables_metadata)
-    else:
-        drop_useless()
+    deposit_config = load_deposit_config()
+    crystal_routes = deposit_config["depositCrystalData"]
+    grindable_routes = deposit_config["depositGrindableData"]
+
+    for index, route in enumerate(crystal_routes):
+        _process_crystal_route(route, open_first_route_crystals=index == 0)
+
+    _process_grindable_routes(grindable_routes)

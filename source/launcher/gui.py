@@ -523,6 +523,16 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         return raw_value
 
     def confirm_reset(self):
+        if getattr(self, "current_settings_group", "") == "DEPOSIT ROUTES":
+            if not self.confirm(
+                "Reset Deposit Routes",
+                "Reset deposit routes to a single empty crystal route and grindable route?",
+                "RESET",
+            ):
+                return
+            self.reset_deposit_routes()
+            return
+
         if not self.confirm(
             "Reset Visible Settings",
             "Reset all visible setting values to defaults and save immediately?",
@@ -649,7 +659,9 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
                 for line in lines:
                     self.log_bridge.line.emit(self._normalize_file_log_line(line))
             except Exception as exc:
-                self.log_bridge.line.emit(f"[ERROR] Unable to read live log file: {exc}\n")
+                self.log_bridge.line.emit(
+                    f"[ERROR] Unable to read live log file: {exc}\n"
+                )
                 time.sleep(2)
                 continue
             time.sleep(1)

@@ -125,6 +125,13 @@ DEFAULT_SETTINGS = {
     "focus_ark_window_interval": 5.0,
 }
 
+HIDDEN_SETTINGS = {
+    "drop_off",
+    "grindables",
+    "height_ele",
+    "height_grind",
+}
+
 SETTINGS_GROUPS = {
     "GENERAL": [
         "screen_resolution",
@@ -135,17 +142,13 @@ SETTINGS_GROUPS = {
     ],
     "DINO / STATION NAMES": [
         "iguanadon",
-        "drop_off",
         "bed_spawn",
         "berry_station",
-        "grindables",
         "berry_type",
     ],
     "POSITION / RENDER": [
         "station_yaw",
         "render_pushout",
-        "height_ele",
-        "height_grind",
     ],
     "FEATURES": [
         "singleplayer",
@@ -157,5 +160,6 @@ SETTINGS_GROUPS = {
         "allow_focus_ark_window",
         "focus_ark_window_interval",
     ],
-    "ADVANCED": list(DEFAULT_SETTINGS.keys()),
+    "DEPOSIT ROUTES": [],
+    "ADVANCED": [key for key in DEFAULT_SETTINGS if key not in HIDDEN_SETTINGS],
 }
