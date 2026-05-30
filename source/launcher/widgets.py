@@ -53,14 +53,15 @@ class CyberSwitch(QCheckBox):
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
         self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumHeight(24)
+        self.setMinimumHeight(32)
         self.setMinimumWidth(58)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setFont(QFont("Segoe UI", FONT_SIZES["form"]))
 
     def sizeHint(self):
         text_width = self.fontMetrics().horizontalAdvance(self.text())
-        return QSize(max(58, 58 + text_width), 28)
+        label_width = text_width + 12 if self.text() else 0
+        return QSize(max(58, 58 + label_width), 32)
 
     def hitButton(self, pos):
         return self.rect().contains(pos)
@@ -69,7 +70,9 @@ class CyberSwitch(QCheckBox):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
 
-        track = QRect(0, 3, 50, 22)
+        track_x = 3
+        track_y = max(3, (self.height() - 22) // 2)
+        track = QRect(track_x, track_y, 50, 22)
         checked = self.isChecked()
         track_color = QColor("#0E3A4D" if checked else "#101820")
         border_color = QColor(COLORS["cyan"] if checked else COLORS["border"])
@@ -79,16 +82,23 @@ class CyberSwitch(QCheckBox):
         painter.setBrush(track_color)
         painter.drawRoundedRect(track, 10, 10)
 
-        knob_x = 27 if checked else 4
+        knob_x = track_x + (27 if checked else 4)
+        knob_y = track_y + 4
         painter.setPen(Qt.NoPen)
         painter.setBrush(knob_color)
-        painter.drawEllipse(knob_x, 7, 14, 14)
+        painter.drawEllipse(knob_x, knob_y, 14, 14)
 
         if self.text():
+            text_x = track.right() + 12
             painter.setPen(QColor(COLORS["text"]))
             painter.setFont(self.font())
             painter.drawText(
-                62, 0, self.width() - 62, self.height(), Qt.AlignVCenter, self.text()
+                text_x,
+                0,
+                max(0, self.width() - text_x),
+                self.height(),
+                Qt.AlignVCenter,
+                self.text(),
             )
 
 
