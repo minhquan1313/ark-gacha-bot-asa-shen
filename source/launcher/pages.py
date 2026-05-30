@@ -592,6 +592,7 @@ class LauncherPagesMixin:
         row = QHBoxLayout()
         row.setSpacing(8)
         self._add_yaw_pitch_fields(row, vault)
+        row.addWidget(self._crouch_switch(vault))
         items_label = QLabel("items")
         items_label.setObjectName("FormLabel")
         items = self._deposit_line_edit(", ".join(vault.get("items", [])))

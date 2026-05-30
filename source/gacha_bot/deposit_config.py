@@ -52,7 +52,7 @@ def default_dedi_item():
 
 
 def default_vault_item():
-    return {"location": {"yaw": 0.0, "pitch": 0.0}, "items": []}
+    return {"location": {"yaw": 0.0, "pitch": 0.0}, "crouched": False, "items": []}
 
 
 def normalize_deposit_config(data):
