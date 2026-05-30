@@ -85,31 +85,45 @@
         "items": [
           {
             "location": {
-              "yaw": -87.8,
-              "pitch": 20.42
+              "yaw": -105.33,
+              "pitch": 21.76
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -39.8,
-              "pitch": 18.22
+              "yaw": -39.71,
+              "pitch": 23.2
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -40.29,
-              "pitch": -27.95
+              "yaw": -41.47,
+              "pitch": -19.39
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -106.49,
-              "pitch": -27.01
+              "yaw": -113.46,
+              "pitch": -22.67
             },
             "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -44.82,
+              "pitch": -38.14
+            },
+            "crouched": true
+          },
+          {
+            "location": {
+              "yaw": -114.88,
+              "pitch": -36.29
+            },
+            "crouched": true
           }
         ]
       }
