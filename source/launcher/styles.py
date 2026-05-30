@@ -182,6 +182,36 @@ def launcher_style_sheet():
             background: rgba(18, 28, 42, 90);
             border: 1px solid {COLORS["border"]};
         }}
+        QWidget#DepositHelperWindow, QDialog#DepositHelperGuide {{
+            background: #050A10;
+            color: {COLORS["text"]};
+        }}
+        QFrame#DepositHelperWindow {{
+            background: rgba(10, 16, 25, 245);
+            border: 1px solid {COLORS["cyan"]};
+        }}
+        QFrame#HelperRow {{
+            background: rgba(18, 28, 42, 150);
+            border: 1px solid {COLORS["border"]};
+        }}
+        QFrame#HelperRow[selected="true"] {{
+            border: 1px solid {COLORS["cyan"]};
+            background: rgba(0, 216, 255, 26);
+        }}
+        QPushButton#HelperIconButton {{
+            min-height: 28px;
+            padding: 2px 7px;
+            font-family: Consolas;
+            font-weight: 900;
+        }}
+        QComboBox#HelperCombo {{
+            min-height: 26px;
+            background: #050A10;
+            color: {COLORS["text"]};
+            border: 1px solid {COLORS["border"]};
+            padding: 2px 8px;
+            font-family: Consolas;
+        }}
         QCheckBox {{
             color: {COLORS["text"]};
         }}

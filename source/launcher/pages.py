@@ -16,9 +16,9 @@ from PySide6.QtWidgets import (
 )
 
 from source.gacha_bot.deposit_config import (
-    default_deposit_config,
     default_crystal_route,
     default_dedi_item,
+    default_deposit_config,
     default_grindable_route,
     default_vault_item,
     load_deposit_config,
@@ -33,6 +33,7 @@ from source.launcher.constants import (
     DEFAULT_SETTINGS,
     SETTINGS_GROUPS,
 )
+from source.launcher.deposit_route_helper import DepositRouteHelper
 from source.launcher.widgets import (
     AnimatedButton,
     ClickableTextEdit,
@@ -398,6 +399,9 @@ class LauncherPagesMixin:
         card, layout = self._deposit_route_card(
             f"CRYSTAL ROUTE {route_index + 1}",
             lambda checked=False, index=route_index: self.remove_crystal_route(index),
+            lambda checked=False, index=route_index: self.open_deposit_helper(
+                "crystal", index
+            ),
         )
         self._add_route_teleport_field(layout, route)
 
@@ -438,6 +442,9 @@ class LauncherPagesMixin:
         card, layout = self._deposit_route_card(
             f"GRINDABLE ROUTE {route_index + 1}",
             lambda checked=False, index=route_index: self.remove_grindable_route(index),
+            lambda checked=False, index=route_index: self.open_deposit_helper(
+                "grindable", index
+            ),
         )
         self._add_route_teleport_field(layout, route)
 
@@ -478,7 +485,7 @@ class LauncherPagesMixin:
         layout.addWidget(add_dedi, alignment=Qt.AlignRight)
         return card
 
-    def _deposit_route_card(self, title, remove_handler):
+    def _deposit_route_card(self, title, remove_handler, helper_handler):
         card = QFrame()
         card.setObjectName("DepositRouteCard")
         layout = QVBoxLayout(card)
@@ -487,13 +494,29 @@ class LauncherPagesMixin:
         header = QHBoxLayout()
         label = QLabel(title)
         label.setObjectName("PanelTitle")
+        helper = self._button("[B]", "secondary")
+        helper.setObjectName("HelperIconButton")
+        helper.setToolTip(
+            "Open helper to add dedi and vault locations the easiest way."
+        )
+        # helper.setFixedSize(38, 30)
+        helper.clicked.connect(helper_handler)
         remove = self._button("REMOVE ROUTE", "danger")
         remove.clicked.connect(remove_handler)
         header.addWidget(label)
         header.addStretch()
+        header.addWidget(helper)
         header.addWidget(remove)
         layout.addLayout(header)
         return card, layout
+
+    def open_deposit_helper(self, route_kind, route_index):
+        self._ensure_deposit_config()
+        helper = DepositRouteHelper(self, route_kind, route_index)
+        helper.show()
+        helper.raise_()
+        helper.activateWindow()
+        self.deposit_helper = helper
 
     def _add_route_teleport_field(self, layout, route):
         row = QHBoxLayout()
