@@ -112,14 +112,14 @@ class DepositRouteHelper(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(10)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(8)
 
         self.header_frame = QFrame()
         self.header_frame.setObjectName("HelperHeader")
         self.header_frame.installEventFilter(self)
         header = QHBoxLayout(self.header_frame)
-        header.setContentsMargins(10, 8, 10, 8)
+        header.setContentsMargins(0, 0, 0, 0)
         header.setSpacing(8)
         self.header_title = QLabel(self._title())
         self.header_title.setObjectName("HelperTitle")
