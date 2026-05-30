@@ -89,6 +89,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.form_values = self.settings.copy()
         self.fields = {}
         self.nav_buttons = {}
+        self.deposit_helpers = []
         self.log_bridge = LogBridge()
         self.log_bridge.line.connect(self.append_log)
         self.log_tail_stop = threading.Event()
@@ -272,6 +273,15 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         super().changeEvent(event)
         if hasattr(self, "title_bar"):
             QTimer.singleShot(0, self.title_bar.sync_maximize_icon)
+
+    def closeEvent(self, event):
+        for helper in list(getattr(self, "deposit_helpers", [])):
+            try:
+                helper.close()
+            except RuntimeError:
+                pass
+        self.deposit_helpers.clear()
+        super().closeEvent(event)
 
     def nativeEvent(self, event_type, message):
         if not ENABLE_NATIVE_CUSTOM_CHROME or sys.platform != "win32":

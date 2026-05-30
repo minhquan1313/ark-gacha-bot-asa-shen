@@ -512,11 +512,46 @@ class LauncherPagesMixin:
 
     def open_deposit_helper(self, route_kind, route_index):
         self._ensure_deposit_config()
+        existing = self.find_deposit_helper(route_kind, route_index)
+        if existing is not None:
+            existing.show()
+            existing.raise_()
+            existing.activateWindow()
+            self.deposit_helper = existing
+            return
+
         helper = DepositRouteHelper(self, route_kind, route_index)
+        self.register_deposit_helper(helper)
         helper.show()
         helper.raise_()
         helper.activateWindow()
         self.deposit_helper = helper
+
+    def find_deposit_helper(self, route_kind, route_index):
+        for helper in list(getattr(self, "deposit_helpers", [])):
+            try:
+                if (
+                    helper.route_kind == route_kind
+                    and helper.route_index == route_index
+                ):
+                    return helper
+            except RuntimeError:
+                self.forget_deposit_helper(helper)
+        return None
+
+    def register_deposit_helper(self, helper):
+        if not hasattr(self, "deposit_helpers"):
+            self.deposit_helpers = []
+        if helper not in self.deposit_helpers:
+            self.deposit_helpers.append(helper)
+        helper.destroyed.connect(
+            lambda _=None, tracked=helper: self.forget_deposit_helper(tracked)
+        )
+
+    def forget_deposit_helper(self, helper):
+        helpers = getattr(self, "deposit_helpers", [])
+        if helper in helpers:
+            helpers.remove(helper)
 
     def _add_route_teleport_field(self, layout, route):
         row = QHBoxLayout()
