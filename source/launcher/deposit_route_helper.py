@@ -1,6 +1,6 @@
 import ctypes
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -47,9 +47,18 @@ class DepositHelperGuide(QDialog):
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(10)
 
+        header = QHBoxLayout()
         title = QLabel("HELPER GUIDE")
-        title.setObjectName("SectionHeading")
-        layout.addWidget(title)
+        title.setObjectName("HelperTitle")
+        close = AnimatedButton("X", "danger")
+        close.setObjectName("HelperIconButton")
+        close.setFixedHeight(30)
+        close.setMinimumWidth(36)
+        close.clicked.connect(self.close)
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(close)
+        layout.addLayout(header)
 
         image = QLabel()
         image.setAlignment(Qt.AlignCenter)
@@ -72,9 +81,6 @@ class DepositHelperGuide(QDialog):
         body.setWordWrap(True)
         layout.addWidget(body)
 
-        close = AnimatedButton("CLOSE", "primary")
-        close.clicked.connect(self.close)
-        layout.addWidget(close, alignment=Qt.AlignRight)
         self.resize(380, 320)
 
 
@@ -87,15 +93,18 @@ class DepositRouteHelper(QWidget):
         self.selected = None
         self.row_widgets = []
         self.guide = None
+        self.drag_position = None
         self.hotkey_id = (id(self) & 0x3FFF) + 1
         self.hotkey_registered = False
 
         self.setObjectName("DepositHelperWindow")
         self.setStyleSheet(owner.styleSheet())
         self.setWindowTitle(f"{APP_NAME} Route Helper")
-        self.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(
+            Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+        )
         self.setAttribute(Qt.WA_DeleteOnClose)
-        self.resize(430, 620)
+        self.resize(460, 640)
         self._build_ui()
         self._position_top_right()
         self._register_hotkey()
@@ -103,27 +112,38 @@ class DepositRouteHelper(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(8)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(10)
 
-        header = QHBoxLayout()
-        title = QLabel(self._title())
-        title.setObjectName("SectionHeading")
+        self.header_frame = QFrame()
+        self.header_frame.setObjectName("HelperHeader")
+        self.header_frame.installEventFilter(self)
+        header = QHBoxLayout(self.header_frame)
+        header.setContentsMargins(10, 8, 10, 8)
+        header.setSpacing(8)
+        self.header_title = QLabel(self._title())
+        self.header_title.setObjectName("HelperTitle")
+        self.header_title.setWordWrap(True)
+        self.header_title.installEventFilter(self)
         guide = self._icon_button("?", "Open guide book")
         guide.clicked.connect(self.show_guide)
-        close = self._icon_button("X", "Close helper")
+        close = self._icon_button("X", "Close helper", "danger")
         close.clicked.connect(self.close)
-        header.addWidget(title)
+        header.addWidget(self.header_title)
         header.addStretch()
         header.addWidget(guide)
         header.addWidget(close)
-        root.addLayout(header)
+        root.addWidget(self.header_frame)
 
         self.hotkey_label = QLabel("SHIFT + N focuses this helper")
-        self.hotkey_label.setObjectName("MutedCopy")
+        self.hotkey_label.setObjectName("HelperHint")
         root.addWidget(self.hotkey_label)
 
-        actions = QHBoxLayout()
+        toolbar = QFrame()
+        toolbar.setObjectName("HelperToolbar")
+        actions = QHBoxLayout(toolbar)
+        actions.setContentsMargins(8, 8, 8, 8)
+        actions.setSpacing(8)
         if self.route_kind == "crystal":
             add_dedi = self._icon_button("+D", "Add dedi row")
             add_dedi.clicked.connect(lambda: self.add_entry("dedi"))
@@ -145,20 +165,21 @@ class DepositRouteHelper(QWidget):
             for button in (cap_grinder, add_dedi, cap_dedi):
                 actions.addWidget(button)
         actions.addStretch()
-        root.addLayout(actions)
+        root.addWidget(toolbar)
 
         self.scroll = QScrollArea()
-        self.scroll.setObjectName("SettingsScroll")
+        self.scroll.setObjectName("HelperScroll")
         self.scroll.setWidgetResizable(True)
         self.scroll_content = QWidget()
+        self.scroll_content.setObjectName("HelperScrollContent")
         self.rows_layout = QVBoxLayout(self.scroll_content)
-        self.rows_layout.setContentsMargins(0, 0, 0, 0)
+        self.rows_layout.setContentsMargins(0, 0, 4, 0)
         self.rows_layout.setSpacing(8)
         self.scroll.setWidget(self.scroll_content)
         root.addWidget(self.scroll, 1)
 
         self.status = QLabel("Ready.")
-        self.status.setObjectName("MutedCopy")
+        self.status.setObjectName("HelperStatus")
         root.addWidget(self.status)
         self.refresh_rows()
 
@@ -199,6 +220,32 @@ class DepositRouteHelper(QWidget):
             return True, 0
         return super().nativeEvent(event_type, message)
 
+    def eventFilter(self, watched, event):
+        if watched not in (
+            getattr(self, "header_frame", None),
+            getattr(self, "header_title", None),
+        ):
+            return super().eventFilter(watched, event)
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self.drag_position = (
+                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            )
+            event.accept()
+            return True
+        if (
+            event.type() == QEvent.MouseMove
+            and self.drag_position is not None
+            and event.buttons() & Qt.LeftButton
+        ):
+            self.move(event.globalPosition().toPoint() - self.drag_position)
+            event.accept()
+            return True
+        if event.type() == QEvent.MouseButtonRelease:
+            self.drag_position = None
+            event.accept()
+            return True
+        return super().eventFilter(watched, event)
+
     def closeEvent(self, event):
         if self.hotkey_registered and hasattr(ctypes, "windll"):
             try:
@@ -207,6 +254,8 @@ class DepositRouteHelper(QWidget):
                 pass
         if self.guide is not None:
             self.guide.close()
+        if self.owner is not None and hasattr(self.owner, "forget_deposit_helper"):
+            self.owner.forget_deposit_helper(self)
         super().closeEvent(event)
 
     def show_guide(self):
@@ -250,7 +299,7 @@ class DepositRouteHelper(QWidget):
 
     def _add_section_label(self, text):
         label = QLabel(text)
-        label.setObjectName("FormLabel")
+        label.setObjectName("HelperSectionLabel")
         self.rows_layout.addWidget(label)
 
     def _add_row(self, kind, index, entry):
@@ -400,14 +449,16 @@ class CollapsibleHelperRow(QFrame):
 
     def _build(self):
         self.root = QVBoxLayout(self)
-        self.root.setContentsMargins(8, 4, 4, 8)
-        self.root.setSpacing(6)
+        self.root.setContentsMargins(8, 8, 8, 8)
+        self.root.setSpacing(8)
 
         top = QHBoxLayout()
+        top.setSpacing(6)
         self.expand_button = self.helper._icon_button(">", "Expand or collapse row")
         self.expand_button.clicked.connect(self.toggle)
         self.summary = QLabel(self._summary_text())
-        self.summary.setObjectName("FormLabel")
+        self.summary.setObjectName("HelperRowSummary")
+        self.summary.setWordWrap(True)
         select = self.helper._icon_button("*", "Select row")
         select.clicked.connect(lambda: self.helper.select_entry(self.kind, self.index))
         capture = self.helper._icon_button("C", "Capture yaw and pitch")
@@ -422,16 +473,19 @@ class CollapsibleHelperRow(QFrame):
         self.root.addLayout(top)
 
         self.details = QWidget()
+        self.details.setObjectName("HelperRowDetails")
         detail = QVBoxLayout(self.details)
-        detail.setContentsMargins(0, 0, 0, 0)
-        detail.setSpacing(6)
+        detail.setContentsMargins(8, 8, 8, 4)
+        detail.setSpacing(8)
         coords = QHBoxLayout()
-        coords.setSpacing(6)
+        coords.setSpacing(8)
         self._add_float_field(coords, "yaw")
         self._add_float_field(coords, "pitch")
         detail.addLayout(coords)
 
         switches = QHBoxLayout()
+        switches.setContentsMargins(0, 2, 0, 2)
+        switches.setSpacing(8)
         crouched = CyberSwitch("CROUCHED")
         crouched.blockSignals(True)
         crouched.setChecked(bool(self.entry.get("crouched", False)))
@@ -463,6 +517,7 @@ class CollapsibleHelperRow(QFrame):
         label.setObjectName("FormLabel")
         field = QLineEdit(str(self.entry["location"].get(key, 0.0)))
         field.setObjectName("SettingField")
+        field.setMinimumWidth(86)
         field.editingFinished.connect(
             lambda entry=self.entry, name=key, editor=field: self.helper.update_float(
                 entry, name, editor
@@ -537,5 +592,8 @@ class CollapsibleHelperRow(QFrame):
         suffix = " crouched" if self.entry.get("crouched", False) else ""
         if self.kind == "grinder":
             active = " active" if self.entry.get("active", False) else ""
-            return f"Grinder | yaw {yaw} pitch {pitch}{suffix}{active}"
-        return f"{self.kind.title()} {self.index + 1} | yaw {yaw} pitch {pitch}{suffix}"
+            return f"GRINDER   yaw {yaw}   pitch {pitch}{suffix}{active}"
+        return (
+            f"{self.kind.upper()} {self.index + 1}   "
+            f"yaw {yaw}   pitch {pitch}{suffix}"
+        )

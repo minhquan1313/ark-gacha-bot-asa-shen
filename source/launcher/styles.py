@@ -185,32 +185,76 @@ def launcher_style_sheet():
         QWidget#DepositHelperWindow, QDialog#DepositHelperGuide {{
             background: #050A10;
             color: {COLORS["text"]};
+            border: 1px solid rgba(0, 216, 255, 120);
         }}
         QFrame#DepositHelperWindow {{
             background: rgba(10, 16, 25, 245);
-            border: 1px solid {COLORS["cyan"]};
+            border: 1px solid rgba(0, 216, 255, 120);
         }}
-        QFrame#HelperRow {{
+        QFrame#HelperToolbar {{
             background: rgba(18, 28, 42, 150);
             border: 1px solid {COLORS["border"]};
         }}
+        QFrame#HelperHeader {{
+        }}
+        QLabel#HelperTitle {{
+            color: {COLORS["text"]};
+            font-size: {FONT_SIZES["section_heading"]}px;
+            font-weight: 900;
+        }}
+        QLabel#HelperHint, QLabel#HelperStatus {{
+            color: {COLORS["muted"]};
+            font-family: Consolas;
+        }}
+        QLabel#HelperSectionLabel {{
+            color: {COLORS["muted"]};
+            font-weight: 900;
+            font-size: {FONT_SIZES["form"]}px;
+            padding: 6px 0 0 0;
+        }}
+        QScrollArea#HelperScroll {{
+            background: transparent;
+            border: none;
+        }}
+        QWidget#HelperScrollContent {{
+            background: transparent;
+        }}
+        QFrame#HelperRow {{
+            background: rgba(18, 28, 42, 155);
+            border: 1px solid {COLORS["border"]};
+        }}
         QFrame#HelperRow[selected="true"] {{
-            border: 1px solid {COLORS["cyan"]};
-            background: rgba(0, 216, 255, 26);
+            border: 1px solid rgba(0, 216, 255, 180);
+            background: rgba(0, 216, 255, 28);
+        }}
+        QWidget#HelperRowDetails {{
+            background: rgba(5, 10, 16, 120);
+            border: 1px solid rgba(0, 216, 255, 34);
+        }}
+        QLabel#HelperRowSummary {{
+            color: {COLORS["text"]};
+            font-family: Consolas;
+            font-weight: 700;
         }}
         QPushButton#HelperIconButton {{
-            min-height: 28px;
-            padding: 2px 7px;
+            min-height: 30px;
+            padding: 2px 8px;
             font-family: Consolas;
             font-weight: 900;
         }}
         QComboBox#HelperCombo {{
-            min-height: 26px;
+            min-height: 28px;
             background: #050A10;
             color: {COLORS["text"]};
             border: 1px solid {COLORS["border"]};
             padding: 2px 8px;
             font-family: Consolas;
+        }}
+        QComboBox#HelperCombo QAbstractItemView {{
+            background: #050A10;
+            color: {COLORS["text"]};
+            selection-background-color: rgba(0, 216, 255, 46);
+            border: 1px solid {COLORS["border"]};
         }}
         QCheckBox {{
             color: {COLORS["text"]};
