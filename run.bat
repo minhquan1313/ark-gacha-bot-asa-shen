@@ -53,17 +53,6 @@ if errorlevel 1 (
   pause
   exit /b
 )
-
-:: Run the main Python script
-echo Installing/updating dependencies from requirements.txt...
-python -m pip install -r requirements.txt
-if errorlevel 1 (
-  echo Failed to install dependencies from requirements.txt.
-  pause
-  deactivate
-  exit /b
-)
-
 echo Running main.py...
 python main.py
 
