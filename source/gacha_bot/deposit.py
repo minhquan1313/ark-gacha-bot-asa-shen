@@ -1,11 +1,11 @@
 import time
+
 import settings
-import json
-from source.utility import utils ,template , windows ,variables ,screen ,local_player
+from source.utility import utils, template, windows, variables
 from source.logs import gachalogs as logs
-from source.ASA.strucutres import teleporter , inventory
+from source.ASA.strucutres import teleporter, inventory
 from source.ASA.stations import custom_stations
-from source.ASA.player import player_inventory , player_state
+from source.ASA.player import player_inventory, player_state
 import source.gacha_bot.config
 from source.gacha_bot.deposit_config import DEDI_CONFIG_PATH
 from source.gacha_bot.deposit_config import load_deposit_config as load_route_config
@@ -108,17 +108,17 @@ def _open_inventory_template(
 
 def open_crystals():
     count = 0
-    while template.check_template("crystal_in_hotbar",0.7) and count < 450: # count is alittle higher incase while pressing the button it doesnt triger
+    while template.check_template("crystal_in_hotbar", 0.7) and count < 450:
         for x in range(10):
-            utils.press_key(f"UseItem{x+1}")
+            utils.press_key(f"UseItem{x + 1}")
             count += 1
 
 
 def drop_useless():
     player_inventory.open()
-    if template.check_template("inventory",0.7):
+    if template.check_template("inventory", 0.7):
         player_inventory.drop_all_inv()
-        time.sleep(0.2*settings.lag_offset)
+        time.sleep(0.2 * settings.lag_offset)
     player_inventory.close()
 
 
