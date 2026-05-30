@@ -191,10 +191,6 @@ def launcher_style_sheet():
             background: rgba(10, 16, 25, 245);
             border: 1px solid rgba(0, 216, 255, 120);
         }}
-        QFrame#HelperToolbar {{
-            background: rgba(18, 28, 42, 150);
-            border: 1px solid {COLORS["border"]};
-        }}
         QFrame#HelperHeader {{
         }}
         QLabel#HelperTitle {{
@@ -235,9 +231,9 @@ def launcher_style_sheet():
             background: rgba(18, 28, 42, 155);
             border: 1px solid {COLORS["border"]};
         }}
-        QFrame#HelperRow[selected="true"] {{
-            border: 1px solid rgba(0, 216, 255, 180);
-            background: rgba(0, 216, 255, 28);
+        QFrame#HelperAddCaptureRow {{
+            background: rgba(5, 10, 16, 120);
+            border: 1px dashed rgba(0, 216, 255, 120);
         }}
         QWidget#HelperRowDetails {{
             background: rgba(5, 10, 16, 120);

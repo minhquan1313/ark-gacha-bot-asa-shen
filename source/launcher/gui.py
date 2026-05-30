@@ -275,12 +275,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             QTimer.singleShot(0, self.title_bar.sync_maximize_icon)
 
     def closeEvent(self, event):
-        for helper in list(getattr(self, "deposit_helpers", [])):
-            try:
-                helper.close()
-            except RuntimeError:
-                pass
-        self.deposit_helpers.clear()
+        self.close_deposit_helpers()
         super().closeEvent(event)
 
     def nativeEvent(self, event_type, message):

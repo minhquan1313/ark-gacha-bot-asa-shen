@@ -34,6 +34,7 @@ from source.launcher.constants import (
     SETTINGS_GROUPS,
 )
 from source.launcher.deposit_route_helper import DepositRouteHelper
+from source.launcher.settings_store import load_settings
 from source.launcher.widgets import (
     AnimatedButton,
     ClickableTextEdit,
@@ -305,6 +306,9 @@ class LauncherPagesMixin:
         action_bar = QHBoxLayout()
         shell_layout.addLayout(action_bar)
         action_bar.addStretch()
+        refresh_button = self._button("REFRESH", "secondary")
+        refresh_button.clicked.connect(self.refresh_json_configs)
+        action_bar.addWidget(refresh_button)
         reset_button = self._button("RESET", "secondary")
         reset_button.clicked.connect(self.confirm_reset)
         action_bar.addWidget(reset_button)
@@ -313,7 +317,10 @@ class LauncherPagesMixin:
 
     def _render_settings_group(self, group_name):
         self.current_settings_group = group_name
-        self.persist_settings_from_visible_fields(show_log=False, show_error=False)
+        if getattr(self, "_skip_visible_field_persist", False):
+            self._skip_visible_field_persist = False
+        else:
+            self.persist_settings_from_visible_fields(show_log=False, show_error=False)
         while self.settings_form_layout.count():
             item = self.settings_form_layout.takeAt(0)
             widget = item.widget()
@@ -552,6 +559,37 @@ class LauncherPagesMixin:
         helpers = getattr(self, "deposit_helpers", [])
         if helper in helpers:
             helpers.remove(helper)
+
+    def close_deposit_helpers(self):
+        for helper in list(getattr(self, "deposit_helpers", [])):
+            try:
+                helper.close()
+            except RuntimeError:
+                pass
+        self.deposit_helpers.clear()
+
+    def refresh_json_configs(self):
+        try:
+            settings = load_settings()
+            deposit_config = load_deposit_config(
+                crystal_teleport=settings.get("drop_off", ""),
+                grindable_teleport=settings.get("grindables", ""),
+            )
+        except Exception as exc:
+            self.append_log(f"[ERROR] Unable to refresh JSON config files: {exc}\n")
+            self.dialog("Refresh Configs", str(exc), "error")
+            return
+
+        self.close_deposit_helpers()
+        self.settings = settings
+        self.form_values = settings.copy()
+        self.deposit_config = deposit_config
+        self.fields = {}
+        self._skip_visible_field_persist = True
+        self._render_settings_group(getattr(self, "current_settings_group", "GENERAL"))
+        self._update_auto_start_switch()
+        self._tick()
+        self.append_log("[SUCCESS] JSON config files refreshed.\n")
 
     def _add_route_teleport_field(self, layout, route):
         row = QHBoxLayout()
