@@ -1,8 +1,11 @@
 import ctypes
 import time
-from . import local_player ,windows
+
+from source.ASA.player import console, player_state
 from source.logs import gachalogs as logs
-from source.ASA.player import console , player_state
+
+from . import local_player, windows
+
 """
 FUNCTIONS FOR KEYBOARD 
 """
@@ -85,10 +88,13 @@ def normalize_yaw(yaw):
     return yaw 
 
 def set_yaw(yaw):
-    global current_yaw    
+    global current_yaw
+    global current_pitch
     try:
-        logs.logger.debug(f"setting yaw as {float(console.console_ccc()[3])}")
-        current_yaw = float(console.console_ccc()[3])
+        ccc_data = console.console_ccc()
+        current_yaw = float(ccc_data[3])
+        current_pitch = float(ccc_data[4])
+        logs.logger.debug(f"setting yaw as {current_yaw}")
     except Exception as e:
         logs.logger.error(f"error processing ccc_data[3]: {e}")
 

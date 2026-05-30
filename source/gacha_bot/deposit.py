@@ -67,16 +67,6 @@ def _route_matches_metadata(route, metadata):
     ) == _route_teleport_name(route)
 
 
-def _sync_route_view(metadata):
-    try:
-        yaw, pitch = utils.get_yaw_pitch()
-        utils.current_yaw = float(yaw)
-        utils.current_pitch = float(pitch)
-    except Exception as exc:
-        logs.logger.error(f"Unable to sync route view from CCC: {exc}")
-    _restore_route_view(metadata)
-
-
 def _restore_route_view(metadata, reset_crouch=True):
     if reset_crouch:
         player_state.human.reset_crouch()
@@ -232,7 +222,7 @@ def _process_crystal_route(
         )
     else:
         route_metadata = _teleport_to_route(route)
-    _sync_route_view(route_metadata)
+    _restore_route_view(route_metadata)
 
     if open_first_route_crystals:
         logs.logger.debug("opening crystals")
@@ -269,14 +259,14 @@ def _process_grindable_routes(routes):
             "at the first grindable teleport and skipping grindable routes."
         )
         route_metadata = _teleport_to_route(routes[0])
-        _sync_route_view(route_metadata)
+        _restore_route_view(route_metadata)
         drop_useless()
         _restore_route_view(route_metadata)
         return
 
     active_route = routes[active_index]
     route_metadata = _teleport_to_route(active_route)
-    _sync_route_view(route_metadata)
+    _restore_route_view(route_metadata)
     _process_grinder(active_route, route_metadata)
     _process_grindable_route(active_route, route_metadata)
     last_route_metadata = route_metadata
@@ -285,7 +275,7 @@ def _process_grindable_routes(routes):
         if index == active_index:
             continue
         route_metadata = _teleport_to_route(route)
-        _sync_route_view(route_metadata)
+        _restore_route_view(route_metadata)
         _process_grindable_route(route, route_metadata)
         last_route_metadata = route_metadata
 
