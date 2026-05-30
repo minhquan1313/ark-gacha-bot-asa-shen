@@ -7,6 +7,7 @@ import win32con
 import win32gui
 
 import settings
+from source.utility import windows
 
 pyautogui.FAILSAFE = False
 
@@ -41,6 +42,10 @@ def focus_window(window_title="ArkAscended", interval=5.0, is_repeat_once=False)
 
 async def main():
     print("[INFO] Offline runner starting.")
+
+    # Reset mouse position to center of the screen to prevent unintended movements when starting the program.
+    windows.move_mouse(1920 / 2, 1080 / 2)
+
     if settings.allow_focus_ark_window:
         focus_window("ArkAscended", settings.focus_ark_window_interval)
         print(
