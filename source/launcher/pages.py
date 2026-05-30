@@ -371,6 +371,8 @@ class LauncherPagesMixin:
 
     def _render_deposit_routes_group(self):
         self._ensure_deposit_config()
+        if not hasattr(self, "deposit_route_card_expanded"):
+            self.deposit_route_card_expanded = {}
         heading = QLabel("DEPOSIT ROUTES")
         heading.setObjectName("SectionHeading")
         self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
@@ -499,6 +501,10 @@ class LauncherPagesMixin:
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(8)
         header = QHBoxLayout()
+        expanded_key = title
+        expanded = self.deposit_route_card_expanded.get(expanded_key, False)
+        toggle = self._button("v" if expanded else ">", "secondary")
+        toggle.setObjectName("HelperIconButton")
         label = QLabel(title)
         label.setObjectName("PanelTitle")
         helper = self._button("[B]", "secondary")
@@ -510,12 +516,28 @@ class LauncherPagesMixin:
         helper.clicked.connect(helper_handler)
         remove = self._button("REMOVE ROUTE", "danger")
         remove.clicked.connect(remove_handler)
+        header.addWidget(toggle)
         header.addWidget(label)
         header.addStretch()
         header.addWidget(helper)
         header.addWidget(remove)
         layout.addLayout(header)
-        return card, layout
+        body = QWidget()
+        body.setObjectName("DepositRouteCardBody")
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(8)
+        body.setVisible(expanded)
+
+        def toggle_body(checked=False):
+            is_visible = body.isHidden()
+            body.setVisible(is_visible)
+            toggle.setText("v" if is_visible else ">")
+            self.deposit_route_card_expanded[expanded_key] = is_visible
+
+        toggle.clicked.connect(toggle_body)
+        layout.addWidget(body)
+        return card, body_layout
 
     def open_deposit_helper(self, route_kind, route_index):
         self._ensure_deposit_config()
@@ -627,10 +649,19 @@ class LauncherPagesMixin:
         return row
 
     def _vault_row(self, vault, remove_handler):
-        row = QHBoxLayout()
-        row.setSpacing(8)
-        self._add_yaw_pitch_fields(row, vault)
-        row.addWidget(self._crouch_switch(vault))
+        row = QVBoxLayout()
+        row.setSpacing(6)
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        self._add_yaw_pitch_fields(top, vault)
+        top.addWidget(self._crouch_switch(vault))
+        remove = self._button("REMOVE", "danger")
+        remove.clicked.connect(remove_handler)
+        top.addWidget(remove)
+        row.addLayout(top)
+
+        items_row = QHBoxLayout()
+        items_row.setSpacing(8)
         items_label = QLabel("items")
         items_label.setObjectName("FormLabel")
         items = self._deposit_line_edit(", ".join(vault.get("items", [])))
@@ -640,11 +671,9 @@ class LauncherPagesMixin:
         items.returnPressed.connect(
             lambda field=items, item=vault: self.update_deposit_items(item, field)
         )
-        remove = self._button("REMOVE", "danger")
-        remove.clicked.connect(remove_handler)
-        row.addWidget(items_label)
-        row.addWidget(items, 1)
-        row.addWidget(remove)
+        items_row.addWidget(items_label)
+        items_row.addWidget(items, 1)
+        row.addLayout(items_row)
         return row
 
     def _add_yaw_pitch_fields(self, row, item):
