@@ -10,6 +10,8 @@ from source.gacha_bot.deposit_config import load_deposit_config as load_route_co
 from source.logs import gachalogs as logs
 from source.utility import template, utils, variables, windows
 
+DEDI_STATE_CHECK_INTERVAL = 10
+
 
 def load_deposit_config():
     try:
@@ -93,6 +95,76 @@ def _turn_to_object(route_metadata, item):
     _set_object_crouch(item)
 
 
+def _recover_dedi_position(route_metadata, item, label):
+    logs.logger.warning(f"{label} handshake stalled; recovering player state")
+    player_state.check_state()
+    teleporter.teleport_not_default(route_metadata)
+    _restore_route_view(route_metadata)
+    _turn_to_object(route_metadata, item)
+
+
+def _deposit_to_dedi(route_metadata, item, label):
+    for attempt in range(
+        1, source.gacha_bot.config.dedi_handshake_recovery_attempts + 1
+    ):
+        _turn_to_object(route_metadata, item)
+        time.sleep(0.3 * settings.lag_offset)
+        utils.press_key("Use")
+        time.sleep(0.3 * settings.lag_offset)
+
+        deadline = time.monotonic() + settings.dedi_handshake_timeout
+        next_state_check = time.monotonic() + DEDI_STATE_CHECK_INTERVAL
+        while time.monotonic() < deadline:
+            utils.press_key("AccessInventory")
+            if template.template_await_true(
+                template.check_template, 5, "inventory", 0.7
+            ):
+                waiting_for_remote = template.template_await_true(
+                    template.check_template, 5, "waiting_inv", 0.8
+                )
+                while (
+                    template.check_template("inventory", 0.7)
+                    and waiting_for_remote
+                    and time.monotonic() < deadline
+                ):
+                    player_state.check_disconnected()
+                    time.sleep(0.5 * settings.lag_offset)
+                    waiting_for_remote = template.check_template("waiting_inv", 0.8)
+
+                if template.check_template(
+                    "inventory", 0.7
+                ) and not template.check_template("waiting_inv", 0.8):
+                    inventory.close()
+                    template.template_await_false(
+                        template.check_template, 1, "inventory", 0.7
+                    )
+                    logs.logger.debug(f"{label} deposit handshake completed")
+                    return True
+
+            player_state.check_disconnected()
+            if time.monotonic() >= next_state_check:
+                _recover_dedi_position(route_metadata, item, label)
+                next_state_check = time.monotonic() + DEDI_STATE_CHECK_INTERVAL
+            time.sleep(0.5 * settings.lag_offset)
+
+        inventory.close()
+        logs.logger.error(
+            f"{label} deposit handshake timed out after "
+            f"{settings.dedi_handshake_timeout} seconds "
+            f"on attempt {attempt} / "
+            f"{source.gacha_bot.config.dedi_handshake_recovery_attempts}"
+        )
+        _recover_dedi_position(route_metadata, item, label)
+
+    inventory.close()
+    logs.logger.critical(
+        f"{label} deposit handshake failed after "
+        f"{source.gacha_bot.config.dedi_handshake_recovery_attempts} attempts; "
+        "skipping this dedi and continuing with residual queued-interaction risk"
+    )
+    return False
+
+
 def _open_inventory_template(
     template_name, route, route_metadata, route_object, object_name
 ):
@@ -133,10 +205,7 @@ def _process_crystal_dedi(route, route_metadata, item, index):
     teleport_name = _route_teleport_name(route)
     label = f"Crystal dedi {index} on teleport {teleport_name}"
     logs.logger.debug(label)
-    _turn_to_object(route_metadata, item)
-    time.sleep(0.3 * settings.lag_offset)
-    utils.press_key("Use")
-    time.sleep(0.3 * settings.lag_offset)
+    _deposit_to_dedi(route_metadata, item, label)
     _restore_route_view(route_metadata, reset_crouch=False)
 
 
@@ -200,10 +269,7 @@ def _process_grindable_dedi(route, route_metadata, item, index):
     teleport_name = _route_teleport_name(route)
     label = f"Grindable dedi {index} on teleport {teleport_name}"
     logs.logger.debug(label)
-    _turn_to_object(route_metadata, item)
-    time.sleep(0.3 * settings.lag_offset)
-    utils.press_key("Use")
-    time.sleep(0.3 * settings.lag_offset)
+    _deposit_to_dedi(route_metadata, item, label)
     _restore_route_view(route_metadata, reset_crouch=False)
 
 

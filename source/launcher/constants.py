@@ -123,6 +123,7 @@ DEFAULT_SETTINGS = {
     "y_trap_bot": False,
     "allow_focus_ark_window": True,
     "focus_ark_window_interval": 5.0,
+    "dedi_handshake_timeout": 180,
 }
 
 HIDDEN_SETTINGS = {
