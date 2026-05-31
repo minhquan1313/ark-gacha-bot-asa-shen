@@ -50,7 +50,9 @@ def enter_tekpod():
             time.sleep(1)
         buff = buffs.check_buffs()
         if buff.check_buffs() == 1:
-            logs.logger.critical(f"bot is now in the render pod rendering the station after {attempts} attempts")
+            logs.logger.debug(
+                f"bot is now in the render pod rendering the station after {attempts} attempts"
+            )
             render_flag = True
             utils.current_pitch = 0 # resetting the pitch for when char leaves the tekpod
         else:
