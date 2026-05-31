@@ -131,14 +131,12 @@ def _deposit_to_dedi(route_metadata, item, label):
     for attempt in range(1, attempts + 1):
         _turn_to_object(route_metadata, item)
         time.sleep(0.3 * settings.lag_offset)
-        utils.press_key("Use")
-        time.sleep(0.3 * settings.lag_offset)
 
         deadline = time.monotonic() + settings.dedi_handshake_timeout
         while time.monotonic() < deadline:
             utils.press_key("AccessInventory")
             if template.template_await_true(
-                template.check_template, 5, "inventory", 0.7
+                template.check_template, 2, "inventory", 0.7
             ):
                 waiting_for_remote = template.template_await_true(
                     template.check_template, 5, "waiting_inv", 0.8
@@ -153,6 +151,12 @@ def _deposit_to_dedi(route_metadata, item, label):
                     waiting_for_remote = template.check_template("waiting_inv", 0.8)
 
                 if template.check_template("inventory", 0.7) and not waiting_for_remote:
+                    windows.click(
+                        variables.get_pixel_loc("dedi_deposit_x"),
+                        variables.get_pixel_loc("dedi_deposit_y"),
+                    )
+                    
+                    # time.sleep(0.3 * settings.lag_offset)
                     inventory.close()
                     template.template_await_false(
                         template.check_template, 1, "inventory", 0.7

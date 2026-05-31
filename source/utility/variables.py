@@ -9,6 +9,8 @@ data = {
     "search_object_x": 1680,
     "dedi_withdraw_x": 1290,
     "dedi_withdraw_y": 1118,
+    "dedi_deposit_x": 1290,
+    "dedi_deposit_y": 1173,
     "search_bar_bed_y": 1300,
     "search_bar_bed_dead_x": 300,
     "search_bar_bed_alive_x": 500,
