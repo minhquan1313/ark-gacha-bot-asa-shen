@@ -67,8 +67,28 @@ class task_scheduler(metaclass=SingletonMeta):
         if not hasattr(self, 'initialized'):  
             self.active_queue = priority_queue_prio() 
             self.waiting_queue = priority_queue_exc()  
-            self.initialized = True 
+            self.initialized = True
             self.prev_task_name = ""
+            self.running_task = None
+
+    def emit_queue_snapshot(self):
+        waiting = [
+            {"name": task.name, "execution_time": exec_time, "state": "WAITING"}
+            for exec_time, _, _, task in sorted(self.waiting_queue.queue)
+        ]
+        active = [
+            {"name": task.name, "execution_time": exec_time, "state": "READY"}
+            for _, exec_time, _, task in sorted(self.active_queue.queue)
+        ]
+        running = (
+            [{"name": self.running_task.name, "state": "RUNNING"}]
+            if self.running_task is not None
+            else []
+        )
+        print(
+            f"[QUEUE_STATE] {json.dumps({'running': running, 'active': active, 'waiting': waiting})}",
+            flush=True,
+        )
 
     def add_task(self, task):
         
@@ -81,6 +101,7 @@ class task_scheduler(metaclass=SingletonMeta):
     
         self.waiting_queue.add(task, task.get_priority_level(), next_execution_time)
         print(f"Added task {task.name} to waiting queue ") # might need to remove this if you have LOADS OF stations causing long messages
+        self.emit_queue_snapshot()
 
             
     def run(self):
@@ -101,11 +122,12 @@ class task_scheduler(metaclass=SingletonMeta):
             exec_time, _, priority, task = task_tuple
 
             if exec_time <= current_time:
-                self.waiting_queue.pop()  
-                self.active_queue.add(task, priority, exec_time)  
+                self.waiting_queue.pop()
+                self.active_queue.add(task, priority, exec_time)
                 
             else:
-                break  
+                break
+        self.emit_queue_snapshot()
 
     def execute_task(self, current_time):
         
@@ -116,13 +138,17 @@ class task_scheduler(metaclass=SingletonMeta):
             
             if task.name != self.prev_task_name:
                 logs.logger.info(f"Executing task: {task.name}")
-            task.execute()  
-            
+            self.running_task = task
+            self.emit_queue_snapshot()
+            task.execute()
+
             self.prev_task_name = task.name
+            self.running_task = None
             if task.name != "pause":
                 self.move_to_waiting_queue(task)
             else:
                 print("pause task skipping adding back ")
+                self.emit_queue_snapshot()
         else:
             
             self.active_queue.add(task, priority, exec_time)
@@ -132,6 +158,7 @@ class task_scheduler(metaclass=SingletonMeta):
         next_execution_time = time.time() + task.get_requeue_delay()
         priority_level = task.get_priority_level()
         self.waiting_queue.add(task,priority_level , next_execution_time)
+        self.emit_queue_snapshot()
 
 
 
