@@ -77,14 +77,14 @@ def _restore_route_view(metadata, reset_crouch=True):
 
 def _sync_post_grinder_route_view(metadata):
     logs.logger.debug("Synchronizing grindable route view after grinder processing")
-    try:
-        utils.get_yaw_pitch()
-    except Exception as exc:
-        logs.logger.warning(
-            "Unable to sync grindable route view after grinder processing; "
-            f"restoring from cached angles: {exc}"
+    if not utils.zero():
+        logs.logger.error(
+            "Unable to reset grindable route view after grinder processing; "
+            "aborting grindable deposits"
         )
+        return False
     _restore_route_view(metadata)
+    return True
 
 
 def _set_object_crouch(item):
@@ -349,7 +349,8 @@ def _process_grindable_routes(routes):
     route_metadata = _teleport_to_route(active_route)
     _restore_route_view(route_metadata)
     _process_grinder(active_route, route_metadata)
-    _sync_post_grinder_route_view(route_metadata)
+    if not _sync_post_grinder_route_view(route_metadata):
+        return False
     if not _process_grindable_route(active_route, route_metadata):
         return False
     last_route_metadata = route_metadata
