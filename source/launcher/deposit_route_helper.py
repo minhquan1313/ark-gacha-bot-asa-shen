@@ -20,14 +20,20 @@ from source.gacha_bot.deposit_config import default_dedi_item, default_vault_ite
 from source.launcher.constants import APP_NAME, ASSETS
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
-    register_shift_n_hotkey,
+    register_alt_n_hotkey,
     unregister_hotkey,
+    view_yaw_pitch,
 )
 from source.launcher.native_window import WindowsMSG
 from source.launcher.vault_items_store import add_vault_item, load_vault_items
 from source.launcher.widgets import AnimatedButton, CyberSwitch
 
 WM_HOTKEY = 0x0312
+
+
+class NoWheelComboBox(QComboBox):
+    def wheelEvent(self, event):
+        event.ignore()
 
 
 class DepositHelperGuide(QDialog):
@@ -49,7 +55,7 @@ class DepositHelperGuide(QDialog):
         ),
         (
             "STEP 4 / CAPTURE",
-            "Select the row in the helper and press capture. The helper focuses Ark, runs ccc through the existing console flow, then saves yaw and pitch.",
+            "Press capture on a row. The helper focuses Ark, runs ccc through the existing console flow, then saves yaw and pitch. Press Alt + N to return to the helper.",
             "logo_text",
         ),
     ]
@@ -241,6 +247,12 @@ class DepositRouteHelper(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        shell = QFrame()
+        shell.setObjectName("DepositHelperWindow")
+        root.addWidget(shell)
+
+        root = QVBoxLayout(shell)
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
 
@@ -264,7 +276,7 @@ class DepositRouteHelper(QWidget):
         header.addWidget(close)
         root.addWidget(self.header_frame)
 
-        self.hotkey_label = QLabel("SHIFT + N focuses this helper")
+        self.hotkey_label = QLabel("ALT + N focuses this helper")
         self.hotkey_label.setObjectName("HelperHint")
         root.addWidget(self.hotkey_label)
 
@@ -301,15 +313,15 @@ class DepositRouteHelper(QWidget):
 
     def _register_hotkey(self):
         if not hasattr(ctypes, "windll"):
-            self.hotkey_label.setText("SHIFT + N focus hotkey unavailable here")
+            self.hotkey_label.setText("ALT + N focus hotkey unavailable here")
             return
         hwnd = int(self.winId())
         try:
-            self.hotkey_registered = register_shift_n_hotkey(hwnd, self.hotkey_id)
+            self.hotkey_registered = register_alt_n_hotkey(hwnd, self.hotkey_id)
         except Exception:
             self.hotkey_registered = False
         if not self.hotkey_registered:
-            self.hotkey_label.setText("SHIFT + N focus hotkey unavailable")
+            self.hotkey_label.setText("ALT + N focus hotkey unavailable")
 
     def nativeEvent(self, event_type, message):
         if not self.hotkey_registered:
@@ -337,7 +349,8 @@ class DepositRouteHelper(QWidget):
             or guide_active
             or owner_active
         )
-        self.setWindowOpacity(1.0 if keep_visible else 0.3)
+        opacity = float(self.owner.settings.get("helper_inactive_opacity", 0.3))
+        self.setWindowOpacity(1.0 if keep_visible else max(0.1, min(1.0, opacity)))
 
     def enterEvent(self, event):
         self.mouse_inside = True
@@ -403,7 +416,7 @@ class DepositRouteHelper(QWidget):
         )
         return self.owner.deposit_config[key][self.route_index]
 
-    def refresh_rows(self):
+    def refresh_rows(self, focus_target=None):
         while self.rows_layout.count():
             item = self.rows_layout.takeAt(0)
             widget = item.widget()
@@ -415,18 +428,18 @@ class DepositRouteHelper(QWidget):
         if self.route_kind == "crystal":
             self._add_section_label("DEDIS")
             for index, entry in enumerate(route["dedi"]["items"]):
-                self._add_row("dedi", index, entry)
+                self._add_row("dedi", index, entry, focus_target)
             self._add_combo_row("dedi")
             self._add_section_label("VAULTS")
             for index, entry in enumerate(route["vault"]["items"]):
-                self._add_row("vault", index, entry)
+                self._add_row("vault", index, entry, focus_target)
             self._add_combo_row("vault")
         else:
             self._add_section_label("GRINDER")
-            self._add_row("grinder", 0, route["grinder"])
+            self._add_row("grinder", 0, route["grinder"], focus_target)
             self._add_section_label("DEDIS")
             for index, entry in enumerate(route["dedi"]["items"]):
-                self._add_row("dedi", index, entry)
+                self._add_row("dedi", index, entry, focus_target)
             self._add_combo_row("dedi")
         self.rows_layout.addStretch()
 
@@ -435,10 +448,17 @@ class DepositRouteHelper(QWidget):
         label.setObjectName("HelperSectionLabel")
         self.rows_layout.addWidget(label)
 
-    def _add_row(self, kind, index, entry):
+    def _add_row(self, kind, index, entry, focus_target=None):
         row = CollapsibleHelperRow(self, kind, index, entry)
         self.row_widgets.append(row)
         self.rows_layout.addWidget(row)
+        if focus_target == (kind, index):
+            QTimer.singleShot(0, lambda widget=row: self._focus_row(widget))
+
+    def _focus_row(self, row):
+        row.expand()
+        self.scroll.ensureWidgetVisible(row, 0, 12)
+        row.setFocus()
 
     def _add_combo_row(self, kind):
         row = AddCaptureRow(self, kind)
@@ -475,7 +495,7 @@ class DepositRouteHelper(QWidget):
         self.save_and_refresh()
 
     def capture_existing(self, kind, index):
-        self.capture_entry(self._entry(kind, index))
+        self.capture_entry(self._entry(kind, index), (kind, index))
 
     def capture_new(self, kind):
         if self.capture_in_progress:
@@ -489,7 +509,7 @@ class DepositRouteHelper(QWidget):
             return
         finally:
             self._set_capture_in_progress(False)
-        entry, _index = self._append_entry(kind)
+        entry, index = self._append_entry(kind)
         if entry is None:
             return
         entry["location"]["yaw"] = yaw
@@ -497,11 +517,11 @@ class DepositRouteHelper(QWidget):
         success = self.save()
         self.refocus_helper()
         if success:
-            self.refresh_rows()
-            self.owner._render_settings_group("DEPOSIT ROUTES")
+            self.refresh_rows((kind, index))
+            self.owner._render_settings_group("STORAGE")
             self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
 
-    def capture_entry(self, entry):
+    def capture_entry(self, entry, focus_target=None):
         if self.capture_in_progress:
             return
         success = False
@@ -521,16 +541,32 @@ class DepositRouteHelper(QWidget):
         finally:
             self.refocus_helper()
         if success:
-            self.refresh_rows()
-            self.owner._render_settings_group("DEPOSIT ROUTES")
+            self.refresh_rows(focus_target)
+            self.owner._render_settings_group("STORAGE")
             self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
 
-    def _set_capture_in_progress(self, active):
+    def view_entry(self, entry):
+        if self.capture_in_progress:
+            return
+        location = entry.get("location", {})
+        try:
+            self._set_capture_in_progress(True, "Setting Ark view...")
+            view_yaw_pitch(location.get("yaw", 0.0), location.get("pitch", 0.0))
+            self.status.setText("View applied.")
+        except Exception as exc:
+            self.status.setText(f"View failed: {exc}")
+        finally:
+            self._set_capture_in_progress(False)
+            self.refocus_helper()
+
+    def _set_capture_in_progress(self, active, message="Capturing yaw/pitch..."):
         self.capture_in_progress = active
         if active:
-            self.status.setText("Capturing yaw/pitch...")
+            self.status.setText(message)
         for widget in self.findChildren(QWidget):
-            if not isinstance(widget, (AnimatedButton, QLineEdit, QComboBox, CyberSwitch)):
+            if not isinstance(
+                widget, (AnimatedButton, QLineEdit, QComboBox, CyberSwitch)
+            ):
                 continue
             widget.setEnabled(not active)
         QApplication.processEvents()
@@ -595,7 +631,7 @@ class DepositRouteHelper(QWidget):
     def save_and_refresh(self):
         if self.save():
             self.refresh_rows()
-            self.owner._render_settings_group("DEPOSIT ROUTES")
+            self.owner._render_settings_group("STORAGE")
 
     def _icon_button(self, text, tooltip, type="secondary"):
         button = AnimatedButton(text, type)
@@ -613,6 +649,7 @@ class CollapsibleHelperRow(QFrame):
         self.index = index
         self.entry = entry
         self.expanded = False
+        self.setFocusPolicy(Qt.StrongFocus)
         self.setObjectName("HelperRow")
         self._build()
 
@@ -630,11 +667,14 @@ class CollapsibleHelperRow(QFrame):
         self.summary.setWordWrap(True)
         capture = self.helper._icon_button("C", "Capture yaw and pitch")
         capture.clicked.connect(self.capture_row)
+        view = self.helper._icon_button("V", "View saved yaw and pitch in Ark")
+        view.clicked.connect(lambda: self.helper.view_entry(self.entry))
         delete = self.helper._icon_button("-", "Delete row", "danger")
         delete.clicked.connect(lambda: self.helper.delete_entry(self.kind, self.index))
         top.addWidget(self.expand_button)
         top.addWidget(self.summary, 1)
         top.addWidget(capture)
+        top.addWidget(view)
         top.addWidget(delete)
         self.root.addLayout(top)
 
@@ -703,7 +743,7 @@ class CollapsibleHelperRow(QFrame):
             row = QHBoxLayout()
             label = QLabel(f"item {item_index + 1}")
             label.setObjectName("FormLabel")
-            combo = QComboBox()
+            combo = NoWheelComboBox()
             combo.setObjectName("HelperCombo")
             combo.setEditable(True)
             options = load_vault_items(self.helper.owner.deposit_config)
@@ -740,6 +780,10 @@ class CollapsibleHelperRow(QFrame):
         self.expanded = not self.expanded
         self.details.setVisible(self.expanded)
         self.expand_button.setText("v" if self.expanded else ">")
+
+    def expand(self):
+        if not self.expanded:
+            self.toggle()
 
     def capture_row(self):
         self.helper.capture_existing(self.kind, self.index)

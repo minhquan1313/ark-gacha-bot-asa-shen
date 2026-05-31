@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import sys
 import threading
@@ -83,6 +84,9 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.setMinimumSize(*PHONE_MINIMUM_SIZE)
 
         self.process = None
+        self.program_stopping = False
+        self.stop_deadline = None
+        self.queue_snapshot = {"running": [], "active": [], "waiting": []}
         self.log_lines = []
         self.current_filter = "ALL"
         self.settings = load_settings()
@@ -416,7 +420,10 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def _update_start_stop_button(self):
         if not hasattr(self, "start_stop_button"):
             return
-        if self.is_program_running():
+        if self.program_stopping:
+            target_text = "STOPPING..."
+            target_variant = "secondary"
+        elif self.is_program_running():
             target_text = "STOP PROGRAM"
             target_variant = "danger"
         else:
@@ -426,6 +433,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         if self.start_stop_button.text() != target_text:
             self.start_stop_button.setText(target_text)
         self.start_stop_button.set_variant(target_variant)
+        self.start_stop_button.setEnabled(not self.program_stopping)
 
     def _is_auto_start_allowed(self):
         cond = str(self.settings.get("server_number", "0")).strip() not in ("", "0")
@@ -509,6 +517,9 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
                 data[key] = float(value)
             else:
                 data[key] = str(value)
+        data["helper_inactive_opacity"] = max(
+            0.1, min(1.0, data["helper_inactive_opacity"])
+        )
         return data
 
     def _capture_visible_fields(self):
@@ -528,7 +539,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         return raw_value
 
     def confirm_reset(self):
-        if getattr(self, "current_settings_group", "") == "DEPOSIT ROUTES":
+        if getattr(self, "current_settings_group", "") == "STORAGE":
             if not self.confirm(
                 "Reset Deposit Routes",
                 "Reset deposit routes to a single empty crystal route and grindable route?",
@@ -565,6 +576,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         )
 
     def start_program(self):
+        if self.program_stopping:
+            return
         if self.process and self.process.poll() is None:
             self.dialog("Program Running", "The program is already running.", "info")
             return
@@ -606,16 +619,32 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
     def stop_program(self):
         if self.process and self.process.poll() is None:
-            self.stop_log_tail()
-            self.process.terminate()
-            self.process = None
-            self.append_log("[WARN] Program terminated by launcher.\n")
+            self.program_stopping = True
+            self.stop_deadline = time.time() + 5
+            self.append_log("[WARN] Stopping program...\n")
             self._update_start_stop_button()
-            self.dialog("Program Stopped", "Program terminated.", "warning")
-        else:
-            self.dialog(
-                "No Program Running", "There is no running program to stop.", "info"
-            )
+            self.process.terminate()
+
+    def _poll_program_stop(self):
+        if self.process is None:
+            return
+        if self.process.poll() is not None:
+            self._finalize_program_stop()
+            return
+        if self.program_stopping and time.time() >= self.stop_deadline:
+            self.append_log("[WARN] Program did not stop in 5 seconds; killing it.\n")
+            self.process.kill()
+
+    def _finalize_program_stop(self):
+        was_stopping = self.program_stopping
+        self.stop_log_tail()
+        self.process = None
+        self.program_stopping = False
+        self.stop_deadline = None
+        self.queue_snapshot = {"running": [], "active": [], "waiting": []}
+        if was_stopping:
+            self.append_log("[WARN] Program stopped.\n")
+        self._update_start_stop_button()
 
     def read_output(self):
         if not self.process or not self.process.stdout:
@@ -696,6 +725,13 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         return line
 
     def append_log(self, text):
+        if text.startswith("[QUEUE_STATE] "):
+            try:
+                self.queue_snapshot = json.loads(text[len("[QUEUE_STATE] ") :])
+            except json.JSONDecodeError:
+                return
+            self._render_logs()
+            return
         if "Added task" in text and "[QUEUE]" not in text:
             text = f"[QUEUE] {text}"
         elif "CRITICAL" in text.upper() and "[CRITICAL]" not in text:
@@ -766,6 +802,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     def _filtered_logs(self):
+        if self.current_filter == "QUEUE":
+            return self._format_queue_snapshot()
         if self.current_filter == "ALL":
             return self.log_lines
         return [
@@ -773,6 +811,26 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             for line in self.log_lines
             if f"[{self.current_filter}]" in line or self.current_filter in line.upper()
         ]
+
+    def _format_queue_snapshot(self):
+        now = time.time()
+        lines = []
+        for task in self.queue_snapshot.get("running", []):
+            lines.append(f"[QUEUE] RUNNING   {task.get('name', 'unknown')}")
+        queued = self.queue_snapshot.get("active", []) + self.queue_snapshot.get(
+            "waiting", []
+        )
+        queued.sort(key=lambda task: float(task.get("execution_time", now)))
+        for task in queued:
+            remaining = max(0, int(float(task.get("execution_time", now)) - now))
+            if task.get("state") == "READY" or remaining == 0:
+                timer = "READY"
+            else:
+                hours, remainder = divmod(remaining, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                timer = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            lines.append(f"[QUEUE] {timer:<9} {task.get('name', 'unknown')}")
+        return lines or ["[QUEUE] No upcoming tasks."]
 
     def set_log_filter(self, value):
         self.current_filter = value
@@ -845,6 +903,9 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         )
 
     def _tick(self):
+        self._poll_program_stop()
+        if self.current_filter == "QUEUE":
+            self._render_logs()
         if hasattr(self, "server_value"):
             self._update_start_stop_button()
             server_number = self.form_values.get(
@@ -854,8 +915,13 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             if field is not None:
                 server_number = field.text()
             self.server_value.setText(str(server_number))
-            self.active_value.setText(str(self.active_count))
-            self.waiting_value.setText(str(self.waiting_count))
+            self.active_value.setText(
+                str(
+                    len(self.queue_snapshot.get("running", []))
+                    + len(self.queue_snapshot.get("active", []))
+                )
+            )
+            self.waiting_value.setText(str(len(self.queue_snapshot.get("waiting", []))))
             if self.start_time and self.process and self.process.poll() is None:
                 elapsed = int(time.time() - self.start_time)
                 hours, remainder = divmod(elapsed, 3600)

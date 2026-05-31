@@ -31,6 +31,18 @@ def capture_ccc_yaw_pitch():
     return parse_ccc_yaw_pitch(data)
 
 
+def view_yaw_pitch(yaw, pitch):
+    focus_game_window()
+    from source.utility import utils
+
+    utils.get_yaw_pitch()
+    utils.turn_to(float(yaw), float(pitch))
+
+
+def view_yaw(yaw):
+    view_yaw_pitch(yaw, 0.0)
+
+
 def parse_ccc_yaw_pitch(data):
     values = data if isinstance(data, (list, tuple)) else str(data).strip().split()
     if len(values) < 5:
@@ -44,8 +56,8 @@ def parse_ccc_yaw_pitch(data):
         ) from exc
 
 
-def register_shift_n_hotkey(hwnd, hotkey_id):
-    return bool(ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, 0x0004, 0x4E))
+def register_alt_n_hotkey(hwnd, hotkey_id):
+    return bool(ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, 0x0001, 0x4E))
 
 
 def unregister_hotkey(hwnd, hotkey_id):
