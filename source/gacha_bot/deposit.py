@@ -96,24 +96,19 @@ def _turn_to_object(route_metadata, item):
 def _open_inventory_template(
     template_name, route, route_metadata, route_object, object_name
 ):
-    teleport_name = _route_teleport_name(route)
     inventory.open()
     attempt = 0
     while not template.template_await_true(
         template.check_template, 1, template_name, 0.7
     ):
         attempt += 1
-        logs.logger.error(
-            f"{object_name} on teleport {teleport_name} was not opened; retrying"
-        )
+        logs.logger.error(f"{object_name} was not opened; retrying")
         inventory.close()
         _restore_route_view(route_metadata)
         _turn_to_object(route_metadata, route_object)
         inventory.open()
         if attempt >= source.gacha_bot.config.grinder_attempts:
-            logs.logger.error(
-                f"{object_name} on teleport {teleport_name} failed to open"
-            )
+            logs.logger.error(f"{object_name} failed to open")
             return False
     return True
 
