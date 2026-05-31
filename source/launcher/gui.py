@@ -278,6 +278,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._apply_responsive_layout()
+        QTimer.singleShot(0, self._sync_dashboard_actions_width)
 
     def changeEvent(self, event):
         super().changeEvent(event)

@@ -150,21 +150,39 @@ def launcher_style_sheet():
             color: {COLORS["red"]};
             border: 1px solid rgba(255, 77, 109, 148);
         }}
+        QFrame#SettingsShell {{
+            background: rgba(10, 16, 25, 235);
+            border: 1px solid {COLORS["border"]};
+        }}
         QFrame#SettingsTabs {{
             background: #050A10;
             border-right: 1px solid {COLORS["border"]};
         }}
         QPushButton#SettingsTab {{
-            min-height: 34px;
+            min-height: 36px;
             text-align: left;
-            padding-left: 10px;
-            background: rgba(18, 28, 42, 89);
+            padding-left: 12px;
+            background: rgba(18, 28, 42, 70);
             color: {COLORS["text"]};
-            border: 1px solid {COLORS["border"]};
+            border: 1px solid rgba(22, 70, 90, 150);
+        }}
+        QPushButton#SettingsTab:hover {{
+            background: rgba(0, 216, 255, 25);
+            border: 1px solid rgba(0, 216, 255, 90);
         }}
         QPushButton#SettingsTab:checked {{
-            background: rgba(0, 216, 255, 46);
+            background: rgba(0, 216, 255, 54);
             color: {COLORS["cyan"]};
+            border: 1px solid rgba(0, 216, 255, 125);
+        }}
+        QFrame#SettingsFooter {{
+            background: rgba(3, 7, 12, 225);
+            border-top: 1px solid {COLORS["border"]};
+        }}
+        QLabel#SettingsFooterHint {{
+            color: {COLORS["muted"]};
+            font-family: Consolas;
+            font-size: {FONT_SIZES["footer"]}px;
         }}
         QLineEdit#SettingField {{
             min-height: 26px;
@@ -304,8 +322,11 @@ def launcher_style_sheet():
             font-weight: 900;
         }}
         QScrollArea#SettingsScroll {{
-            background: transparent;
+            background: rgba(5, 10, 16, 110);
             border: none;
+        }}
+        QWidget#SettingsForm {{
+            background: rgba(5, 10, 16, 110);
         }}
         QScrollBar:vertical {{
             background: #050A10;

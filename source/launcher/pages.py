@@ -1,6 +1,6 @@
 import os
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QScrollArea,
     QSizePolicy,
+    QSpacerItem,
     QVBoxLayout,
     QWidget,
 )
@@ -99,20 +100,22 @@ class LauncherPagesMixin:
         page, layout = self._page("DashboardPage")
         layout.addWidget(HeroBanner(self))
 
+        dashboard_gutter = 10
         stats = QGridLayout()
-        stats.setSpacing(10)
+        stats.setSpacing(dashboard_gutter)
         layout.addLayout(stats)
         self.server_value = self._stat_card(stats, 0, "SERVER NUMBER", "ID")
+        self.dashboard_server_card = stats.itemAtPosition(0, 0).widget()
         self.active_value = self._stat_card(stats, 1, "ACTIVE QUEUE", "TASKS")
         self.waiting_value = self._stat_card(stats, 2, "WAITING QUEUE", "TASKS")
         self.uptime_value = self._stat_card(stats, 3, "UPTIME", "HH:MM:SS")
 
         middle = QHBoxLayout()
-        middle.setSpacing(12)
+        middle.setSpacing(dashboard_gutter)
         layout.addLayout(middle, 1)
 
         actions, action_layout = self._panel("QUICK ACTIONS")
-        actions.setFixedWidth(300)
+        self.dashboard_actions_card = actions
         self.start_stop_button = self._button("START PROGRAM", "primary")
         self.start_stop_button.clicked.connect(self.toggle_program)
         action_layout.addWidget(self.start_stop_button)
@@ -154,7 +157,14 @@ class LauncherPagesMixin:
         self.clock_value = self._footer_stat(footer, 4, "SYSTEM TIME")
         self._update_start_stop_button()
         self._update_auto_start_switch()
+        QTimer.singleShot(0, self._sync_dashboard_actions_width)
         return page
+
+    def _sync_dashboard_actions_width(self):
+        if hasattr(self, "dashboard_actions_card"):
+            self.dashboard_actions_card.setFixedWidth(
+                self.dashboard_server_card.width()
+            )
 
     def _stat_card(self, layout, column, label, sublabel):
         panel, panel_layout = self._panel()
@@ -260,7 +270,9 @@ class LauncherPagesMixin:
         layout.addWidget(self._page_title("SETTINGS"))
 
         shell, shell_layout = self._panel()
+        shell.setObjectName("SettingsShell")
         shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
         content = QHBoxLayout()
         content.setContentsMargins(0, 0, 0, 0)
         content.setSpacing(0)
@@ -284,6 +296,7 @@ class LauncherPagesMixin:
         form_area.setWidgetResizable(True)
         form_area.setObjectName("SettingsScroll")
         self.settings_form = QWidget()
+        self.settings_form.setObjectName("SettingsForm")
         self.settings_form_layout = QGridLayout(self.settings_form)
         self.settings_form_layout.setContentsMargins(28, 20, 28, 20)
         self.settings_form_layout.setHorizontalSpacing(18)
@@ -304,15 +317,22 @@ class LauncherPagesMixin:
                 button.setChecked(True)
         tabs.addStretch()
 
-        action_bar = QHBoxLayout()
-        shell_layout.addLayout(action_bar)
+        footer = QFrame()
+        footer.setObjectName("SettingsFooter")
+        action_bar = QHBoxLayout(footer)
+        action_bar.setContentsMargins(12, 8, 12, 8)
+        action_bar.setSpacing(8)
+        footer_hint = QLabel("CHANGES SAVE AUTOMATICALLY")
+        footer_hint.setObjectName("SettingsFooterHint")
+        action_bar.addWidget(footer_hint)
         action_bar.addStretch()
         refresh_button = self._button("REFRESH", "secondary")
         refresh_button.clicked.connect(self.refresh_json_configs)
         action_bar.addWidget(refresh_button)
-        reset_button = self._button("RESET", "secondary")
+        reset_button = self._button("RESET", "danger")
         reset_button.clicked.connect(self.confirm_reset)
         action_bar.addWidget(reset_button)
+        shell_layout.addWidget(footer)
         self._render_settings_group("GENERAL")
         return page
 
@@ -375,6 +395,14 @@ class LauncherPagesMixin:
 
         self.settings_form_layout.setColumnStretch(1, 1)
         self.settings_form_layout.setColumnStretch(3, 1)
+        spacer_row = 1 + ((len(keys) + 1) // 2)
+        self.settings_form_layout.addItem(
+            QSpacerItem(0, 0, QSizePolicy.Minimum, QSizePolicy.Expanding),
+            spacer_row,
+            0,
+            1,
+            4,
+        )
 
     def _render_deposit_routes_group(self):
         self._ensure_deposit_config()
