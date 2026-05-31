@@ -78,10 +78,10 @@ def _set_object_crouch(item):
     if crouched:
         if not player_state.human.crouched:
             player_state.human.crouch()
-            time.sleep(0.2 * settings.lag_offset)
+            # time.sleep(0.2 * settings.lag_offset)
     elif player_state.human.crouched:
         player_state.human.reset_crouch()
-        time.sleep(0.2 * settings.lag_offset)
+        # time.sleep(0.2 * settings.lag_offset)
 
 
 def _turn_to_object(route_metadata, item):
