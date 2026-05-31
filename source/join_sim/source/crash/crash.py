@@ -6,6 +6,7 @@ import os
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.utility import local_player,windows,recon_utils
 import time
+from source.launcher.constants import GAME_WINDOW_TITLE
 
 appid = "2399830"
 
@@ -44,7 +45,7 @@ def re_open_game():
     time.sleep(10)
     launch_game_with_steam()
     recon_utils.template_sleep_no_bounds("join_last_session",0.7,60)
-    windows.hwnd = windows.find_window_by_title("ArkAscended") # new process ID as game as relaunced
+    windows.hwnd = windows.find_window_by_title(GAME_WINDOW_TITLE) # new process ID as game as relaunced
     
 def crash_rejoin():
     if detect_crash():
@@ -52,4 +53,4 @@ def crash_rejoin():
         time.sleep(10)
         launch_game_with_steam()
         recon_utils.template_sleep_no_bounds("join_last_session",0.7,60)
-        windows.hwnd = windows.find_window_by_title("ArkAscended") # new process ID as game as relaunced
+        windows.hwnd = windows.find_window_by_title(GAME_WINDOW_TITLE) # new process ID as game as relaunced

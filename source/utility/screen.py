@@ -2,14 +2,15 @@ import numpy as np
 import mss
 from ctypes import wintypes
 import ctypes
-import time 
+import time
+from source.launcher.constants import GAME_WINDOW_TITLE 
 
 def find_window_by_title(title):
     return ctypes.windll.user32.FindWindowW(None, title)
 
 
 def find_screen_size():
-    hwnd = find_window_by_title("ArkAscended") 
+    hwnd = find_window_by_title(GAME_WINDOW_TITLE) 
     rect = wintypes.RECT()
     if ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect)):
         height = rect.bottom - rect.top

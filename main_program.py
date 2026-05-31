@@ -7,6 +7,7 @@ import win32con
 import win32gui
 
 import settings
+from source.launcher.constants import GAME_WINDOW_TITLE
 from source.utility import windows
 
 pyautogui.FAILSAFE = False
@@ -15,7 +16,7 @@ pyautogui.FAILSAFE = False
 focus_window_task = None
 
 
-def focus_window(window_title="ArkAscended", interval=5.0, is_repeat_once=False):
+def focus_window(window_title=GAME_WINDOW_TITLE, interval=5.0, is_repeat_once=False):
     global focus_window_task
 
     if focus_window_task and not focus_window_task.done():
@@ -62,13 +63,13 @@ async def main():
         windows.move_mouse(1920 / 2, 1080 / 2)
 
         if settings.allow_focus_ark_window:
-            focus_window("ArkAscended", settings.focus_ark_window_interval)
+            focus_window(GAME_WINDOW_TITLE, settings.focus_ark_window_interval)
             print(
-                f"[INFO] ArkAscended auto-focus enabled every {max(0.1, settings.focus_ark_window_interval)} seconds."
+                f"[INFO] {GAME_WINDOW_TITLE} auto-focus enabled every {max(0.1, settings.focus_ark_window_interval)} seconds."
             )
         else:
-            print("[INFO] ArkAscended auto-focus disabled.")
-            focus_window("ArkAscended", is_repeat_once=True)
+            print(f"[INFO] {GAME_WINDOW_TITLE} auto-focus disabled.")
+            focus_window(GAME_WINDOW_TITLE, is_repeat_once=True)
 
         import task_manager
 

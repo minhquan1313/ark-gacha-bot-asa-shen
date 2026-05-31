@@ -1,4 +1,5 @@
 import ctypes
+from source.launcher.constants import GAME_WINDOW_TITLE
 from . import local_player , screen
 import time
 from ctypes import wintypes
@@ -6,7 +7,7 @@ from ctypes import wintypes
 def find_window_by_title(title):
     return ctypes.windll.user32.FindWindowW(None, title)
 
-hwnd = find_window_by_title("ArkAscended") 
+hwnd = find_window_by_title(GAME_WINDOW_TITLE) 
 
 INPUT_MOUSE = 0
 MOUSEEVENTF_MOVE = 0x0001
