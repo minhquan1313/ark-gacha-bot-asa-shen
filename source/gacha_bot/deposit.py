@@ -11,6 +11,7 @@ from source.logs import gachalogs as logs
 from source.utility import template, utils, variables, windows
 
 DEDI_STATE_CHECK_INTERVAL = 10
+DEDI_REMOTE_POLL_INTERVAL = 0.05
 
 
 def load_deposit_config():
@@ -123,17 +124,15 @@ def _deposit_to_dedi(route_metadata, item, label):
                     template.check_template, 5, "waiting_inv", 0.8
                 )
                 while (
-                    template.check_template("inventory", 0.7)
-                    and waiting_for_remote
+                    waiting_for_remote
                     and time.monotonic() < deadline
+                    and template.check_template("inventory", 0.7)
                 ):
                     player_state.check_disconnected()
-                    time.sleep(0.5 * settings.lag_offset)
+                    time.sleep(DEDI_REMOTE_POLL_INTERVAL)
                     waiting_for_remote = template.check_template("waiting_inv", 0.8)
 
-                if template.check_template(
-                    "inventory", 0.7
-                ) and not template.check_template("waiting_inv", 0.8):
+                if template.check_template("inventory", 0.7) and not waiting_for_remote:
                     inventory.close()
                     template.template_await_false(
                         template.check_template, 1, "inventory", 0.7
