@@ -124,7 +124,7 @@ DEFAULT_SETTINGS = {
     "allow_focus_ark_window": True,
     "focus_ark_window_interval": 5.0,
     "helper_inactive_opacity": 0.3,
-    "dedi_handshake_timeout": 180,
+    "dedi_handshake_timeout": 30,
 }
 
 HIDDEN_SETTINGS = {

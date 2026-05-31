@@ -394,7 +394,7 @@ class LauncherPagesMixin:
         timeout_row = QHBoxLayout()
         timeout_label = QLabel("dedi_handshake_timeout")
         timeout_label.setObjectName("FormLabel")
-        timeout = QLineEdit(str(self.form_values.get("dedi_handshake_timeout", 180)))
+        timeout = QLineEdit(str(self.form_values.get("dedi_handshake_timeout", 30)))
         timeout.setObjectName("SettingField")
         timeout.editingFinished.connect(
             lambda: self.persist_single_setting("dedi_handshake_timeout")

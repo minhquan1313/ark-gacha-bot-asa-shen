@@ -37,7 +37,7 @@ focus_ark_window_interval: float = float(data.get("focus_ark_window_interval", 5
 helper_inactive_opacity: float = max(
     0.1, min(1.0, float(data.get("helper_inactive_opacity", 0.3)))
 )
-dedi_handshake_timeout: int = int(data.get("dedi_handshake_timeout", 180))
+dedi_handshake_timeout: int = int(data.get("dedi_handshake_timeout", 30))
 
 
 if __name__ == "__main__":
