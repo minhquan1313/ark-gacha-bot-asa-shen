@@ -1,7 +1,7 @@
 import ctypes
 
 from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QCursor, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -22,7 +22,7 @@ from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
     register_alt_n_hotkey,
     unregister_hotkey,
-    view_yaw_pitch,
+    view_route_entry,
 )
 from source.launcher.native_window import WindowsMSG
 from source.launcher.vault_items_store import add_vault_item, load_vault_items
@@ -229,8 +229,16 @@ class DepositRouteHelper(QWidget):
         self.drag_position = None
         self.mouse_inside = False
         self.capture_in_progress = False
+        self.closing = False
+        self.pending_focus_row = None
+        self.pending_cursor_position = None
         self.hotkey_id = (id(self) & 0x3FFF) + 1
         self.hotkey_registered = False
+        self.guide_timer = self._single_shot_timer(self.show_guide)
+        self.row_focus_timer = self._single_shot_timer(self._apply_pending_focus_row)
+        self.cursor_restore_timer = self._single_shot_timer(
+            self._restore_pending_cursor
+        )
 
         self.setObjectName("DepositHelperWindow")
         self.setStyleSheet(owner.styleSheet())
@@ -243,7 +251,13 @@ class DepositRouteHelper(QWidget):
         self._build_ui()
         self._position_top_right()
         self._register_hotkey()
-        QTimer.singleShot(0, self.show_guide)
+        self.guide_timer.start(0)
+
+    def _single_shot_timer(self, callback):
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(callback)
+        return timer
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -389,11 +403,18 @@ class DepositRouteHelper(QWidget):
         return super().eventFilter(watched, event)
 
     def closeEvent(self, event):
+        self.closing = True
+        self.guide_timer.stop()
+        self.row_focus_timer.stop()
+        self.cursor_restore_timer.stop()
+        self.pending_focus_row = None
+        self.pending_cursor_position = None
         if self.hotkey_registered and hasattr(ctypes, "windll"):
             try:
                 unregister_hotkey(int(self.winId()), self.hotkey_id)
             except Exception:
                 pass
+        self.hotkey_registered = False
         if self.guide is not None:
             self.guide.close()
         if self.owner is not None and hasattr(self.owner, "forget_deposit_helper"):
@@ -401,6 +422,8 @@ class DepositRouteHelper(QWidget):
         super().closeEvent(event)
 
     def show_guide(self):
+        if self.closing:
+            return
         if self.guide is None:
             self.guide = DepositHelperGuide(self)
         self.guide.show()
@@ -453,7 +476,18 @@ class DepositRouteHelper(QWidget):
         self.row_widgets.append(row)
         self.rows_layout.addWidget(row)
         if focus_target == (kind, index):
-            QTimer.singleShot(0, lambda widget=row: self._focus_row(widget))
+            self.pending_focus_row = row
+            self.row_focus_timer.start(0)
+
+    def _apply_pending_focus_row(self):
+        row = self.pending_focus_row
+        self.pending_focus_row = None
+        if self.closing or row not in self.row_widgets:
+            return
+        try:
+            self._focus_row(row)
+        except RuntimeError:
+            pass
 
     def _focus_row(self, row):
         row.expand()
@@ -500,22 +534,23 @@ class DepositRouteHelper(QWidget):
     def capture_new(self, kind):
         if self.capture_in_progress:
             return
+        cursor_position = QCursor.pos()
+        success = False
         try:
             self._set_capture_in_progress(True)
             yaw, pitch = capture_ccc_yaw_pitch()
+            entry, index = self._append_entry(kind)
+            if entry is None:
+                return
+            entry["location"]["yaw"] = yaw
+            entry["location"]["pitch"] = pitch
+            success = self.save()
         except Exception as exc:
-            self.refocus_helper()
             self.status.setText(f"Capture failed: {exc}")
             return
         finally:
             self._set_capture_in_progress(False)
-        entry, index = self._append_entry(kind)
-        if entry is None:
-            return
-        entry["location"]["yaw"] = yaw
-        entry["location"]["pitch"] = pitch
-        success = self.save()
-        self.refocus_helper()
+            self.refocus_helper(cursor_position)
         if success:
             self.refresh_rows((kind, index))
             self.owner._render_settings_group("STORAGE")
@@ -524,22 +559,20 @@ class DepositRouteHelper(QWidget):
     def capture_entry(self, entry, focus_target=None):
         if self.capture_in_progress:
             return
+        cursor_position = QCursor.pos()
         success = False
         try:
             self._set_capture_in_progress(True)
             yaw, pitch = capture_ccc_yaw_pitch()
+            entry["location"]["yaw"] = yaw
+            entry["location"]["pitch"] = pitch
+            success = self.save()
         except Exception as exc:
-            self.refocus_helper()
             self.status.setText(f"Capture failed: {exc}")
             return
         finally:
             self._set_capture_in_progress(False)
-        try:
-            entry["location"]["yaw"] = yaw
-            entry["location"]["pitch"] = pitch
-            success = self.save()
-        finally:
-            self.refocus_helper()
+            self.refocus_helper(cursor_position)
         if success:
             self.refresh_rows(focus_target)
             self.owner._render_settings_group("STORAGE")
@@ -548,16 +581,21 @@ class DepositRouteHelper(QWidget):
     def view_entry(self, entry):
         if self.capture_in_progress:
             return
+        cursor_position = QCursor.pos()
         location = entry.get("location", {})
         try:
             self._set_capture_in_progress(True, "Setting Ark view...")
-            view_yaw_pitch(location.get("yaw", 0.0), location.get("pitch", 0.0))
+            view_route_entry(
+                location.get("yaw", 0.0),
+                location.get("pitch", 0.0),
+                entry.get("crouched", False),
+            )
             self.status.setText("View applied.")
         except Exception as exc:
             self.status.setText(f"View failed: {exc}")
         finally:
             self._set_capture_in_progress(False)
-            self.refocus_helper()
+            self.refocus_helper(cursor_position)
 
     def _set_capture_in_progress(self, active, message="Capturing yaw/pitch..."):
         self.capture_in_progress = active
@@ -571,10 +609,22 @@ class DepositRouteHelper(QWidget):
             widget.setEnabled(not active)
         QApplication.processEvents()
 
-    def refocus_helper(self):
+    def refocus_helper(self, cursor_position=None):
+        if self.closing:
+            return
         self.show()
         self.raise_()
         self.activateWindow()
+        if cursor_position is not None:
+            self.pending_cursor_position = cursor_position
+            self.cursor_restore_timer.start(0)
+
+    def _restore_pending_cursor(self):
+        cursor_position = self.pending_cursor_position
+        self.pending_cursor_position = None
+        if self.closing or cursor_position is None:
+            return
+        QCursor.setPos(cursor_position)
 
     def _entry(self, kind, index):
         route = self.route()

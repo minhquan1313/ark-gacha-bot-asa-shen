@@ -43,6 +43,19 @@ def view_yaw(yaw):
     view_yaw_pitch(yaw, 0.0)
 
 
+def view_route_entry(yaw, pitch, crouched):
+    focus_game_window()
+    from source.ASA.player import player_state
+    from source.utility import utils
+
+    utils.get_yaw_pitch()
+    utils.press_key("Run")
+    player_state.human.crouched = False
+    utils.turn_to(float(yaw), float(pitch))
+    if crouched:
+        player_state.human.crouch()
+
+
 def parse_ccc_yaw_pitch(data):
     values = data if isinstance(data, (list, tuple)) else str(data).strip().split()
     if len(values) < 5:

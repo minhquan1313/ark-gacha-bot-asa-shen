@@ -565,6 +565,8 @@ class LauncherPagesMixin:
         return card, body_layout
 
     def open_deposit_helper(self, route_kind, route_index):
+        if not self._can_open_setup_helper():
+            return
         self._ensure_deposit_config()
         existing = self.find_deposit_helper(route_kind, route_index)
         if existing is not None:
@@ -583,6 +585,8 @@ class LauncherPagesMixin:
         self.deposit_helper = helper
 
     def open_position_render_helper(self):
+        if not self._can_open_setup_helper():
+            return
         helper = self.find_deposit_helper("position_render", None)
         if helper is not None:
             helper.show()
@@ -600,6 +604,16 @@ class LauncherPagesMixin:
         helper.raise_()
         helper.activateWindow()
         self.deposit_helper = helper
+
+    def _can_open_setup_helper(self):
+        if self.is_program_running() or getattr(self, "program_stopping", False):
+            self.dialog(
+                "Stop Program First",
+                "Stop the running automation before opening a setup helper.",
+                "warning",
+            )
+            return False
+        return True
 
     def find_deposit_helper(self, route_kind, route_index):
         for helper in list(getattr(self, "deposit_helpers", [])):

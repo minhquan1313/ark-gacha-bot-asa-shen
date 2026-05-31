@@ -1,7 +1,15 @@
 import ctypes
 
 from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtGui import QCursor
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
 
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
@@ -37,8 +45,14 @@ class PositionRenderHelper(QWidget):
         self.drag_position = None
         self.mouse_inside = False
         self.capture_in_progress = False
+        self.closing = False
+        self.pending_cursor_position = None
         self.hotkey_id = (id(self) & 0x3FFF) + 1
         self.hotkey_registered = False
+        self.guide_timer = self._single_shot_timer(self.show_guide)
+        self.cursor_restore_timer = self._single_shot_timer(
+            self._restore_pending_cursor
+        )
 
         self.setObjectName("DepositHelperWindow")
         self.setStyleSheet(owner.styleSheet())
@@ -50,7 +64,13 @@ class PositionRenderHelper(QWidget):
         self._build_ui()
         self._position_top_right()
         self._register_hotkey()
-        QTimer.singleShot(0, self.show_guide)
+        self.guide_timer.start(0)
+
+    def _single_shot_timer(self, callback):
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(callback)
+        return timer
 
     def _build_ui(self):
         root = QVBoxLayout(self)
@@ -114,6 +134,7 @@ class PositionRenderHelper(QWidget):
     def capture(self, key):
         if self.capture_in_progress:
             return
+        cursor_position = QCursor.pos()
         try:
             self._set_busy(True, "Capturing yaw...")
             yaw, _pitch = capture_ccc_yaw_pitch()
@@ -129,11 +150,12 @@ class PositionRenderHelper(QWidget):
             self.status.setText(f"Capture failed: {exc}")
         finally:
             self._set_busy(False)
-            self.refocus_helper()
+            self.refocus_helper(cursor_position)
 
     def view(self, key):
         if self.capture_in_progress:
             return
+        cursor_position = QCursor.pos()
         try:
             self._set_busy(True, "Setting Ark view...")
             view_yaw(self.owner.settings.get(key, 0.0))
@@ -142,7 +164,7 @@ class PositionRenderHelper(QWidget):
             self.status.setText(f"View failed: {exc}")
         finally:
             self._set_busy(False)
-            self.refocus_helper()
+            self.refocus_helper(cursor_position)
 
     def _set_busy(self, active, message=None):
         self.capture_in_progress = active
@@ -150,8 +172,11 @@ class PositionRenderHelper(QWidget):
             self.status.setText(message)
         for button in self.findChildren(AnimatedButton):
             button.setEnabled(not active)
+        QApplication.processEvents()
 
     def show_guide(self):
+        if self.closing:
+            return
         if self.guide is None:
             self.guide = PositionRenderGuide(self)
         self.guide.show()
@@ -159,10 +184,22 @@ class PositionRenderHelper(QWidget):
         self.guide.activateWindow()
         self.sync_window_opacity()
 
-    def refocus_helper(self):
+    def refocus_helper(self, cursor_position=None):
+        if self.closing:
+            return
         self.show()
         self.raise_()
         self.activateWindow()
+        if cursor_position is not None:
+            self.pending_cursor_position = cursor_position
+            self.cursor_restore_timer.start(0)
+
+    def _restore_pending_cursor(self):
+        cursor_position = self.pending_cursor_position
+        self.pending_cursor_position = None
+        if self.closing or cursor_position is None:
+            return
+        QCursor.setPos(cursor_position)
 
     def _position_top_right(self):
         screen = self.screen() or self.owner.screen()
@@ -245,11 +282,20 @@ class PositionRenderHelper(QWidget):
         self.setWindowOpacity(1.0 if keep_visible else max(0.1, min(1.0, opacity)))
 
     def closeEvent(self, event):
+        self.closing = True
+        self.guide_timer.stop()
+        self.cursor_restore_timer.stop()
+        self.pending_cursor_position = None
         if self.hotkey_registered and hasattr(ctypes, "windll"):
-            unregister_hotkey(int(self.winId()), self.hotkey_id)
+            try:
+                unregister_hotkey(int(self.winId()), self.hotkey_id)
+            except Exception:
+                pass
+        self.hotkey_registered = False
         if self.guide is not None:
             self.guide.close()
-        self.owner.forget_deposit_helper(self)
+        if self.owner is not None and hasattr(self.owner, "forget_deposit_helper"):
+            self.owner.forget_deposit_helper(self)
         super().closeEvent(event)
 
     @staticmethod

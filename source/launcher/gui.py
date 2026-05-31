@@ -86,6 +86,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.process = None
         self.program_stopping = False
         self.stop_deadline = None
+        self.shutdown_started = False
         self.queue_snapshot = {"running": [], "active": [], "waiting": []}
         self.log_lines = []
         self.current_filter = "ALL"
@@ -98,6 +99,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.log_bridge.line.connect(self.append_log)
         self.log_tail_stop = threading.Event()
         self.log_tail_thread = None
+        self.output_reader_stop = threading.Event()
+        self.output_reader_thread = None
         self.log_file_position = 0
         self.active_count = 0
         self.waiting_count = 0
@@ -221,6 +224,9 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(1000)
+        self.auto_start_timer = QTimer(self)
+        self.auto_start_timer.setSingleShot(True)
+        self.auto_start_timer.timeout.connect(self.start_program)
 
     def _schedule_auto_start(self):
         if (
@@ -230,7 +236,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.append_log(
                 "[INFO] Auto start enabled. Starting program after launcher initialization.\n"
             )
-            QTimer.singleShot(1000, self.start_program)
+            self.auto_start_timer.start(1000)
         elif self.settings.get("auto_start_program", False):
             self.append_log(
                 "[WARN] Auto start is enabled but server number is not configured.\n"
@@ -279,8 +285,51 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             QTimer.singleShot(0, self.title_bar.sync_maximize_icon)
 
     def closeEvent(self, event):
-        self.close_deposit_helpers()
+        if self.shutdown_started:
+            event.accept()
+            super().closeEvent(event)
+            return
+        if self.is_program_running() and not self.confirm(
+            "Stop Program And Exit",
+            "The automation is still running. Stop it and close the launcher?",
+            "STOP AND EXIT",
+        ):
+            event.ignore()
+            return
+        self._shutdown_resources()
+        event.accept()
         super().closeEvent(event)
+
+    def _shutdown_resources(self):
+        if self.shutdown_started:
+            return
+        self.shutdown_started = True
+        if hasattr(self, "timer"):
+            self.timer.stop()
+        if hasattr(self, "auto_start_timer"):
+            self.auto_start_timer.stop()
+        self.close_deposit_helpers()
+        self.output_reader_stop.set()
+        self.stop_log_tail()
+
+        process = self.process
+        if process is not None and process.poll() is None:
+            try:
+                process.terminate()
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                try:
+                    process.kill()
+                    process.wait(timeout=2)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            except OSError:
+                pass
+        self._close_output_reader(process)
+        self.process = None
+        self.program_stopping = False
+        self.stop_deadline = None
+        self.queue_snapshot = {"running": [], "active": [], "waiting": []}
 
     def nativeEvent(self, event_type, message):
         if not ENABLE_NATIVE_CUSTOM_CHROME or sys.platform != "win32":
@@ -576,8 +625,10 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         )
 
     def start_program(self):
-        if self.program_stopping:
+        if self.shutdown_started or self.program_stopping:
             return
+        if self.process is not None and self.process.poll() is not None:
+            self._finalize_program_stop()
         if self.process and self.process.poll() is None:
             self.dialog("Program Running", "The program is already running.", "info")
             return
@@ -602,6 +653,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             return
 
         try:
+            self.close_deposit_helpers()
             self.process = subprocess.Popen(
                 [sys.executable, "-u", "main_program.py"],
                 stdout=subprocess.PIPE,
@@ -613,7 +665,11 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.append_log("[INFO] Started offline runner.\n")
             self._update_start_stop_button()
             self.start_log_tail()
-            threading.Thread(target=self.read_output, daemon=True).start()
+            self.output_reader_stop = threading.Event()
+            self.output_reader_thread = threading.Thread(
+                target=self.read_output, args=(self.process,), daemon=True
+            )
+            self.output_reader_thread.start()
         except Exception as exc:
             self.dialog("Start Failed", str(exc), "error")
 
@@ -638,6 +694,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def _finalize_program_stop(self):
         was_stopping = self.program_stopping
         self.stop_log_tail()
+        self._close_output_reader(self.process)
         self.process = None
         self.program_stopping = False
         self.stop_deadline = None
@@ -646,13 +703,36 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.append_log("[WARN] Program stopped.\n")
         self._update_start_stop_button()
 
-    def read_output(self):
-        if not self.process or not self.process.stdout:
+    def read_output(self, process):
+        if not process or not process.stdout:
             return
-        for line in self.process.stdout:
+        for line in process.stdout:
+            if self.output_reader_stop.is_set():
+                break
+            self._emit_log_line(line)
+        if not self.output_reader_stop.is_set():
+            self.stop_log_tail()
+            self._emit_log_line("[WARN] Program output stream closed.\n")
+
+    def _close_output_reader(self, process):
+        self.output_reader_stop.set()
+        if process is not None and process.stdout is not None:
+            try:
+                process.stdout.close()
+            except (OSError, ValueError):
+                pass
+        thread = self.output_reader_thread
+        if (
+            thread is not None
+            and thread is not threading.current_thread()
+            and thread.is_alive()
+        ):
+            thread.join(timeout=1)
+        self.output_reader_thread = None
+
+    def _emit_log_line(self, line):
+        if not self.shutdown_started:
             self.log_bridge.line.emit(line)
-        self.stop_log_tail()
-        self.log_bridge.line.emit("[WARN] Program output stream closed.\n")
 
     def start_log_tail(self):
         self.stop_log_tail()
@@ -673,11 +753,11 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             try:
                 if not os.path.exists(GACHA_LOG_FILE):
                     if not missing_logged:
-                        self.log_bridge.line.emit(
+                        self._emit_log_line(
                             f"[WARN] Log file not found yet: {GACHA_LOG_FILE}\n"
                         )
                         missing_logged = True
-                    time.sleep(1)
+                    self.log_tail_stop.wait(1)
                     continue
 
                 missing_logged = False
@@ -691,14 +771,12 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
                     self.log_file_position = f.tell()
 
                 for line in lines:
-                    self.log_bridge.line.emit(self._normalize_file_log_line(line))
+                    self._emit_log_line(self._normalize_file_log_line(line))
             except Exception as exc:
-                self.log_bridge.line.emit(
-                    f"[ERROR] Unable to read live log file: {exc}\n"
-                )
-                time.sleep(2)
+                self._emit_log_line(f"[ERROR] Unable to read live log file: {exc}\n")
+                self.log_tail_stop.wait(2)
                 continue
-            time.sleep(1)
+            self.log_tail_stop.wait(1)
 
     @staticmethod
     def _log_file_size():
@@ -903,6 +981,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         )
 
     def _tick(self):
+        if self.shutdown_started:
+            return
         self._poll_program_stop()
         if self.current_filter == "QUEUE":
             self._render_logs()
