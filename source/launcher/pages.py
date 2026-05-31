@@ -35,6 +35,7 @@ from source.launcher.constants import (
     SETTINGS_GROUPS,
 )
 from source.launcher.deposit_route_helper import DepositRouteHelper
+from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.position_render_helper import PositionRenderHelper
 from source.launcher.settings_store import load_settings
 from source.launcher.widgets import (
@@ -633,6 +634,25 @@ class LauncherPagesMixin:
         helper.activateWindow()
         self.deposit_helper = helper
 
+    def open_fertilizer_refresh_helper(self):
+        if not self._can_open_setup_helper():
+            return
+        helper = self.find_deposit_helper("fertilizer_refresh", None)
+        if helper is not None:
+            helper.show()
+            helper.raise_()
+            helper.activateWindow()
+            self.deposit_helper = helper
+            return
+
+        self.close_deposit_helpers()
+        helper = FertilizerRefreshHelper(self)
+        self.register_deposit_helper(helper)
+        helper.show()
+        helper.raise_()
+        helper.activateWindow()
+        self.deposit_helper = helper
+
     def _can_open_setup_helper(self):
         if self.is_program_running() or getattr(self, "program_stopping", False):
             self.dialog(
@@ -984,6 +1004,28 @@ class LauncherPagesMixin:
         bottom.addStretch()
         bottom.addWidget(copy)
         layout.addLayout(bottom)
+        return page
+
+    def _tools_page(self):
+        page, layout = self._page("ToolsPage")
+        layout.addWidget(self._page_title("TOOLS"))
+
+        card, card_layout = self._panel("CROP PLOT FERTILIZER REFRESH")
+        card.setMaximumWidth(620)
+        description = QLabel(
+            "Refresh crop plot fertilizer with one quick helper. Start the tool, "
+            "open a crop plot inventory, and it will transfer everything to your "
+            "player inventory and back into the crop plot."
+        )
+        description.setObjectName("MutedCopy")
+        description.setWordWrap(True)
+        open_tool = self._button("OPEN TOOL", "primary")
+        open_tool.clicked.connect(self.open_fertilizer_refresh_helper)
+        card_layout.addWidget(description)
+        card_layout.addWidget(open_tool)
+
+        layout.addWidget(card)
+        layout.addStretch()
         return page
 
     def _console_widget(self):

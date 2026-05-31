@@ -147,6 +147,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             "setup": self._setup_page(),
             "settings": self._settings_page(),
             "logs": self._logs_page(),
+            "tools": self._tools_page(),
             "update": self._update_page(),
             "about": self._about_page(),
         }
@@ -186,6 +187,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             "setup": "SETUP GUIDE",
             "settings": "SETTINGS",
             "logs": "LOGS",
+            "tools": "TOOLS",
             "update": "CHECK UPDATE",
             "about": "ABOUT ME",
         }
@@ -194,6 +196,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             "setup": "SETUP",
             "settings": "SET",
             "logs": "LOGS",
+            "tools": "TOOLS",
             "update": "UPDATE",
             "about": "ABOUT",
         }
