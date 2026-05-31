@@ -40,24 +40,41 @@ def focus_window(window_title="ArkAscended", interval=5.0, is_repeat_once=False)
     focus_window_task = asyncio.create_task(callback())
 
 
+async def cancel_focus_window():
+    global focus_window_task
+
+    task = focus_window_task
+    focus_window_task = None
+    if task is None or task.done():
+        return
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
 async def main():
-    print("[INFO] Offline runner starting.")
+    try:
+        print("[INFO] Offline runner starting.")
 
-    # Reset mouse position to center of the screen to prevent unintended movements when starting the program.
-    windows.move_mouse(1920 / 2, 1080 / 2)
+        # Reset mouse position to center of the screen to prevent unintended movements when starting the program.
+        windows.move_mouse(1920 / 2, 1080 / 2)
 
-    if settings.allow_focus_ark_window:
-        focus_window("ArkAscended", settings.focus_ark_window_interval)
-        print(
-            f"[INFO] ArkAscended auto-focus enabled every {max(0.1, settings.focus_ark_window_interval)} seconds."
-        )
-    else:
-        print("[INFO] ArkAscended auto-focus disabled.")
-        focus_window("ArkAscended", is_repeat_once=True)
+        if settings.allow_focus_ark_window:
+            focus_window("ArkAscended", settings.focus_ark_window_interval)
+            print(
+                f"[INFO] ArkAscended auto-focus enabled every {max(0.1, settings.focus_ark_window_interval)} seconds."
+            )
+        else:
+            print("[INFO] ArkAscended auto-focus disabled.")
+            focus_window("ArkAscended", is_repeat_once=True)
 
-    import task_manager
+        import task_manager
 
-    await asyncio.to_thread(task_manager.main)
+        await asyncio.to_thread(task_manager.main)
+    finally:
+        await cancel_focus_window()
 
 
 if __name__ == "__main__":
