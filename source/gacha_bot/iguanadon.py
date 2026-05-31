@@ -37,9 +37,8 @@ def seed(type):
             player_inventory.drop_all_inv() #doing this second time round to drop everything else that is not needed by the bot
         time.sleep(0.1*settings.lag_offset)
         player_inventory.close()
-        time.sleep(0.1*settings.lag_offset)
 
-    if not template.template_await_true(template.check_template,1,"seed_inv",0.7):
+    if not template.template_await_true(template.check_template,2,"seed_inv",0.7):
         logs.logger.debug("iguanadon seeding hasnt been spotted re adding berries")
         inventory.open()
         inventory.search_in_object(settings.berry_type)
