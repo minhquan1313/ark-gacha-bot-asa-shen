@@ -75,8 +75,18 @@ def console_ccc():
             finally:
                 win32clipboard.CloseClipboard()
 
-        if attempts >= source.ASA.config.console_ccc_attempts:
-            logs.logger.error(f"CCC is still returning NONE after {attempts} attempts")
+            try:
+                ccc_data = data.split()
+                float(ccc_data[3])
+                float(ccc_data[4])
+            except (AttributeError, IndexError, TypeError, ValueError):
+                logs.logger.warning(f"CCC returned invalid clipboard data: {data!r}")
+                data = None
+
+        if data == None and attempts >= source.ASA.config.console_ccc_attempts:
+            logs.logger.error(
+                f"CCC is still returning invalid data after {attempts} attempts"
+            )
             # When somehow console has some weird value command already there, and the compare function of is_open will never return true,
             # then we have to try and open the console with the key press then press Enter to clear that current command
             # so the command console will be clear and ready for the is_open to check again.
@@ -85,9 +95,6 @@ def console_ccc():
             utils.press_key(
                 "Enter"
             )  # Enter current command to clear it and also close console
-            # utils.press_key("PauseMenu") # Clear current console value
-            # time.sleep(0.1)
-            # utils.press_key("PauseMenu") # Close console
             break
     if data != None:
         ccc_data = data.split()
