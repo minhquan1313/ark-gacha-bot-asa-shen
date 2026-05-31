@@ -21,5 +21,6 @@
     "side_crop_plot": false,
     "y_trap_bot": false,
     "allow_focus_ark_window": true,
-    "focus_ark_window_interval": 5.0
+    "focus_ark_window_interval": 5.0,
+    "dedi_handshake_timeout": 180
 }
