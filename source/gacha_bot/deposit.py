@@ -10,7 +10,6 @@ from source.gacha_bot.deposit_config import load_deposit_config as load_route_co
 from source.logs import gachalogs as logs
 from source.utility import template, utils, variables, windows
 
-DEDI_STATE_CHECK_INTERVAL = 10
 DEDI_REMOTE_POLL_INTERVAL = 0.05
 
 
@@ -116,17 +115,26 @@ def _recover_dedi_position(route_metadata, item, label):
     _turn_to_object(route_metadata, item)
 
 
+def _recover_after_dedi_failure(label):
+    logs.logger.critical(
+        f"{label} deposit handshake exhausted retries; "
+        "aborting remaining deposit routes and respawning player"
+    )
+    inventory.close()
+    player_state.check_disconnected()
+    player_inventory.implant_eat()
+    player_state.check_state()
+
+
 def _deposit_to_dedi(route_metadata, item, label):
-    for attempt in range(
-        1, source.gacha_bot.config.dedi_handshake_recovery_attempts + 1
-    ):
+    attempts = source.gacha_bot.config.dedi_handshake_recovery_attempts
+    for attempt in range(1, attempts + 1):
         _turn_to_object(route_metadata, item)
         time.sleep(0.3 * settings.lag_offset)
         utils.press_key("Use")
         time.sleep(0.3 * settings.lag_offset)
 
         deadline = time.monotonic() + settings.dedi_handshake_timeout
-        next_state_check = time.monotonic() + DEDI_STATE_CHECK_INTERVAL
         while time.monotonic() < deadline:
             utils.press_key("AccessInventory")
             if template.template_await_true(
@@ -153,9 +161,6 @@ def _deposit_to_dedi(route_metadata, item, label):
                     return True
 
             player_state.check_disconnected()
-            if time.monotonic() >= next_state_check:
-                _recover_dedi_position(route_metadata, item, label)
-                next_state_check = time.monotonic() + DEDI_STATE_CHECK_INTERVAL
             time.sleep(0.5 * settings.lag_offset)
 
         inventory.close()
@@ -163,16 +168,12 @@ def _deposit_to_dedi(route_metadata, item, label):
             f"{label} deposit handshake timed out after "
             f"{settings.dedi_handshake_timeout} seconds "
             f"on attempt {attempt} / "
-            f"{source.gacha_bot.config.dedi_handshake_recovery_attempts}"
+            f"{attempts}"
         )
-        _recover_dedi_position(route_metadata, item, label)
+        if attempt < attempts:
+            _recover_dedi_position(route_metadata, item, label)
 
-    inventory.close()
-    logs.logger.critical(
-        f"{label} deposit handshake failed after "
-        f"{source.gacha_bot.config.dedi_handshake_recovery_attempts} attempts; "
-        "skipping this dedi and continuing with residual queued-interaction risk"
-    )
+    _recover_after_dedi_failure(label)
     return False
 
 
@@ -216,8 +217,10 @@ def _process_crystal_dedi(route, route_metadata, item, index):
     teleport_name = _route_teleport_name(route)
     label = f"Crystal dedi {index} on teleport {teleport_name}"
     logs.logger.debug(label)
-    _deposit_to_dedi(route_metadata, item, label)
+    if not _deposit_to_dedi(route_metadata, item, label):
+        return False
     _restore_route_view(route_metadata, reset_crouch=False)
+    return True
 
 
 def _process_vault(route, route_metadata, vault, index):
@@ -280,8 +283,10 @@ def _process_grindable_dedi(route, route_metadata, item, index):
     teleport_name = _route_teleport_name(route)
     label = f"Grindable dedi {index} on teleport {teleport_name}"
     logs.logger.debug(label)
-    _deposit_to_dedi(route_metadata, item, label)
+    if not _deposit_to_dedi(route_metadata, item, label):
+        return False
     _restore_route_view(route_metadata, reset_crouch=False)
+    return True
 
 
 def _process_crystal_route(
@@ -301,12 +306,14 @@ def _process_crystal_route(
         open_crystals()
 
     for index, item in enumerate(_items(route.get("dedi", {})), start=1):
-        _process_crystal_dedi(route, route_metadata, item, index)
+        if not _process_crystal_dedi(route, route_metadata, item, index):
+            return False
 
     for index, vault in enumerate(_items(route.get("vault", {})), start=1):
         _process_vault(route, route_metadata, vault, index)
 
     _restore_route_view(route_metadata)
+    return True
 
 
 def _first_active_grinder_index(routes):
@@ -319,8 +326,10 @@ def _first_active_grinder_index(routes):
 
 def _process_grindable_route(route, route_metadata):
     for index, item in enumerate(_items(route.get("dedi", {})), start=1):
-        _process_grindable_dedi(route, route_metadata, item, index)
+        if not _process_grindable_dedi(route, route_metadata, item, index):
+            return False
     _restore_route_view(route_metadata)
+    return True
 
 
 def _process_grindable_routes(routes):
@@ -334,14 +343,15 @@ def _process_grindable_routes(routes):
         _restore_route_view(route_metadata)
         drop_useless()
         _restore_route_view(route_metadata)
-        return
+        return True
 
     active_route = routes[active_index]
     route_metadata = _teleport_to_route(active_route)
     _restore_route_view(route_metadata)
     _process_grinder(active_route, route_metadata)
     _sync_post_grinder_route_view(route_metadata)
-    _process_grindable_route(active_route, route_metadata)
+    if not _process_grindable_route(active_route, route_metadata):
+        return False
     last_route_metadata = route_metadata
 
     for index, route in enumerate(routes):
@@ -349,11 +359,13 @@ def _process_grindable_routes(routes):
             continue
         route_metadata = _teleport_to_route(route)
         _restore_route_view(route_metadata)
-        _process_grindable_route(route, route_metadata)
+        if not _process_grindable_route(route, route_metadata):
+            return False
         last_route_metadata = route_metadata
 
     drop_useless()
     _restore_route_view(last_route_metadata)
+    return True
 
 
 def deposit_all(metadata):
@@ -362,11 +374,12 @@ def deposit_all(metadata):
     grindable_routes = deposit_config["depositGrindableData"]
 
     for index, route in enumerate(crystal_routes):
-        _process_crystal_route(
+        if not _process_crystal_route(
             route,
             open_first_route_crystals=index == 0,
             current_metadata=metadata if index == 0 else None,
             skip_if_current=index == 0,
-        )
+        ):
+            return False
 
-    _process_grindable_routes(grindable_routes)
+    return _process_grindable_routes(grindable_routes)
