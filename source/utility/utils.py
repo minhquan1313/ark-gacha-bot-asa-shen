@@ -123,6 +123,7 @@ current_yaw = 0
 current_pitch = 0
 player_pitch_minimum = -80
 player_pitch_max = 87
+_CCC_NOT_PROVIDED = object()
 
 
 def normalize_yaw(yaw):
@@ -135,13 +136,16 @@ def normalize_yaw(yaw):
 def set_yaw(yaw):
     global current_yaw
     global current_pitch
-    try:
-        ccc_data = console.console_ccc()
-        current_yaw = float(ccc_data[3])
-        current_pitch = float(ccc_data[4])
-        logs.logger.debug(f"setting yaw as {current_yaw}")
-    except Exception as e:
-        logs.logger.error(f"error processing ccc_data[3]: {e}")
+    ccc_data = console.console_ccc()
+    if ccc_data is None:
+        logs.logger.warning("CCC unavailable; setting yaw from cached angle")
+    else:
+        try:
+            current_yaw = float(ccc_data[3])
+            current_pitch = float(ccc_data[4])
+            logs.logger.debug(f"setting yaw as {current_yaw}")
+        except (IndexError, TypeError, ValueError) as e:
+            logs.logger.error(f"error processing ccc yaw and pitch: {e}")
 
     try:  # had an issue where this was a string for some reason
         target = float(yaw)
@@ -167,36 +171,44 @@ def set_pitch(pitch):
     current_pitch = pitch
 
 
-def yaw_zero(ccc_data=None):
+def yaw_zero(ccc_data=_CCC_NOT_PROVIDED):
     global current_yaw
 
-    if ccc_data == None:
+    if ccc_data is _CCC_NOT_PROVIDED:
         ccc_data = console.console_ccc()
+    if ccc_data is None:
+        logs.logger.warning("CCC unavailable; unable to zero yaw")
+        return False
     try:
         if float(ccc_data[3]) > 0:
             turn_left(float(ccc_data[3]))
         else:
             turn_right(-float(ccc_data[3]))
         current_yaw = 0
-    except Exception as e:
+        return True
+    except (IndexError, TypeError, ValueError) as e:
         logs.logger.error(f"error processing ccc_data[3]: {e}")
-        # ark.check_state()
+        return False
 
 
-def pitch_zero(ccc_data=None):
+def pitch_zero(ccc_data=_CCC_NOT_PROVIDED):
     global current_pitch
 
-    if ccc_data == None:
+    if ccc_data is _CCC_NOT_PROVIDED:
         ccc_data = console.console_ccc()
+    if ccc_data is None:
+        logs.logger.warning("CCC unavailable; unable to zero pitch")
+        return False
     try:
         if float(ccc_data[4]) > 0:
             turn_down(float(ccc_data[4]))
         else:
             turn_up(-float(ccc_data[4]))
         current_pitch = 0
-    except Exception as e:
+        return True
+    except (IndexError, TypeError, ValueError) as e:
         logs.logger.error(f"error processing ccc_data[4]: {e}")
-        # ark.check_state()
+        return False
 
 
 def zero():
@@ -204,15 +216,21 @@ def zero():
     global current_yaw
     global current_pitch
     ccc_data = console.console_ccc()
+    if ccc_data is None:
+        logs.logger.warning("CCC unavailable; unable to zero view angles")
+        return False
 
-    yaw_zero(ccc_data)
-    pitch_zero(ccc_data)
+    yaw_zeroed = yaw_zero(ccc_data)
+    pitch_zeroed = pitch_zero(ccc_data)
+    return yaw_zeroed and pitch_zeroed
 
 
 def get_yaw_pitch():
     global current_pitch
     global current_yaw
     ccc_data = console.console_ccc()
+    if ccc_data is None:
+        raise RuntimeError("CCC unavailable; unable to read yaw and pitch")
     current_yaw = float(ccc_data[3])
     current_pitch = float(ccc_data[4])
     return ccc_data[3], ccc_data[4]  # yaw , pitch
