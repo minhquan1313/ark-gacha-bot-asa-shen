@@ -34,6 +34,7 @@ from source.launcher.constants import (
     SETTINGS_GROUPS,
 )
 from source.launcher.deposit_route_helper import DepositRouteHelper
+from source.launcher.position_render_helper import PositionRenderHelper
 from source.launcher.settings_store import load_settings
 from source.launcher.widgets import (
     AnimatedButton,
@@ -328,13 +329,19 @@ class LauncherPagesMixin:
                 widget.deleteLater()
         self.fields = {}
 
-        if group_name == "DEPOSIT ROUTES":
+        if group_name == "STORAGE":
             self._render_deposit_routes_group()
             return
 
-        heading = QLabel(f"{group_name} SETTINGS")
+        heading = QLabel("HELPER" if group_name == "UI" else f"{group_name} SETTINGS")
         heading.setObjectName("SectionHeading")
         self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
+        if group_name == "POSITION / RENDER":
+            helper = self._button("[B]", "secondary")
+            helper.setObjectName("HelperIconButton")
+            helper.setToolTip("Open helper to capture and view render yaw settings.")
+            helper.clicked.connect(self.open_position_render_helper)
+            self.settings_form_layout.addWidget(helper, 0, 3, alignment=Qt.AlignRight)
 
         keys = SETTINGS_GROUPS[group_name]
         for index, key in enumerate(keys, start=1):
@@ -373,7 +380,7 @@ class LauncherPagesMixin:
         self._ensure_deposit_config()
         if not hasattr(self, "deposit_route_card_expanded"):
             self.deposit_route_card_expanded = {}
-        heading = QLabel("DEPOSIT ROUTES")
+        heading = QLabel("STORAGE SETTINGS")
         heading.setObjectName("SectionHeading")
         self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
 
@@ -382,6 +389,24 @@ class LauncherPagesMixin:
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(12)
         self.settings_form_layout.addWidget(content, 1, 0, 1, 4)
+
+        storage_settings, storage_layout = self._panel("STORAGE")
+        timeout_row = QHBoxLayout()
+        timeout_label = QLabel("dedi_handshake_timeout")
+        timeout_label.setObjectName("FormLabel")
+        timeout = QLineEdit(str(self.form_values.get("dedi_handshake_timeout", 180)))
+        timeout.setObjectName("SettingField")
+        timeout.editingFinished.connect(
+            lambda: self.persist_single_setting("dedi_handshake_timeout")
+        )
+        timeout.returnPressed.connect(
+            lambda: self.persist_single_setting("dedi_handshake_timeout")
+        )
+        self.fields["dedi_handshake_timeout"] = timeout
+        timeout_row.addWidget(timeout_label)
+        timeout_row.addWidget(timeout, 1)
+        storage_layout.addLayout(timeout_row)
+        content_layout.addWidget(storage_settings)
 
         crystal_heading = QLabel("CRYSTAL DEPOSIT ROUTES")
         crystal_heading.setObjectName("PanelTitle")
@@ -549,7 +574,27 @@ class LauncherPagesMixin:
             self.deposit_helper = existing
             return
 
+        self.close_deposit_helpers()
         helper = DepositRouteHelper(self, route_kind, route_index)
+        self.register_deposit_helper(helper)
+        helper.show()
+        helper.raise_()
+        helper.activateWindow()
+        self.deposit_helper = helper
+
+    def open_position_render_helper(self):
+        helper = self.find_deposit_helper("position_render", None)
+        if helper is not None:
+            helper.show()
+            helper.raise_()
+            helper.activateWindow()
+            self.deposit_helper = helper
+            return
+
+        self.close_deposit_helpers()
+        helper = PositionRenderHelper(self)
+        helper.route_kind = "position_render"
+        helper.route_index = None
         self.register_deposit_helper(helper)
         helper.show()
         helper.raise_()
@@ -771,7 +816,7 @@ class LauncherPagesMixin:
     def add_crystal_route(self):
         self.deposit_config["depositCrystalData"].append(default_crystal_route())
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def remove_crystal_route(self, route_index):
         if len(self.deposit_config["depositCrystalData"]) <= 1:
@@ -783,40 +828,40 @@ class LauncherPagesMixin:
             return
         del self.deposit_config["depositCrystalData"][route_index]
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def add_crystal_dedi(self, route_index):
         self.deposit_config["depositCrystalData"][route_index]["dedi"]["items"].append(
             default_dedi_item()
         )
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def remove_crystal_dedi(self, route_index, item_index):
         del self.deposit_config["depositCrystalData"][route_index]["dedi"]["items"][
             item_index
         ]
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def add_crystal_vault(self, route_index):
         self.deposit_config["depositCrystalData"][route_index]["vault"]["items"].append(
             default_vault_item()
         )
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def remove_crystal_vault(self, route_index, item_index):
         del self.deposit_config["depositCrystalData"][route_index]["vault"]["items"][
             item_index
         ]
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def add_grindable_route(self):
         self.deposit_config["depositGrindableData"].append(default_grindable_route())
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def remove_grindable_route(self, route_index):
         if len(self.deposit_config["depositGrindableData"]) <= 1:
@@ -828,26 +873,26 @@ class LauncherPagesMixin:
             return
         del self.deposit_config["depositGrindableData"][route_index]
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def add_grindable_dedi(self, route_index):
         self.deposit_config["depositGrindableData"][route_index]["dedi"][
             "items"
         ].append(default_dedi_item())
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def remove_grindable_dedi(self, route_index, item_index):
         del self.deposit_config["depositGrindableData"][route_index]["dedi"]["items"][
             item_index
         ]
         self.save_deposit_routes()
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
 
     def reset_deposit_routes(self):
         self.deposit_config = default_deposit_config()
         self.save_deposit_routes(show_log=False)
-        self._render_settings_group("DEPOSIT ROUTES")
+        self._render_settings_group("STORAGE")
         self.append_log("[INFO] Deposit routes reset to defaults and saved.\n")
         self.dialog(
             "Deposit Routes Reset",

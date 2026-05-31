@@ -123,6 +123,7 @@ DEFAULT_SETTINGS = {
     "y_trap_bot": False,
     "allow_focus_ark_window": True,
     "focus_ark_window_interval": 5.0,
+    "helper_inactive_opacity": 0.3,
     "dedi_handshake_timeout": 180,
 }
 
@@ -147,10 +148,14 @@ SETTINGS_GROUPS = {
         "berry_station",
         "berry_type",
     ],
+    "UI": [
+        "helper_inactive_opacity",
+    ],
     "POSITION / RENDER": [
         "station_yaw",
         "render_pushout",
     ],
+    "STORAGE": [],
     "FEATURES": [
         "singleplayer",
         "external_berry",
@@ -161,6 +166,4 @@ SETTINGS_GROUPS = {
         "allow_focus_ark_window",
         "focus_ark_window_interval",
     ],
-    "DEPOSIT ROUTES": [],
-    "ADVANCED": [key for key in DEFAULT_SETTINGS if key not in HIDDEN_SETTINGS],
 }
