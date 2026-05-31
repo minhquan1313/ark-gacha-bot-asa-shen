@@ -6,3 +6,4 @@ settings.py
 /json_files/backup2
 
 .vscode
+tests
