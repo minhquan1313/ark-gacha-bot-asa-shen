@@ -39,6 +39,28 @@ class LogBridge(QObject):
     line = Signal(str)
 
 
+class WrappedStatusLabel(QLabel):
+    def __init__(self, text="", parent=None):
+        super().__init__(parent)
+        self.setWordWrap(True)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setText(text)
+
+    def setText(self, text):
+        super().setText(text)
+        self._sync_minimum_height()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._sync_minimum_height()
+
+    def _sync_minimum_height(self):
+        width = self.width()
+        if width > 0:
+            self.setMinimumHeight(self.heightForWidth(width))
+            self.updateGeometry()
+
+
 class ClickableTextEdit(QTextEdit):
     copied = Signal()
 

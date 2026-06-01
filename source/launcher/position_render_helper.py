@@ -19,7 +19,7 @@ from source.launcher.deposit_helper_capture import (
 )
 from source.launcher.deposit_route_helper import DepositHelperGuide, WM_HOTKEY
 from source.launcher.native_window import WindowsMSG
-from source.launcher.widgets import AnimatedButton
+from source.launcher.widgets import AnimatedButton, WrappedStatusLabel
 
 
 class PositionRenderGuide(DepositHelperGuide):
@@ -61,6 +61,7 @@ class PositionRenderHelper(QWidget):
         )
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.resize(430, 260)
+        self.setFixedWidth(430)
         self._build_ui()
         self._position_top_right()
         self._register_hotkey()
@@ -109,7 +110,7 @@ class PositionRenderHelper(QWidget):
         for key in ("station_yaw", "render_pushout"):
             layout.addWidget(self._setting_row(key))
 
-        self.status = QLabel("Ready.")
+        self.status = WrappedStatusLabel("Ready.")
         self.status.setObjectName("HelperStatus")
         layout.addWidget(self.status)
 

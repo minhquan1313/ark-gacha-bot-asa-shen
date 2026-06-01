@@ -26,7 +26,7 @@ from source.launcher.deposit_helper_capture import (
 )
 from source.launcher.native_window import WindowsMSG
 from source.launcher.vault_items_store import add_vault_item, load_vault_items
-from source.launcher.widgets import AnimatedButton, CyberSwitch
+from source.launcher.widgets import AnimatedButton, CyberSwitch, WrappedStatusLabel
 
 WM_HOTKEY = 0x0312
 
@@ -248,6 +248,7 @@ class DepositRouteHelper(QWidget):
         )
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.resize(460, 640)
+        self.setFixedWidth(460)
         self._build_ui()
         self._position_top_right()
         self._register_hotkey()
@@ -305,7 +306,7 @@ class DepositRouteHelper(QWidget):
         self.scroll.setWidget(self.scroll_content)
         root.addWidget(self.scroll, 1)
 
-        self.status = QLabel("Ready.")
+        self.status = WrappedStatusLabel("Ready.")
         self.status.setObjectName("HelperStatus")
         root.addWidget(self.status)
         self.refresh_rows()

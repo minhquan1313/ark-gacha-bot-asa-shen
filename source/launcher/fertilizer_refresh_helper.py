@@ -2,7 +2,13 @@ import ctypes
 import threading
 
 from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
 
 from source.gacha_bot.fertilizer_refresh import run_fertilizer_refresh
 from source.launcher.deposit_helper_capture import (
@@ -11,7 +17,7 @@ from source.launcher.deposit_helper_capture import (
 )
 from source.launcher.deposit_route_helper import WM_HOTKEY
 from source.launcher.native_window import WindowsMSG
-from source.launcher.widgets import AnimatedButton
+from source.launcher.widgets import AnimatedButton, WrappedStatusLabel
 
 
 class FertilizerRefreshHelper(QWidget):
@@ -39,6 +45,7 @@ class FertilizerRefreshHelper(QWidget):
         )
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.resize(440, 250)
+        self.setFixedWidth(440)
         self._build_ui()
         self._position_top_right()
         self._register_hotkey()
@@ -90,7 +97,7 @@ class FertilizerRefreshHelper(QWidget):
         self.start_stop_button.clicked.connect(self.toggle)
         layout.addWidget(self.start_stop_button)
 
-        self.status = QLabel("Ready.")
+        self.status = WrappedStatusLabel("Ready.")
         self.status.setObjectName("HelperStatus")
         layout.addWidget(self.status)
 
