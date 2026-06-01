@@ -14,7 +14,7 @@ roi_regions = {
     "beds_title": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
     "console": {"start_x": 0, "start_y": 1050, "width": 38, "height": 30},
     "crop_plot": {"start_x": 825, "start_y": 187, "width": 233, "height": 113},
-    "crop_plot_prompt": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
+    "crop_plot_prompt": {"start_x": 300, "start_y": 150, "width": 1400, "height": 800},
     "crystal_in_hotbar": {
         "start_x": 562,
         "start_y": 937,
@@ -136,12 +136,11 @@ def check_template_no_bounds(item: str, threshold: float) -> bool:
 
     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-    # if item == "crop_plot_prompt" and max_val > threshold:
+    # if item == "crop_plot_prompt":
     #     print(f"Max value: {max_val}, Threshold: {threshold}")
-    #     cv2.imshow("roi", gray_roi)
     #     cv2.imshow("template", image)
     #     cv2.rectangle(
-    #         gray_roi,
+    #         roi,
     #         (max_loc[0], max_loc[1]),
     #         (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
     #         (0, 0, 255),
@@ -149,6 +148,7 @@ def check_template_no_bounds(item: str, threshold: float) -> bool:
     #     )
     #     cv2.imshow("roi_with_rectangle", gray_roi)
     #     cv2.waitKey(0)
+    #     cv2.destroyAllWindows()
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
