@@ -93,9 +93,9 @@ class gacha_station(base_task):
     
     def get_requeue_delay(self):
         if settings.seeds_230:
-            delay = 10700  # should take about this amount of time to do 230 slots of seeds 
+            delay = settings.gacha_230_feed_delay  # should take about this amount of time to do 230 slots of seeds
         else:
-            delay = 6600    # delay can be constant as it will be the same for all gachas 142 stacks took 110 mins
+            delay = settings.gacha_feed_delay    # delay can be constant as it will be the same for all gachas 142 stacks took 110 mins
         return delay 
 
 class pego_station(base_task):

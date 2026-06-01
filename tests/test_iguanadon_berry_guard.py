@@ -118,6 +118,8 @@ def load_stations_module():
             y_trap_bot=False,
             external_berry=False,
             seeds_230=False,
+            gacha_feed_delay=123,
+            gacha_230_feed_delay=456,
             side_crop_plot=False,
         ),
         "source.logs.gachalogs": logs,
@@ -225,6 +227,23 @@ class BerryStationTaskGuardTests(unittest.TestCase):
         iguanadon.berry_station.assert_called_once_with(metadata["BERRIES"])
         self.assertEqual(
             teleporter.teleport_not_default.call_args_list[0], call(metadata["BERRIES"])
+        )
+
+    def test_normal_gacha_requeue_delay_uses_setting(self):
+        stations, _, _, _ = load_stations_module()
+
+        self.assertEqual(
+            stations.gacha_station("gacha1", "GACHA1", "left").get_requeue_delay(),
+            123,
+        )
+
+    def test_230_gacha_requeue_delay_uses_setting(self):
+        stations, _, _, _ = load_stations_module()
+        stations.settings.seeds_230 = True
+
+        self.assertEqual(
+            stations.gacha_station("gacha1", "GACHA1", "left").get_requeue_delay(),
+            456,
         )
 
 

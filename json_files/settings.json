@@ -18,6 +18,8 @@
     "external_berry": false,
     "crafting": false,
     "seeds_230": false,
+    "gacha_feed_delay": 6600,
+    "gacha_230_feed_delay": 10700,
     "side_crop_plot": false,
     "y_trap_bot": false,
     "allow_focus_ark_window": true,
