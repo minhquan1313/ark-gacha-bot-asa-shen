@@ -86,8 +86,8 @@ class FertilizerRefreshHelper(QWidget):
         layout.addWidget(hint)
 
         description = QLabel(
-            "Open a crop plot inventory and this tool transfers everything to your "
-            "player inventory, then transfers everything back into the crop plot."
+            "Aim at a crop plot and this tool opens its inventory, transfers everything "
+            "to your player inventory, then transfers everything back into the crop plot."
         )
         description.setObjectName("MutedCopy")
         description.setWordWrap(True)
@@ -125,7 +125,8 @@ class FertilizerRefreshHelper(QWidget):
         self.stop_event = threading.Event()
         self.start_stop_button.setText("STOP")
         self.start_stop_button.set_variant("danger")
-        self.status.setText("Waiting for a crop plot inventory...")
+        self.start_stop_button.setEnabled(True)
+        self.status.setText("Aim at a crop plot to refresh fertilizer...")
         self.worker_thread = threading.Thread(target=self._run_worker, daemon=True)
         self.worker_thread.start()
 
@@ -138,8 +139,11 @@ class FertilizerRefreshHelper(QWidget):
     def stop(self):
         if not self.is_running():
             return
-        self.status.setText("Stopping...")
         self.stop_event.set()
+        self.start_stop_button.setText("START")
+        self.start_stop_button.set_variant("primary")
+        self.start_stop_button.setEnabled(False)
+        self.status.setText("Stopped.")
 
     def is_running(self):
         return self.worker_thread is not None and self.worker_thread.is_alive()
@@ -155,9 +159,11 @@ class FertilizerRefreshHelper(QWidget):
     def _on_worker_finished(self, error):
         self.worker_thread = None
         if self.closing:
+            self.close()
             return
         self.start_stop_button.setText("START")
         self.start_stop_button.set_variant("primary")
+        self.start_stop_button.setEnabled(True)
         self.status.setText(f"Failed: {error}" if error else "Stopped.")
 
     def _position_top_right(self):
@@ -237,7 +243,10 @@ class FertilizerRefreshHelper(QWidget):
         self.stop_event.set()
         thread = self.worker_thread
         if thread is not None and thread.is_alive():
-            thread.join()
+            self.status.setText("Stopping...")
+            self.start_stop_button.setEnabled(False)
+            event.ignore()
+            return
         if self.hotkey_registered and hasattr(ctypes, "windll"):
             try:
                 unregister_hotkey(int(self.winId()), self.hotkey_id)

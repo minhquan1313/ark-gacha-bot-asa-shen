@@ -100,6 +100,84 @@ class FertilizerStartValidationTests(unittest.TestCase):
         finally:
             helper.close()
 
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_close_defers_without_joining_live_worker(self, _register_hotkey):
+        with patch.object(FertilizerRefreshHelper, "_position_top_right"):
+            helper = FertilizerRefreshHelper(_RejectedOwner())
+        worker = Mock()
+        worker.is_alive.return_value = True
+        helper.worker_thread = worker
+        event = Mock()
+
+        try:
+            helper.closeEvent(event)
+
+            self.assertTrue(helper.stop_event.is_set())
+            self.assertEqual(helper.status.text(), "Stopping...")
+            self.assertFalse(helper.start_stop_button.isEnabled())
+            event.ignore.assert_called_once_with()
+            worker.join.assert_not_called()
+        finally:
+            worker.is_alive.return_value = False
+            helper.close()
+
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_worker_finish_finalizes_deferred_close(self, _register_hotkey):
+        with patch.object(FertilizerRefreshHelper, "_position_top_right"):
+            helper = FertilizerRefreshHelper(_RejectedOwner())
+        helper.closing = True
+
+        with patch.object(helper, "close") as close:
+            helper._on_worker_finished("")
+
+        self.assertIsNone(helper.worker_thread)
+        close.assert_called_once_with()
+
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_stop_reports_stopped_immediately_and_disables_restart(
+        self, _register_hotkey
+    ):
+        with patch.object(FertilizerRefreshHelper, "_position_top_right"):
+            helper = FertilizerRefreshHelper(_RejectedOwner())
+        worker = Mock()
+        worker.is_alive.return_value = True
+        helper.worker_thread = worker
+        try:
+            helper.stop()
+
+            self.assertTrue(helper.stop_event.is_set())
+            self.assertEqual(helper.status.text(), "Stopped.")
+            self.assertEqual(helper.start_stop_button.text(), "START")
+            self.assertFalse(helper.start_stop_button.isEnabled())
+        finally:
+            worker.is_alive.return_value = False
+            helper.close()
+
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_worker_finish_reenables_restart(self, _register_hotkey):
+        with patch.object(FertilizerRefreshHelper, "_position_top_right"):
+            helper = FertilizerRefreshHelper(_RejectedOwner())
+        try:
+            helper.start_stop_button.setEnabled(False)
+            helper._on_worker_finished("")
+
+            self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertEqual(helper.status.text(), "Stopped.")
+        finally:
+            helper.close()
+
 
 class DialogOwnershipTests(unittest.TestCase):
     @patch(

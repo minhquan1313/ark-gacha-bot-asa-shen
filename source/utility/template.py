@@ -14,6 +14,7 @@ roi_regions = {
     "beds_title": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
     "console": {"start_x": 0, "start_y": 1050, "width": 38, "height": 30},
     "crop_plot": {"start_x": 825, "start_y": 187, "width": 233, "height": 113},
+    "crop_plot_prompt": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
     "crystal_in_hotbar": {
         "start_x": 562,
         "start_y": 937,
