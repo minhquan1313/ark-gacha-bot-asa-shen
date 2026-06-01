@@ -138,7 +138,7 @@ def _deposit_to_dedi(route_metadata, item, label):
                 template.check_template, 2, "inventory", 0.7
             ):
                 waiting_for_remote = template.template_await_true(
-                    template.check_template, 5, "waiting_inv", 0.8
+                    template.check_template, 2, "waiting_inv", 0.8
                 )
                 while (
                     waiting_for_remote
@@ -154,7 +154,7 @@ def _deposit_to_dedi(route_metadata, item, label):
                         variables.get_pixel_loc("dedi_deposit_x"),
                         variables.get_pixel_loc("dedi_deposit_y"),
                     )
-                    
+
                     # time.sleep(0.3 * settings.lag_offset)
                     inventory.close()
                     template.template_await_false(
