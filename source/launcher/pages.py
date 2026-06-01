@@ -33,6 +33,7 @@ from source.launcher.constants import (
     COLORS,
     DEFAULT_SETTINGS,
     SETTINGS_GROUPS,
+    setting_label,
 )
 from source.launcher.deposit_route_helper import DepositRouteHelper
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
@@ -367,7 +368,7 @@ class LauncherPagesMixin:
         keys = SETTINGS_GROUPS[group_name]
         for index, key in enumerate(keys, start=1):
             default_value = DEFAULT_SETTINGS[key]
-            label = QLabel(key)
+            label = QLabel(setting_label(key))
             label.setObjectName("FormLabel")
             row = 1 + ((index - 1) // 2)
             col = 0 if index % 2 else 2
@@ -421,7 +422,7 @@ class LauncherPagesMixin:
 
         storage_settings, storage_layout = self._panel("STORAGE")
         timeout_row = QHBoxLayout()
-        timeout_label = QLabel("dedi_handshake_timeout")
+        timeout_label = QLabel(setting_label("dedi_handshake_timeout"))
         timeout_label.setObjectName("FormLabel")
         timeout = QLineEdit(str(self.form_values.get("dedi_handshake_timeout", 30)))
         timeout.setObjectName("SettingField")
@@ -723,7 +724,7 @@ class LauncherPagesMixin:
     def _add_route_teleport_field(self, layout, route):
         row = QHBoxLayout()
         row.setSpacing(8)
-        label = QLabel("teleport")
+        label = QLabel(setting_label("teleport"))
         label.setObjectName("FormLabel")
         field = self._deposit_line_edit(route.get("teleport", ""))
         field.editingFinished.connect(
@@ -769,7 +770,7 @@ class LauncherPagesMixin:
 
         items_row = QHBoxLayout()
         items_row.setSpacing(8)
-        items_label = QLabel("items")
+        items_label = QLabel(setting_label("items"))
         items_label.setObjectName("FormLabel")
         items = self._deposit_line_edit(", ".join(vault.get("items", [])))
         items.editingFinished.connect(
@@ -786,7 +787,7 @@ class LauncherPagesMixin:
     def _add_yaw_pitch_fields(self, row, item):
         location = item["location"]
         for key in ("yaw", "pitch"):
-            label = QLabel(key)
+            label = QLabel(setting_label(key))
             label.setObjectName("FormLabel")
             field = self._deposit_line_edit(str(location.get(key, 0.0)))
             field.editingFinished.connect(

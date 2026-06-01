@@ -136,22 +136,49 @@ HIDDEN_SETTINGS = {
     "height_grind",
 }
 
+SETTING_LABELS = {
+    "screen_resolution": "Screen resolution",
+    "base_path": "Base path",
+    "lag_offset": "Lag offset",
+    "server_number": "Server number",
+    "auto_start_program": "Auto start program",
+    "singleplayer": "Singleplayer",
+    "crafting": "Crafting",
+    "iguanadon": "Iguanadon",
+    "bed_spawn": "Bed & teleport",
+    "berry_station": "Berry station",
+    "berry_type": "Berry type",
+    "station_yaw": "Station yaw",
+    "render_pushout": "Render pushout",
+    "external_berry": "Troughs far away",
+    "seeds_230": "Seeds 230",
+    "gacha_feed_delay": "Gacha feed delay",
+    "gacha_230_feed_delay": "Gacha 230 feed delay",
+    "side_crop_plot": "Side crops plot",
+    "y_trap_bot": "Y trap bot",
+    "helper_inactive_opacity": "Helper inactive opacity",
+    "allow_focus_ark_window": "Allow Ark window focus",
+    "focus_ark_window_interval": "Ark window focus interval",
+    "dedi_handshake_timeout": "Dedi handshake timeout",
+}
+
+
+def setting_label(key):
+    return SETTING_LABELS.get(key, key.replace("_", " ").capitalize())
+
+
 SETTINGS_GROUPS = {
     "GENERAL": [
-        "screen_resolution",
-        "base_path",
         "lag_offset",
         "server_number",
         "auto_start_program",
+        "singleplayer",
     ],
-    "DINO / STATION NAMES": [
+    "STATIONS": [
         "iguanadon",
         "bed_spawn",
         "berry_station",
         "berry_type",
-    ],
-    "UI": [
-        "helper_inactive_opacity",
     ],
     "POSITION / RENDER": [
         "station_yaw",
@@ -159,14 +186,13 @@ SETTINGS_GROUPS = {
     ],
     "STORAGE": [],
     "FEATURES": [
-        "singleplayer",
         "external_berry",
-        "crafting",
-        "seeds_230",
+        "side_crop_plot",
         "gacha_feed_delay",
         "gacha_230_feed_delay",
-        "side_crop_plot",
-        "y_trap_bot",
+    ],
+    "WINDOW / HELPERS": [
+        "helper_inactive_opacity",
         "allow_focus_ark_window",
         "focus_ark_window_interval",
     ],
