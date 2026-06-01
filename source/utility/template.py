@@ -10,49 +10,55 @@ from source.logs import gachalogs as logs
 from source.utility import screen
 
 roi_regions = {
-    "bed_radical": {"start_x": 1120, "start_y": 345, "width": 250, "height": 250},
-    "beds_title": {"start_x": 100, "start_y": 100, "width": 740, "height": 180},
-    "console": {"start_x": 0, "start_y": 1400, "width": 50, "height": 40},
-    "crop_plot": {"start_x": 1100, "start_y": 250, "width": 310, "height": 150},
+    "bed_radical": {"start_x": 840, "start_y": 258, "width": 188, "height": 188},
+    "beds_title": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
+    "console": {"start_x": 0, "start_y": 1050, "width": 38, "height": 30},
+    "crop_plot": {"start_x": 825, "start_y": 187, "width": 233, "height": 113},
     "crystal_in_hotbar": {
-        "start_x": 750,
-        "start_y": 1250,
-        "width": 1060,
-        "height": 250,
+        "start_x": 562,
+        "start_y": 937,
+        "width": 795,
+        "height": 188,
     },
-    "death_regions": {"start_x": 100, "start_y": 100, "width": 700, "height": 200},
-    "dedi": {"start_x": 1100, "start_y": 245, "width": 355, "height": 70},
-    "vault": {"start_x": 1100, "start_y": 245, "width": 355, "height": 150},
-    "grinder": {"start_x": 1100, "start_y": 245, "width": 355, "height": 70},
-    "tek_trough": {"start_x": 1170, "start_y": 260, "width": 214, "height": 40},
-    "exit_resume": {"start_x": 550, "start_y": 450, "width": 1670, "height": 880},
-    "inventory": {"start_x": 200, "start_y": 125, "width": 360, "height": 150},
-    "ready_clicked_bed": {"start_x": 580, "start_y": 250, "width": 150, "height": 1000},
-    "seed_inv": {"start_x": 550, "start_y": 450, "width": 1670, "height": 880},
-    "slot_capped": {"start_x": 2240, "start_y": 1314, "width": 150, "height": 100},
-    "teleporter_title": {"start_x": 200, "start_y": 135, "width": 405, "height": 185},
-    "tribelog_check": {"start_x": 1150, "start_y": 35, "width": 150, "height": 150},
-    "waiting_inv": {"start_x": 2000, "start_y": 100, "width": 500, "height": 250},
-    "bed_icon": {"start_x": 800, "start_y": 200, "width": 1690, "height": 1100},
-    "teleporter_icon": {"start_x": 800, "start_y": 200, "width": 1690, "height": 1100},
+    "death_regions": {"start_x": 75, "start_y": 75, "width": 525, "height": 150},
+    "dedi": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
+    "vault": {"start_x": 825, "start_y": 183, "width": 267, "height": 113},
+    "grinder": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
+    "tek_trough": {"start_x": 877, "start_y": 195, "width": 161, "height": 30},
+    "exit_resume": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
+    "inventory": {"start_x": 150, "start_y": 93, "width": 270, "height": 113},
+    "ready_clicked_bed": {"start_x": 435, "start_y": 187, "width": 113, "height": 750},
+    "seed_inv": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
+    "slot_capped": {"start_x": 1680, "start_y": 985, "width": 113, "height": 75},
+    "teleporter_title": {"start_x": 150, "start_y": 101, "width": 304, "height": 139},
+    "tribelog_check": {"start_x": 862, "start_y": 26, "width": 113, "height": 113},
+    "waiting_inv": {"start_x": 1500, "start_y": 75, "width": 375, "height": 188},
+    "bed_icon": {"start_x": 600, "start_y": 150, "width": 1268, "height": 825},
+    "teleporter_icon": {"start_x": 600, "start_y": 150, "width": 1268, "height": 825},
     "teleporter_icon_pressed": {
-        "start_x": 800,
-        "start_y": 200,
-        "width": 1690,
-        "height": 1100,
+        "start_x": 600,
+        "start_y": 150,
+        "width": 1268,
+        "height": 825,
     },
-    "first_slot": {"start_x": 220, "start_y": 305, "width": 130, "height": 130},
-    "player_stats": {"start_x": 1120, "start_y": 240, "width": 300, "height": 900},
-    "show_buff": {"start_x": 1200, "start_y": 1150, "width": 200, "height": 50},
-    "snow_owl_pellet": {"start_x": 200, "start_y": 150, "width": 600, "height": 600},
-    "orange": {"start_x": 705, "start_y": 290, "width": 1, "height": 1},
-    "chem_bench": {"start_x": 1100, "start_y": 245, "width": 355, "height": 70},
-    "indi_forge": {"start_x": 1100, "start_y": 245, "width": 355, "height": 70},
-    "access_inv": {"start_x": 550, "start_y": 450, "width": 1670, "height": 880},
-    "turn_off": {"start_x": 1200, "start_y": 1160, "width": 200, "height": 40},
-    "vault_full": {"start_x": 1420, "start_y": 700, "width": 150, "height": 40},
-    "search": {"start_x": 450, "start_y": 1270, "width": 120, "height": 40},
+    "first_slot": {"start_x": 165, "start_y": 228, "width": 98, "height": 98},
+    "player_stats": {"start_x": 840, "start_y": 180, "width": 225, "height": 675},
+    "show_buff": {"start_x": 900, "start_y": 862, "width": 150, "height": 38},
+    "snow_owl_pellet": {"start_x": 150, "start_y": 112, "width": 450, "height": 450},
+    "orange": {"start_x": 528, "start_y": 217, "width": 1, "height": 1},
+    "chem_bench": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
+    "indi_forge": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
+    "access_inv": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
+    "turn_off": {"start_x": 900, "start_y": 870, "width": 150, "height": 30},
+    "vault_full": {"start_x": 1065, "start_y": 525, "width": 113, "height": 30},
+    "search": {"start_x": 337, "start_y": 952, "width": 90, "height": 30},
 }
+
+
+def get_region_roi(region):
+    return screen.get_screen_roi(
+        region["start_x"], region["start_y"], region["width"], region["height"]
+    )
 
 
 def template_await_true(func, sleep_amount: float, *args) -> bool:
@@ -77,17 +83,7 @@ def template_await_false(func, sleep_amount: float, *args) -> bool:
 
 def check_template(item: str, threshold: float) -> bool:
     region = roi_regions[item]
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(
-            region["start_x"], region["start_y"], region["width"], region["height"]
-        )
-    else:
-        roi = screen.get_screen_roi(
-            int(region["start_x"] * 0.75),
-            int(region["start_y"] * 0.75),
-            int(region["width"] * 0.75),
-            int(region["height"] * 0.75),
-        )
+    roi = get_region_roi(region)
 
     lower_boundary = np.array([0, 30, 200])
     upper_boundary = np.array([255, 255, 255])
@@ -97,7 +93,7 @@ def check_template(item: str, threshold: float) -> bool:
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons{screen.screen_resolution}/{item}.png")
+    image = cv2.imread(f"assets/icons1080/{item}.png")
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -121,17 +117,7 @@ def check_template(item: str, threshold: float) -> bool:
 
 def check_template_no_bounds(item: str, threshold: float) -> bool:
     region = roi_regions[item]
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(
-            region["start_x"], region["start_y"], region["width"], region["height"]
-        )
-    else:
-        roi = screen.get_screen_roi(
-            int(region["start_x"] * 0.75),
-            int(region["start_y"] * 0.75),
-            int(region["width"] * 0.75),
-            int(region["height"] * 0.75),
-        )
+    roi = get_region_roi(region)
 
     lower_boundary = np.array([0, 0, 0])
     upper_boundary = np.array([255, 255, 255])
@@ -141,7 +127,7 @@ def check_template_no_bounds(item: str, threshold: float) -> bool:
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons{screen.screen_resolution}/{item}.png")
+    image = cv2.imread(f"assets/icons1080/{item}.png")
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -161,17 +147,7 @@ def return_location(
     item: str, threshold: float
 ):  # assumes that the check for the item on the screen has already been done
     region = roi_regions[item]
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(
-            region["start_x"], region["start_y"], region["width"], region["height"]
-        )
-    else:
-        roi = screen.get_screen_roi(
-            int(region["start_x"] * 0.75),
-            int(region["start_y"] * 0.75),
-            int(region["width"] * 0.75),
-            int(region["height"] * 0.75),
-        )
+    roi = get_region_roi(region)
 
     lower_boundary = np.array([0, 0, 0])
     upper_boundary = np.array([255, 255, 255])
@@ -181,7 +157,7 @@ def return_location(
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons{screen.screen_resolution}/{item}.png")
+    image = cv2.imread(f"assets/icons1080/{item}.png")
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -199,17 +175,7 @@ def return_location(
 
 def teleport_icon(threshold: float) -> bool:
     region = roi_regions["teleporter_icon"]
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(
-            region["start_x"], region["start_y"], region["width"], region["height"]
-        )
-    else:
-        roi = screen.get_screen_roi(
-            int(region["start_x"] * 0.75),
-            int(region["start_y"] * 0.75),
-            int(region["width"] * 0.75),
-            int(region["height"] * 0.75),
-        )
+    roi = get_region_roi(region)
 
     lower_boundary = np.array([0, 0, 150])
     upper_boundary = np.array([255, 255, 255])
@@ -219,7 +185,7 @@ def teleport_icon(threshold: float) -> bool:
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons{screen.screen_resolution}/teleporter_icon.png")
+    image = cv2.imread("assets/icons1080/teleporter_icon.png")
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -237,17 +203,7 @@ def teleport_icon(threshold: float) -> bool:
 
 def inventory_first_slot(item: str, threshold: float) -> bool:
     region = roi_regions["first_slot"]
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(
-            region["start_x"], region["start_y"], region["width"], region["height"]
-        )
-    else:
-        roi = screen.get_screen_roi(
-            int(region["start_x"] * 0.75),
-            int(region["start_y"] * 0.75),
-            int(region["width"] * 0.75),
-            int(region["height"] * 0.75),
-        )
+    roi = get_region_roi(region)
 
     lower_boundary = np.array([0, 0, 0])
     upper_boundary = np.array([255, 255, 255])
@@ -257,7 +213,7 @@ def inventory_first_slot(item: str, threshold: float) -> bool:
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons{screen.screen_resolution}/{item}.png")
+    image = cv2.imread(f"assets/icons1080/{item}.png")
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -275,17 +231,7 @@ def inventory_first_slot(item: str, threshold: float) -> bool:
 
 def check_buffs(buff, threshold):
     region = roi_regions["player_stats"]
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(
-            region["start_x"], region["start_y"], region["width"], region["height"]
-        )
-    else:
-        roi = screen.get_screen_roi(
-            int(region["start_x"] * 0.75),
-            int(region["start_y"] * 0.75),
-            int(region["width"] * 0.75),
-            int(region["height"] * 0.75),
-        )
+    roi = get_region_roi(region)
 
     lower_boundary = np.array([0, 0, 180])
     upper_boundary = np.array([255, 255, 255])
@@ -295,7 +241,7 @@ def check_buffs(buff, threshold):
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons{screen.screen_resolution}/{buff}.png")
+    image = cv2.imread(f"assets/icons1080/{buff}.png")
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -313,17 +259,7 @@ def check_buffs(buff, threshold):
 
 def check_teleporter_orange():
     region = roi_regions["orange"]
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(
-            region["start_x"], region["start_y"], region["width"], region["height"]
-        )
-    else:
-        roi = screen.get_screen_roi(
-            int(region["start_x"] * 0.75),
-            int(region["start_y"] * 0.75),
-            int(region["width"]),
-            int(region["height"]),
-        )
+    roi = get_region_roi(region)
 
     lower_boundary = np.array([10, 211, 50])
     upper_boundary = np.array([15, 255, 100])
@@ -376,19 +312,11 @@ lower_console_bound = bounds[0]["lower_bound"]
 
 
 def console_strip_bottom():
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(0, 1419, 2560, 2)
-    else:
-        roi = screen.get_screen_roi(0, 1059, 1920, 2)
-    return roi
+    return screen.get_screen_roi(0, 1059, 1920, 2)
 
 
 def console_strip_middle():
-    if screen.screen_resolution == 1440:
-        roi = screen.get_screen_roi(0, 1065, 2560, 2)
-    else:
-        roi = screen.get_screen_roi(0, 795, 1920, 2)
-    return roi
+    return screen.get_screen_roi(0, 795, 1920, 2)
 
 
 def console_strip_check(roi):

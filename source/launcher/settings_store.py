@@ -7,6 +7,7 @@ from source.launcher.constants import DEFAULT_SETTINGS, SETTINGS_FILE
 def _normalize_settings(data):
     normalized = DEFAULT_SETTINGS.copy()
     normalized.update(data)
+    normalized.pop("screen_resolution", None)
     normalized["helper_inactive_opacity"] = max(
         0.1, min(1.0, float(normalized.get("helper_inactive_opacity", 0.3)))
     )

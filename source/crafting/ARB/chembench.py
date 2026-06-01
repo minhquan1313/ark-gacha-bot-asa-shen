@@ -14,7 +14,6 @@ import ASA.strucutres.inventory
 import ASA.player.player_inventory
 import bot.config
 import json
-import screen 
 def craft_gunpowder():
     # open chem bench
     ASA.strucutres.inventory.open()
@@ -28,12 +27,8 @@ def craft_gunpowder():
         time.sleep(0.3*settings.lag_offset)
         x = ASA.strucutres.inventory.inv_slots["x"]
         y = ASA.strucutres.inventory.inv_slots["y"]
-        if screen.screen_resolution == 1080:
-            windows.move_mouse(x * 0.75,y * 0.75)
-            windows.click(x * 0.75,y * 0.75)
-        else:
-            windows.move_mouse(x,y)
-            windows.click(x,y)
+        windows.move_mouse(x,y)
+        windows.click(x,y)
         
         for count in range(15):
             utils.press_key("a")
@@ -53,12 +48,8 @@ def craft_sparkpowder():
         time.sleep(0.3*settings.lag_offset)
         x = ASA.strucutres.inventory.inv_slots["x"]
         y = ASA.strucutres.inventory.inv_slots["y"]
-        if screen.screen_resolution == 1080:
-            windows.move_mouse(x * 0.75,y * 0.75)
-            windows.click(x * 0.75,y * 0.75)
-        else:
-            windows.move_mouse(x,y)
-            windows.click(x,y)
+        windows.move_mouse(x,y)
+        windows.click(x,y)
         
         for count in range(15):
             utils.press_key("a")

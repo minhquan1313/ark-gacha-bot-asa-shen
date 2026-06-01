@@ -2,12 +2,10 @@ from source.join_sim.source.utility import windows, recon_utils
 from source.join_sim.source.logs import logger as logs
 
 buttons = {
-    "mod_join_x":700,"mod_join_y":1250
+    "mod_join_x":525,"mod_join_y":937
 }
 
 def get_pixel_loc( location):
-    if windows.screen.screen_resolution == 1080:
-        return round(buttons.get(location) * 0.75)
     return buttons.get(location)
 
 def is_open():

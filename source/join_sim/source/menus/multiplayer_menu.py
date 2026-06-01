@@ -4,19 +4,17 @@ import time
 from source.join_sim.source.logs import logger as logs
 
 buttons = {
-    "search_x": 2230, "search_y": 260,
-    "first_server_x": 2230, "first_server_y": 438,
-    "join_x": 2230, "join_y": 1260,
-    "refresh_x": 1240, "refresh_y": 1250,
-    "back_x": 230, "back_y": 1180,
-    "cancel_x":1426,"cancel_y":970,
-    "red_okay_x":1270,"red_okay_y":880,
-    "mod_join_x":700,"mod_join_y":1250
+    "search_x": 1672, "search_y": 195,
+    "first_server_x": 1672, "first_server_y": 328,
+    "join_x": 1672, "join_y": 945,
+    "refresh_x": 930, "refresh_y": 937,
+    "back_x": 172, "back_y": 885,
+    "cancel_x":1069,"cancel_y":727,
+    "red_okay_x":952,"red_okay_y":660,
+    "mod_join_x":525,"mod_join_y":937
 }
 
 def get_pixel_loc( location):
-    if windows.screen.screen_resolution == 1080:
-        return round(buttons.get(location) * 0.75)
     return buttons.get(location)
 
 def is_open():

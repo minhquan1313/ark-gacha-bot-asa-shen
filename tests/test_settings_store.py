@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from source.launcher.constants import (
     DEFAULT_SETTINGS,
@@ -17,6 +18,21 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertEqual(settings["gacha_230_feed_delay"], 10700)
         self.assertIsInstance(DEFAULT_SETTINGS["gacha_feed_delay"], int)
         self.assertIsInstance(DEFAULT_SETTINGS["gacha_230_feed_delay"], int)
+
+    def test_legacy_screen_resolution_setting_is_discarded(self):
+        settings = _normalize_settings({"screen_resolution": 1440})
+
+        self.assertNotIn("screen_resolution", settings)
+        self.assertNotIn("screen_resolution", DEFAULT_SETTINGS)
+
+    def test_obsolete_resolution_artifacts_are_removed(self):
+        project_root = Path(__file__).resolve().parents[1]
+
+        self.assertFalse((project_root / "assets" / "icons1440").exists())
+        self.assertFalse(
+            (project_root / "source" / "join_sim" / "assets" / "icons1440").exists()
+        )
+        self.assertFalse((project_root / "json_files" / "resolution.json").exists())
 
     def test_settings_groups_follow_workflow_order(self):
         self.assertEqual(

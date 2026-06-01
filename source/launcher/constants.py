@@ -100,7 +100,6 @@ ASSETS = {
 }
 
 DEFAULT_SETTINGS = {
-    "screen_resolution": "VALUE DOES NOT MATTER",
     "base_path": "VALUE DOES NOT MATTER",
     "lag_offset": 1.0,
     "iguanadon": "GACHAIGUANADON",
@@ -137,7 +136,6 @@ HIDDEN_SETTINGS = {
 }
 
 SETTING_LABELS = {
-    "screen_resolution": "Screen resolution",
     "base_path": "Base path",
     "lag_offset": "Lag offset",
     "server_number": "Server number",

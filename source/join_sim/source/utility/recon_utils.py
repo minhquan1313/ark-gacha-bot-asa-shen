@@ -4,42 +4,39 @@ import time
 from source.join_sim.source.utility import windows ,screen 
 
 location = {
-    "accept":{"start_x":1220, "start_y":958 ,"width":100 ,"height":30},
-    "escape":{"start_x":2330, "start_y":110 ,"width":60 ,"height":50},
-    "escape_obscured":{"start_x":2330, "start_y":110 ,"width":60 ,"height":50},
-    "join_last_session":{"start_x":1135, "start_y":1250 ,"width":300 ,"height":50},
-    "join_game":{"start_x":400, "start_y":1000 ,"width":700 ,"height":60},
-    "join_button":{"start_x":2230, "start_y":1230 ,"width":100 ,"height":50},
-    "multiplayer":{"start_x":100, "start_y":110 ,"width":85 ,"height":60},
-    "server_full":{"start_x":1330, "start_y":460 ,"width":250 ,"height":60},
-    "red_fail":{"start_x":1230, "start_y":485 ,"width":250 ,"height":60},
-    "mod_join":{"start_x":2255, "start_y":1225 ,"width":100 ,"height":60},
-    "req_mods":{"start_x":965, "start_y":187 ,"width":200 ,"height":50},
-    "join_text":{"start_x":900, "start_y":635 ,"width":400 ,"height":30},
-    "loading_screen":{"start_x":0, "start_y":0 ,"width":500 ,"height":500},
-    "searching":{"start_x":1160, "start_y":635 ,"width":120 ,"height":40},
-    "no_session":{"start_x":1260, "start_y":635 ,"width":150 ,"height":40},
-    "connection_timeout":{"start_x":1025, "start_y":460 ,"width":200 ,"height":55},
-    "search": {"start_x":2100, "start_y":245 ,"width":100 ,"height":40},
-    "download": {"start_x":575, "start_y":1220 ,"width":200 ,"height":25},
-    "beds_title": {"start_x":100, "start_y":100 ,"width":740 ,"height":180},
-    "tribelog_check": {"start_x":1150, "start_y":35 ,"width":150 ,"height":150},
-    "network_failure": {"start_x":1050, "start_y":450 ,"width":300 ,"height":70}
+    "accept":{"start_x":915, "start_y":718 ,"width":75 ,"height":23},
+    "escape":{"start_x":1747, "start_y":82 ,"width":45 ,"height":38},
+    "escape_obscured":{"start_x":1747, "start_y":82 ,"width":45 ,"height":38},
+    "join_last_session":{"start_x":851, "start_y":937 ,"width":225 ,"height":38},
+    "join_game":{"start_x":300, "start_y":750 ,"width":525 ,"height":45},
+    "join_button":{"start_x":1672, "start_y":922 ,"width":75 ,"height":38},
+    "multiplayer":{"start_x":75, "start_y":82 ,"width":64 ,"height":45},
+    "server_full":{"start_x":997, "start_y":345 ,"width":188 ,"height":45},
+    "red_fail":{"start_x":922, "start_y":363 ,"width":188 ,"height":45},
+    "mod_join":{"start_x":1691, "start_y":918 ,"width":75 ,"height":45},
+    "req_mods":{"start_x":723, "start_y":140 ,"width":150 ,"height":38},
+    "join_text":{"start_x":675, "start_y":476 ,"width":300 ,"height":23},
+    "loading_screen":{"start_x":0, "start_y":0 ,"width":375 ,"height":375},
+    "searching":{"start_x":870, "start_y":476 ,"width":90 ,"height":30},
+    "no_session":{"start_x":945, "start_y":476 ,"width":113 ,"height":30},
+    "connection_timeout":{"start_x":768, "start_y":345 ,"width":150 ,"height":42},
+    "search": {"start_x":1575, "start_y":183 ,"width":75 ,"height":30},
+    "download": {"start_x":431, "start_y":915 ,"width":150 ,"height":19},
+    "beds_title": {"start_x":75, "start_y":75 ,"width":555 ,"height":135},
+    "tribelog_check": {"start_x":862, "start_y":26 ,"width":113 ,"height":113},
+    "network_failure": {"start_x":787, "start_y":337 ,"width":225 ,"height":53}
 }
 
+def get_region_roi(region):
+    return screen.get_screen_roi(
+        region["start_x"], region["start_y"], region["width"], region["height"]
+    )
 
 
 def check_template(item:str, threshold:float) -> bool:
     
     region = location[item]
-    multiplier = 1 if screen.screen_resolution == 1440 else 0.75
-
-    roi = screen.get_screen_roi(
-    int(region["start_x"] * multiplier),
-    int(region["start_y"] * multiplier),
-    int(region["width"] * multiplier),
-    int(region["height"] * multiplier)
-    ) 
+    roi = get_region_roi(region)
     lower_boundary = np.array([0,30,200])
     upper_boundary = np.array([255,255,255])
 
@@ -48,7 +45,7 @@ def check_template(item:str, threshold:float) -> bool:
     masked_template = cv2.bitwise_and(roi, roi, mask= mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"source/join_sim/assets/icons{screen.screen_resolution}/{item}.png")
+    image = cv2.imread(f"source/join_sim/assets/icons1080/{item}.png")
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv,lower_boundary,upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -66,14 +63,7 @@ def check_template(item:str, threshold:float) -> bool:
 def check_template_no_bounds(item:str, threshold:float) -> bool:
     
     region = location[item]
-    multiplier = 1 if screen.screen_resolution == 1440 else 0.75
-
-    roi = screen.get_screen_roi(
-    int(region["start_x"] * multiplier),
-    int(region["start_y"] * multiplier),
-    int(region["width"] * multiplier),
-    int(region["height"] * multiplier)
-    )  
+    roi = get_region_roi(region)
     lower_boundary = np.array([0,0,0])
     upper_boundary = np.array([255,255,255])
 
@@ -82,7 +72,7 @@ def check_template_no_bounds(item:str, threshold:float) -> bool:
     masked_template = cv2.bitwise_and(roi, roi, mask= mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"source/join_sim/assets/icons{screen.screen_resolution}/{item}.png")
+    image = cv2.imread(f"source/join_sim/assets/icons1080/{item}.png")
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv,lower_boundary,upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -137,14 +127,7 @@ def window_still_open_no_bounds(template:str,threshold:float,sleep_amount:float)
 def template_find(item:str,) -> tuple:
     
     region = location[item]
-    multiplier = 1 if screen.screen_resolution == 1440 else 0.75
-
-    roi = screen.get_screen_roi(
-    int(region["start_x"] * multiplier),
-    int(region["start_y"] * multiplier),
-    int(region["width"] * multiplier),
-    int(region["height"] * multiplier)
-    )
+    roi = get_region_roi(region)
 
     lower_boundary = np.array([0,0,0])
     upper_boundary = np.array([255,255,255])
@@ -154,7 +137,7 @@ def template_find(item:str,) -> tuple:
     masked_template = cv2.bitwise_and(roi, roi, mask= mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"source/join_sim/assets/icons{screen.screen_resolution}/{item}.png")
+    image = cv2.imread(f"source/join_sim/assets/icons1080/{item}.png")
     hsv = cv2.cvtColor(image,cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv,lower_boundary,upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -166,7 +149,7 @@ def template_find(item:str,) -> tuple:
     height = image.shape[0]
     width = image.shape[1]
 
-    start_point =(int(region["start_x"] * multiplier) + max_loc[0], int(region["start_y"] * multiplier) + max_loc[1])
+    start_point =(region["start_x"] + max_loc[0], region["start_y"] + max_loc[1])
     mid_point = (start_point[0] + width // 2 , start_point[1] + height // 2)
 
     return mid_point

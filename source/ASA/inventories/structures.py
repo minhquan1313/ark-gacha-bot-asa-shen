@@ -1,14 +1,14 @@
 import source.logs.gachalogs as logs 
-from source.utility import utils ,template , windows ,variables ,screen ,local_player
+from source.utility import utils ,template , windows ,variables ,local_player
 import time
 import settings
 import source.ASA.config 
 import source.ASA.inventories.inventory
 
 inv_slots = { 
-    "x" : 1660,
-    "y" : 320,
-    "distance" : 125
+    "x" : 1245,
+    "y" : 240,
+    "distance" : 93
 }
 
 class structure_inventory(source.ASA.inventories.inventory.inventory):
@@ -66,12 +66,9 @@ class structure_inventory(source.ASA.inventories.inventory.inventory):
         if self.is_open():
             for count in range(6):
                 time.sleep(0.1*settings.lag_offset)
-                x = inv_slots["x"] + (count *inv_slots["distance"]) + 30 # x pos = startx + distancebetweenslots * count 
-                y = inv_slots["y"] + 30
-                if screen.screen_resolution == 1080:
-                    windows.move_mouse(x * 0.75,y * 0.75)
-                else:
-                    windows.move_mouse(x,y)
+                x = inv_slots["x"] + (count *inv_slots["distance"]) + 22 # x pos = startx + distancebetweenslots * count
+                y = inv_slots["y"] + 22
+                windows.move_mouse(x,y)
                 time.sleep(0.1*settings.lag_offset)
                 utils.press_key("DropItem")
     
