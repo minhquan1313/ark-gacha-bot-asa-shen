@@ -1015,7 +1015,7 @@ class LauncherPagesMixin:
         card.setMaximumWidth(620)
         description = QLabel(
             "Refresh crop plot fertilizer with one quick helper. Start the tool, "
-            "open a crop plot inventory, and it will transfer everything to your "
+            "and it will open a crop plot inventory, transfer everything to your "
             "player inventory and back into the crop plot."
         )
         description.setObjectName("MutedCopy")
