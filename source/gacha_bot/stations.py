@@ -69,7 +69,7 @@ class gacha_station(base_task):
                 if settings.external_berry: 
                     logs.logger.debug("sleeping for 20 seconds as external")
                     time.sleep(20)#letting station spawn in if you have to tp away
-                iguanadon.berry_station()
+                iguanadon.berry_station(berry_metadata)
                 last_berry = time.time()
                 berry_station = False
                 temp = True

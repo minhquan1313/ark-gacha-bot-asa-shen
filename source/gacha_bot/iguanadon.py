@@ -7,6 +7,12 @@ from source.ASA.stations import custom_stations
 from source.ASA.player import player_inventory , player_state
 import source.gacha_bot.config 
 
+def _recover_berry_station(metadata):
+    teleporter.teleport_not_default(metadata)
+    if settings.external_berry:
+        logs.logger.debug("sleeping for 20 seconds as external")
+        time.sleep(20) #letting station spawn in if you have to tp away
+
 def berry_collection():
     time.sleep(0.5)
     inventory.open()
@@ -15,8 +21,36 @@ def berry_collection():
         inventory.close()
     time.sleep(0.5)
 
-def berry_station():
-    berry_collection()
+def _collect_first_trough(metadata):
+    attempt = 0
+    while True:
+        time.sleep(0.5)
+        inventory.open()
+        if inventory.is_open() and template.template_await_true(
+            template.check_template,1,"tek_trough",0.7
+        ):
+            inventory.transfer_all_from()
+            inventory.close()
+            time.sleep(0.5)
+            return
+
+        attempt += 1
+        logs.logger.error(
+            f"tek trough was not opened; retrying {attempt} / "
+            f"{source.gacha_bot.config.tek_trough_attempts}"
+        )
+        inventory.close()
+        if attempt >= source.gacha_bot.config.tek_trough_attempts:
+            logs.logger.critical(
+                "tek trough failed to open; suiciding and restarting berry station"
+            )
+            player_inventory.implant_eat()
+            player_state.check_state()
+            attempt = 0
+        _recover_berry_station(metadata)
+
+def berry_station(metadata):
+    _collect_first_trough(metadata)
     utils.turn_down(50)
     berry_collection()
     utils.turn_up(50)

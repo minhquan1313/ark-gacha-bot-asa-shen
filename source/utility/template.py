@@ -24,6 +24,7 @@ roi_regions = {
     "dedi": {"start_x": 1100, "start_y": 245, "width": 355, "height": 70},
     "vault": {"start_x": 1100, "start_y": 245, "width": 355, "height": 150},
     "grinder": {"start_x": 1100, "start_y": 245, "width": 355, "height": 70},
+    "tek_trough": {"start_x": 1170, "start_y": 260, "width": 214, "height": 40},
     "exit_resume": {"start_x": 550, "start_y": 450, "width": 1670, "height": 880},
     "inventory": {"start_x": 200, "start_y": 125, "width": 360, "height": 150},
     "ready_clicked_bed": {"start_x": 580, "start_y": 250, "width": 150, "height": 1000},
