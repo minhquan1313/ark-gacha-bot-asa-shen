@@ -1,4 +1,5 @@
 import ctypes
+import time
 from ctypes import wintypes
 
 from source.launcher.constants import (
@@ -34,23 +35,48 @@ def find_window_size(window_title):
 
 
 def focus_window_if_needed(window_title, center_cursor_when_switching=False):
-    hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
+    user32 = ctypes.windll.user32
+    hwnd = user32.FindWindowW(None, window_title)
     if not hwnd:
         return False
-    if ctypes.windll.user32.GetForegroundWindow() == hwnd:
+    foreground_hwnd = user32.GetForegroundWindow()
+    if foreground_hwnd == hwnd:
         return True
 
-    ctypes.windll.user32.ShowWindow(hwnd, 9)
-    if center_cursor_when_switching:
-        rect = wintypes.RECT()
-        if not ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect)):
-            raise RuntimeError(f"Unable to read {window_title} window position.")
-        center_x = (rect.left + rect.right) // 2
-        center_y = (rect.top + rect.bottom) // 2
-        if not ctypes.windll.user32.SetCursorPos(center_x, center_y):
-            raise RuntimeError("Unable to center the mouse cursor.")
-    ctypes.windll.user32.SetForegroundWindow(hwnd)
-    return True
+    current_thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
+    foreground_thread_id = user32.GetWindowThreadProcessId(foreground_hwnd, None)
+    attached = False
+    try:
+        if foreground_thread_id and foreground_thread_id != current_thread_id:
+            attached = bool(
+                user32.AttachThreadInput(current_thread_id, foreground_thread_id, True)
+            )
+            if not attached:
+                raise RuntimeError(
+                    f"Unable to attach to the foreground thread for {window_title}."
+                )
+
+        user32.ShowWindow(hwnd, 9)
+        if center_cursor_when_switching:
+            rect = wintypes.RECT()
+            if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+                raise RuntimeError(f"Unable to read {window_title} window position.")
+            center_x = (rect.left + rect.right) // 2
+            center_y = (rect.top + rect.bottom) // 2
+            if not user32.SetCursorPos(center_x, center_y):
+                raise RuntimeError("Unable to center the mouse cursor.")
+        user32.BringWindowToTop(hwnd)
+        if not user32.SetForegroundWindow(hwnd):
+            raise RuntimeError(f"Unable to focus {window_title} window.")
+        deadline = time.monotonic() + 0.25
+        while user32.GetForegroundWindow() != hwnd:
+            if time.monotonic() >= deadline:
+                raise RuntimeError(f"{window_title} window did not become foreground.")
+            time.sleep(0.01)
+        return True
+    finally:
+        if attached:
+            user32.AttachThreadInput(current_thread_id, foreground_thread_id, False)
 
 
 def validate_ark_window():

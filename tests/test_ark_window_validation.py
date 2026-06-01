@@ -52,8 +52,13 @@ class ArkWindowValidationTests(unittest.TestCase):
     def test_focus_window_if_needed_centers_cursor_before_switching_to_ark(self):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
-        user32.GetForegroundWindow.return_value = 456
+        user32.GetForegroundWindow.side_effect = [456, 123]
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
         user32.SetCursorPos.return_value = True
+        user32.SetForegroundWindow.return_value = True
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
 
         def set_window_rect(_hwnd, rect_pointer):
             rect_pointer._obj.left = 100
@@ -63,7 +68,7 @@ class ArkWindowValidationTests(unittest.TestCase):
             return True
 
         user32.GetWindowRect.side_effect = set_window_rect
-        windll = types.SimpleNamespace(user32=user32)
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
 
         with patch.object(system.ctypes, "windll", windll):
             self.assertTrue(
@@ -77,6 +82,9 @@ class ArkWindowValidationTests(unittest.TestCase):
         self.assertLess(
             user32.mock_calls.index(call.SetCursorPos(1060, 740)),
             user32.mock_calls.index(call.SetForegroundWindow(123)),
+        )
+        user32.AttachThreadInput.assert_has_calls(
+            [call(321, 789, True), call(321, 789, False)]
         )
 
     def test_focus_window_if_needed_does_nothing_when_ark_is_foreground(self):
@@ -98,23 +106,36 @@ class ArkWindowValidationTests(unittest.TestCase):
     def test_focus_window_if_needed_default_does_not_move_cursor(self):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
-        user32.GetForegroundWindow.return_value = 456
-        windll = types.SimpleNamespace(user32=user32)
+        user32.GetForegroundWindow.side_effect = [456, 123]
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
+        user32.SetForegroundWindow.return_value = True
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
 
         with patch.object(system.ctypes, "windll", windll):
             self.assertTrue(focus_window_if_needed("ArkAscended"))
 
         user32.ShowWindow.assert_called_once_with(123, 9)
+        user32.BringWindowToTop.assert_called_once_with(123)
         user32.GetWindowRect.assert_not_called()
         user32.SetCursorPos.assert_not_called()
         user32.SetForegroundWindow.assert_called_once_with(123)
+        user32.AttachThreadInput.assert_has_calls(
+            [call(321, 789, True), call(321, 789, False)]
+        )
 
     def test_focus_window_if_needed_reports_window_position_failure(self):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
         user32.GetForegroundWindow.return_value = 456
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
         user32.GetWindowRect.return_value = False
-        windll = types.SimpleNamespace(user32=user32)
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
 
         with (
             patch.object(system.ctypes, "windll", windll),
@@ -124,12 +145,19 @@ class ArkWindowValidationTests(unittest.TestCase):
 
         user32.SetCursorPos.assert_not_called()
         user32.SetForegroundWindow.assert_not_called()
+        user32.AttachThreadInput.assert_has_calls(
+            [call(321, 789, True), call(321, 789, False)]
+        )
 
     def test_focus_window_if_needed_reports_cursor_position_failure(self):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
         user32.GetForegroundWindow.return_value = 456
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
         user32.SetCursorPos.return_value = False
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
 
         def set_window_rect(_hwnd, rect_pointer):
             rect_pointer._obj.left = 100
@@ -139,7 +167,7 @@ class ArkWindowValidationTests(unittest.TestCase):
             return True
 
         user32.GetWindowRect.side_effect = set_window_rect
-        windll = types.SimpleNamespace(user32=user32)
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
 
         with (
             patch.object(system.ctypes, "windll", windll),
@@ -148,6 +176,99 @@ class ArkWindowValidationTests(unittest.TestCase):
             focus_window_if_needed("ArkAscended", center_cursor_when_switching=True)
 
         user32.SetForegroundWindow.assert_not_called()
+        user32.AttachThreadInput.assert_has_calls(
+            [call(321, 789, True), call(321, 789, False)]
+        )
+
+    def test_focus_window_if_needed_reports_rejected_activation(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.return_value = 456
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
+        user32.SetForegroundWindow.return_value = False
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
+
+        with (
+            patch.object(system.ctypes, "windll", windll),
+            self.assertRaisesRegex(RuntimeError, "Unable to focus ArkAscended"),
+        ):
+            focus_window_if_needed("ArkAscended")
+
+        user32.AttachThreadInput.assert_has_calls(
+            [call(321, 789, True), call(321, 789, False)]
+        )
+
+    def test_focus_window_if_needed_reports_thread_attachment_failure(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.return_value = 456
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = False
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
+
+        with (
+            patch.object(system.ctypes, "windll", windll),
+            self.assertRaisesRegex(RuntimeError, "foreground thread"),
+        ):
+            focus_window_if_needed("ArkAscended")
+
+        user32.ShowWindow.assert_not_called()
+        user32.SetForegroundWindow.assert_not_called()
+        user32.AttachThreadInput.assert_called_once_with(321, 789, True)
+
+    @patch("source.launcher.system.time.sleep")
+    @patch("source.launcher.system.time.monotonic", side_effect=[0.0, 0.1])
+    def test_focus_window_if_needed_waits_for_delayed_foreground_switch(
+        self, _monotonic, sleep
+    ):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.side_effect = [456, 456, 123]
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
+        user32.SetForegroundWindow.return_value = True
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
+
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertTrue(focus_window_if_needed("ArkAscended"))
+
+        sleep.assert_called_once_with(0.01)
+        user32.AttachThreadInput.assert_has_calls(
+            [call(321, 789, True), call(321, 789, False)]
+        )
+
+    @patch("source.launcher.system.time.sleep")
+    @patch("source.launcher.system.time.monotonic", side_effect=[0.0, 0.25])
+    def test_focus_window_if_needed_reports_foreground_mismatch(
+        self, _monotonic, sleep
+    ):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.side_effect = [456, 456]
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
+        user32.SetForegroundWindow.return_value = True
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
+
+        with (
+            patch.object(system.ctypes, "windll", windll),
+            self.assertRaisesRegex(RuntimeError, "did not become foreground"),
+        ):
+            focus_window_if_needed("ArkAscended")
+
+        user32.AttachThreadInput.assert_has_calls(
+            [call(321, 789, True), call(321, 789, False)]
+        )
+        sleep.assert_not_called()
 
     @patch(
         "source.launcher.deposit_helper_capture.focus_window_if_needed",
