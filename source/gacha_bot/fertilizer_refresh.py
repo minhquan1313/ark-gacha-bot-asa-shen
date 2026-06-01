@@ -90,7 +90,7 @@ def _close_crop_plot_inventory(stop_event):
 def run_fertilizer_refresh(
     stop_event,
     status_callback=None,
-    poll_interval=0.1,
+    poll_interval=0.02,
     crop_plot_is_open=None,
     crop_plot_prompt_is_visible=None,
     inventory_is_open=None,
