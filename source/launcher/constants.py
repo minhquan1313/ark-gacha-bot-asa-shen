@@ -187,7 +187,6 @@ SETTINGS_GROUPS = {
         "external_berry",
         "side_crop_plot",
         "gacha_feed_delay",
-        "gacha_230_feed_delay",
     ],
     "WINDOW / HELPERS": [
         "helper_inactive_opacity",
