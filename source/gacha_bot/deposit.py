@@ -102,9 +102,8 @@ def _turn_to_object(route_metadata, item):
     location = item.get("location", {}) if isinstance(item, dict) else {}
     yaw = _float_setting(location, "yaw", 0.0)
     pitch = _float_setting(location, "pitch", 0.0)
-    utils.turn_to(route_metadata.yaw, 0)
-    utils.turn_to(yaw, pitch)
     _set_object_crouch(item)
+    utils.turn_to(yaw, pitch)
 
 
 def _recover_dedi_position(route_metadata, item, label):
@@ -223,7 +222,6 @@ def _process_crystal_dedi(route, route_metadata, item, index):
     logs.logger.debug(label)
     if not _deposit_to_dedi(route_metadata, item, label):
         return False
-    _restore_route_view(route_metadata, reset_crouch=False)
     return True
 
 
@@ -289,7 +287,6 @@ def _process_grindable_dedi(route, route_metadata, item, index):
     logs.logger.debug(label)
     if not _deposit_to_dedi(route_metadata, item, label):
         return False
-    _restore_route_view(route_metadata, reset_crouch=False)
     return True
 
 

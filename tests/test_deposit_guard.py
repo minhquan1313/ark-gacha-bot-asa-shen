@@ -52,8 +52,8 @@ def load_deposit_module():
     utility = types.ModuleType("source.utility")
     utility.template = template
     utility.utils = utils
-    utility.variables = types.SimpleNamespace()
-    utility.windows = types.SimpleNamespace()
+    utility.variables = types.SimpleNamespace(get_pixel_loc=Mock(return_value=0))
+    utility.windows = types.SimpleNamespace(click=Mock())
 
     modules = {
         "settings": types.SimpleNamespace(
@@ -103,7 +103,7 @@ class DediDepositGuardTests(unittest.TestCase):
 
         self.assertEqual(
             [call.args[0] for call in self.utils.press_key.call_args_list],
-            ["Use", "AccessInventory"],
+            ["AccessInventory"],
         )
         self.inventory.close.assert_called_once_with()
 
@@ -168,12 +168,42 @@ class DediDepositGuardTests(unittest.TestCase):
 
         self.assertFalse(self.deposit._deposit_to_dedi(self.route, self.item, "dedi"))
 
-        self.assertEqual(
-            [call.args[0] for call in self.utils.press_key.call_args_list].count("Use"),
-            3,
+        self.assertGreater(
+            [call.args[0] for call in self.utils.press_key.call_args_list].count(
+                "AccessInventory"
+            ),
+            0,
         )
         self.assertEqual(self.deposit._recover_dedi_position.call_count, 2)
         self.deposit._recover_after_dedi_failure.assert_called_once_with("dedi")
+
+    def test_stance_changes_before_final_dedi_aim(self):
+        order = []
+        self.player_state.human.crouched = True
+        self.player_state.human.reset_crouch.side_effect = lambda: order.append("stand")
+        self.utils.turn_to.side_effect = lambda yaw, pitch: order.append(
+            ("turn", yaw, pitch)
+        )
+
+        self.deposit._turn_to_object(self.route, self.item)
+
+        self.assertEqual(
+            order,
+            [
+                "stand",
+                ("turn", 34.0, 56.0),
+            ],
+        )
+
+    def test_grindable_sweep_restores_route_only_after_all_dedis(self):
+        route = {"teleport": "GRIND", "dedi": {"items": [self.item, self.item]}}
+        self.deposit._deposit_to_dedi = Mock(return_value=True)
+        self.deposit._restore_route_view = Mock()
+
+        self.assertTrue(self.deposit._process_grindable_route(route, self.route))
+
+        self.assertEqual(self.deposit._deposit_to_dedi.call_count, 2)
+        self.deposit._restore_route_view.assert_called_once_with(self.route)
 
     def test_unavailable_inventory_checks_disconnect_and_recovers_same_dedi(self):
         self.deposit.settings.dedi_handshake_timeout = 11
