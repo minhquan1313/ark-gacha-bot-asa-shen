@@ -58,7 +58,7 @@ def join_server(server:str):
     if is_open():
         logs.logger.debug("joining server")
         search_bar_search(server)
-        time.sleep(0.5)
+        time.sleep(1)
         windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
         time.sleep(0.5)
         if is_open() and join_button():
