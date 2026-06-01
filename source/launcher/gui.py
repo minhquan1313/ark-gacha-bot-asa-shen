@@ -930,21 +930,47 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             f"[INFO] Average console colour: {colour}. Set console.json lower_bound to average - 5 and upper_bound to average + 5.\n"
         )
 
-    def require_ark_window(self, action):
+    def require_ark_window(self, action, dialog_parent=None):
         try:
             validate_ark_window()
         except RuntimeError as exc:
             self.last_ark_window_error = str(exc)
             self.append_log(f"[ERROR] Cannot {action}: {self.last_ark_window_error}\n")
             self.dialog(
-                f"{GAME_WINDOW_TITLE} Required", self.last_ark_window_error, "error"
+                f"{GAME_WINDOW_TITLE} Required",
+                self.last_ark_window_error,
+                "error",
+                parent=dialog_parent,
             )
             return False
         self.last_ark_window_error = ""
         return True
 
-    def dialog(self, title, message, variant="info"):
-        CyberDialog(self, title, message, variant).exec()
+    def dialog(self, title, message, variant="info", parent=None):
+        dialog_parent = self if parent is None else parent
+        active_dialog = getattr(dialog_parent, "_active_cyber_dialog", None)
+        if active_dialog is not None:
+            try:
+                if active_dialog.isVisible():
+                    active_dialog.show()
+                    active_dialog.raise_()
+                    active_dialog.activateWindow()
+                    return active_dialog.result()
+            except RuntimeError:
+                pass
+
+        if dialog_parent is not self:
+            dialog_parent.show()
+            dialog_parent.raise_()
+            dialog_parent.activateWindow()
+
+        dialog = CyberDialog(dialog_parent, title, message, variant)
+        dialog_parent._active_cyber_dialog = dialog
+        try:
+            return dialog.exec()
+        finally:
+            if getattr(dialog_parent, "_active_cyber_dialog", None) is dialog:
+                dialog_parent._active_cyber_dialog = None
 
     def toast(self, message, variant="info"):
         self.dialog(APP_NAME, message, variant)

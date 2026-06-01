@@ -115,6 +115,7 @@ class FertilizerRefreshHelper(QWidget):
                 "Stop Program First",
                 "Stop the running automation before starting this tool.",
                 "warning",
+                parent=self,
             )
             self.status.setText("Cannot start while the main program is running.")
             return
@@ -129,7 +130,7 @@ class FertilizerRefreshHelper(QWidget):
         self.worker_thread.start()
 
     def _require_ark_window(self, action):
-        if self.owner.require_ark_window(action):
+        if self.owner.require_ark_window(action, dialog_parent=self):
             return True
         self.status.setText(f"Cannot start: {self.owner.last_ark_window_error}")
         return False

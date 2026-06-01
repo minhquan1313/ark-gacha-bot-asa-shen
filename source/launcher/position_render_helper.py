@@ -172,7 +172,7 @@ class PositionRenderHelper(QWidget):
             self.refocus_helper(cursor_position)
 
     def _require_ark_window(self, action):
-        if self.owner.require_ark_window(action):
+        if self.owner.require_ark_window(action, dialog_parent=self):
             return True
         self.status.setText(f"Cannot continue: {self.owner.last_ark_window_error}")
         return False
