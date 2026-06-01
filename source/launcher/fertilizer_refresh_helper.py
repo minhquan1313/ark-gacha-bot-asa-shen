@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 
 from source.gacha_bot.fertilizer_refresh import run_fertilizer_refresh
 from source.launcher.deposit_helper_capture import (
+    focus_game_window,
     register_alt_n_hotkey,
     unregister_hotkey,
 )
@@ -120,6 +121,11 @@ class FertilizerRefreshHelper(QWidget):
             self.status.setText("Cannot start while the main program is running.")
             return
         if not self._require_ark_window("start fertilizer refresh"):
+            return
+        try:
+            focus_game_window(center_cursor_when_switching=True)
+        except RuntimeError as exc:
+            self.status.setText(f"Cannot start: {exc}")
             return
 
         self.stop_event = threading.Event()

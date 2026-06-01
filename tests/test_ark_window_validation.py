@@ -1,11 +1,15 @@
 import os
+import threading
+import types
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
+from source.launcher import deposit_helper_capture
 from source.launcher.deposit_helper_capture import focus_game_window
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.gui import SettingsGUI
@@ -34,6 +38,66 @@ class ArkWindowValidationTests(unittest.TestCase):
     def test_focus_game_window_revalidates_before_focusing(self, _validate):
         with self.assertRaisesRegex(RuntimeError, "invalid Ark window"):
             focus_game_window()
+
+    def test_focus_game_window_centers_cursor_before_switching_to_ark(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.return_value = 456
+        user32.SetCursorPos.return_value = True
+
+        def set_window_rect(_hwnd, rect_pointer):
+            rect_pointer._obj.left = 100
+            rect_pointer._obj.top = 200
+            rect_pointer._obj.right = 2020
+            rect_pointer._obj.bottom = 1280
+            return True
+
+        user32.GetWindowRect.side_effect = set_window_rect
+        windll = types.SimpleNamespace(user32=user32)
+
+        with (
+            patch.object(deposit_helper_capture.ctypes, "windll", windll),
+            patch.object(deposit_helper_capture, "validate_ark_window"),
+            patch.object(deposit_helper_capture.time, "sleep"),
+        ):
+            focus_game_window(center_cursor_when_switching=True)
+
+        self.assertLess(
+            user32.mock_calls.index(call.SetCursorPos(1060, 740)),
+            user32.mock_calls.index(call.SetForegroundWindow(123)),
+        )
+
+    def test_focus_game_window_does_not_move_cursor_when_ark_is_foreground(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.return_value = 123
+        windll = types.SimpleNamespace(user32=user32)
+
+        with (
+            patch.object(deposit_helper_capture.ctypes, "windll", windll),
+            patch.object(deposit_helper_capture, "validate_ark_window"),
+            patch.object(deposit_helper_capture.time, "sleep"),
+        ):
+            focus_game_window(center_cursor_when_switching=True)
+
+        user32.GetWindowRect.assert_not_called()
+        user32.SetCursorPos.assert_not_called()
+
+    def test_focus_game_window_default_does_not_move_cursor(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        windll = types.SimpleNamespace(user32=user32)
+
+        with (
+            patch.object(deposit_helper_capture.ctypes, "windll", windll),
+            patch.object(deposit_helper_capture, "validate_ark_window"),
+            patch.object(deposit_helper_capture.time, "sleep"),
+        ):
+            focus_game_window()
+
+        user32.GetForegroundWindow.assert_not_called()
+        user32.GetWindowRect.assert_not_called()
+        user32.SetCursorPos.assert_not_called()
 
 
 class _RejectedOwner:
@@ -68,6 +132,10 @@ class FertilizerStartValidationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def tearDown(self):
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        QApplication.processEvents()
+
     @patch(
         "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
         return_value=False,
@@ -99,6 +167,64 @@ class FertilizerStartValidationTests(unittest.TestCase):
             self.assertIs(owner.dialog_calls[0][3], helper)
         finally:
             helper.close()
+
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_start_focuses_ark_before_launching_worker(self, _register_hotkey):
+        helper = Mock()
+        helper.is_running.return_value = False
+        helper.closing = False
+        helper.owner.is_program_running.return_value = False
+        helper.owner.program_stopping = False
+        helper._require_ark_window.return_value = True
+        worker = Mock()
+        events = []
+        fake_threading = types.SimpleNamespace(
+            Event=threading.Event,
+            Thread=lambda **_kwargs: events.append("thread") or worker,
+        )
+        with (
+            patch(
+                "source.launcher.fertilizer_refresh_helper.focus_game_window",
+                side_effect=lambda **_kwargs: events.append("focus"),
+            ) as focus,
+            patch(
+                "source.launcher.fertilizer_refresh_helper.threading",
+                fake_threading,
+            ),
+        ):
+            FertilizerRefreshHelper.start(helper)
+
+        self.assertEqual(events, ["focus", "thread"])
+        focus.assert_called_once_with(center_cursor_when_switching=True)
+        self.assertIs(helper.worker_thread, worker)
+        worker.start.assert_called_once_with()
+
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.focus_game_window",
+        side_effect=RuntimeError("unable to focus Ark"),
+    )
+    def test_focus_failure_does_not_start_worker(self, _focus, _register_hotkey):
+        helper = Mock()
+        helper.is_running.return_value = False
+        helper.closing = False
+        helper.owner.is_program_running.return_value = False
+        helper.owner.program_stopping = False
+        helper._require_ark_window.return_value = True
+        helper.worker_thread = None
+
+        FertilizerRefreshHelper.start(helper)
+
+        self.assertIsNone(helper.worker_thread)
+        helper.status.setText.assert_called_once_with(
+            "Cannot start: unable to focus Ark"
+        )
 
     @patch(
         "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
