@@ -134,6 +134,8 @@ class PositionRenderHelper(QWidget):
     def capture(self, key):
         if self.capture_in_progress:
             return
+        if not self._require_ark_window("capture render position"):
+            return
         cursor_position = QCursor.pos()
         try:
             self._set_busy(True, "Capturing yaw...")
@@ -155,6 +157,8 @@ class PositionRenderHelper(QWidget):
     def view(self, key):
         if self.capture_in_progress:
             return
+        if not self._require_ark_window("view render position"):
+            return
         cursor_position = QCursor.pos()
         try:
             self._set_busy(True, "Setting Ark view...")
@@ -165,6 +169,12 @@ class PositionRenderHelper(QWidget):
         finally:
             self._set_busy(False)
             self.refocus_helper(cursor_position)
+
+    def _require_ark_window(self, action):
+        if self.owner.require_ark_window(action):
+            return True
+        self.status.setText(f"Cannot continue: {self.owner.last_ark_window_error}")
+        return False
 
     def _set_busy(self, active, message=None):
         self.capture_in_progress = active

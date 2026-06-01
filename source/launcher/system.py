@@ -1,6 +1,11 @@
 import ctypes
 from ctypes import wintypes
 
+from source.launcher.constants import (
+    GAME_WINDOW_TITLE,
+    SUPPORTED_GAME_RESOLUTIONS,
+)
+
 
 class MemoryStatusEx(ctypes.Structure):
     _fields_ = [
@@ -26,6 +31,18 @@ def find_window_size(window_title):
         return None
 
     return rect.right - rect.left, rect.bottom - rect.top
+
+
+def validate_ark_window():
+    game_size = find_window_size(GAME_WINDOW_TITLE)
+    if game_size is None:
+        raise RuntimeError(f"{GAME_WINDOW_TITLE} window was not found.")
+    if game_size not in SUPPORTED_GAME_RESOLUTIONS:
+        raise RuntimeError(
+            f"Detected {GAME_WINDOW_TITLE} size: {game_size[0]}x{game_size[1]}. "
+            f"{GAME_WINDOW_TITLE} must run at 1920x1080."
+        )
+    return game_size
 
 
 def get_memory_usage_gb():

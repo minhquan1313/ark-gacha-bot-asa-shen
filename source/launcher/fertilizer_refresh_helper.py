@@ -111,6 +111,8 @@ class FertilizerRefreshHelper(QWidget):
             )
             self.status.setText("Cannot start while the main program is running.")
             return
+        if not self._require_ark_window("start fertilizer refresh"):
+            return
 
         self.stop_event = threading.Event()
         self.start_stop_button.setText("STOP")
@@ -118,6 +120,12 @@ class FertilizerRefreshHelper(QWidget):
         self.status.setText("Waiting for a crop plot inventory...")
         self.worker_thread = threading.Thread(target=self._run_worker, daemon=True)
         self.worker_thread.start()
+
+    def _require_ark_window(self, action):
+        if self.owner.require_ark_window(action):
+            return True
+        self.status.setText(f"Cannot start: {self.owner.last_ark_window_error}")
+        return False
 
     def stop(self):
         if not self.is_running():

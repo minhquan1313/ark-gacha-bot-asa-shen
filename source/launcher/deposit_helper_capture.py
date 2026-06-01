@@ -2,11 +2,14 @@ import ctypes
 import time
 
 from source.launcher.constants import GAME_WINDOW_TITLE
+from source.launcher.system import validate_ark_window
 
 
 def focus_game_window(window_title=GAME_WINDOW_TITLE):
     if not hasattr(ctypes, "windll"):
         raise RuntimeError("Window focusing is only available on Windows.")
+    if window_title == GAME_WINDOW_TITLE:
+        validate_ark_window()
     hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
     if not hwnd:
         raise RuntimeError(f"{window_title} window was not found.")

@@ -1,5 +1,5 @@
-import os
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -37,7 +37,6 @@ from source.launcher.constants import (
     GACHA_LOG_FILE,
     GAME_WINDOW_TITLE,
     PHONE_MINIMUM_SIZE,
-    SUPPORTED_GAME_RESOLUTIONS,
     WINDOW_RESIZE_BORDER_PX,
 )
 from source.launcher.native_window import (
@@ -60,9 +59,9 @@ from source.launcher.settings_store import load_settings, save_settings
 from source.launcher.styles import launcher_style_sheet
 from source.launcher.system import (
     calculate_cpu_percent,
-    find_window_size,
     get_cpu_times,
     get_memory_usage_gb,
+    validate_ark_window,
 )
 from source.launcher.widgets import (
     AnimatedButton,
@@ -637,23 +636,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.dialog("Program Running", "The program is already running.", "info")
             return
 
-        game_size = find_window_size(GAME_WINDOW_TITLE)
-        if game_size not in SUPPORTED_GAME_RESOLUTIONS:
-            if game_size:
-                size_message = (
-                    f"Detected ArkAscended size: {game_size[0]}x{game_size[1]}."
-                )
-                self.append_log(
-                    f"[ERROR] Unsupported ArkAscended resolution: {game_size[0]}x{game_size[1]}.\n"
-                )
-            else:
-                size_message = "ArkAscended window was not found."
-                self.append_log("[ERROR] ArkAscended window was not found.\n")
-            self.dialog(
-                "Unsupported Screen Resolution",
-                f"{size_message}\n\n{APP_NAME} supports ArkAscended at 1920x1080.",
-                "error",
-            )
+        if not self.require_ark_window("start program"):
             return
 
         try:
@@ -929,25 +912,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.toast("Logs copied to clipboard.", "success")
 
     def check_colours(self):
-        game_size = find_window_size(GAME_WINDOW_TITLE)
-        if game_size not in SUPPORTED_GAME_RESOLUTIONS:
-            if game_size:
-                size_message = (
-                    f"Detected ArkAscended size: {game_size[0]}x{game_size[1]}."
-                )
-                self.append_log(
-                    f"[ERROR] Unsupported ArkAscended resolution for colour check: {game_size[0]}x{game_size[1]}.\n"
-                )
-            else:
-                size_message = "ArkAscended window was not found."
-                self.append_log(
-                    "[ERROR] ArkAscended window was not found for colour check.\n"
-                )
-            self.dialog(
-                "Unsupported Screen Resolution",
-                f"{size_message}\n\nConsole colour checking supports ArkAscended at 1920x1080.",
-                "error",
-            )
+        if not self.require_ark_window("check console colours"):
             return
 
         try:
@@ -964,6 +929,19 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.append_log(
             f"[INFO] Average console colour: {colour}. Set console.json lower_bound to average - 5 and upper_bound to average + 5.\n"
         )
+
+    def require_ark_window(self, action):
+        try:
+            validate_ark_window()
+        except RuntimeError as exc:
+            self.last_ark_window_error = str(exc)
+            self.append_log(f"[ERROR] Cannot {action}: {self.last_ark_window_error}\n")
+            self.dialog(
+                f"{GAME_WINDOW_TITLE} Required", self.last_ark_window_error, "error"
+            )
+            return False
+        self.last_ark_window_error = ""
+        return True
 
     def dialog(self, title, message, variant="info"):
         CyberDialog(self, title, message, variant).exec()

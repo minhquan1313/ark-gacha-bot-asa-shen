@@ -534,6 +534,8 @@ class DepositRouteHelper(QWidget):
     def capture_new(self, kind):
         if self.capture_in_progress:
             return
+        if not self._require_ark_window("capture route location"):
+            return
         cursor_position = QCursor.pos()
         success = False
         try:
@@ -559,6 +561,8 @@ class DepositRouteHelper(QWidget):
     def capture_entry(self, entry, focus_target=None):
         if self.capture_in_progress:
             return
+        if not self._require_ark_window("capture route location"):
+            return
         cursor_position = QCursor.pos()
         success = False
         try:
@@ -581,6 +585,8 @@ class DepositRouteHelper(QWidget):
     def view_entry(self, entry):
         if self.capture_in_progress:
             return
+        if not self._require_ark_window("view route location"):
+            return
         cursor_position = QCursor.pos()
         location = entry.get("location", {})
         try:
@@ -596,6 +602,12 @@ class DepositRouteHelper(QWidget):
         finally:
             self._set_capture_in_progress(False)
             self.refocus_helper(cursor_position)
+
+    def _require_ark_window(self, action):
+        if self.owner.require_ark_window(action):
+            return True
+        self.status.setText(f"Cannot continue: {self.owner.last_ark_window_error}")
+        return False
 
     def _set_capture_in_progress(self, active, message="Capturing yaw/pitch..."):
         self.capture_in_progress = active
