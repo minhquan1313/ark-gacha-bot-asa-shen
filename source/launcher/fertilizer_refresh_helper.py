@@ -48,7 +48,7 @@ class FertilizerRefreshHelper(QWidget):
         self.resize(440, 250)
         self.setFixedWidth(440)
         self._build_ui()
-        self._position_top_right()
+        self._position_middle_right()
         self._register_hotkey()
         self.status_changed.connect(self.status.setText)
         self.worker_finished.connect(self._on_worker_finished)
@@ -172,12 +172,15 @@ class FertilizerRefreshHelper(QWidget):
         self.start_stop_button.setEnabled(True)
         self.status.setText(f"Failed: {error}" if error else "Stopped.")
 
-    def _position_top_right(self):
+    def _position_middle_right(self):
         screen = self.screen() or self.owner.screen()
         if screen is None:
             return
         rect = screen.availableGeometry()
-        self.move(rect.right() - self.width() - 18, rect.top() + 18)
+        self.move(
+            rect.right() - self.width() - 18,
+            rect.top() + (rect.height() - self.height()) // 2,
+        )
 
     def _register_hotkey(self):
         if not hasattr(ctypes, "windll"):

@@ -195,6 +195,20 @@ class FertilizerStartValidationTests(unittest.TestCase):
         QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
         QApplication.processEvents()
 
+    def test_helper_starts_at_middle_right(self):
+        helper = Mock()
+        rect = Mock()
+        rect.right.return_value = 1919
+        rect.top.return_value = 0
+        rect.height.return_value = 1080
+        helper.screen.return_value.availableGeometry.return_value = rect
+        helper.width.return_value = 440
+        helper.height.return_value = 250
+
+        FertilizerRefreshHelper._position_middle_right(helper)
+
+        helper.move.assert_called_once_with(1461, 415)
+
     @patch(
         "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
         return_value=False,
@@ -290,7 +304,7 @@ class FertilizerStartValidationTests(unittest.TestCase):
         return_value=False,
     )
     def test_close_defers_without_joining_live_worker(self, _register_hotkey):
-        with patch.object(FertilizerRefreshHelper, "_position_top_right"):
+        with patch.object(FertilizerRefreshHelper, "_position_middle_right"):
             helper = FertilizerRefreshHelper(_RejectedOwner())
         worker = Mock()
         worker.is_alive.return_value = True
@@ -314,7 +328,7 @@ class FertilizerStartValidationTests(unittest.TestCase):
         return_value=False,
     )
     def test_worker_finish_finalizes_deferred_close(self, _register_hotkey):
-        with patch.object(FertilizerRefreshHelper, "_position_top_right"):
+        with patch.object(FertilizerRefreshHelper, "_position_middle_right"):
             helper = FertilizerRefreshHelper(_RejectedOwner())
         helper.closing = True
 
@@ -331,7 +345,7 @@ class FertilizerStartValidationTests(unittest.TestCase):
     def test_stop_reports_stopped_immediately_and_disables_restart(
         self, _register_hotkey
     ):
-        with patch.object(FertilizerRefreshHelper, "_position_top_right"):
+        with patch.object(FertilizerRefreshHelper, "_position_middle_right"):
             helper = FertilizerRefreshHelper(_RejectedOwner())
         worker = Mock()
         worker.is_alive.return_value = True
@@ -352,7 +366,7 @@ class FertilizerStartValidationTests(unittest.TestCase):
         return_value=False,
     )
     def test_worker_finish_reenables_restart(self, _register_hotkey):
-        with patch.object(FertilizerRefreshHelper, "_position_top_right"):
+        with patch.object(FertilizerRefreshHelper, "_position_middle_right"):
             helper = FertilizerRefreshHelper(_RejectedOwner())
         try:
             helper.start_stop_button.setEnabled(False)
