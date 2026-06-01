@@ -9,11 +9,11 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
-from source.launcher import deposit_helper_capture
 from source.launcher.deposit_helper_capture import focus_game_window
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.gui import SettingsGUI
-from source.launcher.system import validate_ark_window
+from source.launcher import system
+from source.launcher.system import focus_window_if_needed, validate_ark_window
 
 
 class ArkWindowValidationTests(unittest.TestCase):
@@ -39,7 +39,17 @@ class ArkWindowValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "invalid Ark window"):
             focus_game_window()
 
-    def test_focus_game_window_centers_cursor_before_switching_to_ark(self):
+    def test_focus_window_if_needed_returns_false_for_missing_window(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 0
+        windll = types.SimpleNamespace(user32=user32)
+
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertFalse(focus_window_if_needed("ArkAscended"))
+
+        user32.GetForegroundWindow.assert_not_called()
+
+    def test_focus_window_if_needed_centers_cursor_before_switching_to_ark(self):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
         user32.GetForegroundWindow.return_value = 456
@@ -55,49 +65,98 @@ class ArkWindowValidationTests(unittest.TestCase):
         user32.GetWindowRect.side_effect = set_window_rect
         windll = types.SimpleNamespace(user32=user32)
 
-        with (
-            patch.object(deposit_helper_capture.ctypes, "windll", windll),
-            patch.object(deposit_helper_capture, "validate_ark_window"),
-            patch.object(deposit_helper_capture.time, "sleep"),
-        ):
-            focus_game_window(center_cursor_when_switching=True)
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertTrue(
+                focus_window_if_needed("ArkAscended", center_cursor_when_switching=True)
+            )
 
+        self.assertLess(
+            user32.mock_calls.index(call.ShowWindow(123, 9)),
+            user32.mock_calls.index(call.SetCursorPos(1060, 740)),
+        )
         self.assertLess(
             user32.mock_calls.index(call.SetCursorPos(1060, 740)),
             user32.mock_calls.index(call.SetForegroundWindow(123)),
         )
 
-    def test_focus_game_window_does_not_move_cursor_when_ark_is_foreground(self):
+    def test_focus_window_if_needed_does_nothing_when_ark_is_foreground(self):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
         user32.GetForegroundWindow.return_value = 123
         windll = types.SimpleNamespace(user32=user32)
 
-        with (
-            patch.object(deposit_helper_capture.ctypes, "windll", windll),
-            patch.object(deposit_helper_capture, "validate_ark_window"),
-            patch.object(deposit_helper_capture.time, "sleep"),
-        ):
-            focus_game_window(center_cursor_when_switching=True)
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertTrue(
+                focus_window_if_needed("ArkAscended", center_cursor_when_switching=True)
+            )
 
+        user32.ShowWindow.assert_not_called()
         user32.GetWindowRect.assert_not_called()
         user32.SetCursorPos.assert_not_called()
+        user32.SetForegroundWindow.assert_not_called()
 
-    def test_focus_game_window_default_does_not_move_cursor(self):
+    def test_focus_window_if_needed_default_does_not_move_cursor(self):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.return_value = 456
+        windll = types.SimpleNamespace(user32=user32)
+
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertTrue(focus_window_if_needed("ArkAscended"))
+
+        user32.ShowWindow.assert_called_once_with(123, 9)
+        user32.GetWindowRect.assert_not_called()
+        user32.SetCursorPos.assert_not_called()
+        user32.SetForegroundWindow.assert_called_once_with(123)
+
+    def test_focus_window_if_needed_reports_window_position_failure(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.return_value = 456
+        user32.GetWindowRect.return_value = False
         windll = types.SimpleNamespace(user32=user32)
 
         with (
-            patch.object(deposit_helper_capture.ctypes, "windll", windll),
-            patch.object(deposit_helper_capture, "validate_ark_window"),
-            patch.object(deposit_helper_capture.time, "sleep"),
+            patch.object(system.ctypes, "windll", windll),
+            self.assertRaisesRegex(RuntimeError, "window position"),
         ):
-            focus_game_window()
+            focus_window_if_needed("ArkAscended", center_cursor_when_switching=True)
 
-        user32.GetForegroundWindow.assert_not_called()
-        user32.GetWindowRect.assert_not_called()
         user32.SetCursorPos.assert_not_called()
+        user32.SetForegroundWindow.assert_not_called()
+
+    def test_focus_window_if_needed_reports_cursor_position_failure(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.return_value = 456
+        user32.SetCursorPos.return_value = False
+
+        def set_window_rect(_hwnd, rect_pointer):
+            rect_pointer._obj.left = 100
+            rect_pointer._obj.top = 200
+            rect_pointer._obj.right = 2020
+            rect_pointer._obj.bottom = 1280
+            return True
+
+        user32.GetWindowRect.side_effect = set_window_rect
+        windll = types.SimpleNamespace(user32=user32)
+
+        with (
+            patch.object(system.ctypes, "windll", windll),
+            self.assertRaisesRegex(RuntimeError, "center the mouse cursor"),
+        ):
+            focus_window_if_needed("ArkAscended", center_cursor_when_switching=True)
+
+        user32.SetForegroundWindow.assert_not_called()
+
+    @patch(
+        "source.launcher.deposit_helper_capture.focus_window_if_needed",
+        return_value=False,
+    )
+    @patch("source.launcher.deposit_helper_capture.validate_ark_window")
+    def test_focus_game_window_reports_missing_window(self, _validate, _focus):
+        with self.assertRaisesRegex(RuntimeError, "window was not found"):
+            focus_game_window()
 
 
 class _RejectedOwner:

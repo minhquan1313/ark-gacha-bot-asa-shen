@@ -3,11 +3,10 @@ import sys
 import time
 
 import pyautogui
-import win32con
-import win32gui
 
 import settings
 from source.launcher.constants import GAME_WINDOW_TITLE
+from source.launcher.system import focus_window_if_needed
 from source.utility import windows
 
 pyautogui.FAILSAFE = False
@@ -27,10 +26,7 @@ def focus_window(window_title=GAME_WINDOW_TITLE, interval=5.0, is_repeat_once=Fa
     async def callback():
         while True:
             try:
-                hwnd = win32gui.FindWindow(None, window_title)
-                if hwnd and win32gui.GetForegroundWindow() != hwnd:
-                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                    win32gui.SetForegroundWindow(hwnd)
+                if focus_window_if_needed(window_title):
                     await asyncio.sleep(0.1)
             except Exception as exc:
                 print(f"[ERROR] Error focusing window: {exc}")

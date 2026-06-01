@@ -1,32 +1,19 @@
 import ctypes
 import time
-from ctypes import wintypes
 
 from source.launcher.constants import GAME_WINDOW_TITLE
-from source.launcher.system import validate_ark_window
+from source.launcher.system import focus_window_if_needed, validate_ark_window
 
 
-def focus_game_window(window_title=GAME_WINDOW_TITLE, center_cursor_when_switching=False):
+def focus_game_window(
+    window_title=GAME_WINDOW_TITLE, center_cursor_when_switching=False
+):
     if not hasattr(ctypes, "windll"):
         raise RuntimeError("Window focusing is only available on Windows.")
     if window_title == GAME_WINDOW_TITLE:
         validate_ark_window()
-    hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
-    if not hwnd:
+    if not focus_window_if_needed(window_title, center_cursor_when_switching):
         raise RuntimeError(f"{window_title} window was not found.")
-    ctypes.windll.user32.ShowWindow(hwnd, 9)
-    if (
-        center_cursor_when_switching
-        and ctypes.windll.user32.GetForegroundWindow() != hwnd
-    ):
-        rect = wintypes.RECT()
-        if not ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect)):
-            raise RuntimeError(f"Unable to read {window_title} window position.")
-        center_x = (rect.left + rect.right) // 2
-        center_y = (rect.top + rect.bottom) // 2
-        if not ctypes.windll.user32.SetCursorPos(center_x, center_y):
-            raise RuntimeError("Unable to center the mouse cursor.")
-    ctypes.windll.user32.SetForegroundWindow(hwnd)
     time.sleep(0.15)
 
 

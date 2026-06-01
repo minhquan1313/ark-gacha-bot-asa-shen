@@ -33,6 +33,26 @@ def find_window_size(window_title):
     return rect.right - rect.left, rect.bottom - rect.top
 
 
+def focus_window_if_needed(window_title, center_cursor_when_switching=False):
+    hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
+    if not hwnd:
+        return False
+    if ctypes.windll.user32.GetForegroundWindow() == hwnd:
+        return True
+
+    ctypes.windll.user32.ShowWindow(hwnd, 9)
+    if center_cursor_when_switching:
+        rect = wintypes.RECT()
+        if not ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            raise RuntimeError(f"Unable to read {window_title} window position.")
+        center_x = (rect.left + rect.right) // 2
+        center_y = (rect.top + rect.bottom) // 2
+        if not ctypes.windll.user32.SetCursorPos(center_x, center_y):
+            raise RuntimeError("Unable to center the mouse cursor.")
+    ctypes.windll.user32.SetForegroundWindow(hwnd)
+    return True
+
+
 def validate_ark_window():
     game_size = find_window_size(GAME_WINDOW_TITLE)
     if game_size is None:
