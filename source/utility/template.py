@@ -106,6 +106,12 @@ def check_template(item: str, threshold: float) -> bool:
     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
+    # if item == "tek_trough":
+    #     print(f"Max value: {max_val}, Threshold: {threshold}")
+    #     cv2.imshow("roi", gray_roi)
+    #     cv2.imshow("template", image)
+    #     cv2.waitKey(0)
+
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
         return True
