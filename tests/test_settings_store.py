@@ -4,6 +4,7 @@ from pathlib import Path
 from source.launcher.constants import (
     DEFAULT_SETTINGS,
     HIDDEN_SETTINGS,
+    PHONE_MINIMUM_SIZE,
     SETTINGS_GROUPS,
     setting_label,
 )
@@ -24,6 +25,20 @@ class SettingsStoreTests(unittest.TestCase):
 
         self.assertNotIn("screen_resolution", settings)
         self.assertNotIn("screen_resolution", DEFAULT_SETTINGS)
+
+    def test_launcher_size_defaults_are_preserved(self):
+        settings = _normalize_settings({})
+
+        self.assertEqual(settings["launcher_width"], 1400)
+        self.assertEqual(settings["launcher_height"], 800)
+
+    def test_launcher_size_is_clamped_to_phone_minimum(self):
+        settings = _normalize_settings(
+            {"launcher_width": 100, "launcher_height": 200}
+        )
+
+        self.assertEqual(settings["launcher_width"], PHONE_MINIMUM_SIZE[0])
+        self.assertEqual(settings["launcher_height"], PHONE_MINIMUM_SIZE[1])
 
     def test_obsolete_resolution_artifacts_are_removed(self):
         project_root = Path(__file__).resolve().parents[1]
@@ -67,6 +82,7 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertEqual(
             setting_label("dedi_handshake_timeout"), "Dedi handshake timeout"
         )
+        self.assertEqual(setting_label("launcher_width"), "Launcher startup width")
         self.assertEqual(setting_label("unmapped_example"), "Unmapped example")
 
 

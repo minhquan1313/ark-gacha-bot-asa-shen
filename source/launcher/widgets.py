@@ -3,13 +3,24 @@ import os
 from PySide6.QtCore import (
     QEasingCurve,
     QObject,
+    QPoint,
+    QPointF,
     QRect,
     QSize,
     Qt,
     QVariantAnimation,
     Signal,
 )
-from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPen, QPixmap
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QLinearGradient,
+    QPainter,
+    QPen,
+    QPixmap,
+    QPolygon,
+)
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -449,6 +460,11 @@ class HeroBanner(QFrame):
     ART_RIGHT_MARGIN = 8
     ART_TOP = -120
 
+    BACKDROP_TOP_WIDTH = 520
+    BACKDROP_BOTTOM_WIDTH = 420
+    BACKDROP_OPACITY = 120
+    BACKDROP_FADE_START = 0.4
+
     def __init__(self, parent):
         super().__init__(parent)
         self.logo = (
@@ -479,11 +495,42 @@ class HeroBanner(QFrame):
 
             # Object fixed
             art = self.art.scaledToHeight(self.ART_HEIGHT, Qt.SmoothTransformation)
+
             painter.drawPixmap(
                 rect.width() - art.width() - self.ART_RIGHT_MARGIN,
                 self.ART_TOP,
                 art,
             )
+
+        backdrop = QPolygon(
+            [
+                QPoint(0, 0),
+                QPoint(self.BACKDROP_TOP_WIDTH, 0),
+                QPoint(self.BACKDROP_BOTTOM_WIDTH, rect.height()),
+                QPoint(0, rect.height()),
+            ]
+        )
+        edge_height = rect.height()
+        edge_width = self.BACKDROP_TOP_WIDTH - self.BACKDROP_BOTTOM_WIDTH
+        edge_normal_length_squared = edge_height**2 + edge_width**2
+        edge_offset = edge_height * self.BACKDROP_TOP_WIDTH
+        backdrop_gradient = QLinearGradient(
+            QPointF(0, 0),
+            QPointF(
+                edge_height * edge_offset / edge_normal_length_squared,
+                edge_width * edge_offset / edge_normal_length_squared,
+            ),
+        )
+        backdrop_color = QColor("#03070C")
+        backdrop_color.setAlpha(self.BACKDROP_OPACITY)
+        backdrop_transparent = QColor("#03070C")
+        backdrop_transparent.setAlpha(0)
+        backdrop_gradient.setColorAt(0, backdrop_color)
+        backdrop_gradient.setColorAt(self.BACKDROP_FADE_START, backdrop_color)
+        backdrop_gradient.setColorAt(1, backdrop_transparent)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(backdrop_gradient))
+        painter.drawPolygon(backdrop)
 
         painter.setPen(QColor(COLORS["cyan"]))
         painter.drawLine(0, rect.height() - 2, rect.width(), rect.height())
