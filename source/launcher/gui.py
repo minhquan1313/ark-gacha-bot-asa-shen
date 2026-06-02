@@ -79,8 +79,12 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.setWindowIcon(QIcon(ASSETS["logo"]))
             QApplication.setWindowIcon(QIcon(ASSETS["logo"]))
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
-        self.resize(1400, 800)
         self.setMinimumSize(*PHONE_MINIMUM_SIZE)
+        self.settings = load_settings()
+        self.resize(
+            self.settings["launcher_width"],
+            self.settings["launcher_height"],
+        )
 
         self.process = None
         self.program_stopping = False
@@ -89,7 +93,6 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.queue_snapshot = {"running": [], "active": [], "waiting": []}
         self.log_lines = []
         self.current_filter = "ALL"
-        self.settings = load_settings()
         self.form_values = self.settings.copy()
         self.fields = {}
         self.nav_buttons = {}

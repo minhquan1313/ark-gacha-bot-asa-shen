@@ -1,7 +1,11 @@
 import json
 import os
 
-from source.launcher.constants import DEFAULT_SETTINGS, SETTINGS_FILE
+from source.launcher.constants import (
+    DEFAULT_SETTINGS,
+    PHONE_MINIMUM_SIZE,
+    SETTINGS_FILE,
+)
 
 
 def _normalize_settings(data):
@@ -10,6 +14,12 @@ def _normalize_settings(data):
     normalized.pop("screen_resolution", None)
     normalized["helper_inactive_opacity"] = max(
         0.1, min(1.0, float(normalized.get("helper_inactive_opacity", 0.3)))
+    )
+    normalized["launcher_width"] = max(
+        PHONE_MINIMUM_SIZE[0], int(normalized["launcher_width"])
+    )
+    normalized["launcher_height"] = max(
+        PHONE_MINIMUM_SIZE[1], int(normalized["launcher_height"])
     )
     return normalized
 

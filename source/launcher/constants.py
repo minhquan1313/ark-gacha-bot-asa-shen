@@ -125,6 +125,8 @@ DEFAULT_SETTINGS = {
     "allow_focus_ark_window": True,
     "focus_ark_window_interval": 5.0,
     "helper_inactive_opacity": 0.3,
+    "launcher_width": 1200,
+    "launcher_height": 800,
     "dedi_handshake_timeout": 30,
 }
 
@@ -158,6 +160,8 @@ SETTING_LABELS = {
     "allow_focus_ark_window": "Allow Ark window focus",
     "focus_ark_window_interval": "Ark window focus interval",
     "dedi_handshake_timeout": "Dedi handshake timeout",
+    "launcher_width": "Launcher startup width",
+    "launcher_height": "Launcher startup height",
 }
 
 
@@ -192,5 +196,7 @@ SETTINGS_GROUPS = {
         "helper_inactive_opacity",
         "allow_focus_ark_window",
         "focus_ark_window_interval",
+        "launcher_width",
+        "launcher_height",
     ],
 }
