@@ -284,7 +284,7 @@ class ChromeIconButton(AnimatedButton):
         variant = "close" if icon_name == "close" else "chrome"
         super().__init__("", variant, parent)
         self.icon_name = icon_name
-        self.setFixedSize(46, TITLE_BAR_HEIGHT)
+        self.setFixedSize(46, TITLE_BAR_HEIGHT - 1)
         self.setObjectName("ChromeIconButton")
         self.set_state("normal")
 
@@ -443,6 +443,12 @@ class CyberDialog(QDialog):
 
 
 class HeroBanner(QFrame):
+    BANNER_HEIGHT = 180
+
+    ART_HEIGHT = 560
+    ART_RIGHT_MARGIN = 8
+    ART_TOP = -120
+
     def __init__(self, parent):
         super().__init__(parent)
         self.logo = (
@@ -454,7 +460,7 @@ class HeroBanner(QFrame):
             else QPixmap()
         )
         self.setObjectName("HeroBanner")
-        self.setMinimumHeight(150)
+        self.setMinimumHeight(self.BANNER_HEIGHT)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -463,29 +469,24 @@ class HeroBanner(QFrame):
         painter.fillRect(rect, QColor("#03070C"))
 
         if not self.art.isNull():
-            art = self.art.scaled(
-                rect.width(),
-                rect.height() + 180,
-                Qt.KeepAspectRatioByExpanding,
-                Qt.SmoothTransformation,
-            )
-            painter.setOpacity(0.62)
-            painter.drawPixmap(rect.width() - art.width(), -80, art)
-            painter.setOpacity(1)
+            # Object fit cover
+            # art = self.art.scaled(
+            #     rect.width(),
+            #     rect.height(),
+            #     Qt.KeepAspectRatioByExpanding,
+            #     Qt.SmoothTransformation,
+            # )
 
-        painter.fillRect(rect, QBrush(QColor(3, 7, 12, 110)))
-        painter.setPen(QColor("#0E3D54"))
-        for x in range(-80, rect.width() + 80, 42):
-            painter.drawLine(x, 0, x + 80, rect.height())
+            # Object fixed
+            art = self.art.scaledToHeight(self.ART_HEIGHT, Qt.SmoothTransformation)
+            painter.drawPixmap(
+                rect.width() - art.width() - self.ART_RIGHT_MARGIN,
+                self.ART_TOP,
+                art,
+            )
 
         painter.setPen(QColor(COLORS["cyan"]))
-        painter.drawLine(0, rect.height() - 2, rect.width(), rect.height() - 2)
-
-        if not self.logo.isNull() and rect.width() > 760:
-            logo = self.logo.scaled(
-                118, 118, Qt.KeepAspectRatio, Qt.SmoothTransformation
-            )
-            painter.drawPixmap(rect.width() - 150, 16, logo)
+        painter.drawLine(0, rect.height() - 2, rect.width(), rect.height())
 
         painter.setPen(QColor(COLORS["cyan"]))
         painter.setFont(QFont("Segoe UI", FONT_SIZES["section_heading"], QFont.Bold))
