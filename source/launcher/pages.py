@@ -100,6 +100,7 @@ class LauncherPagesMixin:
 
     def _dashboard_page(self):
         page, layout = self._page("DashboardPage")
+        layout.setContentsMargins(16, 0, 16, 14)
         layout.addWidget(HeroBanner(self))
 
         dashboard_gutter = 10
