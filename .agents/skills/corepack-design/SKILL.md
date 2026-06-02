@@ -1,6 +1,6 @@
 ---
-name: corepack-installer-design
-description: Project UI design reference for creating, redesigning, reviewing, or refining this app's launcher and desktop interface. Use when Codex works on UI layout, visual styling, PySide launcher pages, navigation, panels, buttons, custom window chrome, status displays, progress views, artwork placement, or design consistency. Apply the documented modern nostalgic 2010s installer-inspired direction: borderless dark cinematic shell, cyan neon accents, compact technical panels, readable spacing, and legal branding without piracy or crack wording.
+name: corepack-design
+description: "Project UI design reference for creating, redesigning, reviewing, or refining this app's launcher and desktop interface. Use when Codex works on UI layout, visual styling, PySide launcher pages, navigation, panels, buttons, custom window chrome, status displays, progress views, artwork placement, or design consistency. Apply the documented modern nostalgic 2010s installer-inspired direction: borderless dark cinematic shell, cyan neon accents, compact technical panels, readable spacing, and legal branding without piracy or crack wording."
 ---
 
 # Retro CorePack/Repack Installer Inspired UI — Design Notes

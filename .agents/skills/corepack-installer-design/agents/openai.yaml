@@ -1,4 +1,0 @@
-interface:
-  display_name: "CorePack Installer Design"
-  short_description: "Design nostalgic cyan-neon launcher interfaces"
-  default_prompt: "Use $corepack-installer-design to redesign this desktop app with a modern nostalgic installer-inspired interface."
