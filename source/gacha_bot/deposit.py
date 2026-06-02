@@ -150,12 +150,11 @@ def _deposit_to_dedi(route_metadata, item, label):
                     waiting_for_remote = template.check_template("waiting_inv", 0.8)
 
                 if template.check_template("inventory", 0.7) and not waiting_for_remote:
+                    time.sleep(0.3 * settings.lag_offset)
                     windows.click(
                         variables.get_pixel_loc("dedi_deposit_x"),
                         variables.get_pixel_loc("dedi_deposit_y"),
                     )
-
-                    # time.sleep(0.3 * settings.lag_offset)
                     inventory.close()
                     template.template_await_false(
                         template.check_template, 1, "inventory", 0.7
