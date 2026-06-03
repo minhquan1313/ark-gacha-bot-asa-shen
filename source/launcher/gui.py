@@ -694,8 +694,6 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.process = None
         self.program_stopping = False
         self.stop_deadline = None
-        self.queue_snapshot = {"running": [], "active": [], "waiting": []}
-        self.running_task_name = None
         if was_stopping:
             self.append_log("[WARN] Program stopped.\n")
         self._update_start_stop_button()
@@ -950,6 +948,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def clear_logs(self):
         self.log_lines.clear()
         self.running_history.clear()
+        self.queue_snapshot = {"running": [], "active": [], "waiting": []}
+        self.running_task_name = None
         self.active_count = 0
         self.waiting_count = 0
         self.log_file_position = 0
