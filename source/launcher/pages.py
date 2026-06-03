@@ -702,10 +702,7 @@ class LauncherPagesMixin:
     def refresh_json_configs(self):
         try:
             settings = load_settings()
-            deposit_config = load_deposit_config(
-                crystal_teleport=settings.get("drop_off", ""),
-                grindable_teleport=settings.get("grindables", ""),
-            )
+            deposit_config = load_deposit_config()
         except Exception as exc:
             self.append_log(f"[ERROR] Unable to refresh JSON config files: {exc}\n")
             self.dialog("Refresh Configs", str(exc), "error")
@@ -825,10 +822,7 @@ class LauncherPagesMixin:
         if hasattr(self, "deposit_config"):
             return
         try:
-            self.deposit_config = load_deposit_config(
-                crystal_teleport=self.settings.get("drop_off", ""),
-                grindable_teleport=self.settings.get("grindables", ""),
-            )
+            self.deposit_config = load_deposit_config()
         except ValueError as exc:
             self.deposit_config = {
                 "depositCrystalData": [default_crystal_route()],

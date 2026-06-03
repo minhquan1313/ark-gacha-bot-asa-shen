@@ -103,19 +103,20 @@ def load_stations_module():
     utility.variables = types.SimpleNamespace()
     utility.windows = types.SimpleNamespace()
     iguanadon = types.SimpleNamespace(berry_station=Mock(), iguanadon=Mock())
-    gacha = types.SimpleNamespace(drop_off_nocrop=Mock(), drop_off=Mock())
+    gacha = types.SimpleNamespace(
+        collection=Mock(), drop_off_nocrop=Mock(), drop_off=Mock()
+    )
     bot_modules = types.ModuleType("source.gacha_bot")
     bot_modules.config = types.SimpleNamespace(time_to_reberry=0.01)
-    bot_modules.deposit = types.SimpleNamespace()
+    bot_modules.deposit = types.SimpleNamespace(deposit_all=Mock())
     bot_modules.gacha = gacha
     bot_modules.iguanadon = iguanadon
-    bot_modules.pego = types.SimpleNamespace()
+    bot_modules.pego = types.SimpleNamespace(pego_pickup=Mock())
     bot_modules.render = types.SimpleNamespace()
     modules = {
         "settings": types.SimpleNamespace(
             berry_station="BERRIES",
             iguanadon="IGUANADON",
-            y_trap_bot=False,
             external_berry=False,
             seeds_230=False,
             gacha_feed_delay=123,
@@ -245,6 +246,24 @@ class BerryStationTaskGuardTests(unittest.TestCase):
             stations.gacha_station("gacha1", "GACHA1", "left").get_requeue_delay(),
             456,
         )
+
+    def test_pego_uses_dedi_routes_for_crystal_deposit(self):
+        stations, teleporter, _, metadata = load_stations_module()
+        stations.template.check_template.return_value = True
+
+        stations.pego_station("pego1", "PEGO", 100).execute()
+
+        teleporter.teleport_not_default.assert_called_once_with(metadata["PEGO"])
+        stations.deposit.deposit_all.assert_called_once_with(None)
+
+    def test_snail_phoenix_uses_dedi_routes_for_deposit(self):
+        stations, teleporter, _, metadata = load_stations_module()
+
+        stations.snail_pheonix("snail1", "SNAIL", "left", "OLD_DEPOSIT").execute()
+
+        teleporter.teleport_not_default.assert_called_once_with(metadata["SNAIL"])
+        stations.gacha.collection.assert_called_once_with(metadata["SNAIL"])
+        stations.deposit.deposit_all.assert_called_once_with(None)
 
 
 if __name__ == "__main__":

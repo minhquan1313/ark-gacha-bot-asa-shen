@@ -26,10 +26,49 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertNotIn("screen_resolution", settings)
         self.assertNotIn("screen_resolution", DEFAULT_SETTINGS)
 
+    def test_unknown_and_retired_settings_are_discarded(self):
+        settings = _normalize_settings(
+            {
+                "base_path": "obsolete",
+                "crafting": True,
+                "drop_off": "GACHADEDI",
+                "grindables": "GACHAGRINDABLES",
+                "height_ele": 3,
+                "height_grind": 3,
+                "y_trap_bot": True,
+                "custom_setting": "obsolete",
+                "server_number": "5147",
+            }
+        )
+
+        self.assertNotIn("base_path", settings)
+        self.assertNotIn("crafting", settings)
+        self.assertNotIn("drop_off", settings)
+        self.assertNotIn("grindables", settings)
+        self.assertNotIn("height_ele", settings)
+        self.assertNotIn("height_grind", settings)
+        self.assertNotIn("y_trap_bot", settings)
+        self.assertNotIn("custom_setting", settings)
+        self.assertEqual(settings["server_number"], "5147")
+
+    def test_active_json_only_settings_remain_hidden_and_preserved(self):
+        settings = _normalize_settings(
+            {
+                "seeds_230": True,
+                "gacha_230_feed_delay": 12345,
+            }
+        )
+
+        self.assertTrue(settings["seeds_230"])
+        self.assertEqual(settings["gacha_230_feed_delay"], 12345)
+        self.assertTrue(
+            {"seeds_230", "gacha_230_feed_delay"} <= HIDDEN_SETTINGS
+        )
+
     def test_launcher_size_defaults_are_preserved(self):
         settings = _normalize_settings({})
 
-        self.assertEqual(settings["launcher_width"], 1400)
+        self.assertEqual(settings["launcher_width"], 1200)
         self.assertEqual(settings["launcher_height"], 800)
 
     def test_launcher_size_is_clamped_to_phone_minimum(self):

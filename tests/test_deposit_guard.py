@@ -56,9 +56,7 @@ def load_deposit_module():
     utility.windows = types.SimpleNamespace(click=Mock())
 
     modules = {
-        "settings": types.SimpleNamespace(
-            lag_offset=1, drop_off="", grindables="", dedi_handshake_timeout=30
-        ),
+        "settings": types.SimpleNamespace(lag_offset=1, dedi_handshake_timeout=30),
         "source.ASA.player": player,
         "source.ASA.stations": stations,
         "source.ASA.strucutres": structures,

@@ -17,8 +17,6 @@ def load_deposit_config():
     try:
         return load_route_config(
             DEDI_CONFIG_PATH,
-            crystal_teleport=settings.drop_off,
-            grindable_teleport=settings.grindables,
             create_missing=True,
             raise_on_missing=True,
         )

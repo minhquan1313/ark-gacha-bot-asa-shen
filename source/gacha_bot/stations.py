@@ -2,7 +2,7 @@ import time
 import settings
 from source.utility import utils ,template , windows ,variables ,screen ,local_player
 from source.logs import gachalogs as logs
-from source.ASA.strucutres import teleporter , inventory ,bed
+from source.ASA.strucutres import teleporter , inventory
 from source.ASA.stations import custom_stations
 from source.ASA.player import player_inventory , player_state ,console , tribelog
 import source.gacha_bot.config 
@@ -53,40 +53,29 @@ class gacha_station(base_task):
 
         berry_metadata = custom_stations.get_station_metadata(settings.berry_station)
         iguanadon_metadata = custom_stations.get_station_metadata(settings.iguanadon)
-        if settings.y_trap_bot:
-            #check if we are on a teleporter or bed
-            #if on a bed fast travel 
-            #else we need to go to render and fast travel
-            time.sleep(0.2)
-            bed.fast_travel(self.teleporter_name)
-            gacha.y_trap_harvest()
-            
+        if (berry_station or time_between > source.gacha_bot.config.time_to_reberry*60*60): # if time is greater than 4 hours since the last time you went to berry station
+            teleporter.teleport_not_default(berry_metadata)                    # or if berry station is true( when you go to tekpod and drop all ) and the time between has been longer than 30 mins since youve last been
+            if settings.external_berry:
+                logs.logger.debug("sleeping for 20 seconds as external")
+                time.sleep(20)#letting station spawn in if you have to tp away
+            iguanadon.berry_station(berry_metadata)
+            last_berry = time.time()
+            berry_station = False
+            temp = True
 
+        teleporter.teleport_not_default(iguanadon_metadata) # iguanadon is a centeral tp
 
+        if settings.external_berry and temp: # quick fix for level 1 bug
+            logs.logger.debug("reconnecting because of level 1 bug - you chose external berry will sleep for 60 seconds as a way to ensure that we are fully loaded in")
+            console.console_write("reconnect")
+            time.sleep(60) # takes a while for the reonnect to actually go into action
+
+        iguanadon.iguanadon(iguanadon_metadata)
+        teleporter.teleport_not_default(gacha_metadata)
+        if settings.side_crop_plot:
+            gacha.drop_off(gacha_metadata)
         else:
-            if (berry_station or time_between > source.gacha_bot.config.time_to_reberry*60*60): # if time is greater than 4 hours since the last time you went to berry station 
-                teleporter.teleport_not_default(berry_metadata)                    # or if berry station is true( when you go to tekpod and drop all ) and the time between has been longer than 30 mins since youve last been 
-                if settings.external_berry: 
-                    logs.logger.debug("sleeping for 20 seconds as external")
-                    time.sleep(20)#letting station spawn in if you have to tp away
-                iguanadon.berry_station(berry_metadata)
-                last_berry = time.time()
-                berry_station = False
-                temp = True
-            
-            teleporter.teleport_not_default(iguanadon_metadata) # iguanadon is a centeral tp
-            
-            if settings.external_berry and temp: # quick fix for level 1 bug
-                logs.logger.debug("reconnecting because of level 1 bug - you chose external berry will sleep for 60 seconds as a way to ensure that we are fully loaded in")
-                console.console_write("reconnect")
-                time.sleep(60) # takes a while for the reonnect to actually go into action
-
-            iguanadon.iguanadon(iguanadon_metadata)
-            teleporter.teleport_not_default(gacha_metadata)
-            if settings.side_crop_plot:
-                gacha.drop_off(gacha_metadata)
-            else:
-                gacha.drop_off_nocrop(gacha_metadata)
+            gacha.drop_off_nocrop(gacha_metadata)
 
     def get_priority_level(self):
         return 3
@@ -109,13 +98,10 @@ class pego_station(base_task):
         player_state.check_state()
         
         pego_metadata = custom_stations.get_station_metadata(self.teleporter_name)
-        dropoff_metadata = custom_stations.get_station_metadata(settings.drop_off)
-
         teleporter.teleport_not_default(pego_metadata)
         pego.pego_pickup(pego_metadata)
         if template.check_template("crystal_in_hotbar",0.7):
-            teleporter.teleport_not_default(dropoff_metadata) # everytime you collect you have to drop off makes sense to include it into here 
-            deposit.deposit_all(dropoff_metadata)
+            deposit.deposit_all(None)
         else:
             logs.logger.info(f"bot has no crystals in hotbar we are skipping the deposit step")
 
@@ -164,8 +150,7 @@ class snail_pheonix(base_task):
         player_state.check_state()
         teleporter.teleport_not_default(gacha_metadata)
         gacha.collection(gacha_metadata)
-        teleporter.teleport_not_default(self.depo_tp)
-        deposit.dedi_deposit(settings.height_ele)
+        deposit.deposit_all(None)
         
     def get_priority_level(self):
         return 4

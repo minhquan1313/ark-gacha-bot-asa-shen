@@ -100,28 +100,21 @@ ASSETS = {
 }
 
 DEFAULT_SETTINGS = {
-    "base_path": "VALUE DOES NOT MATTER",
     "lag_offset": 1.0,
     "iguanadon": "GACHAIGUANADON",
-    "drop_off": "GACHADEDI",
     "bed_spawn": "GACHARENDER",
     "berry_station": "GACHABERRYSTATION",
-    "grindables": "GACHAGRINDABLES",
     "berry_type": "mejoberry",
     "station_yaw": 0.0,
     "render_pushout": 0.0,
-    "height_ele": 3,
-    "height_grind": 3,
     "server_number": "0",
     "auto_start_program": False,
     "singleplayer": False,
     "external_berry": False,
-    "crafting": False,
     "seeds_230": False,
     "gacha_feed_delay": 6600,
     "gacha_230_feed_delay": 10700,
     "side_crop_plot": False,
-    "y_trap_bot": False,
     "allow_focus_ark_window": True,
     "focus_ark_window_interval": 5.0,
     "helper_inactive_opacity": 0.3,
@@ -131,19 +124,15 @@ DEFAULT_SETTINGS = {
 }
 
 HIDDEN_SETTINGS = {
-    "drop_off",
-    "grindables",
-    "height_ele",
-    "height_grind",
+    "seeds_230",
+    "gacha_230_feed_delay",
 }
 
 SETTING_LABELS = {
-    "base_path": "Base path",
     "lag_offset": "Lag offset",
     "server_number": "Server number",
     "auto_start_program": "Auto start program",
     "singleplayer": "Singleplayer",
-    "crafting": "Crafting",
     "iguanadon": "Iguanadon",
     "bed_spawn": "Bed & teleport",
     "berry_station": "Berry station",
@@ -155,7 +144,6 @@ SETTING_LABELS = {
     "gacha_feed_delay": "Gacha feed delay",
     "gacha_230_feed_delay": "Gacha 230 feed delay",
     "side_crop_plot": "Side crops plot",
-    "y_trap_bot": "Y trap bot",
     "helper_inactive_opacity": "Helper inactive opacity",
     "allow_focus_ark_window": "Allow Ark window focus",
     "focus_ark_window_interval": "Ark window focus interval",
