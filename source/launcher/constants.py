@@ -1,5 +1,6 @@
 SETTINGS_FILE = "json_files/settings.json"
 GACHA_LOG_FILE = "source/logs/logs.txt"
+MAX_LAUNCHER_LOG_LINES = 1000
 APP_NAME = "Shen GBot"
 APP_TITLE = APP_NAME.upper()
 APP_VERSION = "v1.0.0"

@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 
 try:
     import psutil
@@ -36,6 +37,7 @@ from source.launcher.constants import (
     ENABLE_NATIVE_CUSTOM_CHROME,
     GACHA_LOG_FILE,
     GAME_WINDOW_TITLE,
+    MAX_LAUNCHER_LOG_LINES,
     PHONE_MINIMUM_SIZE,
     WINDOW_RESIZE_BORDER_PX,
 )
@@ -118,6 +120,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self._build_ui()
         self._build_timer()
         self.show_page("dashboard")
+        self.load_previous_logs()
         self._schedule_auto_start()
 
     def _build_ui(self):
@@ -728,6 +731,18 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         if not self.shutdown_started:
             self.log_bridge.line.emit(line)
 
+    def load_previous_logs(self):
+        if not os.path.exists(GACHA_LOG_FILE):
+            return
+        try:
+            with open(GACHA_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+                lines = deque(f, maxlen=MAX_LAUNCHER_LOG_LINES)
+        except Exception as exc:
+            self.append_log(f"[ERROR] Unable to load previous log file: {exc}\n")
+            return
+        self.log_lines = [self._normalize_file_log_line(line) for line in lines]
+        self._render_logs()
+
     def start_log_tail(self):
         self.stop_log_tail()
         self.log_tail_stop = threading.Event()
@@ -819,6 +834,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             text = f"[TEMPLATE] {text}"
 
         self.log_lines.append(text)
+        if len(self.log_lines) > MAX_LAUNCHER_LOG_LINES:
+            self.log_lines = self.log_lines[-MAX_LAUNCHER_LOG_LINES:]
         self.last_activity = time.strftime("%H:%M:%S")
         if "[QUEUE]" in text:
             self.waiting_count += 1
@@ -935,7 +952,13 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.running_history.clear()
         self.active_count = 0
         self.waiting_count = 0
+        self.log_file_position = 0
         self._render_logs()
+        try:
+            with open(GACHA_LOG_FILE, "w", encoding="utf-8") as f:
+                f.truncate(0)
+        except Exception as exc:
+            self.append_log(f"[ERROR] Unable to clear log file: {exc}\n")
 
     def copy_logs(self):
         QApplication.clipboard().setText("".join(self._filtered_logs()))

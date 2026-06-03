@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 import unittest
 from types import MethodType, SimpleNamespace
 from unittest.mock import patch
@@ -16,6 +18,7 @@ class LauncherLogTests(unittest.TestCase):
             current_filter="ALL",
             active_count=0,
             waiting_count=0,
+            log_file_position=50,
             _render_logs=lambda: None,
         )
         for method_name in [
@@ -26,6 +29,7 @@ class LauncherLogTests(unittest.TestCase):
         ]:
             method = getattr(SettingsGUI, method_name)
             setattr(self.launcher, method_name, MethodType(method, self.launcher))
+        self.launcher._normalize_file_log_line = SettingsGUI._normalize_file_log_line
 
     def append_snapshot(self, snapshot):
         SettingsGUI.append_log(self.launcher, f"[QUEUE_STATE] {json.dumps(snapshot)}")
@@ -90,10 +94,41 @@ class LauncherLogTests(unittest.TestCase):
         self.launcher.log_lines = ["[INFO] retained log"]
         self.launcher.running_history = ["[RUNNING] STARTED   gacha"]
 
-        SettingsGUI.clear_logs(self.launcher)
+        with tempfile.NamedTemporaryFile(delete=False) as temp_log:
+            temp_log.write(b"previous log")
+            temp_log_path = temp_log.name
+        self.addCleanup(lambda: os.path.exists(temp_log_path) and os.remove(temp_log_path))
+
+        with patch("source.launcher.gui.GACHA_LOG_FILE", temp_log_path):
+            SettingsGUI.clear_logs(self.launcher)
 
         self.assertEqual(self.launcher.log_lines, [])
         self.assertEqual(self.launcher.running_history, [])
+        self.assertEqual(self.launcher.log_file_position, 0)
+        with open(temp_log_path, "r", encoding="utf-8") as temp_log:
+            self.assertEqual(temp_log.read(), "")
+
+    def test_append_log_keeps_only_latest_1000_lines(self):
+        for line_number in range(1001):
+            SettingsGUI.append_log(self.launcher, f"[INFO] line {line_number}\n")
+
+        self.assertEqual(len(self.launcher.log_lines), 1000)
+        self.assertEqual(self.launcher.log_lines[0], "[INFO] line 1\n")
+        self.assertEqual(self.launcher.log_lines[-1], "[INFO] line 1000\n")
+
+    def test_load_previous_logs_keeps_only_latest_1000_lines(self):
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as temp_log:
+            for line_number in range(1001):
+                temp_log.write(f"12:00:00 - INFO - test - line {line_number}\n")
+            temp_log_path = temp_log.name
+        self.addCleanup(lambda: os.path.exists(temp_log_path) and os.remove(temp_log_path))
+
+        with patch("source.launcher.gui.GACHA_LOG_FILE", temp_log_path):
+            SettingsGUI.load_previous_logs(self.launcher)
+
+        self.assertEqual(len(self.launcher.log_lines), 1000)
+        self.assertIn("line 1", self.launcher.log_lines[0])
+        self.assertIn("line 1000", self.launcher.log_lines[-1])
 
 
 if __name__ == "__main__":
