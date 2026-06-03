@@ -7,6 +7,7 @@ import pyautogui
 import settings
 from source.launcher.constants import GAME_WINDOW_TITLE
 from source.launcher.system import focus_window_if_needed
+from source.utility.debug_screenshots import stop_debug_screenshot_worker
 from source.utility import windows
 
 pyautogui.FAILSAFE = False
@@ -72,6 +73,7 @@ async def main():
         await asyncio.to_thread(task_manager.main)
     finally:
         await cancel_focus_window()
+        stop_debug_screenshot_worker()
 
 
 if __name__ == "__main__":

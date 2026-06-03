@@ -5,7 +5,12 @@ from source.logs import gachalogs as logs
 from source.ASA.strucutres import teleporter , inventory
 from source.ASA.stations import custom_stations
 from source.ASA.player import player_inventory , player_state
+from source.utility.debug_screenshots import CAPTURE_PEGO_CRYSTAL, capture_for
 import source.gacha_bot.config 
+
+capture_pego_crystal_withdraw = capture_for(
+    "pego_crystal_withdraw", active=CAPTURE_PEGO_CRYSTAL
+)
 
 def pego_pickup(metadata):
     attempt = 0
@@ -29,9 +34,9 @@ def pego_pickup(metadata):
         time.sleep(0.2*settings.lag_offset)
         inventory.transfer_all_from()
         time.sleep(0.2*settings.lag_offset)
+        capture_pego_crystal_withdraw(metadata.name)
         inventory.close() 
         
     time.sleep(0.1*settings.lag_offset)
     utils.turn_down(utils.current_pitch)
     time.sleep(0.1*settings.lag_offset)
-        

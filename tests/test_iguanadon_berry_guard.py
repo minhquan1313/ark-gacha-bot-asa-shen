@@ -15,13 +15,14 @@ def load_iguanadon_module(external_berry=False):
         close=Mock(),
         is_open=Mock(return_value=True),
         open=Mock(),
+        search_in_object=Mock(),
         transfer_all_from=Mock(),
     )
     template = types.SimpleNamespace(
         check_template=Mock(),
         template_await_true=Mock(return_value=True),
     )
-    utils = types.SimpleNamespace(turn_down=Mock(), turn_up=Mock())
+    utils = types.SimpleNamespace(press_key=Mock(), turn_down=Mock(), turn_up=Mock())
     logs = types.ModuleType("source.logs.gachalogs")
     logs.logger = Mock()
     utility = types.ModuleType("source.utility")
@@ -31,13 +32,29 @@ def load_iguanadon_module(external_berry=False):
     utility.utils = utils
     utility.variables = types.SimpleNamespace()
     utility.windows = types.SimpleNamespace()
+    captures = {}
+    debug_screenshots = types.ModuleType("source.utility.debug_screenshots")
+    debug_screenshots.CAPTURE_IGUANADON_SEED = False
+
+    def capture_for(category, active=False, delay=0.0):
+        captures[category] = Mock()
+        return captures[category]
+
+    debug_screenshots.capture_for = capture_for
+    utility.debug_screenshots = debug_screenshots
     teleporter = types.SimpleNamespace(teleport_not_default=Mock())
     structures = types.ModuleType("source.ASA.strucutres")
     structures.inventory = inventory
     structures.teleporter = teleporter
     stations = types.ModuleType("source.ASA.stations")
     stations.custom_stations = types.SimpleNamespace()
-    player_inventory = types.SimpleNamespace(implant_eat=Mock())
+    player_inventory = types.SimpleNamespace(
+        close=Mock(),
+        drop_all_inv=Mock(),
+        implant_eat=Mock(),
+        search_in_inventory=Mock(),
+        transfer_all_inventory=Mock(),
+    )
     player_state = types.SimpleNamespace(check_state=Mock())
     player = types.ModuleType("source.ASA.player")
     player.player_inventory = player_inventory
@@ -48,6 +65,7 @@ def load_iguanadon_module(external_berry=False):
         ),
         "source.logs.gachalogs": logs,
         "source.utility": utility,
+        "source.utility.debug_screenshots": debug_screenshots,
         "source.ASA.strucutres": structures,
         "source.ASA.stations": stations,
         "source.ASA.player": player,
@@ -59,6 +77,7 @@ def load_iguanadon_module(external_berry=False):
     with patch.dict(sys.modules, modules):
         spec.loader.exec_module(module)
     module.time.sleep = Mock()
+    module.debug_captures = captures
     return (
         module,
         inventory,
@@ -217,6 +236,14 @@ class BerryCollectionGuardTests(unittest.TestCase):
 
         teleporter.teleport_not_default.assert_called_once_with(self.metadata)
         iguanadon.time.sleep.assert_any_call(20)
+
+    def test_seed_capture_happens_after_withdrawing_seeds(self):
+        self.iguanadon.seed(2)
+
+        self.iguanadon.debug_captures[
+            "iguanadon_seed_withdraw"
+        ].assert_called_once_with("seed_2")
+        self.inventory.close.assert_called_once()
 
 
 class BerryStationTaskGuardTests(unittest.TestCase):

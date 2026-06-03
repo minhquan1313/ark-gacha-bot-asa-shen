@@ -8,9 +8,26 @@ from source.ASA.strucutres import inventory, teleporter
 from source.gacha_bot.deposit_config import DEDI_CONFIG_PATH
 from source.gacha_bot.deposit_config import load_deposit_config as load_route_config
 from source.logs import gachalogs as logs
+from source.utility.debug_screenshots import (
+    CAPTURE_DEDI_DEPOSIT,
+    CAPTURE_GRINDER_WITHDRAW,
+    CAPTURE_ROUTE_READY,
+    CAPTURE_VAULT_TRANSFER,
+    capture_for,
+)
 from source.utility import template, utils, variables, windows
 
 DEDI_REMOTE_POLL_INTERVAL = 0.05
+capture_dedi_deposit = capture_for(
+    "dedi_deposit_after_click", active=CAPTURE_DEDI_DEPOSIT
+)
+capture_route_ready = capture_for("deposit_route_ready", active=CAPTURE_ROUTE_READY)
+capture_grinder_after_withdraw = capture_for(
+    "grinder_after_withdraw", active=CAPTURE_GRINDER_WITHDRAW, delay=0
+)
+capture_vault_after_transfer = capture_for(
+    "vault_after_transfer", active=CAPTURE_VAULT_TRANSFER, delay=0
+)
 
 
 def load_deposit_config():
@@ -153,6 +170,7 @@ def _deposit_to_dedi(route_metadata, item, label):
                         variables.get_pixel_loc("dedi_deposit_x"),
                         variables.get_pixel_loc("dedi_deposit_y"),
                     )
+                    capture_dedi_deposit(label)
                     inventory.close()
                     template.template_await_false(
                         template.check_template, 1, "inventory", 0.7
@@ -243,6 +261,7 @@ def _process_vault(route, route_metadata, vault, index):
             player_inventory.search_in_inventory(item_name)
             player_inventory.transfer_all_inventory()
             time.sleep(0.3 * settings.lag_offset)
+        capture_vault_after_transfer(label)
     inventory.close()
     template.template_await_false(template.check_template, 1, "inventory", 0.7)
     time.sleep(0.2 * settings.lag_offset)
@@ -271,6 +290,7 @@ def _process_grinder(route, route_metadata):
         time.sleep(0.3 * settings.lag_offset)
         inventory.transfer_all_from()
         time.sleep(0.2 * settings.lag_offset)
+        capture_grinder_after_withdraw(label)
         inventory.close()
 
     template.template_await_false(template.check_template, 1, "inventory", 0.7)
@@ -302,6 +322,7 @@ def _process_crystal_route(
     if open_first_route_crystals:
         logs.logger.debug("opening crystals")
         open_crystals()
+    capture_route_ready(f"Crystal route {_route_teleport_name(route)}")
 
     for index, item in enumerate(_items(route.get("dedi", {})), start=1):
         if not _process_crystal_dedi(route, route_metadata, item, index):

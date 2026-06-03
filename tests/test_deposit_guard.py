@@ -23,7 +23,7 @@ class FakeClock:
 
 def load_deposit_module():
     logger = Mock()
-    inventory = types.SimpleNamespace(close=Mock())
+    inventory = types.SimpleNamespace(close=Mock(), transfer_all_from=Mock())
     teleporter = types.SimpleNamespace(teleport_not_default=Mock())
     player_state = types.SimpleNamespace(
         check_disconnected=Mock(),
@@ -40,7 +40,11 @@ def load_deposit_module():
     )
 
     player = types.ModuleType("source.ASA.player")
-    player.player_inventory = types.SimpleNamespace(implant_eat=Mock())
+    player.player_inventory = types.SimpleNamespace(
+        implant_eat=Mock(),
+        search_in_inventory=Mock(),
+        transfer_all_inventory=Mock(),
+    )
     player.player_state = player_state
     stations = types.ModuleType("source.ASA.stations")
     stations.custom_stations = types.SimpleNamespace()
@@ -54,6 +58,19 @@ def load_deposit_module():
     utility.utils = utils
     utility.variables = types.SimpleNamespace(get_pixel_loc=Mock(return_value=0))
     utility.windows = types.SimpleNamespace(click=Mock())
+    captures = {}
+    debug_screenshots = types.ModuleType("source.utility.debug_screenshots")
+    debug_screenshots.CAPTURE_DEDI_DEPOSIT = False
+    debug_screenshots.CAPTURE_GRINDER_WITHDRAW = False
+    debug_screenshots.CAPTURE_ROUTE_READY = False
+    debug_screenshots.CAPTURE_VAULT_TRANSFER = False
+
+    def capture_for(category, active=False, delay=0.0):
+        captures[category] = Mock()
+        return captures[category]
+
+    debug_screenshots.capture_for = capture_for
+    utility.debug_screenshots = debug_screenshots
 
     modules = {
         "settings": types.SimpleNamespace(lag_offset=1, dedi_handshake_timeout=30),
@@ -62,6 +79,7 @@ def load_deposit_module():
         "source.ASA.strucutres": structures,
         "source.logs.gachalogs": logs,
         "source.utility": utility,
+        "source.utility.debug_screenshots": debug_screenshots,
     }
     spec = importlib.util.spec_from_file_location(
         "deposit_under_test", ROOT / "source" / "gacha_bot" / "deposit.py"
@@ -69,6 +87,7 @@ def load_deposit_module():
     module = importlib.util.module_from_spec(spec)
     with patch.dict(sys.modules, modules):
         spec.loader.exec_module(module)
+    module.debug_captures = captures
     return module, logger, inventory, teleporter, player_state, template, utils
 
 
@@ -104,6 +123,27 @@ class DediDepositGuardTests(unittest.TestCase):
             ["AccessInventory"],
         )
         self.inventory.close.assert_called_once_with()
+        self.deposit.debug_captures[
+            "dedi_deposit_after_click"
+        ].assert_called_once_with("dedi")
+
+    def test_crystal_route_ready_capture_happens_before_processing_dedis(self):
+        self.deposit._process_crystal_dedi = Mock(return_value=True)
+        self.deposit._process_vault = Mock()
+        self.deposit._restore_route_view = Mock()
+        route = {"teleport": "CRYSTAL", "dedi": {"items": [self.item]}}
+
+        self.assertTrue(
+            self.deposit._process_crystal_route(
+                route,
+                current_metadata=types.SimpleNamespace(name="CRYSTAL", yaw=12),
+                skip_if_current=True,
+            )
+        )
+
+        self.deposit.debug_captures["deposit_route_ready"].assert_called_once_with(
+            "Crystal route CRYSTAL"
+        )
 
     def test_handshake_waits_for_remote_loading_to_clear(self):
         self.deposit.time.sleep = Mock()
@@ -192,6 +232,31 @@ class DediDepositGuardTests(unittest.TestCase):
                 ("turn", 34.0, 56.0),
             ],
         )
+
+    def test_grinder_capture_happens_before_inventory_close(self):
+        route = {"teleport": "GRIND", "grinder": self.item}
+        self.deposit._open_inventory_template = Mock(return_value=True)
+        self.template.check_template.return_value = True
+
+        self.deposit._process_grinder(route, self.route)
+
+        self.deposit.debug_captures["grinder_after_withdraw"].assert_called_once_with(
+            "Grinder on teleport GRIND"
+        )
+        self.inventory.close.assert_called_once_with()
+
+    def test_vault_capture_happens_before_inventory_close(self):
+        route = {"teleport": "CRYSTAL"}
+        vault = {**self.item, "items": ["obsidian"]}
+        self.deposit._open_inventory_template = Mock(return_value=True)
+        self.template.template_await_true.return_value = True
+
+        self.deposit._process_vault(route, self.route, vault, 1)
+
+        self.deposit.debug_captures["vault_after_transfer"].assert_called_once_with(
+            "Vault 1 on teleport CRYSTAL"
+        )
+        self.inventory.close.assert_called_once_with()
 
     def test_grindable_sweep_restores_route_only_after_all_dedis(self):
         route = {"teleport": "GRIND", "dedi": {"items": [self.item, self.item]}}

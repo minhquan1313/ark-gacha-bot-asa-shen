@@ -5,7 +5,12 @@ from source.logs import gachalogs as logs
 from source.ASA.strucutres import teleporter , inventory
 from source.ASA.stations import custom_stations
 from source.ASA.player import player_inventory , player_state
+from source.utility.debug_screenshots import CAPTURE_IGUANADON_SEED, capture_for
 import source.gacha_bot.config 
+
+capture_iguanadon_seed_withdraw = capture_for(
+    "iguanadon_seed_withdraw", active=CAPTURE_IGUANADON_SEED
+)
 
 def _recover_berry_station(metadata):
     teleporter.teleport_not_default(metadata)
@@ -88,6 +93,7 @@ def seed(type):
         inventory.search_in_object("seed")
         inventory.transfer_all_from()
         time.sleep(0.3*settings.lag_offset)
+        capture_iguanadon_seed_withdraw(f"seed_{type}")
         inventory.close()
     time.sleep(0.2*settings.lag_offset)
 
