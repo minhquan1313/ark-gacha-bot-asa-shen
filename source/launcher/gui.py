@@ -91,6 +91,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.stop_deadline = None
         self.shutdown_started = False
         self.queue_snapshot = {"running": [], "active": [], "waiting": []}
+        self.running_history = []
+        self.running_task_name = None
         self.log_lines = []
         self.current_filter = "ALL"
         self.form_values = self.settings.copy()
@@ -336,6 +338,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.program_stopping = False
         self.stop_deadline = None
         self.queue_snapshot = {"running": [], "active": [], "waiting": []}
+        self.running_task_name = None
 
     def nativeEvent(self, event_type, message):
         if not ENABLE_NATIVE_CUSTOM_CHROME or sys.platform != "win32":
@@ -689,6 +692,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.program_stopping = False
         self.stop_deadline = None
         self.queue_snapshot = {"running": [], "active": [], "waiting": []}
+        self.running_task_name = None
         if was_stopping:
             self.append_log("[WARN] Program stopped.\n")
         self._update_start_stop_button()
@@ -795,9 +799,10 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def append_log(self, text):
         if text.startswith("[QUEUE_STATE] "):
             try:
-                self.queue_snapshot = json.loads(text[len("[QUEUE_STATE] ") :])
+                snapshot = json.loads(text[len("[QUEUE_STATE] ") :])
             except json.JSONDecodeError:
                 return
+            self._update_queue_snapshot(snapshot)
             self._render_logs()
             return
         if "Added task" in text and "[QUEUE]" not in text:
@@ -872,6 +877,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def _filtered_logs(self):
         if self.current_filter == "QUEUE":
             return self._format_queue_snapshot()
+        if self.current_filter == "RUNNING":
+            return self._format_running_snapshot()
         if self.current_filter == "ALL":
             return self.log_lines
         return [
@@ -883,12 +890,12 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def _format_queue_snapshot(self):
         now = time.time()
         lines = []
-        for task in self.queue_snapshot.get("running", []):
-            lines.append(f"[QUEUE] RUNNING   {task.get('name', 'unknown')}")
         queued = self.queue_snapshot.get("active", []) + self.queue_snapshot.get(
             "waiting", []
         )
-        queued.sort(key=lambda task: float(task.get("execution_time", now)))
+        queued.sort(
+            key=lambda task: float(task.get("execution_time", now)), reverse=True
+        )
         for task in queued:
             remaining = max(0, int(float(task.get("execution_time", now)) - now))
             if task.get("state") == "READY" or remaining == 0:
@@ -898,7 +905,26 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
                 minutes, seconds = divmod(remainder, 60)
                 timer = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
             lines.append(f"[QUEUE] {timer:<9} {task.get('name', 'unknown')}")
+        for task in self.queue_snapshot.get("running", []):
+            lines.append(f"[QUEUE] RUNNING   {task.get('name', 'unknown')}")
         return lines or ["[QUEUE] No upcoming tasks."]
+
+    def _update_queue_snapshot(self, snapshot):
+        self.queue_snapshot = snapshot
+        running = snapshot.get("running", [])
+        running_task_name = running[0].get("name", "unknown") if running else None
+        if running_task_name and running_task_name != self.running_task_name:
+            self.running_history.append(f"[RUNNING] STARTED   {running_task_name}")
+        self.running_task_name = running_task_name
+
+    def _format_running_snapshot(self):
+        lines = self.running_history.copy()
+        running = self.queue_snapshot.get("running", [])
+        if running:
+            lines.append(f"[RUNNING] CURRENT   {running[0].get('name', 'unknown')}")
+        else:
+            lines.append("[RUNNING] IDLE")
+        return lines
 
     def set_log_filter(self, value):
         self.current_filter = value
@@ -906,6 +932,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
     def clear_logs(self):
         self.log_lines.clear()
+        self.running_history.clear()
         self.active_count = 0
         self.waiting_count = 0
         self._render_logs()
@@ -995,7 +1022,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         if self.shutdown_started:
             return
         self._poll_program_stop()
-        if self.current_filter == "QUEUE":
+        if self.current_filter in {"QUEUE", "RUNNING"}:
             self._render_logs()
         if hasattr(self, "server_value"):
             self._update_start_stop_button()

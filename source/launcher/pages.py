@@ -977,7 +977,7 @@ class LauncherPagesMixin:
             "WARN",
             "ERROR",
             "CRITICAL",
-            "TEMPLATE",
+            "RUNNING",
             "QUEUE",
         ]:
             button = self._button(name, "secondary")
