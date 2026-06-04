@@ -539,8 +539,11 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
         if self.start_stop_button.text() != target_text:
             self.start_stop_button.setText(target_text)
-        self.start_stop_button.set_variant(target_variant)
-        self.start_stop_button.setEnabled(not self.program_stopping)
+        if self.start_stop_button.variant != target_variant:
+            self.start_stop_button.set_variant(target_variant)
+        target_enabled = not self.program_stopping
+        if self.start_stop_button.isEnabled() != target_enabled:
+            self.start_stop_button.setEnabled(target_enabled)
 
     def _is_auto_start_allowed(self):
         cond = str(self.settings.get("server_number", "0")).strip() not in ("", "0")

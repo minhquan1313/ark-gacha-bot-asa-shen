@@ -196,6 +196,8 @@ class AnimatedButton(QPushButton):
         self._apply_style()
 
     def setEnabled(self, enabled):
+        if self.isEnabled() == enabled:
+            return
         super().setEnabled(enabled)
         self.set_state("normal" if enabled else "disabled")
 

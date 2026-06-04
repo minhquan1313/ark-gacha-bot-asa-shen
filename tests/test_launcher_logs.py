@@ -6,10 +6,15 @@ import ctypes
 from types import MethodType, SimpleNamespace
 from unittest.mock import Mock, patch
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication
+
 from source.launcher.constants import MAX_LAUNCHER_LOG_LINES
 from source.launcher.gui import SettingsGUI
 from source.launcher.native_window import WM_HOTKEY, WindowsMSG
 from source.launcher.runner_overlay import format_runner_overlay
+from source.launcher.widgets import AnimatedButton
 
 
 class LauncherLogTests(unittest.TestCase):
@@ -288,6 +293,40 @@ class LauncherStartProgramTests(unittest.TestCase):
         popen.assert_not_called()
         launcher._show_runner_overlay.assert_not_called()
 
+    def test_start_stop_button_update_is_noop_when_state_is_current(self):
+        button = Mock()
+        button.text.return_value = "START PROGRAM"
+        button.variant = "primary"
+        button.isEnabled.return_value = True
+        launcher = SimpleNamespace(
+            start_stop_button=button,
+            program_stopping=False,
+            is_program_running=Mock(return_value=False),
+        )
+
+        SettingsGUI._update_start_stop_button(launcher)
+
+        button.setText.assert_not_called()
+        button.set_variant.assert_not_called()
+        button.setEnabled.assert_not_called()
+
+    def test_start_stop_button_update_applies_real_state_changes(self):
+        button = Mock()
+        button.text.return_value = "START PROGRAM"
+        button.variant = "primary"
+        button.isEnabled.return_value = True
+        launcher = SimpleNamespace(
+            start_stop_button=button,
+            program_stopping=True,
+            is_program_running=Mock(return_value=True),
+        )
+
+        SettingsGUI._update_start_stop_button(launcher)
+
+        button.setText.assert_called_once_with("STOPPING...")
+        button.set_variant.assert_called_once_with("secondary")
+        button.setEnabled.assert_called_once_with(False)
+
     def test_stop_program_hides_runner_overlay(self):
         launcher = self.make_launcher()
         launcher.process = Mock()
@@ -445,6 +484,28 @@ class LauncherHotkeyTests(unittest.TestCase):
 
         self.assertTrue(handled)
         launcher.toggle_program.assert_called_once_with()
+
+
+class AnimatedButtonTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_repeated_set_enabled_true_does_not_reset_state(self):
+        button = AnimatedButton("TEST", "primary")
+
+        with patch.object(button, "set_state") as set_state:
+            button.setEnabled(True)
+
+        set_state.assert_not_called()
+
+    def test_set_enabled_false_updates_disabled_state(self):
+        button = AnimatedButton("TEST", "primary")
+
+        with patch.object(button, "set_state") as set_state:
+            button.setEnabled(False)
+
+        set_state.assert_called_once_with("disabled")
 
 
 if __name__ == "__main__":
