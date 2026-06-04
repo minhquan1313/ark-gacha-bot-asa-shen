@@ -5,7 +5,6 @@
   "berry_station": "GACHABERRYSTATION",
   "berry_type": "mejoberry",
   "station_yaw": 0.0,
-  "render_pushout": 0.0,
   "server_number": "0",
   "auto_start_program": false,
   "singleplayer": false,

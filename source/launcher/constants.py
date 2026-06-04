@@ -107,7 +107,6 @@ DEFAULT_SETTINGS = {
     "berry_station": "GACHABERRYSTATION",
     "berry_type": "mejoberry",
     "station_yaw": 0.0,
-    "render_pushout": 0.0,
     "server_number": "0",
     "auto_start_program": False,
     "singleplayer": False,
@@ -139,7 +138,6 @@ SETTING_LABELS = {
     "berry_station": "Berry station",
     "berry_type": "Berry type",
     "station_yaw": "Station yaw",
-    "render_pushout": "Render pushout",
     "external_berry": "Troughs far away",
     "seeds_230": "Seeds 230",
     "gacha_feed_delay": "Gacha feed delay",
@@ -173,7 +171,6 @@ SETTINGS_GROUPS = {
     ],
     "POSITION / RENDER": [
         "station_yaw",
-        "render_pushout",
     ],
     "STORAGE": [],
     "FEATURES": [

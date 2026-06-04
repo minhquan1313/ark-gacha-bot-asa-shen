@@ -35,6 +35,7 @@ class SettingsStoreTests(unittest.TestCase):
                 "grindables": "GACHAGRINDABLES",
                 "height_ele": 3,
                 "height_grind": 3,
+                "render_pushout": -165.96,
                 "y_trap_bot": True,
                 "custom_setting": "obsolete",
                 "server_number": "5147",
@@ -47,6 +48,7 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertNotIn("grindables", settings)
         self.assertNotIn("height_ele", settings)
         self.assertNotIn("height_grind", settings)
+        self.assertNotIn("render_pushout", settings)
         self.assertNotIn("y_trap_bot", settings)
         self.assertNotIn("custom_setting", settings)
         self.assertEqual(settings["server_number"], "5147")

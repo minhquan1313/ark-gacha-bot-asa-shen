@@ -105,7 +105,6 @@ def leave_tekpod():
         logs.logger.warning("bot didnt leave the tekpod first try we are retrying now")
         utils.press_key(local_player.get_input_settings("Use"))
         time.sleep(1 * settings.lag_offset)
-    utils.current_yaw = settings.render_pushout
     utils.set_yaw(settings.station_yaw)
     time.sleep(0.5 * settings.lag_offset)
     render_flag = False

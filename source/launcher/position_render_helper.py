@@ -17,7 +17,7 @@ from source.launcher.deposit_helper_capture import (
     unregister_hotkey,
     view_yaw,
 )
-from source.launcher.deposit_route_helper import DepositHelperGuide, WM_HOTKEY
+from source.launcher.deposit_route_helper import WM_HOTKEY, DepositHelperGuide
 from source.launcher.native_window import WindowsMSG
 from source.launcher.widgets import AnimatedButton, WrappedStatusLabel
 
@@ -107,7 +107,7 @@ class PositionRenderHelper(QWidget):
         self.hotkey_label = hint
         layout.addWidget(hint)
 
-        for key in ("station_yaw", "render_pushout"):
+        for key in "station_yaw":
             layout.addWidget(self._setting_row(key))
 
         self.status = WrappedStatusLabel("Ready.")

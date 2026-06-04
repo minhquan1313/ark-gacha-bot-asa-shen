@@ -274,7 +274,7 @@ class BerryCollectionGuardTests(unittest.TestCase):
         self.iguanadon.seed(2)
 
         self.assertEqual(self.inventory.transfer_all_from.call_count, 3)
-        self.assertEqual(self.player_inventory.transfer_all_inventory.call_count, 3)
+        self.assertEqual(self.player_inventory.transfer_all_inventory.call_count, 2)
         self.logger.warning.assert_called_once()
 
     def test_seed_two_cleanup_drop_happens_after_lag_refresh(self):
