@@ -449,6 +449,17 @@ class LauncherPagesMixin:
         self.settings_form_layout.addWidget(content, 1, 0, 1, 4)
 
         storage_settings, storage_layout = self._panel("STORAGE")
+        expand_row = QHBoxLayout()
+        expand_row.setSpacing(8)
+        expand_all = self._button("EXPAND ALL", "secondary")
+        collapse_all = self._button("COLLAPSE ALL", "secondary")
+        expand_all.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        collapse_all.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        expand_all.clicked.connect(lambda: self.set_storage_routes_expanded(True))
+        collapse_all.clicked.connect(lambda: self.set_storage_routes_expanded(False))
+        expand_row.addWidget(expand_all)
+        expand_row.addWidget(collapse_all)
+        storage_layout.addLayout(expand_row)
         timeout_row = QHBoxLayout()
         timeout_label = QLabel(setting_label("dedi_handshake_timeout"))
         timeout_label.setObjectName("FormLabel")
@@ -472,8 +483,9 @@ class LauncherPagesMixin:
         for route_index, route in enumerate(self.deposit_config["depositCrystalData"]):
             content_layout.addWidget(self._crystal_route_card(route, route_index))
         add_crystal = self._button("ADD CRYSTAL ROUTE", "secondary")
+        add_crystal.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         add_crystal.clicked.connect(self.add_crystal_route)
-        content_layout.addWidget(add_crystal, alignment=Qt.AlignRight)
+        content_layout.addWidget(add_crystal)
 
         grindable_heading = QLabel("GRINDABLE ROUTES")
         grindable_heading.setObjectName("PanelTitle")
@@ -483,8 +495,9 @@ class LauncherPagesMixin:
         ):
             content_layout.addWidget(self._grindable_route_card(route, route_index))
         add_grindable = self._button("ADD GRINDABLE ROUTE", "secondary")
+        add_grindable.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         add_grindable.clicked.connect(self.add_grindable_route)
-        content_layout.addWidget(add_grindable, alignment=Qt.AlignRight)
+        content_layout.addWidget(add_grindable)
         content_layout.addStretch()
 
     def _render_gacha_group(self):
@@ -754,10 +767,11 @@ remove.setObjectName("HelperIconButton")
                 )
             )
         add_dedi = self._button("ADD DEDI", "secondary")
+        add_dedi.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         add_dedi.clicked.connect(
             lambda checked=False, index=route_index: self.add_crystal_dedi(index)
         )
-        layout.addWidget(add_dedi, alignment=Qt.AlignRight)
+        layout.addWidget(add_dedi)
 
         self._add_deposit_subheading(layout, "VAULTS")
         for vault_index, vault in enumerate(route["vault"]["items"]):
@@ -770,10 +784,11 @@ remove.setObjectName("HelperIconButton")
                 )
             )
         add_vault = self._button("ADD VAULT", "secondary")
+        add_vault.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         add_vault.clicked.connect(
             lambda checked=False, index=route_index: self.add_crystal_vault(index)
         )
-        layout.addWidget(add_vault, alignment=Qt.AlignRight)
+        layout.addWidget(add_vault)
         return card
 
     def _grindable_route_card(self, route, route_index):
@@ -817,10 +832,11 @@ remove.setObjectName("HelperIconButton")
                 )
             )
         add_dedi = self._button("ADD DEDI", "secondary")
+        add_dedi.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         add_dedi.clicked.connect(
             lambda checked=False, index=route_index: self.add_grindable_dedi(index)
         )
-        layout.addWidget(add_dedi, alignment=Qt.AlignRight)
+        layout.addWidget(add_dedi)
         return card
 
     def _deposit_route_card(self, title, remove_handler, helper_handler):
@@ -1234,6 +1250,18 @@ remove.setObjectName("HelperIconButton")
             "Deposit routes were reset and saved.",
             "info",
         )
+
+    def set_storage_routes_expanded(self, expanded):
+        self._ensure_deposit_config()
+        if not hasattr(self, "deposit_route_card_expanded"):
+            self.deposit_route_card_expanded = {}
+        for index, _route in enumerate(self.deposit_config["depositCrystalData"], 1):
+            self.deposit_route_card_expanded[f"CRYSTAL ROUTE {index}"] = bool(expanded)
+        for index, _route in enumerate(self.deposit_config["depositGrindableData"], 1):
+            self.deposit_route_card_expanded[f"GRINDABLE ROUTE {index}"] = bool(
+                expanded
+            )
+        self._render_settings_group("STORAGE")
 
     def _add_station_text_field(self, row, label_text, value, entry_index, kind):
         label = QLabel(label_text)
