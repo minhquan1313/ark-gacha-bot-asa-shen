@@ -234,6 +234,60 @@ class StationConfigTests(unittest.TestCase):
         self.assertIn("GACHAPAIR_2", launcher.gacha_group_expanded)
         self.assertNotIn("bad_name", launcher.gacha_group_expanded)
 
+    def test_gacha_side_update_saves_without_rerender(self):
+        launcher = SimpleNamespace(
+            gacha_config=[default_gacha_entry("gacha", "GACHAPAIR_1", "left")],
+            save_gacha_config=Mock(),
+            _render_settings_group=Mock(),
+            _ensure_gacha_config=lambda: None,
+        )
+        launcher.update_gacha_side = MethodType(
+            LauncherPagesMixin.update_gacha_side, launcher
+        )
+        field = SimpleNamespace(currentText=Mock(return_value="right"))
+
+        launcher.update_gacha_side(0, field)
+
+        self.assertEqual(launcher.gacha_config[0]["side"], "right")
+        launcher.save_gacha_config.assert_called_once_with()
+        launcher._render_settings_group.assert_not_called()
+
+    def test_gacha_name_update_saves_without_rerender(self):
+        launcher = SimpleNamespace(
+            gacha_config=[default_gacha_entry("old", "GACHAPAIR_1", "left")],
+            save_gacha_config=Mock(),
+            _render_settings_group=Mock(),
+            _ensure_gacha_config=lambda: None,
+        )
+        launcher.update_station_field = MethodType(
+            LauncherPagesMixin.update_station_field, launcher
+        )
+        field = SimpleNamespace(text=Mock(return_value="new"))
+
+        launcher.update_station_field("gacha", 0, "name", field)
+
+        self.assertEqual(launcher.gacha_config[0]["name"], "new")
+        launcher.save_gacha_config.assert_called_once_with()
+        launcher._render_settings_group.assert_not_called()
+
+    def test_gacha_teleporter_update_still_rerenders(self):
+        launcher = SimpleNamespace(
+            gacha_config=[default_gacha_entry("gacha", "OLD", "left")],
+            save_gacha_config=Mock(),
+            _render_settings_group=Mock(),
+            _ensure_gacha_config=lambda: None,
+        )
+        launcher.update_station_field = MethodType(
+            LauncherPagesMixin.update_station_field, launcher
+        )
+        field = SimpleNamespace(text=Mock(return_value="NEW"))
+
+        launcher.update_station_field("gacha", 0, "teleporter", field)
+
+        self.assertEqual(launcher.gacha_config[0]["teleporter"], "NEW")
+        launcher.save_gacha_config.assert_called_once_with()
+        launcher._render_settings_group.assert_called_once_with("GACHA")
+
 
 if __name__ == "__main__":
     unittest.main()

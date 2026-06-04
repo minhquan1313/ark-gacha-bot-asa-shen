@@ -621,16 +621,14 @@ class LauncherPagesMixin:
         for entry_index, entry in group:
             body_layout.addWidget(self._gacha_row_card(entry_index, entry))
 
-        add = self._button("ADD GACHA", "secondary")
-        add.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        add.setEnabled(
-            len(group) < 2
-            and missing_gacha_side([entry for _, entry in group]) is not None
-        )
-        add.clicked.connect(
-            lambda checked=False, value=teleporter: self.add_gacha_to_group(value)
-        )
-        body_layout.addWidget(add)
+        if len(group) < 2:
+            add = self._button("ADD GACHA", "secondary")
+            add.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            add.setEnabled(missing_gacha_side([entry for _, entry in group]) is not None)
+            add.clicked.connect(
+                lambda checked=False, value=teleporter: self.add_gacha_to_group(value)
+            )
+            body_layout.addWidget(add)
 
         def toggle_body(checked=False):
             is_visible = body.isHidden()
@@ -1362,7 +1360,7 @@ class LauncherPagesMixin:
             else:
                 entry[key] = value
             self.save_gacha_config()
-            if key in {"teleporter", "side"}:
+            if key == "teleporter":
                 self._render_settings_group("GACHA")
             return
 
@@ -1384,7 +1382,6 @@ class LauncherPagesMixin:
         self._ensure_gacha_config()
         self.gacha_config[entry_index]["side"] = field.currentText()
         self.save_gacha_config()
-        self._render_settings_group("GACHA")
 
     def update_gacha_group_teleporter(self, old_teleporter, field):
         self._ensure_gacha_config()

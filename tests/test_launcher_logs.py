@@ -8,10 +8,10 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QLineEdit, QPushButton, QWidget
 from PySide6.QtWidgets import QApplication
 
-from source.launcher.constants import MAX_LAUNCHER_LOG_LINES
+from source.launcher.constants import APP_NAME, MAX_LAUNCHER_LOG_LINES
 from source.launcher.gui import SettingsGUI
 from source.launcher.native_window import WM_HOTKEY, WindowsMSG
 from source.launcher.runner_overlay import format_runner_overlay
@@ -199,6 +199,73 @@ class LauncherLogTests(unittest.TestCase):
 
 
 class LauncherDashboardTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def make_gacha_render_launcher(self):
+        launcher = SimpleNamespace(
+            gacha_group_expanded={},
+            copy_text=Mock(),
+            auto_fill_gacha_group=Mock(),
+            remove_gacha_group=Mock(),
+            add_gacha_to_group=Mock(),
+        )
+        launcher._button = lambda text, _variant: QPushButton(text)
+        launcher._deposit_line_edit = lambda value: QLineEdit(str(value))
+        launcher.update_gacha_group_teleporter = Mock()
+        launcher._gacha_row_card = lambda _index, _entry: QWidget()
+        launcher._gacha_group_card = MethodType(SettingsGUI._gacha_group_card, launcher)
+        return launcher
+
+    def test_full_gacha_group_hides_add_gacha_button(self):
+        launcher = self.make_gacha_render_launcher()
+        group = [
+            (0, {"name": "left", "teleporter": "GACHAPAIR_1", "side": "left"}),
+            (1, {"name": "right", "teleporter": "GACHAPAIR_1", "side": "right"}),
+        ]
+
+        card = launcher._gacha_group_card("GACHAPAIR_1", group, set())
+
+        self.assertNotIn(
+            "ADD GACHA", [button.text() for button in card.findChildren(QPushButton)]
+        )
+
+    def test_partial_gacha_group_shows_add_gacha_button(self):
+        launcher = self.make_gacha_render_launcher()
+        group = [(0, {"name": "left", "teleporter": "GACHAPAIR_1", "side": "left"})]
+
+        card = launcher._gacha_group_card("GACHAPAIR_1", group, set())
+
+        self.assertIn(
+            "ADD GACHA", [button.text() for button in card.findChildren(QPushButton)]
+        )
+
+    def test_success_toast_is_modeless_and_auto_closes(self):
+        launcher = SimpleNamespace()
+        dialog = Mock()
+        dialog.finished.connect = Mock()
+
+        with patch("source.launcher.gui.CyberDialog", return_value=dialog) as cyber:
+            with patch("source.launcher.gui.QTimer.singleShot") as single_shot:
+                SettingsGUI.toast(launcher, "Copied", "success")
+
+        cyber.assert_called_once()
+        dialog.setModal.assert_called_once_with(False)
+        dialog.show.assert_called_once_with()
+        dialog.exec.assert_not_called()
+        single_shot.assert_called_once_with(3000, dialog.accept)
+        self.assertEqual(launcher._toast_dialogs, [dialog])
+
+    def test_non_success_toast_uses_modal_dialog_path(self):
+        launcher = SimpleNamespace(dialog=Mock())
+
+        SettingsGUI.toast(launcher, "Needs attention", "warning")
+
+        launcher.dialog.assert_called_once_with(
+            APP_NAME, "Needs attention", "warning"
+        )
+
     def test_start_program_button_tooltip_mentions_hotkey(self):
         launcher = SimpleNamespace(
             _page=Mock(return_value=(Mock(), Mock())),

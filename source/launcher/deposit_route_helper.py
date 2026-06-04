@@ -553,7 +553,6 @@ class DepositRouteHelper(QWidget):
             self.refocus_helper(cursor_position)
         if success:
             self.refresh_rows((kind, index))
-            self.owner._render_settings_group("STORAGE")
             self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
 
     def capture_entry(self, entry, focus_target=None):
@@ -577,7 +576,6 @@ class DepositRouteHelper(QWidget):
             self.refocus_helper(cursor_position)
         if success:
             self.refresh_rows(focus_target)
-            self.owner._render_settings_group("STORAGE")
             self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
 
     def view_entry(self, entry):
@@ -691,7 +689,6 @@ class DepositRouteHelper(QWidget):
     def save_and_refresh(self):
         if self.save():
             self.refresh_rows()
-            self.owner._render_settings_group("STORAGE")
 
     def _icon_button(self, text, tooltip, type="secondary"):
         button = AnimatedButton(text, type)

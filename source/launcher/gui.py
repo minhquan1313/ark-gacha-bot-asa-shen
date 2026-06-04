@@ -1133,8 +1133,18 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.dialog(APP_NAME, message, variant)
             return
         dialog = CyberDialog(self, APP_NAME, message, variant)
+        dialog.setModal(False)
+        dialog.setAttribute(Qt.WA_DeleteOnClose)
+        if not hasattr(self, "_toast_dialogs"):
+            self._toast_dialogs = []
+        self._toast_dialogs.append(dialog)
+        dialog.finished.connect(
+            lambda _result, item=dialog: self._toast_dialogs.remove(item)
+            if item in self._toast_dialogs
+            else None
+        )
         QTimer.singleShot(3000, dialog.accept)
-        dialog.exec()
+        dialog.show()
 
     def confirm(self, title, message, confirm_text="OK"):
         return (
