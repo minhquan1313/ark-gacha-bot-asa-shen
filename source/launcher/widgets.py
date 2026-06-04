@@ -218,14 +218,17 @@ class AnimatedButton(QPushButton):
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
-        if not self.isEnabled():
+        try:
+            if not self.isEnabled():
+                return
+            if self.isChecked():
+                self.set_state("active")
+            elif self.underMouse():
+                self.set_state("hover")
+            else:
+                self.set_state("normal")
+        except RuntimeError:
             return
-        if self.isChecked():
-            self.set_state("active")
-        elif self.underMouse():
-            self.set_state("hover")
-        else:
-            self.set_state("normal")
 
     def _handle_toggled(self, checked):
         if self.isEnabled():

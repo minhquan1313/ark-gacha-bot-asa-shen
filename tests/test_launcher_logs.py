@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QApplication
 
 from source.launcher.constants import MAX_LAUNCHER_LOG_LINES
@@ -506,6 +507,22 @@ class AnimatedButtonTests(unittest.TestCase):
             button.setEnabled(False)
 
         set_state.assert_called_once_with("disabled")
+
+    def test_mouse_release_ignores_deleted_qt_object_after_click_handler(self):
+        button = AnimatedButton("TEST", "primary")
+        event = Mock()
+
+        with patch.object(QPushButton, "mouseReleaseEvent") as release:
+            with patch.object(
+                button,
+                "isEnabled",
+                side_effect=RuntimeError(
+                    "Internal C++ object (AnimatedButton) already deleted."
+                ),
+            ):
+                button.mouseReleaseEvent(event)
+
+        release.assert_called_once_with(event)
 
 
 if __name__ == "__main__":
