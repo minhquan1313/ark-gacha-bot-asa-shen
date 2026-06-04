@@ -61,8 +61,10 @@ default_keymap = {
 }
 
 hwnd = windows.hwnd
-ctypes.windll.user32.VkKeyScanA.argtypes = [ctypes.c_char]
-ctypes.windll.user32.VkKeyScanA.restype = ctypes.c_short
+_VkKeyScanW = ctypes.WINFUNCTYPE(
+    ctypes.c_short,
+    ctypes.c_wchar,
+)(("VkKeyScanW", ctypes.windll.user32))
 
 
 def keymap_return(key_input):
@@ -80,7 +82,7 @@ def keymap_return(key_input):
         return keymap[key]
 
     if len(key) == 1:
-        result = ctypes.windll.user32.VkKeyScanA(ord(key))
+        result = _VkKeyScanW(key)
 
         vk_code = result & 0xFF
 

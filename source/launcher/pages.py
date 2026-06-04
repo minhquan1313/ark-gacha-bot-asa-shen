@@ -37,6 +37,7 @@ from source.launcher.constants import (
     SETTINGS_GROUPS,
     setting_label,
 )
+from source.launcher.auto_join_server_helper import AutoJoinServerHelper
 from source.launcher.deposit_route_helper import DepositRouteHelper
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.position_render_helper import PositionRenderHelper
@@ -946,6 +947,25 @@ class LauncherPagesMixin:
         helper.activateWindow()
         self.deposit_helper = helper
 
+    def open_auto_join_server_helper(self):
+        if not self._can_open_setup_helper():
+            return
+        helper = self.find_deposit_helper("auto_join_server", None)
+        if helper is not None:
+            helper.show()
+            helper.raise_()
+            helper.activateWindow()
+            self.deposit_helper = helper
+            return
+
+        self.close_deposit_helpers()
+        helper = AutoJoinServerHelper(self)
+        self.register_deposit_helper(helper)
+        helper.show()
+        helper.raise_()
+        helper.activateWindow()
+        self.deposit_helper = helper
+
     def _can_open_setup_helper(self):
         if self.is_program_running() or getattr(self, "program_stopping", False):
             self.dialog(
@@ -1590,6 +1610,19 @@ class LauncherPagesMixin:
         page, layout = self._page("ToolsPage")
         layout.addWidget(self._page_title("TOOLS"))
 
+        auto_join_card, auto_join_layout = self._panel("AUTO JOIN SERVER")
+        auto_join_card.setMaximumWidth(620)
+        auto_join_description = QLabel(
+            "Enter a server number and retry the existing join flow until the "
+            "character is detected back in-server."
+        )
+        auto_join_description.setObjectName("MutedCopy")
+        auto_join_description.setWordWrap(True)
+        open_auto_join = self._button("OPEN TOOL", "primary")
+        open_auto_join.clicked.connect(self.open_auto_join_server_helper)
+        auto_join_layout.addWidget(auto_join_description)
+        auto_join_layout.addWidget(open_auto_join)
+
         card, card_layout = self._panel("CROP PLOT FERTILIZER REFRESH")
         card.setMaximumWidth(620)
         description = QLabel(
@@ -1604,6 +1637,7 @@ class LauncherPagesMixin:
         card_layout.addWidget(description)
         card_layout.addWidget(open_tool)
 
+        layout.addWidget(auto_join_card)
         layout.addWidget(card)
         layout.addStretch()
         return page

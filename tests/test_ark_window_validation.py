@@ -9,6 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
+from source.launcher.auto_join_server_helper import AutoJoinServerHelper
 from source.launcher.deposit_helper_capture import focus_game_window
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.gui import SettingsGUI
@@ -289,6 +290,7 @@ class _RejectedOwner:
         self.program_running = False
         self.required_dialog_parent = None
         self.dialog_calls = []
+        self.stop_program = Mock()
 
     def styleSheet(self):
         return ""
@@ -305,6 +307,105 @@ class _RejectedOwner:
 
     def dialog(self, title, message, variant="info", parent=None):
         self.dialog_calls.append((title, message, variant, parent))
+
+
+class AutoJoinStopTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def tearDown(self):
+        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+        QApplication.processEvents()
+
+    def _make_running_helper(self, owner=None):
+        with patch.object(AutoJoinServerHelper, "_position_middle_right"):
+            helper = AutoJoinServerHelper(owner or _RejectedOwner())
+        worker = Mock()
+        worker.is_alive.return_value = True
+        helper.worker_thread = worker
+        return helper, worker
+
+    @patch(
+        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_stop_reports_stopping_until_worker_finishes(self, _register_hotkey):
+        helper, worker = self._make_running_helper()
+        try:
+            helper.stop()
+
+            self.assertTrue(helper.stop_event.is_set())
+            self.assertEqual(helper.status.text(), "Stopping...")
+            self.assertEqual(helper.start_stop_button.text(), "START")
+            self.assertFalse(helper.start_stop_button.isEnabled())
+        finally:
+            worker.is_alive.return_value = False
+            helper.close()
+
+    @patch(
+        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_worker_finish_reports_stopped(self, _register_hotkey):
+        with patch.object(AutoJoinServerHelper, "_position_middle_right"):
+            helper = AutoJoinServerHelper(_RejectedOwner())
+        try:
+            helper.start_stop_button.setEnabled(False)
+            helper._on_worker_finished("Stopped.")
+
+            self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertEqual(helper.status.text(), "Stopped.")
+        finally:
+            helper.close()
+
+    @patch(
+        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_stop_stops_running_main_program(self, _register_hotkey):
+        owner = _RejectedOwner()
+        owner.program_running = True
+        helper, worker = self._make_running_helper(owner)
+        try:
+            helper.stop()
+
+            owner.stop_program.assert_called_once_with()
+        finally:
+            worker.is_alive.return_value = False
+            helper.close()
+
+    @patch(
+        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_stop_does_not_stop_program_when_not_running(self, _register_hotkey):
+        owner = _RejectedOwner()
+        helper, worker = self._make_running_helper(owner)
+        try:
+            helper.stop()
+
+            owner.stop_program.assert_not_called()
+        finally:
+            worker.is_alive.return_value = False
+            helper.close()
+
+    @patch(
+        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_stop_does_not_stop_program_when_already_stopping(self, _register_hotkey):
+        owner = _RejectedOwner()
+        owner.program_running = True
+        owner.program_stopping = True
+        helper, worker = self._make_running_helper(owner)
+        try:
+            helper.stop()
+
+            owner.stop_program.assert_not_called()
+        finally:
+            worker.is_alive.return_value = False
+            helper.close()
 
 
 class FertilizerStartValidationTests(unittest.TestCase):
