@@ -97,18 +97,22 @@ class SettingsStoreTests(unittest.TestCase):
                 "GENERAL",
                 "STATIONS",
                 "POSITION / RENDER",
+                "GACHA",
                 "STORAGE",
+                "PEGO",
                 "FEATURES",
                 "WINDOW / HELPERS",
             ],
         )
         self.assertEqual(SETTINGS_GROUPS["STORAGE"], [])
+        self.assertEqual(SETTINGS_GROUPS["GACHA"], [])
+        self.assertEqual(SETTINGS_GROUPS["PEGO"], [])
 
     def test_visible_non_storage_settings_are_grouped_once(self):
         grouped_keys = [
             key
             for group_name, keys in SETTINGS_GROUPS.items()
-            if group_name != "STORAGE"
+            if group_name not in {"GACHA", "STORAGE", "PEGO"}
             for key in keys
         ]
         visible_keys = set(DEFAULT_SETTINGS) - HIDDEN_SETTINGS - {

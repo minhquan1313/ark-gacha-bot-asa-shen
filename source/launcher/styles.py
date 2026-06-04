@@ -200,6 +200,10 @@ def launcher_style_sheet():
             background: rgba(18, 28, 42, 90);
             border: 1px solid {COLORS["border"]};
         }}
+        QFrame#StationConfigWarningCard {{
+            background: rgba(18, 28, 42, 90);
+            border: 1px solid rgba(255, 209, 102, 190);
+        }}
         QWidget#DepositHelperWindow, QDialog#DepositHelperGuide {{
             background: #050A10;
             color: {COLORS["text"]};

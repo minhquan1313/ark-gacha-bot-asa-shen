@@ -1,9 +1,11 @@
 import os
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
+QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -39,6 +41,24 @@ from source.launcher.deposit_route_helper import DepositRouteHelper
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.position_render_helper import PositionRenderHelper
 from source.launcher.settings_store import load_settings
+from source.launcher.station_config import (
+    DEFAULT_PEGO_DELAY,
+    auto_fill_gacha_group,
+    default_gacha_entry,
+    default_gacha_pair,
+    default_pego_entry,
+    gacha_name_from_teleporter,
+    grouped_gacha_entries,
+    load_gacha_config,
+    load_pego_config,
+    missing_gacha_side,
+    next_gacha_teleporter,
+    next_pego_index,
+    risky_teleporter_names,
+    save_gacha_config,
+    save_pego_config,
+    set_all_pego_delays,
+)
 from source.launcher.widgets import (
     AnimatedButton,
     ClickableTextEdit,
@@ -356,6 +376,12 @@ class LauncherPagesMixin:
         if group_name == "STORAGE":
             self._render_deposit_routes_group()
             return
+        if group_name == "GACHA":
+            self._render_gacha_group()
+            return
+        if group_name == "PEGO":
+            self._render_pego_group()
+            return
 
         heading = QLabel("HELPER" if group_name == "UI" else f"{group_name} SETTINGS")
         heading.setObjectName("SectionHeading")
@@ -460,6 +486,252 @@ class LauncherPagesMixin:
         add_grindable.clicked.connect(self.add_grindable_route)
         content_layout.addWidget(add_grindable, alignment=Qt.AlignRight)
         content_layout.addStretch()
+
+    def _render_gacha_group(self):
+        self._ensure_gacha_config()
+        if not hasattr(self, "gacha_group_expanded"):
+            self.gacha_group_expanded = {}
+
+        heading = QLabel("GACHA SETTINGS")
+        heading.setObjectName("SectionHeading")
+        self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(12)
+        self.settings_form_layout.addWidget(content, 1, 0, 1, 4)
+
+        controls, controls_layout = self._panel("GACHA GROUPS")
+        hint = QLabel(
+            "Groups are matched by exact teleport name. Each group supports one left and one right gacha."
+        )
+        hint.setObjectName("MutedCopy")
+        hint.setWordWrap(True)
+        controls_layout.addWidget(hint)
+        expand_row = QHBoxLayout()
+        expand_row.setSpacing(8)
+        expand_all = self._button("EXPAND ALL", "secondary")
+        collapse_all = self._button("COLLAPSE ALL", "secondary")
+        expand_all.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        collapse_all.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        expand_all.clicked.connect(lambda: self.set_gacha_groups_expanded(True))
+        collapse_all.clicked.connect(lambda: self.set_gacha_groups_expanded(False))
+        expand_row.addWidget(expand_all)
+        expand_row.addWidget(collapse_all)
+        controls_layout.addLayout(expand_row)
+        content_layout.addWidget(controls)
+
+        risky = risky_teleporter_names(self.gacha_config)
+        for teleporter, group in grouped_gacha_entries(self.gacha_config):
+            content_layout.addWidget(self._gacha_group_card(teleporter, group, risky))
+        add_group = self._button("ADD GACHA GROUP", "secondary")
+        add_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add_group.clicked.connect(self.add_gacha_group)
+        content_layout.addWidget(add_group)
+        content_layout.addStretch()
+
+    def _gacha_group_card(self, teleporter, group, risky):
+        card = QFrame()
+        warning = teleporter in risky
+        card.setObjectName(
+            "StationConfigWarningCard" if warning else "DepositRouteCard"
+        )
+        if warning:
+            card.setToolTip(
+                "Teleport name may match longer teleport names in Ark search. "
+                "Rename it to a unique form like GACHAPAIR_2."
+            )
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+
+        expanded = self.gacha_group_expanded.get(teleporter, False)
+        header = QHBoxLayout()
+        toggle = self._button("v" if expanded else ">", "secondary")
+        toggle.setObjectName("HelperIconButton")
+        title = QLabel(
+            f"{teleporter or 'NO TELEPORT'} ({len(group)}/2)"
+            + ("  WARNING" if warning else "")
+        )
+        title.setObjectName("PanelTitle")
+        copy = self._button("COPY", "secondary")
+        copy.setObjectName("HelperIconButton")
+        copy.setToolTip("Copy teleport name")
+        copy.clicked.connect(
+            lambda checked=False, value=teleporter: self.copy_text(value)
+        )
+        auto = self._button("AUTO FILL", "secondary")
+        auto.clicked.connect(
+            lambda checked=False, value=teleporter: self.auto_fill_gacha_group(value)
+        )
+        remove = self._button("", "danger")
+remove.setObjectName("HelperIconButton")
+        remove.setToolTip("Remove gacha group")
+        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
+        remove.setIconSize(QSize(18, 18))
+        remove.clicked.connect(
+            lambda checked=False, value=teleporter: self.remove_gacha_group(value)
+        )
+        header.addWidget(toggle)
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(copy)
+        header.addWidget(auto)
+        header.addWidget(remove)
+        layout.addLayout(header)
+
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(8)
+        body.setVisible(expanded)
+
+        teleporter_row = QHBoxLayout()
+        teleporter_label = QLabel("teleporter")
+        teleporter_label.setObjectName("FormLabel")
+        teleporter_field = self._deposit_line_edit(teleporter)
+        teleporter_field.editingFinished.connect(
+            lambda field=teleporter_field, old=teleporter: self.update_gacha_group_teleporter(
+                old, field
+            )
+        )
+        teleporter_field.returnPressed.connect(
+            lambda field=teleporter_field, old=teleporter: self.update_gacha_group_teleporter(
+                old, field
+            )
+        )
+        teleporter_row.addWidget(teleporter_label)
+        teleporter_row.addWidget(teleporter_field, 1)
+        body_layout.addLayout(teleporter_row)
+
+        for entry_index, entry in group:
+            body_layout.addWidget(self._gacha_row_card(entry_index, entry))
+
+        add = self._button("ADD GACHA", "secondary")
+        add.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add.setEnabled(
+            len(group) < 2
+            and missing_gacha_side([entry for _, entry in group]) is not None
+        )
+        add.clicked.connect(
+            lambda checked=False, value=teleporter: self.add_gacha_to_group(value)
+        )
+        body_layout.addWidget(add)
+
+        def toggle_body(checked=False):
+            is_visible = body.isHidden()
+            body.setVisible(is_visible)
+            toggle.setText("v" if is_visible else ">")
+            self.gacha_group_expanded[teleporter] = is_visible
+
+        toggle.clicked.connect(toggle_body)
+        layout.addWidget(body)
+        return card
+
+    def _gacha_row_card(self, entry_index, entry):
+        row = QFrame()
+        row.setObjectName("HelperRow")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(8)
+
+                self._add_station_text_field(
+            layout, "name", entry.get("name", ""), entry_index, "gacha"
+        )
+        self._add_gacha_side_field(layout, entry.get("side", ""), entry_index)
+        remove = self._button("", "danger")
+        remove.setObjectName("HelperIconButton")
+        remove.setToolTip("Remove gacha from group")
+        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
+        remove.setIconSize(QSize(18, 18))
+        remove.clicked.connect(
+            lambda checked=False, index=entry_index: self.remove_gacha(index)
+        )
+        layout.addWidget(remove)
+                return row
+
+    def _render_pego_group(self):
+        self._ensure_pego_config()
+
+        heading = QLabel("PEGO SETTINGS")
+        heading.setObjectName("SectionHeading")
+        self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
+
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(12)
+        self.settings_form_layout.addWidget(content, 1, 0, 1, 4)
+
+        controls, controls_layout = self._panel("PEGO DELAYS")
+        delay_row = QHBoxLayout()
+        delay_label = QLabel("set all delays")
+        delay_label.setObjectName("FormLabel")
+        self.pego_bulk_delay_field = self._deposit_line_edit(
+            self.pego_config[-1]["delay"] if self.pego_config else DEFAULT_PEGO_DELAY
+        )
+        set_delay = self._button("SET ALL DELAYS", "secondary")
+        set_delay.clicked.connect(self.apply_all_pego_delays)
+        delay_row.addWidget(delay_label)
+        delay_row.addWidget(self.pego_bulk_delay_field, 1)
+        delay_row.addWidget(set_delay)
+        controls_layout.addLayout(delay_row)
+        content_layout.addWidget(controls)
+
+        for index, entry in enumerate(self.pego_config):
+            content_layout.addWidget(self._pego_card(index, entry))
+        add = self._button("ADD PEGO", "secondary")
+        add.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add.clicked.connect(self.add_pego)
+        content_layout.addWidget(add)
+        content_layout.addStretch()
+
+    def _pego_card(self, entry_index, entry):
+        card = QFrame()
+        card.setObjectName("DepositRouteCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+
+        header = QHBoxLayout()
+        title = QLabel(entry.get("name", f"PEGO {entry_index + 1}"))
+        title.setObjectName("PanelTitle")
+        copy = self._button("COPY", "secondary")
+        copy.setObjectName("HelperIconButton")
+        copy.setToolTip("Copy teleport name")
+        copy.clicked.connect(
+            lambda checked=False, value=entry.get("teleporter", ""): self.copy_text(
+                value
+            )
+        )
+        remove = self._button("", "danger")
+remove.setObjectName("HelperIconButton")
+        remove.setToolTip("Remove pego entry")
+        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
+        remove.setIconSize(QSize(18, 18))
+        remove.clicked.connect(
+            lambda checked=False, index=entry_index: self.remove_pego(index)
+        )
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(copy)
+        header.addWidget(remove)
+        layout.addLayout(header)
+
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self._add_station_text_field(
+            row, "name", entry.get("name", ""), entry_index, "pego"
+        )
+        self._add_station_text_field(
+            row, "teleporter", entry.get("teleporter", ""), entry_index, "pego"
+        )
+        self._add_station_text_field(
+            row, "delay", entry.get("delay", ""), entry_index, "pego"
+        )
+        layout.addLayout(row)
+        return card
 
     def _crystal_route_card(self, route, route_index):
         card, layout = self._deposit_route_card(
@@ -704,6 +976,8 @@ class LauncherPagesMixin:
         try:
             settings = load_settings()
             deposit_config = load_deposit_config()
+            gacha_config = load_gacha_config()
+            pego_config = load_pego_config()
         except Exception as exc:
             self.append_log(f"[ERROR] Unable to refresh JSON config files: {exc}\n")
             self.dialog("Refresh Configs", str(exc), "error")
@@ -713,6 +987,8 @@ class LauncherPagesMixin:
         self.settings = settings
         self.form_values = settings.copy()
         self.deposit_config = deposit_config
+        self.gacha_config = gacha_config
+        self.pego_config = pego_config
         self.fields = {}
         self._skip_visible_field_persist = True
         self._render_settings_group(getattr(self, "current_settings_group", "GENERAL"))
@@ -958,6 +1234,276 @@ class LauncherPagesMixin:
             "Deposit routes were reset and saved.",
             "info",
         )
+
+    def _add_station_text_field(self, row, label_text, value, entry_index, kind):
+        label = QLabel(label_text)
+        label.setObjectName("FormLabel")
+        field = self._deposit_line_edit(value)
+        field.editingFinished.connect(
+            lambda field=field, index=entry_index, key=label_text, name=kind: self.update_station_field(
+                name, index, key, field
+            )
+        )
+        field.returnPressed.connect(
+            lambda field=field, index=entry_index, key=label_text, name=kind: self.update_station_field(
+                name, index, key, field
+            )
+        )
+        row.addWidget(label)
+        row.addWidget(field, 1)
+        return field
+
+    def _add_gacha_side_field(self, row, value, entry_index):
+        label = QLabel("side")
+        label.setObjectName("FormLabel")
+        field = QComboBox()
+        field.setObjectName("HelperCombo")
+        field.addItems(["left", "right"])
+        side = str(value).lower()
+        field.setCurrentText(side if side in {"left", "right"} else "left")
+        field.currentTextChanged.connect(
+            lambda _value, combo=field, index=entry_index: self.update_gacha_side(
+                index, combo
+            )
+        )
+        row.addWidget(label)
+        row.addWidget(field)
+        return field
+
+    def _ensure_gacha_config(self):
+        if hasattr(self, "gacha_config"):
+            return
+        try:
+            self.gacha_config = load_gacha_config()
+        except ValueError as exc:
+            self.gacha_config = default_gacha_pair()
+            self.append_log(f"[ERROR] Invalid gacha config: {exc}\n")
+            self.dialog("Invalid Gacha Config", str(exc), "error")
+
+    def _ensure_pego_config(self):
+        if hasattr(self, "pego_config"):
+            return
+        try:
+            self.pego_config = load_pego_config()
+        except ValueError as exc:
+            self.pego_config = [default_pego_entry()]
+            self.append_log(f"[ERROR] Invalid pego config: {exc}\n")
+            self.dialog("Invalid Pego Config", str(exc), "error")
+
+    def save_gacha_config(self, show_log=True):
+        try:
+            self.gacha_config = save_gacha_config(self.gacha_config)
+        except ValueError as exc:
+            self.append_log(f"[ERROR] Invalid gacha config: {exc}\n")
+            self.dialog("Invalid Gacha Config", str(exc), "error")
+            return False
+        if show_log:
+            self.append_log("[SUCCESS] Gacha config saved automatically.\n")
+        return True
+
+    def save_pego_config(self, show_log=True):
+        try:
+            self.pego_config = save_pego_config(self.pego_config)
+        except ValueError as exc:
+            self.append_log(f"[ERROR] Invalid pego config: {exc}\n")
+            self.dialog("Invalid Pego Config", str(exc), "error")
+            return False
+        if show_log:
+            self.append_log("[SUCCESS] Pego config saved automatically.\n")
+        return True
+
+    def update_station_field(self, kind, entry_index, key, field):
+        if kind == "gacha":
+            self._ensure_gacha_config()
+            entry = self.gacha_config[entry_index]
+            value = field.text()
+            if key == "depo_tp" and not value.strip():
+                entry.pop("depo_tp", None)
+            else:
+                entry[key] = value
+            self.save_gacha_config()
+            if key in {"teleporter", "side"}:
+                self._render_settings_group("GACHA")
+            return
+
+        self._ensure_pego_config()
+        entry = self.pego_config[entry_index]
+        previous = entry.get(key)
+        try:
+            entry[key] = int(field.text()) if key == "delay" else field.text()
+        except ValueError:
+            field.setText(str(previous))
+            self.append_log("[ERROR] Invalid pego delay: must be an integer.\n")
+            self.dialog("Invalid Pego Config", "delay must be an integer.", "error")
+            return
+        if not self.save_pego_config():
+            entry[key] = previous
+            field.setText(str(previous))
+
+    def update_gacha_side(self, entry_index, field):
+        self._ensure_gacha_config()
+        self.gacha_config[entry_index]["side"] = field.currentText()
+        self.save_gacha_config()
+        self._render_settings_group("GACHA")
+
+    def update_gacha_group_teleporter(self, old_teleporter, field):
+        self._ensure_gacha_config()
+        if not hasattr(self, "gacha_group_expanded"):
+            self.gacha_group_expanded = {}
+        new_teleporter = field.text()
+        for entry in self.gacha_config:
+            if entry.get("teleporter", "") == old_teleporter:
+                entry["teleporter"] = new_teleporter
+        self.gacha_group_expanded[new_teleporter] = self.gacha_group_expanded.pop(
+            old_teleporter, True
+        )
+        self.save_gacha_config()
+        self._render_settings_group("GACHA")
+
+    def add_gacha_group(self):
+        self._ensure_gacha_config()
+        if not hasattr(self, "gacha_group_expanded"):
+            self.gacha_group_expanded = {}
+        teleporter = next_gacha_teleporter(self.gacha_config)
+        self.gacha_config.extend(
+            [
+                default_gacha_entry(f"{teleporter}_left", teleporter, "left"),
+                default_gacha_entry(f"{teleporter}_right", teleporter, "right"),
+            ]
+        )
+        self.gacha_group_expanded[teleporter] = True
+        self.save_gacha_config()
+        self._render_settings_group("GACHA")
+
+    def set_gacha_groups_expanded(self, expanded):
+        self._ensure_gacha_config()
+        if not hasattr(self, "gacha_group_expanded"):
+            self.gacha_group_expanded = {}
+        for teleporter, _group in grouped_gacha_entries(self.gacha_config):
+            self.gacha_group_expanded[teleporter] = bool(expanded)
+        self._render_settings_group("GACHA")
+
+    def add_gacha_to_group(self, teleporter):
+        self._ensure_gacha_config()
+        group = [
+            entry
+            for entry in self.gacha_config
+            if entry.get("teleporter", "") == teleporter
+        ]
+        if len(group) >= 2:
+            self.dialog(
+                "Gacha Group", "A gacha pair can only contain two gachas.", "warning"
+            )
+            return
+        side = missing_gacha_side(group)
+        if side is None:
+            self.dialog(
+                "Gacha Group",
+                "This gacha pair already has left and right sides.",
+                "warning",
+            )
+            return
+        self.gacha_config.append(
+            default_gacha_entry(
+                gacha_name_from_teleporter(teleporter, side), teleporter, side
+            )
+        )
+        self.save_gacha_config()
+        self._render_settings_group("GACHA")
+
+    def remove_gacha(self, entry_index):
+        self._ensure_gacha_config()
+        del self.gacha_config[entry_index]
+        self.save_gacha_config()
+        self._render_settings_group("GACHA")
+
+    def remove_gacha_group(self, teleporter):
+        self._ensure_gacha_config()
+        if not hasattr(self, "gacha_group_expanded"):
+            self.gacha_group_expanded = {}
+        self.gacha_config = [
+            entry
+            for entry in self.gacha_config
+            if entry.get("teleporter", "") != teleporter
+        ]
+        self.gacha_group_expanded.pop(teleporter, None)
+        self.save_gacha_config()
+        self._render_settings_group("GACHA")
+
+    def auto_fill_gacha_group(self, teleporter):
+        self._ensure_gacha_config()
+if not self.confirm(
+            "Auto Fill Gacha Group",
+            "Auto fill will assign the first available GACHAPAIR name, then overwrite this group's gacha names and sides.",
+            "AUTO FILL",
+        ):
+            return
+        group = [
+            entry
+            for entry in self.gacha_config
+            if entry.get("teleporter", "") == teleporter
+        ]
+        try:
+            new_teleporter = next_gacha_teleporter(
+                self.gacha_config, exclude_teleporter=teleporter
+            )
+        except ValueError as exc:
+            self.dialog("Gacha Group", str(exc), "warning")
+            return
+        auto_fill_gacha_group(group, new_teleporter)
+        if hasattr(self, "gacha_group_expanded"):
+            self.gacha_group_expanded[new_teleporter] = self.gacha_group_expanded.pop(
+                teleporter, True
+            )
+        self.save_gacha_config()
+        self._render_settings_group("GACHA")
+
+    def reset_gacha_config(self):
+        self.gacha_config = default_gacha_pair()
+        self.gacha_group_expanded = {}
+        self.save_gacha_config(show_log=False)
+        self._render_settings_group("GACHA")
+        self.append_log("[INFO] Gacha config reset to defaults and saved.\n")
+        self.dialog("Gacha Config Reset", "Gacha config was reset and saved.", "info")
+
+    def add_pego(self):
+        self._ensure_pego_config()
+        delay = (
+            self.pego_config[-1]["delay"] if self.pego_config else DEFAULT_PEGO_DELAY
+        )
+        self.pego_config.append(
+            default_pego_entry(next_pego_index(self.pego_config), delay)
+        )
+        self.save_pego_config()
+        self._render_settings_group("PEGO")
+
+    def remove_pego(self, entry_index):
+        self._ensure_pego_config()
+        del self.pego_config[entry_index]
+        self.save_pego_config()
+        self._render_settings_group("PEGO")
+
+    def apply_all_pego_delays(self):
+        self._ensure_pego_config()
+        try:
+            set_all_pego_delays(self.pego_config, self.pego_bulk_delay_field.text())
+        except ValueError:
+            self.append_log("[ERROR] Invalid pego delay: must be an integer.\n")
+            self.dialog("Invalid Pego Config", "delay must be an integer.", "error")
+            return
+        self.save_pego_config()
+        self._render_settings_group("PEGO")
+
+    def reset_pego_config(self):
+        self.pego_config = [default_pego_entry()]
+        self.save_pego_config(show_log=False)
+        self._render_settings_group("PEGO")
+        self.append_log("[INFO] Pego config reset to defaults and saved.\n")
+        self.dialog("Pego Config Reset", "Pego config was reset and saved.", "info")
+
+    def copy_text(self, value):
+        QApplication.clipboard().setText(str(value))
+        self.toast("Teleport name copied to clipboard.", "success")
 
     def _logs_page(self):
         page, layout = self._page("LogsPage")

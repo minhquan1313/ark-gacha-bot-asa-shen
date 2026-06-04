@@ -658,6 +658,24 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
                 return
             self.reset_deposit_routes()
             return
+        if getattr(self, "current_settings_group", "") == "GACHA":
+            if not self.confirm(
+                "Reset Gacha Config",
+                "Reset gacha config to one default left/right pair?",
+                "RESET",
+            ):
+                return
+            self.reset_gacha_config()
+            return
+        if getattr(self, "current_settings_group", "") == "PEGO":
+            if not self.confirm(
+                "Reset Pego Config",
+                "Reset pego config to one default pego?",
+                "RESET",
+            ):
+                return
+            self.reset_pego_config()
+            return
 
         if not self.confirm(
             "Reset Visible Settings",

@@ -98,6 +98,7 @@ ASSETS = {
     "logo_text": "assets/app/image/logoWText.png",
     "dashboard": "assets/app/image/dashboard.png",
     "welcome": "assets/app/image/welcome.png",
+    "icon.trash_junk": "assets/app/icons/trash_junk.png",
 }
 
 DEFAULT_SETTINGS = {
@@ -172,7 +173,9 @@ SETTINGS_GROUPS = {
     "POSITION / RENDER": [
         "station_yaw",
     ],
+    "PEGO": [],
     "STORAGE": [],
+    "GACHA": [],
     "FEATURES": [
         "external_berry",
         "side_crop_plot",
