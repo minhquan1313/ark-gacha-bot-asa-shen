@@ -5,7 +5,7 @@ from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
-QComboBox,
+    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -579,7 +579,7 @@ class LauncherPagesMixin:
             lambda checked=False, value=teleporter: self.auto_fill_gacha_group(value)
         )
         remove = self._button("", "danger")
-remove.setObjectName("HelperIconButton")
+        remove.setObjectName("HelperIconButton")
         remove.setToolTip("Remove gacha group")
         remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
         remove.setIconSize(QSize(18, 18))
@@ -649,7 +649,7 @@ remove.setObjectName("HelperIconButton")
         layout.setContentsMargins(10, 8, 10, 8)
         layout.setSpacing(8)
 
-                self._add_station_text_field(
+        self._add_station_text_field(
             layout, "name", entry.get("name", ""), entry_index, "gacha"
         )
         self._add_gacha_side_field(layout, entry.get("side", ""), entry_index)
@@ -662,7 +662,7 @@ remove.setObjectName("HelperIconButton")
             lambda checked=False, index=entry_index: self.remove_gacha(index)
         )
         layout.addWidget(remove)
-                return row
+        return row
 
     def _render_pego_group(self):
         self._ensure_pego_config()
@@ -719,7 +719,7 @@ remove.setObjectName("HelperIconButton")
             )
         )
         remove = self._button("", "danger")
-remove.setObjectName("HelperIconButton")
+        remove.setObjectName("HelperIconButton")
         remove.setToolTip("Remove pego entry")
         remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
         remove.setIconSize(QSize(18, 18))
@@ -859,7 +859,11 @@ remove.setObjectName("HelperIconButton")
         )
         # helper.setFixedSize(38, 30)
         helper.clicked.connect(helper_handler)
-        remove = self._button("REMOVE ROUTE", "danger")
+        remove = self._button("", "danger")
+        remove.setObjectName("HelperIconButton")
+        remove.setToolTip("Remove route")
+        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
+        remove.setIconSize(QSize(18, 18))
         remove.clicked.connect(remove_handler)
         header.addWidget(toggle)
         header.addWidget(label)
@@ -1042,7 +1046,11 @@ remove.setObjectName("HelperIconButton")
         row.setSpacing(8)
         self._add_yaw_pitch_fields(row, item)
         row.addWidget(self._crouch_switch(item))
-        remove = self._button("REMOVE", "danger")
+        remove = self._button("", "danger")
+        remove.setObjectName("HelperIconButton")
+        remove.setToolTip("Remove dedi entry")
+        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
+        remove.setIconSize(QSize(18, 18))
         remove.clicked.connect(remove_handler)
         row.addWidget(remove)
         return row
@@ -1054,7 +1062,11 @@ remove.setObjectName("HelperIconButton")
         top.setSpacing(8)
         self._add_yaw_pitch_fields(top, vault)
         top.addWidget(self._crouch_switch(vault))
-        remove = self._button("REMOVE", "danger")
+        remove = self._button("", "danger")
+        remove.setObjectName("HelperIconButton")
+        remove.setToolTip("Remove vault entry")
+        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
+        remove.setIconSize(QSize(18, 18))
         remove.clicked.connect(remove_handler)
         top.addWidget(remove)
         row.addLayout(top)
@@ -1460,7 +1472,7 @@ remove.setObjectName("HelperIconButton")
 
     def auto_fill_gacha_group(self, teleporter):
         self._ensure_gacha_config()
-if not self.confirm(
+        if not self.confirm(
             "Auto Fill Gacha Group",
             "Auto fill will assign the first available GACHAPAIR name, then overwrite this group's gacha names and sides.",
             "AUTO FILL",
