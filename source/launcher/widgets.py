@@ -461,9 +461,9 @@ class CyberDialog(QDialog):
 class HeroBanner(QFrame):
     BANNER_HEIGHT = 180
 
-    ART_HEIGHT = 560
+    ART_HEIGHT = 480
     ART_RIGHT_MARGIN = 8
-    ART_TOP = -120
+    ART_TOP = -96
 
     BACKDROP_TOP_WIDTH = 520
     BACKDROP_BOTTOM_WIDTH = 420
