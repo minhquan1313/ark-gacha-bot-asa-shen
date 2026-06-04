@@ -1129,7 +1129,12 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
                 dialog_parent._active_cyber_dialog = None
 
     def toast(self, message, variant="info"):
-        self.dialog(APP_NAME, message, variant)
+        if variant != "success":
+            self.dialog(APP_NAME, message, variant)
+            return
+        dialog = CyberDialog(self, APP_NAME, message, variant)
+        QTimer.singleShot(3000, dialog.accept)
+        dialog.exec()
 
     def confirm(self, title, message, confirm_text="OK"):
         return (
