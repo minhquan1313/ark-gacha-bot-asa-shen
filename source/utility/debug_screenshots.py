@@ -175,7 +175,7 @@ class _ScreenCapturer:
         label_name = _sanitize(label)
         folder = self.root / category_name
         folder.mkdir(parents=True, exist_ok=True)
-        timestamp = time.strftime("%H%M%S")
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
         timestamp = f"{timestamp}_{time.time_ns() % 1_000_000_000:09d}"
         filename = f"{timestamp}__{label_name}.png"
         path = folder / filename
