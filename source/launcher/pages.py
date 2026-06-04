@@ -120,6 +120,7 @@ class LauncherPagesMixin:
         actions, action_layout = self._panel("QUICK ACTIONS")
         self.dashboard_actions_card = actions
         self.start_stop_button = self._button("START PROGRAM", "primary")
+        self.start_stop_button.setToolTip("Hotkey: Shift + Alt + N")
         self.start_stop_button.clicked.connect(self.toggle_program)
         action_layout.addWidget(self.start_stop_button)
 

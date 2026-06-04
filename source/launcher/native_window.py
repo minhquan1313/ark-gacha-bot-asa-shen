@@ -16,6 +16,7 @@ class WindowsMSG(ctypes.Structure):
 
 
 WM_NCHITTEST = 0x0084
+WM_HOTKEY = 0x0312
 HTCLIENT = 1
 HTCAPTION = 2
 HTLEFT = 10

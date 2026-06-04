@@ -4,6 +4,10 @@ import time
 from source.launcher.constants import GAME_WINDOW_TITLE
 from source.launcher.system import focus_window_if_needed, validate_ark_window
 
+MOD_ALT = 0x0001
+MOD_SHIFT = 0x0004
+KEY_N = 0x4E
+
 
 def focus_game_window(
     window_title=GAME_WINDOW_TITLE, center_cursor_when_switching=False
@@ -72,7 +76,15 @@ def parse_ccc_yaw_pitch(data):
 
 
 def register_alt_n_hotkey(hwnd, hotkey_id):
-    return bool(ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, 0x0001, 0x4E))
+    return bool(ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, MOD_ALT, KEY_N))
+
+
+def register_shift_alt_n_hotkey(hwnd, hotkey_id):
+    return bool(
+        ctypes.windll.user32.RegisterHotKey(
+            hwnd, hotkey_id, MOD_ALT | MOD_SHIFT, KEY_N
+        )
+    )
 
 
 def unregister_hotkey(hwnd, hotkey_id):

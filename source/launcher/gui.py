@@ -1,3 +1,4 @@
+import ctypes
 import json
 import os
 import subprocess
@@ -41,6 +42,10 @@ from source.launcher.constants import (
     PHONE_MINIMUM_SIZE,
     WINDOW_RESIZE_BORDER_PX,
 )
+from source.launcher.deposit_helper_capture import (
+    register_shift_alt_n_hotkey,
+    unregister_hotkey,
+)
 from source.launcher.native_window import (
     HTBOTTOM,
     HTBOTTOMLEFT,
@@ -52,11 +57,13 @@ from source.launcher.native_window import (
     HTTOP,
     HTTOPLEFT,
     HTTOPRIGHT,
+    WM_HOTKEY,
     WM_NCHITTEST,
     WindowsMSG,
     global_pos_from_lparam,
 )
 from source.launcher.pages import LauncherPagesMixin
+from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.settings_store import load_settings, save_settings
 from source.launcher.styles import launcher_style_sheet
 from source.launcher.system import (
@@ -114,6 +121,9 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.start_time = None
         self.last_activity = "--:--:--"
         self._cpu_times = get_cpu_times()
+        self.runner_overlay = None
+        self.start_stop_hotkey_id = (id(self) & 0x3FFF) + 0x4000
+        self.start_stop_hotkey_registered = False
         self.is_narrow_layout = False
         self.is_custom_maximized = False
         self.normal_geometry = None
@@ -122,6 +132,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self._build_timer()
         self.show_page("dashboard")
         self.load_previous_logs()
+        self._register_start_stop_hotkey()
         self._schedule_auto_start()
 
     def _build_ui(self):
@@ -320,6 +331,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.timer.stop()
         if hasattr(self, "auto_start_timer"):
             self.auto_start_timer.stop()
+        self._unregister_start_stop_hotkey()
+        self._hide_runner_overlay()
         self.close_deposit_helpers()
         self.output_reader_stop.set()
         self.stop_log_tail()
@@ -345,6 +358,9 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.running_task_name = None
 
     def nativeEvent(self, event_type, message):
+        if self._handle_native_hotkey_message(message):
+            return True, 0
+
         if not ENABLE_NATIVE_CUSTOM_CHROME or sys.platform != "win32":
             return super().nativeEvent(event_type, message)
 
@@ -478,6 +494,35 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
     def is_program_running(self):
         return self.process is not None and self.process.poll() is None
+
+    def _register_start_stop_hotkey(self):
+        if not hasattr(ctypes, "windll"):
+            return
+        try:
+            self.start_stop_hotkey_registered = register_shift_alt_n_hotkey(
+                int(self.winId()), self.start_stop_hotkey_id
+            )
+        except Exception:
+            self.start_stop_hotkey_registered = False
+
+    def _unregister_start_stop_hotkey(self):
+        if not self.start_stop_hotkey_registered or not hasattr(ctypes, "windll"):
+            self.start_stop_hotkey_registered = False
+            return
+        try:
+            unregister_hotkey(int(self.winId()), self.start_stop_hotkey_id)
+        except Exception:
+            pass
+        self.start_stop_hotkey_registered = False
+
+    def _handle_native_hotkey_message(self, message):
+        if not self.start_stop_hotkey_registered:
+            return False
+        msg = WindowsMSG.from_address(int(message))
+        if msg.message == WM_HOTKEY and msg.wParam == self.start_stop_hotkey_id:
+            self.toggle_program()
+            return True
+        return False
 
     def _update_start_stop_button(self):
         if not hasattr(self, "start_stop_button"):
@@ -668,6 +713,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
                 target=self.read_output, args=(self.process,), daemon=True
             )
             self.output_reader_thread.start()
+            self._show_runner_overlay()
         except Exception as exc:
             self.dialog("Start Failed", str(exc), "error")
 
@@ -678,6 +724,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.append_log("[WARN] Stopping program...\n")
             self._update_start_stop_button()
             self.process.terminate()
+            self._hide_runner_overlay()
 
     def _poll_program_stop(self):
         if self.process is None:
@@ -699,6 +746,38 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         if was_stopping:
             self.append_log("[WARN] Program stopped.\n")
         self._update_start_stop_button()
+        self._hide_runner_overlay()
+
+    def _show_runner_overlay(self):
+        if not self.is_program_running() or self.program_stopping:
+            self._hide_runner_overlay()
+            return
+        overlay = getattr(self, "runner_overlay", None)
+        try:
+            if overlay is None:
+                overlay = RunnerOverlay(self)
+                self.runner_overlay = overlay
+            overlay.refresh(self.queue_snapshot)
+            overlay.show()
+            overlay.raise_()
+        except RuntimeError:
+            self.runner_overlay = None
+
+    def _hide_runner_overlay(self):
+        overlay = getattr(self, "runner_overlay", None)
+        self.runner_overlay = None
+        if overlay is None:
+            return
+        try:
+            overlay.close()
+        except RuntimeError:
+            pass
+
+    def _sync_runner_overlay(self):
+        if self.is_program_running() and not self.program_stopping:
+            self._show_runner_overlay()
+        else:
+            self._hide_runner_overlay()
 
     def read_output(self, process):
         if not process or not process.stdout:
@@ -933,6 +1012,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         if running_task_name and running_task_name != self.running_task_name:
             self.running_history.append(f"[RUNNING] STARTED   {running_task_name}")
         self.running_task_name = running_task_name
+        self._sync_runner_overlay()
 
     def _format_running_snapshot(self):
         lines = self.running_history.copy()
@@ -1047,6 +1127,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         if self.shutdown_started:
             return
         self._poll_program_stop()
+        self._sync_runner_overlay()
         if self.current_filter in {"QUEUE", "RUNNING"}:
             self._render_logs()
         if hasattr(self, "server_value"):

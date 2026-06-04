@@ -2,11 +2,14 @@ import json
 import os
 import tempfile
 import unittest
+import ctypes
 from types import MethodType, SimpleNamespace
 from unittest.mock import Mock, patch
 
 from source.launcher.constants import MAX_LAUNCHER_LOG_LINES
 from source.launcher.gui import SettingsGUI
+from source.launcher.native_window import WM_HOTKEY, WindowsMSG
+from source.launcher.runner_overlay import format_runner_overlay
 
 
 class LauncherLogTests(unittest.TestCase):
@@ -21,6 +24,7 @@ class LauncherLogTests(unittest.TestCase):
             waiting_count=0,
             log_file_position=50,
             _render_logs=lambda: None,
+            _sync_runner_overlay=lambda: None,
         )
         for method_name in [
             "_filtered_logs",
@@ -75,6 +79,18 @@ class LauncherLogTests(unittest.TestCase):
             self.launcher.running_history,
             ["[RUNNING] STARTED   gacha", "[RUNNING] STARTED   gacha"],
         )
+
+    def test_queue_snapshot_update_refreshes_runner_overlay(self):
+        self.launcher._sync_runner_overlay = Mock()
+        snapshot = {
+            "running": [{"name": "gacha"}],
+            "active": [],
+            "waiting": [],
+        }
+
+        self.launcher._update_queue_snapshot(snapshot)
+
+        self.launcher._sync_runner_overlay.assert_called_once_with()
 
     def test_running_filter_shows_history_and_current_task(self):
         self.launcher.running_history = ["[RUNNING] STARTED   gacha"]
@@ -132,6 +148,7 @@ class LauncherLogTests(unittest.TestCase):
         self.launcher.stop_log_tail = lambda: None
         self.launcher._close_output_reader = lambda process: None
         self.launcher._update_start_stop_button = lambda: None
+        self.launcher._hide_runner_overlay = Mock()
 
         SettingsGUI._finalize_program_stop(self.launcher)
 
@@ -147,6 +164,7 @@ class LauncherLogTests(unittest.TestCase):
             },
         )
         self.assertEqual(self.launcher.running_task_name, "gacha")
+        self.launcher._hide_runner_overlay.assert_called_once_with()
 
     def test_append_log_keeps_only_latest_configured_lines(self):
         for line_number in range(MAX_LAUNCHER_LOG_LINES + 1):
@@ -174,6 +192,43 @@ class LauncherLogTests(unittest.TestCase):
         self.assertIn(f"line {MAX_LAUNCHER_LOG_LINES}", self.launcher.log_lines[-1])
 
 
+class LauncherDashboardTests(unittest.TestCase):
+    def test_start_program_button_tooltip_mentions_hotkey(self):
+        launcher = SimpleNamespace(
+            _page=Mock(return_value=(Mock(), Mock())),
+            _stat_card=Mock(return_value=Mock()),
+            _panel=Mock(return_value=(Mock(), Mock())),
+            _button=Mock(return_value=Mock()),
+            toggle_program=Mock(),
+            toggle_auto_start_program=Mock(),
+            _update_auto_start_switch=Mock(),
+            _update_start_stop_button=Mock(),
+            _console_widget=Mock(return_value=Mock()),
+            set_log_filter=Mock(),
+            show_page=Mock(),
+            _footer_stat=Mock(
+                side_effect=[(Mock(), Mock()), (Mock(), Mock()), Mock(), Mock(), Mock()]
+            ),
+            _sync_dashboard_actions_width=Mock(),
+        )
+
+        with patch("source.launcher.pages.HeroBanner"):
+            with patch("source.launcher.pages.QGridLayout") as grid:
+                with patch("source.launcher.pages.QHBoxLayout"):
+                    with patch("source.launcher.pages.QFrame"):
+                        with patch("source.launcher.pages.QVBoxLayout"):
+                            with patch("source.launcher.pages.CyberSwitch") as switch:
+                                with patch("source.launcher.pages.QLabel"):
+                                    grid.return_value.itemAtPosition.return_value.widget.return_value = Mock()
+                                    switch.return_value.toggled.connect = Mock()
+                                    with patch("source.launcher.pages.QTimer"):
+                                        SettingsGUI._dashboard_page(launcher)
+
+        launcher.start_stop_button.setToolTip.assert_called_once_with(
+            "Hotkey: Shift + Alt + N"
+        )
+
+
 class LauncherStartProgramTests(unittest.TestCase):
     def make_launcher(self, ark_window_ok=True):
         return SimpleNamespace(
@@ -187,6 +242,8 @@ class LauncherStartProgramTests(unittest.TestCase):
             start_log_tail=Mock(),
             read_output=Mock(),
             dialog=Mock(),
+            _show_runner_overlay=Mock(),
+            _hide_runner_overlay=Mock(),
             output_reader_stop=None,
             output_reader_thread=None,
         )
@@ -216,6 +273,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         self.assertEqual(events, ["cleanup", "popen"])
         launcher.close_deposit_helpers.assert_called_once_with()
         thread.start.assert_called_once_with()
+        launcher._show_runner_overlay.assert_called_once_with()
 
     def test_start_program_does_not_clean_when_ark_window_validation_fails(self):
         launcher = self.make_launcher(ark_window_ok=False)
@@ -228,6 +286,165 @@ class LauncherStartProgramTests(unittest.TestCase):
 
         cleanup.assert_not_called()
         popen.assert_not_called()
+        launcher._show_runner_overlay.assert_not_called()
+
+    def test_stop_program_hides_runner_overlay(self):
+        launcher = self.make_launcher()
+        launcher.process = Mock()
+        launcher.process.poll.return_value = None
+
+        with patch("source.launcher.gui.time.time", return_value=100):
+            SettingsGUI.stop_program(launcher)
+
+        launcher.process.terminate.assert_called_once_with()
+        launcher._hide_runner_overlay.assert_called_once_with()
+
+    def test_show_runner_overlay_creates_and_refreshes_overlay(self):
+        launcher = SimpleNamespace(
+            process=Mock(),
+            program_stopping=False,
+            runner_overlay=None,
+            queue_snapshot={"running": [{"name": "gacha"}]},
+            is_program_running=Mock(return_value=True),
+        )
+        overlay = Mock()
+
+        with patch("source.launcher.gui.RunnerOverlay", return_value=overlay):
+            SettingsGUI._show_runner_overlay(launcher)
+
+        self.assertIs(launcher.runner_overlay, overlay)
+        overlay.refresh.assert_called_once_with(launcher.queue_snapshot)
+        overlay.show.assert_called_once_with()
+        overlay.raise_.assert_called_once_with()
+
+    def test_shutdown_hides_overlay_and_unregisters_hotkey(self):
+        process = Mock()
+        process.poll.return_value = 1
+        stop_event = Mock()
+        launcher = SimpleNamespace(
+            shutdown_started=False,
+            timer=Mock(),
+            auto_start_timer=Mock(),
+            close_deposit_helpers=Mock(),
+            output_reader_stop=stop_event,
+            stop_log_tail=Mock(),
+            process=process,
+            program_stopping=False,
+            stop_deadline=100,
+            queue_snapshot={"running": [{"name": "gacha"}]},
+            running_task_name="gacha",
+            _close_output_reader=Mock(),
+            _hide_runner_overlay=Mock(),
+            _unregister_start_stop_hotkey=Mock(),
+        )
+
+        SettingsGUI._shutdown_resources(launcher)
+
+        launcher._unregister_start_stop_hotkey.assert_called_once_with()
+        launcher._hide_runner_overlay.assert_called_once_with()
+        self.assertEqual(
+            launcher.queue_snapshot, {"running": [], "active": [], "waiting": []}
+        )
+        self.assertIsNone(launcher.running_task_name)
+
+
+class RunnerOverlayFormattingTests(unittest.TestCase):
+    def test_overlay_formats_running_and_next_five_tasks_soonest_first(self):
+        snapshot = {
+            "running": [{"name": "pego deposit"}],
+            "active": [
+                {"name": "ready task", "execution_time": 100, "state": "READY"},
+                {"name": "feed gacha", "execution_time": 112},
+            ],
+            "waiting": [
+                {"name": "task 5", "execution_time": 150},
+                {"name": "task 4", "execution_time": 140},
+                {"name": "task 3", "execution_time": 130},
+                {"name": "task 6", "execution_time": 160},
+                {"name": "task 2", "execution_time": 120},
+            ],
+        }
+
+        current, upcoming = format_runner_overlay(snapshot, now=100)
+
+        self.assertEqual(current, "Running pego deposit")
+        self.assertEqual(
+            upcoming,
+            [
+                "READY    ready task",
+                "00:00:12 feed gacha",
+                "00:00:20 task 2",
+                "00:00:30 task 3",
+                "00:00:40 task 4",
+            ],
+        )
+
+    def test_overlay_shows_waiting_state_without_running_snapshot(self):
+        current, upcoming = format_runner_overlay(
+            {"running": [], "active": [], "waiting": []}, now=100
+        )
+
+        self.assertEqual(current, "Waiting for running task...")
+        self.assertEqual(upcoming, ["No upcoming tasks."])
+
+
+class LauncherHotkeyTests(unittest.TestCase):
+    def test_register_start_stop_hotkey_uses_shift_alt_n_and_is_nonfatal(self):
+        launcher = SimpleNamespace(
+            start_stop_hotkey_id=44,
+            start_stop_hotkey_registered=False,
+            winId=Mock(return_value=123),
+        )
+
+        with patch("source.launcher.gui.ctypes", SimpleNamespace(windll=object())):
+            with patch(
+                "source.launcher.gui.register_shift_alt_n_hotkey", return_value=True
+            ) as register:
+                SettingsGUI._register_start_stop_hotkey(launcher)
+
+        register.assert_called_once_with(123, 44)
+        self.assertTrue(launcher.start_stop_hotkey_registered)
+
+        launcher.start_stop_hotkey_registered = False
+        with patch("source.launcher.gui.ctypes", SimpleNamespace(windll=object())):
+            with patch(
+                "source.launcher.gui.register_shift_alt_n_hotkey",
+                side_effect=RuntimeError("blocked"),
+            ):
+                SettingsGUI._register_start_stop_hotkey(launcher)
+
+        self.assertFalse(launcher.start_stop_hotkey_registered)
+
+    def test_unregister_start_stop_hotkey(self):
+        launcher = SimpleNamespace(
+            start_stop_hotkey_id=44,
+            start_stop_hotkey_registered=True,
+            winId=Mock(return_value=123),
+        )
+
+        with patch("source.launcher.gui.ctypes", SimpleNamespace(windll=object())):
+            with patch("source.launcher.gui.unregister_hotkey") as unregister:
+                SettingsGUI._unregister_start_stop_hotkey(launcher)
+
+        unregister.assert_called_once_with(123, 44)
+        self.assertFalse(launcher.start_stop_hotkey_registered)
+
+    def test_native_hotkey_message_toggles_program(self):
+        launcher = SimpleNamespace(
+            start_stop_hotkey_id=44,
+            start_stop_hotkey_registered=True,
+            toggle_program=Mock(),
+        )
+        message = WindowsMSG()
+        message.message = WM_HOTKEY
+        message.wParam = 44
+
+        handled = SettingsGUI._handle_native_hotkey_message(
+            launcher, ctypes.addressof(message)
+        )
+
+        self.assertTrue(handled)
+        launcher.toggle_program.assert_called_once_with()
 
 
 if __name__ == "__main__":

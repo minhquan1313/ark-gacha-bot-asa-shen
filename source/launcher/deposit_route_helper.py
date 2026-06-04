@@ -24,12 +24,9 @@ from source.launcher.deposit_helper_capture import (
     unregister_hotkey,
     view_route_entry,
 )
-from source.launcher.native_window import WindowsMSG
+from source.launcher.native_window import WM_HOTKEY, WindowsMSG
 from source.launcher.vault_items_store import add_vault_item, load_vault_items
 from source.launcher.widgets import AnimatedButton, CyberSwitch, WrappedStatusLabel
-
-WM_HOTKEY = 0x0312
-
 
 class NoWheelComboBox(QComboBox):
     def wheelEvent(self, event):
