@@ -10,6 +10,8 @@ from queue import Empty
 SHUTDOWN_TIMEOUT_SECONDS = 2.0
 DEBUG_SCREENSHOT_ROOT = Path("debug_screenshots")
 
+IS_DEBUG_ON = True
+
 CAPTURE_DEDI_DEPOSIT = True
 CAPTURE_IGUANADON_SEED = True
 CAPTURE_GACHA_SEED = True
@@ -30,7 +32,7 @@ class _WorkerState:
 
 
 def capture_for(category, active=False, delay=0.5):
-    if not active:
+    if not active or not IS_DEBUG_ON:
         return _noop_capture
 
     delay_seconds = max(0.0, float(delay))

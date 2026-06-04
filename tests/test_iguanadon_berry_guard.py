@@ -243,7 +243,61 @@ class BerryCollectionGuardTests(unittest.TestCase):
         self.iguanadon.debug_captures[
             "iguanadon_seed_withdraw"
         ].assert_called_once_with("seed_2")
-        self.inventory.close.assert_called_once()
+        self.assertGreaterEqual(self.inventory.close.call_count, 1)
+
+    def test_seed_two_measures_reopen_time_before_cleanup_drop(self):
+        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock(
+            return_value=1.0
+        )
+
+        self.iguanadon.seed(2)
+
+        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait.assert_called_once_with()
+        self.player_inventory.drop_all_inv.assert_called_once_with()
+
+    def test_seed_two_does_not_refresh_when_remote_wait_is_at_threshold(self):
+        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock(
+            return_value=self.iguanadon.IGUANODON_REMOTE_LAG_THRESHOLD_SECONDS
+        )
+        self.iguanadon._refresh_iguanodon_berry_transfer_after_lag = Mock()
+
+        self.iguanadon.seed(2)
+
+        self.iguanadon._refresh_iguanodon_berry_transfer_after_lag.assert_not_called()
+        self.logger.warning.assert_not_called()
+
+    def test_seed_two_refreshes_berries_once_when_remote_wait_is_slow(self):
+        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock(
+            return_value=3.1
+        )
+
+        self.iguanadon.seed(2)
+
+        self.assertEqual(self.inventory.transfer_all_from.call_count, 3)
+        self.assertEqual(self.player_inventory.transfer_all_inventory.call_count, 3)
+        self.logger.warning.assert_called_once()
+
+    def test_seed_two_cleanup_drop_happens_after_lag_refresh(self):
+        actions = []
+        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock(
+            return_value=3.1
+        )
+        self.iguanadon._refresh_iguanodon_berry_transfer_after_lag = Mock(
+            side_effect=lambda: actions.append("refresh")
+        )
+        self.player_inventory.drop_all_inv.side_effect = lambda: actions.append("drop")
+
+        self.iguanadon.seed(2)
+
+        self.assertEqual(actions, ["refresh", "drop"])
+
+    def test_seed_one_does_not_run_lag_guard_or_cleanup_drop(self):
+        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock()
+
+        self.iguanadon.seed(1)
+
+        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait.assert_not_called()
+        self.player_inventory.drop_all_inv.assert_not_called()
 
 
 class BerryStationTaskGuardTests(unittest.TestCase):

@@ -8,6 +8,8 @@ from source.ASA.player import player_inventory , player_state
 from source.utility.debug_screenshots import CAPTURE_IGUANADON_SEED, capture_for
 import source.gacha_bot.config 
 
+IGUANODON_REMOTE_LAG_THRESHOLD_SECONDS = 2.0
+
 capture_iguanadon_seed_withdraw = capture_for(
     "iguanadon_seed_withdraw", active=CAPTURE_IGUANADON_SEED
 )
@@ -60,10 +62,23 @@ def berry_station(metadata):
     berry_collection()
     utils.turn_up(50)
 
-def transfer_berries_to_iguanodon(attempts=2):
+def transfer_berries_to_iguanodon(attempts=1):
     for _ in range(attempts):
         player_inventory.search_in_inventory(settings.berry_type) #iguanadon has 1450 weight for the 145 stacks of berries
         player_inventory.transfer_all_inventory()
+        if attempts > 1:
+            time.sleep(0.1 * settings.lag_offset)
+
+def _reopen_iguanodon_inventory_and_measure_wait():
+    inventory.close()
+    start = time.time()
+    inventory.open()
+    return time.time() - start
+
+def _refresh_iguanodon_berry_transfer_after_lag():
+    if inventory.is_open():
+        inventory.transfer_all_from()
+        transfer_berries_to_iguanodon()
         time.sleep(0.1*settings.lag_offset)
 
 def seed(type):
@@ -73,6 +88,13 @@ def seed(type):
         transfer_berries_to_iguanodon()
         if type == 2:
             time.sleep(0.2*settings.lag_offset)
+            elapsed = _reopen_iguanodon_inventory_and_measure_wait()
+            if elapsed > IGUANODON_REMOTE_LAG_THRESHOLD_SECONDS:
+                logs.logger.warning(
+                    f"iguanodon remote inventory lag detected after {elapsed:.2f}s; "
+                    "refreshing berry transfer before cleanup drop"
+                )
+                _refresh_iguanodon_berry_transfer_after_lag()
             player_inventory.drop_all_inv() #doing this second time round to drop everything else that is not needed by the bot
         time.sleep(0.1*settings.lag_offset)
         player_inventory.close()
