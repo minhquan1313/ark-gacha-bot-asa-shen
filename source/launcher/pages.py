@@ -1609,9 +1609,14 @@ class LauncherPagesMixin:
     def _tools_page(self):
         page, layout = self._page("ToolsPage")
         layout.addWidget(self._page_title("TOOLS"))
+        tools_grid = QGridLayout()
+        tools_grid.setContentsMargins(0, 0, 0, 0)
+        tools_grid.setHorizontalSpacing(14)
+        tools_grid.setVerticalSpacing(14)
+        tools_grid.setColumnStretch(0, 1)
+        tools_grid.setColumnStretch(1, 1)
 
         auto_join_card, auto_join_layout = self._panel("AUTO JOIN SERVER")
-        auto_join_card.setMaximumWidth(620)
         auto_join_description = QLabel(
             "Enter a server number and retry the existing join flow until the "
             "character is detected back in-server."
@@ -1624,7 +1629,6 @@ class LauncherPagesMixin:
         auto_join_layout.addWidget(open_auto_join)
 
         card, card_layout = self._panel("CROP PLOT FERTILIZER REFRESH")
-        card.setMaximumWidth(620)
         description = QLabel(
             "Refresh crop plot fertilizer with one quick helper. Start the tool, "
             "and it will open a crop plot inventory, transfer everything to your "
@@ -1637,8 +1641,9 @@ class LauncherPagesMixin:
         card_layout.addWidget(description)
         card_layout.addWidget(open_tool)
 
-        layout.addWidget(auto_join_card)
-        layout.addWidget(card)
+        tools_grid.addWidget(auto_join_card, 0, 0)
+        tools_grid.addWidget(card, 0, 1)
+        layout.addLayout(tools_grid)
         layout.addStretch()
         return page
 
