@@ -1,6 +1,7 @@
 import multiprocessing
 import os
 import re
+import shutil
 import time
 from dataclasses import dataclass
 from heapq import heappop, heappush
@@ -11,6 +12,7 @@ SHUTDOWN_TIMEOUT_SECONDS = 2.0
 DEBUG_SCREENSHOT_ROOT = Path("debug_screenshots")
 
 IS_DEBUG_ON = True
+IS_CLEANUP_ONSTART = True
 
 CAPTURE_DEDI_DEPOSIT = True
 CAPTURE_IGUANADON_SEED = True
@@ -22,6 +24,7 @@ CAPTURE_GRINDER_WITHDRAW = True
 CAPTURE_VAULT_TRANSFER = True
 
 _state = None
+_cleanup_done = False
 _run_timestamp = time.strftime("%Y%m%d_%H%M%S")
 
 
@@ -64,6 +67,23 @@ def stop_debug_screenshot_worker():
     if process.is_alive():
         process.terminate()
         process.join(SHUTDOWN_TIMEOUT_SECONDS)
+
+
+def cleanup_debug_screenshots_on_program_start():
+    global _cleanup_done
+    if _cleanup_done or not IS_DEBUG_ON or not IS_CLEANUP_ONSTART:
+        return
+
+    _cleanup_done = True
+    try:
+        DEBUG_SCREENSHOT_ROOT.mkdir(parents=True, exist_ok=True)
+        for child in DEBUG_SCREENSHOT_ROOT.iterdir():
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+    except Exception as exc:
+        _warn(f"Unable to cleanup debug screenshots: {exc}")
 
 
 def _noop_capture(label="capture"):
@@ -233,5 +253,6 @@ def _warn(message):
 
 
 def _reset_for_tests():
-    global _state
+    global _state, _cleanup_done
     _state = None
+    _cleanup_done = False

@@ -3,7 +3,7 @@ import os
 import tempfile
 import unittest
 from types import MethodType, SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from source.launcher.constants import MAX_LAUNCHER_LOG_LINES
 from source.launcher.gui import SettingsGUI
@@ -172,6 +172,62 @@ class LauncherLogTests(unittest.TestCase):
         self.assertEqual(len(self.launcher.log_lines), MAX_LAUNCHER_LOG_LINES)
         self.assertIn("line 1", self.launcher.log_lines[0])
         self.assertIn(f"line {MAX_LAUNCHER_LOG_LINES}", self.launcher.log_lines[-1])
+
+
+class LauncherStartProgramTests(unittest.TestCase):
+    def make_launcher(self, ark_window_ok=True):
+        return SimpleNamespace(
+            shutdown_started=False,
+            program_stopping=False,
+            process=None,
+            require_ark_window=Mock(return_value=ark_window_ok),
+            close_deposit_helpers=Mock(),
+            append_log=Mock(),
+            _update_start_stop_button=Mock(),
+            start_log_tail=Mock(),
+            read_output=Mock(),
+            dialog=Mock(),
+            output_reader_stop=None,
+            output_reader_thread=None,
+        )
+
+    def test_start_program_cleans_debug_screenshots_before_launching_process(self):
+        launcher = self.make_launcher()
+        events = []
+        process = Mock()
+        thread = Mock()
+
+        def cleanup():
+            events.append("cleanup")
+
+        def popen(*_args, **_kwargs):
+            events.append("popen")
+            return process
+
+        with patch(
+            "source.launcher.gui.cleanup_debug_screenshots_on_program_start",
+            side_effect=cleanup,
+        ) as cleanup_mock:
+            with patch("source.launcher.gui.subprocess.Popen", side_effect=popen):
+                with patch("source.launcher.gui.threading.Thread", return_value=thread):
+                    SettingsGUI.start_program(launcher)
+
+        cleanup_mock.assert_called_once_with()
+        self.assertEqual(events, ["cleanup", "popen"])
+        launcher.close_deposit_helpers.assert_called_once_with()
+        thread.start.assert_called_once_with()
+
+    def test_start_program_does_not_clean_when_ark_window_validation_fails(self):
+        launcher = self.make_launcher(ark_window_ok=False)
+
+        with patch(
+            "source.launcher.gui.cleanup_debug_screenshots_on_program_start"
+        ) as cleanup:
+            with patch("source.launcher.gui.subprocess.Popen") as popen:
+                SettingsGUI.start_program(launcher)
+
+        cleanup.assert_not_called()
+        popen.assert_not_called()
 
 
 if __name__ == "__main__":

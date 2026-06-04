@@ -1,5 +1,6 @@
 import importlib.util
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -149,6 +150,55 @@ class DebugScreenshotHelperTests(unittest.TestCase):
 
         self.assertEqual(request_queue.messages, [None])
         self.assertTrue(process.terminated)
+
+    def test_cleanup_disabled_leaves_debug_screenshots_untouched(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            old_file = root / "old.png"
+            old_file.write_text("old", encoding="utf-8")
+
+            with patch.object(debug_screenshots, "DEBUG_SCREENSHOT_ROOT", root):
+                with patch.object(debug_screenshots, "IS_CLEANUP_ONSTART", False):
+                    debug_screenshots.cleanup_debug_screenshots_on_program_start()
+
+            self.assertTrue(old_file.exists())
+
+    def test_cleanup_enabled_deletes_children_but_keeps_root(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            old_folder = root / "old_run"
+            old_folder.mkdir()
+            (old_folder / "old.png").write_text("old", encoding="utf-8")
+            old_file = root / "loose.png"
+            old_file.write_text("old", encoding="utf-8")
+
+            with patch.object(debug_screenshots, "DEBUG_SCREENSHOT_ROOT", root):
+                with patch.object(debug_screenshots, "IS_CLEANUP_ONSTART", True):
+                    debug_screenshots.cleanup_debug_screenshots_on_program_start()
+
+            self.assertTrue(root.exists())
+            self.assertFalse(old_folder.exists())
+            self.assertFalse(old_file.exists())
+
+    def test_cleanup_runs_only_once_until_reset(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+
+            with patch.object(debug_screenshots, "DEBUG_SCREENSHOT_ROOT", root):
+                with patch.object(debug_screenshots, "IS_CLEANUP_ONSTART", True):
+                    debug_screenshots.cleanup_debug_screenshots_on_program_start()
+                    later_file = root / "later.png"
+                    later_file.write_text("later", encoding="utf-8")
+                    debug_screenshots.cleanup_debug_screenshots_on_program_start()
+
+            self.assertTrue(later_file.exists())
+
+    def test_reset_for_tests_resets_cleanup_guard(self):
+        debug_screenshots._cleanup_done = True
+
+        debug_screenshots._reset_for_tests()
+
+        self.assertFalse(debug_screenshots._cleanup_done)
 
 
 def _debug_capture_module():

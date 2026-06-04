@@ -71,6 +71,7 @@ from source.launcher.widgets import (
     LogBridge,
     TitleBar,
 )
+from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
 
 
 class SettingsGUI(LauncherPagesMixin, QMainWindow):
@@ -650,6 +651,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
         try:
             self.close_deposit_helpers()
+            cleanup_debug_screenshots_on_program_start()
             self.process = subprocess.Popen(
                 [sys.executable, "-u", "main_program.py"],
                 stdout=subprocess.PIPE,
