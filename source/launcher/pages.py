@@ -289,7 +289,7 @@ class LauncherPagesMixin:
         tabs.setSpacing(6)
         tab_frame = QFrame()
         tab_frame.setObjectName("SettingsTabs")
-        tab_frame.setMinimumWidth(270)
+        tab_frame.setMinimumWidth(0)
         tab_frame.setMaximumWidth(340)
         tab_frame.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         tab_frame.setLayout(tabs)
