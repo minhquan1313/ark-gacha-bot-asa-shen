@@ -83,7 +83,7 @@ from source.launcher.widgets import (
 )
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
 
-START_GAME_DISABLE_DELAY = 30000
+START_GAME_DISABLE_DELAY = 10000
 
 
 class SettingsGUI(LauncherPagesMixin, QMainWindow):
