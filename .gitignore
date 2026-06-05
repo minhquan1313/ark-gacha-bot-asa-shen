@@ -4,8 +4,9 @@ __pycache__
 settings.py
 /source/logs
 /json_files/backup2
-
 .vscode
-debug_screenshots/*
 
+debug_screenshots/*
 .codegraph/daemon.pid
+json_files/GameUserSettings.ini.backup
+json_files/ark_start_game_restore.json
