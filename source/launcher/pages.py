@@ -41,6 +41,7 @@ from source.launcher.auto_join_server_helper import AutoJoinServerHelper
 from source.launcher.deposit_route_helper import DepositRouteHelper
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.position_render_helper import PositionRenderHelper
+from source.launcher.server_transfer_helper import ServerTransferHelper
 from source.launcher.settings_store import load_settings
 from source.launcher.station_config import (
     DEFAULT_PEGO_DELAY,
@@ -998,6 +999,25 @@ class LauncherPagesMixin:
         helper.activateWindow()
         self.deposit_helper = helper
 
+    def open_server_transfer_helper(self):
+        if not self._can_open_setup_helper():
+            return
+        helper = self.find_deposit_helper("server_transfer", None)
+        if helper is not None:
+            helper.show()
+            helper.raise_()
+            helper.activateWindow()
+            self.deposit_helper = helper
+            return
+
+        self.close_external_helpers()
+        helper = ServerTransferHelper(self)
+        self.register_deposit_helper(helper)
+        helper.show()
+        helper.raise_()
+        helper.activateWindow()
+        self.deposit_helper = helper
+
     def _can_open_setup_helper(self):
         if self.is_program_running() or getattr(self, "program_stopping", False):
             self.dialog(
@@ -1652,7 +1672,20 @@ class LauncherPagesMixin:
         auto_join_layout.addWidget(auto_join_description)
         auto_join_layout.addWidget(open_auto_join)
 
-        card, card_layout = self._panel("CROP PLOT FERTILIZER REFRESH")
+        transfer_card, transfer_layout = self._panel("SERVER TRANSFER HELPER")
+        transfer_description = QLabel(
+            "Move resources between two servers across multiple Steam accounts. "
+            "The helper saves its own settings and blocks start until required "
+            "Steam and transfer UI inputs are configured."
+        )
+        transfer_description.setObjectName("MutedCopy")
+        transfer_description.setWordWrap(True)
+        open_transfer = self._button("OPEN TOOL", "primary")
+        open_transfer.clicked.connect(self.open_server_transfer_helper)
+        transfer_layout.addWidget(transfer_description)
+        transfer_layout.addWidget(open_transfer)
+
+        fertilizer_card, card_layout = self._panel("CROP PLOT FERTILIZER REFRESH")
         description = QLabel(
             "Refresh crop plot fertilizer with one quick helper. Start the tool, "
             "and it will open a crop plot inventory, transfer everything to your "
@@ -1666,7 +1699,8 @@ class LauncherPagesMixin:
         card_layout.addWidget(open_tool)
 
         tools_grid.addWidget(auto_join_card, 0, 0)
-        tools_grid.addWidget(card, 0, 1)
+        tools_grid.addWidget(transfer_card, 0, 1)
+        tools_grid.addWidget(fertilizer_card, 1, 0)
         layout.addLayout(tools_grid)
         layout.addStretch()
         return page

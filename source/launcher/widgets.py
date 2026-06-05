@@ -68,7 +68,10 @@ class WrappedStatusLabel(QLabel):
     def _sync_minimum_height(self):
         width = self.width()
         if width > 0:
-            self.setMinimumHeight(self.heightForWidth(width))
+            height = self.heightForWidth(width)
+            if height < 0:
+                height = max(0, self.sizeHint().height())
+            self.setMinimumHeight(height)
             self.updateGeometry()
 
 
