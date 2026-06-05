@@ -474,28 +474,18 @@ class FertilizerStartValidationTests(unittest.TestCase):
         helper.owner.is_program_running.return_value = False
         helper.owner.program_stopping = False
         helper._require_ark_window.return_value = True
-        worker = Mock()
         events = []
-        fake_threading = types.SimpleNamespace(
-            Event=threading.Event,
-            Thread=lambda **_kwargs: events.append("thread") or worker,
-        )
         with (
             patch(
                 "source.launcher.fertilizer_refresh_helper.focus_game_window",
                 side_effect=lambda **_kwargs: events.append("focus"),
             ) as focus,
-            patch(
-                "source.launcher.fertilizer_refresh_helper.threading",
-                fake_threading,
-            ),
         ):
             FertilizerRefreshHelper.start(helper)
 
-        self.assertEqual(events, ["focus", "thread"])
+        self.assertEqual(events, ["focus"])
         focus.assert_called_once_with(center_cursor_when_switching=True)
-        self.assertIs(helper.worker_thread, worker)
-        worker.start.assert_called_once_with()
+        helper._start_worker.assert_called_once_with(helper._run_worker)
 
     @patch(
         "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",

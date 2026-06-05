@@ -1,5 +1,3 @@
-import ctypes
-
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QCursor, QPixmap
 from PySide6.QtWidgets import (
@@ -17,16 +15,17 @@ from PySide6.QtWidgets import (
 )
 
 from source.gacha_bot.deposit_config import default_dedi_item, default_vault_item
-from source.launcher.constants import APP_NAME, ASSETS
+from source.launcher.constants import ASSETS
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
     register_alt_n_hotkey,
     unregister_hotkey,
     view_route_entry,
 )
-from source.launcher.native_window import WM_HOTKEY, WindowsMSG
+from source.launcher.helper_window import BaseHelperWindow
 from source.launcher.vault_items_store import add_vault_item, load_vault_items
 from source.launcher.widgets import AnimatedButton, CyberSwitch, WrappedStatusLabel
+
 
 class NoWheelComboBox(QComboBox):
     def wheelEvent(self, event):
@@ -215,39 +214,31 @@ class DepositHelperGuide(QDialog):
         return super().eventFilter(watched, event)
 
 
-class DepositRouteHelper(QWidget):
+class DepositRouteHelper(BaseHelperWindow):
     def __init__(self, owner, route_kind, route_index):
-        super().__init__(None)
-        self.owner = owner
-        self.route_kind = route_kind
-        self.route_index = route_index
+        super().__init__(
+            owner,
+            self._title_for(owner, route_kind, route_index),
+            460,
+            640,
+            route_kind=route_kind,
+            route_index=route_index,
+            position="top_right",
+            hotkey_hint="ALT + N focuses this helper",
+            unavailable_hotkey_hint="ALT + N focus hotkey unavailable",
+            register_hotkey_func=register_alt_n_hotkey,
+            unregister_hotkey_func=unregister_hotkey,
+        )
         self.row_widgets = []
-        self.guide = None
-        self.drag_position = None
-        self.mouse_inside = False
         self.capture_in_progress = False
-        self.closing = False
         self.pending_focus_row = None
         self.pending_cursor_position = None
-        self.hotkey_id = (id(self) & 0x3FFF) + 1
-        self.hotkey_registered = False
         self.guide_timer = self._single_shot_timer(self.show_guide)
         self.row_focus_timer = self._single_shot_timer(self._apply_pending_focus_row)
         self.cursor_restore_timer = self._single_shot_timer(
             self._restore_pending_cursor
         )
-
-        self.setObjectName("DepositHelperWindow")
-        self.setStyleSheet(owner.styleSheet())
-        self.setWindowTitle(f"{APP_NAME} Route Helper")
-        self.setWindowFlags(
-            Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
-        )
-        self.setAttribute(Qt.WA_DeleteOnClose)
-        self.resize(460, 640)
-        self.setFixedWidth(460)
         self._build_ui()
-        self._position_top_right()
         self._register_hotkey()
         self.guide_timer.start(0)
 
@@ -258,39 +249,11 @@ class DepositRouteHelper(QWidget):
         return timer
 
     def _build_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        shell = QFrame()
-        shell.setObjectName("DepositHelperWindow")
-        root.addWidget(shell)
-
-        root = QVBoxLayout(shell)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
-
-        self.header_frame = QFrame()
-        self.header_frame.setObjectName("HelperHeader")
-        self.header_frame.installEventFilter(self)
-        header = QHBoxLayout(self.header_frame)
-        header.setContentsMargins(0, 0, 0, 0)
-        header.setSpacing(8)
-        self.header_title = QLabel(self._title())
-        self.header_title.setObjectName("HelperTitle")
+        self.header_title.setText(self._title())
         self.header_title.setWordWrap(True)
-        self.header_title.installEventFilter(self)
         guide = self._icon_button("?", "Open guide book")
         guide.clicked.connect(self.show_guide)
-        close = self._icon_button("X", "Close helper", "danger")
-        close.clicked.connect(self.close)
-        header.addWidget(self.header_title)
-        header.addStretch()
-        header.addWidget(guide)
-        header.addWidget(close)
-        root.addWidget(self.header_frame)
-
-        self.hotkey_label = QLabel("ALT + N focuses this helper")
-        self.hotkey_label.setObjectName("HelperHint")
-        root.addWidget(self.hotkey_label)
+        self.add_header_action(guide)
 
         self.scroll = QScrollArea()
         self.scroll.setObjectName("HelperScroll")
@@ -301,12 +264,22 @@ class DepositRouteHelper(QWidget):
         self.rows_layout.setContentsMargins(0, 0, 4, 0)
         self.rows_layout.setSpacing(8)
         self.scroll.setWidget(self.scroll_content)
-        root.addWidget(self.scroll, 1)
+        self.content_layout.addWidget(self.scroll, 1)
 
         self.status = WrappedStatusLabel("Ready.")
         self.status.setObjectName("HelperStatus")
-        root.addWidget(self.status)
+        self.content_layout.addWidget(self.status)
         self.refresh_rows()
+
+    @staticmethod
+    def _title_for(owner, route_kind, route_index):
+        prefix = "CRYSTAL" if route_kind == "crystal" else "GRINDABLE"
+        key = (
+            "depositCrystalData" if route_kind == "crystal" else "depositGrindableData"
+        )
+        route = owner.deposit_config[key][route_index]
+        teleport = route.get("teleport", "")
+        return f"{prefix} HELPER {route_index + 1}: {teleport or 'NO TELEPORT'}"
 
     def _title(self):
         prefix = "CRYSTAL" if self.route_kind == "crystal" else "GRINDABLE"
@@ -314,110 +287,12 @@ class DepositRouteHelper(QWidget):
         teleport = route.get("teleport", "")
         return f"{prefix} HELPER {self.route_index + 1}: {teleport or 'NO TELEPORT'}"
 
-    def _position_top_right(self):
-        screen = self.screen()
-        if screen is None and self.owner:
-            screen = self.owner.screen()
-        if screen is None:
-            return
-        rect = screen.availableGeometry()
-        self.move(rect.right() - self.width() - 18, rect.top() + 18)
-
-    def _register_hotkey(self):
-        if not hasattr(ctypes, "windll"):
-            self.hotkey_label.setText("ALT + N focus hotkey unavailable here")
-            return
-        hwnd = int(self.winId())
-        try:
-            self.hotkey_registered = register_alt_n_hotkey(hwnd, self.hotkey_id)
-        except Exception:
-            self.hotkey_registered = False
-        if not self.hotkey_registered:
-            self.hotkey_label.setText("ALT + N focus hotkey unavailable")
-
-    def nativeEvent(self, event_type, message):
-        if not self.hotkey_registered:
-            return super().nativeEvent(event_type, message)
-        msg = WindowsMSG.from_address(int(message))
-        if msg.message == WM_HOTKEY and msg.wParam == self.hotkey_id:
-            self.raise_()
-            self.activateWindow()
-            return True, 0
-        return super().nativeEvent(event_type, message)
-
-    def changeEvent(self, event):
-        super().changeEvent(event)
-        if event.type() == QEvent.ActivationChange:
-            self.sync_window_opacity()
-
-    def sync_window_opacity(self):
-        guide_active = self.guide is not None and self.guide.isActiveWindow()
-        guide_hovered = self.guide is not None and self.guide.mouse_inside
-        owner_active = self.owner is not None and self.owner.isActiveWindow()
-        keep_visible = (
-            self.mouse_inside
-            or guide_hovered
-            or self.isActiveWindow()
-            or guide_active
-            or owner_active
-        )
-        opacity = float(self.owner.settings.get("helper_inactive_opacity", 0.3))
-        self.setWindowOpacity(1.0 if keep_visible else max(0.1, min(1.0, opacity)))
-
-    def enterEvent(self, event):
-        self.mouse_inside = True
-        self.sync_window_opacity()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.mouse_inside = False
-        self.sync_window_opacity()
-        super().leaveEvent(event)
-
-    def eventFilter(self, watched, event):
-        if watched not in (
-            getattr(self, "header_frame", None),
-            getattr(self, "header_title", None),
-        ):
-            return super().eventFilter(watched, event)
-        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-            self.drag_position = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            )
-            event.accept()
-            return True
-        if (
-            event.type() == QEvent.MouseMove
-            and self.drag_position is not None
-            and event.buttons() & Qt.LeftButton
-        ):
-            self.move(event.globalPosition().toPoint() - self.drag_position)
-            event.accept()
-            return True
-        if event.type() == QEvent.MouseButtonRelease:
-            self.drag_position = None
-            event.accept()
-            return True
-        return super().eventFilter(watched, event)
-
-    def closeEvent(self, event):
-        self.closing = True
+    def _before_close(self):
         self.guide_timer.stop()
         self.row_focus_timer.stop()
         self.cursor_restore_timer.stop()
         self.pending_focus_row = None
         self.pending_cursor_position = None
-        if self.hotkey_registered and hasattr(ctypes, "windll"):
-            try:
-                unregister_hotkey(int(self.winId()), self.hotkey_id)
-            except Exception:
-                pass
-        self.hotkey_registered = False
-        if self.guide is not None:
-            self.guide.close()
-        if self.owner is not None and hasattr(self.owner, "forget_deposit_helper"):
-            self.owner.forget_deposit_helper(self)
-        super().closeEvent(event)
 
     def show_guide(self):
         if self.closing:
@@ -599,12 +474,6 @@ class DepositRouteHelper(QWidget):
             self._set_capture_in_progress(False)
             self.refocus_helper(cursor_position)
 
-    def _require_ark_window(self, action):
-        if self.owner.require_ark_window(action, dialog_parent=self):
-            return True
-        self.status.setText(f"Cannot continue: {self.owner.last_ark_window_error}")
-        return False
-
     def _set_capture_in_progress(self, active, message="Capturing yaw/pitch..."):
         self.capture_in_progress = active
         if active:
@@ -616,16 +485,6 @@ class DepositRouteHelper(QWidget):
                 continue
             widget.setEnabled(not active)
         QApplication.processEvents()
-
-    def refocus_helper(self, cursor_position=None):
-        if self.closing:
-            return
-        self.show()
-        self.raise_()
-        self.activateWindow()
-        if cursor_position is not None:
-            self.pending_cursor_position = cursor_position
-            self.cursor_restore_timer.start(0)
 
     def _restore_pending_cursor(self):
         cursor_position = self.pending_cursor_position
@@ -691,11 +550,7 @@ class DepositRouteHelper(QWidget):
             self.refresh_rows()
 
     def _icon_button(self, text, tooltip, type="secondary"):
-        button = AnimatedButton(text, type)
-        button.setObjectName("HelperIconButton")
-        button.setToolTip(tooltip)
-        # button.setFixedSize(38, 30)
-        return button
+        return self._helper_button(text, tooltip, type)
 
 
 class CollapsibleHelperRow(QFrame):

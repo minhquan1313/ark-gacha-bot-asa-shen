@@ -3,7 +3,7 @@ import time
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from source.launcher.constants import APP_TITLE, COLORS
+from source.launcher.constants import APP_TITLE, COLORS, HELPER_HEIGHT, HELPER_WIDTH
 from source.launcher.widgets import AnimatedButton
 
 RUNNER_OVERLAY_UPCOMING_LIMIT = 5
@@ -48,8 +48,10 @@ class RunnerOverlay(QWidget):
         self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setWindowOpacity(1.0)
-        self.setFixedWidth(360)
+        self.setFixedWidth(200)
+        self.setMinimumHeight(HELPER_HEIGHT)
         self._build_ui()
+        self._resize_to_content_height()
         self._position_set()
 
     def _build_ui(self):
@@ -139,7 +141,23 @@ class RunnerOverlay(QWidget):
                 label.show()
             else:
                 label.hide()
+        self._resize_to_content_height()
         self._position_set()
+
+    def _resize_to_content_height(self):
+        layout = self.layout()
+        if layout is not None:
+            layout.invalidate()
+            layout.activate()
+        height = self.sizeHint().height()
+        if layout is not None and layout.hasHeightForWidth():
+            layout_height = layout.heightForWidth(self.width())
+            if layout_height >= 0:
+                height = max(height, layout_height)
+        self.resize(self.width(), max(HELPER_HEIGHT, height))
+        self.adjustSize()
+        if self.height() < HELPER_HEIGHT:
+            self.resize(self.width(), HELPER_HEIGHT)
 
     def stop_program(self):
         if self.owner is not None:

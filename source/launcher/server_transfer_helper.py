@@ -1,7 +1,4 @@
-import ctypes
-import threading
-
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -18,8 +15,7 @@ from source.launcher.deposit_helper_capture import (
     register_alt_n_hotkey,
     unregister_hotkey,
 )
-from source.launcher.deposit_route_helper import WM_HOTKEY
-from source.launcher.native_window import WindowsMSG
+from source.launcher.helper_window import WorkerHelperWindow
 from source.launcher.transfer_helper_config import (
     bed_name,
     load_transfer_runtime_config,
@@ -37,77 +33,39 @@ from source.launcher.widgets import (
 )
 
 
-class ServerTransferHelper(QWidget):
+class ServerTransferHelper(WorkerHelperWindow):
     status_changed = Signal(str)
     worker_finished = Signal(str)
 
     def __init__(self, owner):
-        super().__init__(None)
-        self.owner = owner
-        self.route_kind = "server_transfer"
-        self.route_index = None
-        self.drag_position = None
-        self.mouse_inside = False
-        self.closing = False
-        self.worker_thread = None
-        self.stop_event = threading.Event()
-        self.hotkey_id = (id(self) & 0x3FFF) + 1
-        self.hotkey_registered = False
         self.setting_fields = {}
         self.dedi_rows = []
         self.config = load_transfer_runtime_config(create_missing=True)
 
-        self.setObjectName("DepositHelperWindow")
-        self.setStyleSheet(owner.styleSheet())
-        self.setWindowTitle("SERVER TRANSFER HELPER")
-        self.setWindowFlags(
-            Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+        super().__init__(
+            owner,
+            "SERVER TRANSFER HELPER",
+            560,
+            700,
+            route_kind="server_transfer",
+            route_index=None,
+            hotkey_hint="ALT + N toggles START / STOP",
+            unavailable_hotkey_hint="ALT + N toggle hotkey unavailable",
+            register_hotkey_func=register_alt_n_hotkey,
+            unregister_hotkey_func=unregister_hotkey,
         )
-        self.setAttribute(Qt.WA_DeleteOnClose)
-        self.resize(560, 700)
         self._build_ui()
-        self._position_middle_right()
         self._register_hotkey()
         self.status_changed.connect(self._append_status)
         self.worker_finished.connect(self._on_worker_finished)
 
     def _build_ui(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
-        shell = QFrame()
-        shell.setObjectName("DepositHelperWindow")
-        root.addWidget(shell)
-
-        layout = QVBoxLayout(shell)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
-
-        self.header_frame = QFrame()
-        self.header_frame.setObjectName("HelperHeader")
-        self.header_frame.installEventFilter(self)
-        header = QHBoxLayout(self.header_frame)
-        header.setContentsMargins(0, 0, 0, 0)
-        self.header_title = QLabel("SERVER TRANSFER HELPER")
-        self.header_title.setObjectName("HelperTitle")
-        self.header_title.installEventFilter(self)
-        close = AnimatedButton("X", "danger")
-        close.setObjectName("HelperIconButton")
-        close.setToolTip("Close helper")
-        close.clicked.connect(self.close)
-        header.addWidget(self.header_title)
-        header.addStretch()
-        header.addWidget(close)
-        layout.addWidget(self.header_frame)
-
-        self.hotkey_label = QLabel("ALT + N toggles START / STOP")
-        self.hotkey_label.setObjectName("HelperHint")
-        layout.addWidget(self.hotkey_label)
-
         self.idle_widget = self._idle_widget()
         self.running_widget = self._running_widget()
         self.running_widget.setVisible(False)
-        layout.addWidget(self.idle_widget, 1)
-        layout.addWidget(self.running_widget, 1)
+        self.content_layout.addWidget(self.idle_widget, 1)
+        self.content_layout.addWidget(self.running_widget, 1)
+        self.register_minimal_running_widgets(self.idle_widget)
 
     def _idle_widget(self):
         wrapper = QWidget()
@@ -299,12 +257,6 @@ class ServerTransferHelper(QWidget):
         except Exception as exc:
             self.loop_hint.setText(f"Loop hint unavailable: {exc}")
 
-    def toggle(self):
-        if self.is_running():
-            self.stop()
-        else:
-            self.start()
-
     def start(self):
         if self.is_running() or self.closing:
             return
@@ -338,25 +290,17 @@ class ServerTransferHelper(QWidget):
             )
             return
 
-        self.stop_event = threading.Event()
         self.running_log.clear()
-        self._set_running_ui(True)
         self.status.setText("Starting server transfer helper...")
-        self.worker_thread = threading.Thread(
-            target=self._run_worker, args=(config,), daemon=True
-        )
-        self.worker_thread.start()
+        self._start_worker(self._run_worker, config)
 
     def stop(self):
         if not self.is_running():
             return
-        self.stop_event.set()
+        super().stop()
         self.running_stop_button.setEnabled(False)
         self.running_summary.setText("Stopping...")
         self.status.setText("Stopping...")
-
-    def is_running(self):
-        return self.worker_thread is not None and self.worker_thread.is_alive()
 
     def _run_worker(self, config):
         try:
@@ -376,17 +320,14 @@ class ServerTransferHelper(QWidget):
         self.running_log.append(message)
 
     def _on_worker_finished(self, message):
-        self.worker_thread = None
-        if self.closing:
-            self.close()
+        if self._finish_worker():
             return
-        self._set_running_ui(False)
         self.running_stop_button.setEnabled(True)
         self.status.setText(message)
 
     def _set_running_ui(self, running):
-        self.idle_widget.setVisible(not running)
-        self.running_widget.setVisible(running)
+        super()._set_running_ui(running)
+        self.running_widget.setVisible(False)
         self.start_stop_button.setText("STOP" if running else "START")
         self.start_stop_button.set_variant("danger" if running else "primary")
 
@@ -415,96 +356,3 @@ class ServerTransferHelper(QWidget):
         row.addWidget(label)
         row.addWidget(widget, 1)
         return row
-
-    def _position_middle_right(self):
-        screen = self.screen() or self.owner.screen()
-        if screen is None:
-            return
-        rect = screen.availableGeometry()
-        self.move(
-            rect.right() - self.width() - 18,
-            rect.top() + (rect.height() - self.height()) // 2,
-        )
-
-    def _register_hotkey(self):
-        if not hasattr(ctypes, "windll"):
-            self.hotkey_label.setText("ALT + N toggle hotkey unavailable here")
-            return
-        try:
-            self.hotkey_registered = register_alt_n_hotkey(
-                int(self.winId()), self.hotkey_id
-            )
-        except Exception:
-            self.hotkey_registered = False
-        if not self.hotkey_registered:
-            self.hotkey_label.setText("ALT + N toggle hotkey unavailable")
-
-    def nativeEvent(self, event_type, message):
-        if self.hotkey_registered:
-            msg = WindowsMSG.from_address(int(message))
-            if msg.message == WM_HOTKEY and msg.wParam == self.hotkey_id:
-                self.toggle()
-                return True, 0
-        return super().nativeEvent(event_type, message)
-
-    def changeEvent(self, event):
-        super().changeEvent(event)
-        if event.type() == QEvent.ActivationChange:
-            self.sync_window_opacity()
-
-    def eventFilter(self, watched, event):
-        if watched not in (
-            getattr(self, "header_frame", None),
-            getattr(self, "header_title", None),
-        ):
-            return super().eventFilter(watched, event)
-        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-            self.drag_position = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            )
-            return True
-        if (
-            event.type() == QEvent.MouseMove
-            and self.drag_position is not None
-            and event.buttons() & Qt.LeftButton
-        ):
-            self.move(event.globalPosition().toPoint() - self.drag_position)
-            return True
-        if event.type() == QEvent.MouseButtonRelease:
-            self.drag_position = None
-            return True
-        return super().eventFilter(watched, event)
-
-    def enterEvent(self, event):
-        self.mouse_inside = True
-        self.sync_window_opacity()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.mouse_inside = False
-        self.sync_window_opacity()
-        super().leaveEvent(event)
-
-    def sync_window_opacity(self):
-        owner_active = self.owner is not None and self.owner.isActiveWindow()
-        keep_visible = self.mouse_inside or self.isActiveWindow() or owner_active
-        opacity = float(self.owner.settings.get("helper_inactive_opacity", 0.3))
-        self.setWindowOpacity(1.0 if keep_visible else max(0.1, min(1.0, opacity)))
-
-    def closeEvent(self, event):
-        self.closing = True
-        self.stop_event.set()
-        thread = self.worker_thread
-        if thread is not None and thread.is_alive():
-            self.status.setText("Stopping...")
-            event.ignore()
-            return
-        if self.hotkey_registered and hasattr(ctypes, "windll"):
-            try:
-                unregister_hotkey(int(self.winId()), self.hotkey_id)
-            except Exception:
-                pass
-        self.hotkey_registered = False
-        if self.owner is not None and hasattr(self.owner, "forget_deposit_helper"):
-            self.owner.forget_deposit_helper(self)
-        super().closeEvent(event)
