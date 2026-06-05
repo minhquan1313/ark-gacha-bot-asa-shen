@@ -258,8 +258,8 @@ class AnimatedButton(QPushButton):
         selector = (
             f"QPushButton#{self.objectName()}" if self.objectName() else "QPushButton"
         )
-        min_height = "0px" if self.variant in ("chrome", "close") else "34px"
-        padding = "0px" if self.variant in ("chrome", "close") else "5px 16px"
+        min_height = "0px" if self.variant in ("chrome", "close") else "32px"
+        padding = "0px" if self.variant in ("chrome", "close") else "4px 16px"
         self.setStyleSheet(f"""
             {selector} {{
                 min-height: {min_height};
