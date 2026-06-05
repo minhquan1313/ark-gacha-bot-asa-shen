@@ -146,6 +146,18 @@ def _join_server_cancellable(server, stop_event):
             multiplayer_menu.get_pixel_loc("join_x"),
             multiplayer_menu.get_pixel_loc("join_y"),
         )
+        if _wait(stop_event, 1):
+            return
+        if (
+            not _stopped(stop_event)
+            and multiplayer_menu.is_open()
+            and not multiplayer_menu.mod_menu()
+        ):
+            logs.logger.debug("join stalled, backing out to retry")
+            windows.click(
+                multiplayer_menu.get_pixel_loc("back_x"),
+                multiplayer_menu.get_pixel_loc("back_y"),
+            )
 
 
 def _mod_menu_join_cancellable(stop_event):

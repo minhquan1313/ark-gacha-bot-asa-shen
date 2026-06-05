@@ -1,8 +1,11 @@
+import sys
 import threading
+import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from source.join_sim.source.auto_join import (
+    _join_server_cancellable,
     join_round_cancellable,
     normalize_server_number,
     run_auto_join_server,
@@ -209,6 +212,49 @@ class AutoJoinServerTests(unittest.TestCase):
         self.assertEqual(
             actions,
             ["start", "join_game", "server:5147", "mod_menu", "failure"],
+        )
+
+    def test_cancellable_join_server_backs_out_when_join_stalls(self):
+        stop_event = threading.Event()
+        multiplayer_menu = types.ModuleType("multiplayer_menu")
+        multiplayer_menu.mod_menu = Mock(side_effect=[False, False])
+        multiplayer_menu.is_open = Mock(side_effect=[True, True, True])
+        multiplayer_menu.join_button = Mock(return_value=True)
+        multiplayer_menu.get_pixel_loc = Mock(
+            side_effect=lambda key: {
+                "first_server_x": 10,
+                "first_server_y": 20,
+                "join_x": 30,
+                "join_y": 40,
+                "back_x": 50,
+                "back_y": 60,
+            }[key]
+        )
+        windows = types.ModuleType("windows")
+        windows.click = Mock()
+        logger = types.ModuleType("logger")
+        logger.logger = Mock()
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "source.join_sim.source.menus.multiplayer_menu": multiplayer_menu,
+                    "source.join_sim.source.utility.windows": windows,
+                    "source.join_sim.source.logs.logger": logger,
+                },
+            ),
+            patch(
+                "source.join_sim.source.auto_join._search_bar_search_cancellable"
+            ) as search,
+            patch("source.join_sim.source.auto_join._wait", return_value=False),
+        ):
+            _join_server_cancellable("5147", stop_event)
+
+        search.assert_called_once_with("5147", stop_event)
+        self.assertEqual(
+            [call.args for call in windows.click.call_args_list],
+            [(10, 20), (30, 40), (50, 60)],
         )
 
     def test_triggers_crash_reopen_before_retrying(self):
