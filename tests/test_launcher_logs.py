@@ -126,7 +126,9 @@ class LauncherLogTests(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False) as temp_log:
             temp_log.write(b"previous log")
             temp_log_path = temp_log.name
-        self.addCleanup(lambda: os.path.exists(temp_log_path) and os.remove(temp_log_path))
+        self.addCleanup(
+            lambda: os.path.exists(temp_log_path) and os.remove(temp_log_path)
+        )
 
         with patch("source.launcher.gui.GACHA_LOG_FILE", temp_log_path):
             SettingsGUI.clear_logs(self.launcher)
@@ -184,11 +186,15 @@ class LauncherLogTests(unittest.TestCase):
         )
 
     def test_load_previous_logs_keeps_only_latest_configured_lines(self):
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as temp_log:
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", delete=False
+        ) as temp_log:
             for line_number in range(MAX_LAUNCHER_LOG_LINES + 1):
                 temp_log.write(f"12:00:00 - INFO - test - line {line_number}\n")
             temp_log_path = temp_log.name
-        self.addCleanup(lambda: os.path.exists(temp_log_path) and os.remove(temp_log_path))
+        self.addCleanup(
+            lambda: os.path.exists(temp_log_path) and os.remove(temp_log_path)
+        )
 
         with patch("source.launcher.gui.GACHA_LOG_FILE", temp_log_path):
             SettingsGUI.load_previous_logs(self.launcher)
@@ -262,9 +268,7 @@ class LauncherDashboardTests(unittest.TestCase):
 
         SettingsGUI.toast(launcher, "Needs attention", "warning")
 
-        launcher.dialog.assert_called_once_with(
-            APP_NAME, "Needs attention", "warning"
-        )
+        launcher.dialog.assert_called_once_with(APP_NAME, "Needs attention", "warning")
 
     def test_start_program_button_tooltip_mentions_hotkey(self):
         launcher = SimpleNamespace(
@@ -292,7 +296,9 @@ class LauncherDashboardTests(unittest.TestCase):
                         with patch("source.launcher.pages.QVBoxLayout"):
                             with patch("source.launcher.pages.CyberSwitch") as switch:
                                 with patch("source.launcher.pages.QLabel"):
-                                    grid.return_value.itemAtPosition.return_value.widget.return_value = Mock()
+                                    grid.return_value.itemAtPosition.return_value.widget.return_value = (
+                                        Mock()
+                                    )
                                     switch.return_value.toggled.connect = Mock()
                                     with patch("source.launcher.pages.QTimer"):
                                         SettingsGUI._dashboard_page(launcher)
@@ -309,7 +315,7 @@ class LauncherStartProgramTests(unittest.TestCase):
             program_stopping=False,
             process=None,
             require_ark_window=Mock(return_value=ark_window_ok),
-            close_deposit_helpers=Mock(),
+            close_external_helpers=Mock(),
             append_log=Mock(),
             _update_start_stop_button=Mock(),
             start_log_tail=Mock(),
@@ -344,7 +350,7 @@ class LauncherStartProgramTests(unittest.TestCase):
 
         cleanup_mock.assert_called_once_with()
         self.assertEqual(events, ["cleanup", "popen"])
-        launcher.close_deposit_helpers.assert_called_once_with()
+        launcher.close_external_helpers.assert_called_once_with()
         thread.start.assert_called_once_with()
         launcher._show_runner_overlay.assert_called_once_with()
 
@@ -432,7 +438,7 @@ class LauncherStartProgramTests(unittest.TestCase):
             shutdown_started=False,
             timer=Mock(),
             auto_start_timer=Mock(),
-            close_deposit_helpers=Mock(),
+            close_external_helpers=Mock(),
             output_reader_stop=stop_event,
             stop_log_tail=Mock(),
             process=process,

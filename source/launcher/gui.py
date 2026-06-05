@@ -108,7 +108,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.form_values = self.settings.copy()
         self.fields = {}
         self.nav_buttons = {}
-        self.deposit_helpers = []
+        self.external_helpers = []
         self.log_bridge = LogBridge()
         self.log_bridge.line.connect(self.append_log)
         self.log_tail_stop = threading.Event()
@@ -333,7 +333,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.auto_start_timer.stop()
         self._unregister_start_stop_hotkey()
         self._hide_runner_overlay()
-        self.close_deposit_helpers()
+        self.close_external_helpers()
         self.output_reader_stop.set()
         self.stop_log_tail()
 
@@ -716,7 +716,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             return
 
         try:
-            self.close_deposit_helpers()
+            self.close_external_helpers()
             cleanup_debug_screenshots_on_program_start()
             self.process = subprocess.Popen(
                 [sys.executable, "-u", "main_program.py"],
@@ -1139,9 +1139,11 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self._toast_dialogs = []
         self._toast_dialogs.append(dialog)
         dialog.finished.connect(
-            lambda _result, item=dialog: self._toast_dialogs.remove(item)
-            if item in self._toast_dialogs
-            else None
+            lambda _result, item=dialog: (
+                self._toast_dialogs.remove(item)
+                if item in self._toast_dialogs
+                else None
+            )
         )
         QTimer.singleShot(3000, dialog.accept)
         dialog.show()

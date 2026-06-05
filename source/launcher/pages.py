@@ -625,7 +625,9 @@ class LauncherPagesMixin:
         if len(group) < 2:
             add = self._button("ADD GACHA", "secondary")
             add.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            add.setEnabled(missing_gacha_side([entry for _, entry in group]) is not None)
+            add.setEnabled(
+                missing_gacha_side([entry for _, entry in group]) is not None
+            )
             add.clicked.connect(
                 lambda checked=False, value=teleporter: self.add_gacha_to_group(value)
             )
@@ -899,7 +901,7 @@ class LauncherPagesMixin:
             self.deposit_helper = existing
             return
 
-        self.close_deposit_helpers()
+        self.close_external_helpers()
         helper = DepositRouteHelper(self, route_kind, route_index)
         self.register_deposit_helper(helper)
         helper.show()
@@ -918,7 +920,7 @@ class LauncherPagesMixin:
             self.deposit_helper = helper
             return
 
-        self.close_deposit_helpers()
+        self.close_external_helpers()
         helper = PositionRenderHelper(self)
         helper.route_kind = "position_render"
         helper.route_index = None
@@ -939,7 +941,7 @@ class LauncherPagesMixin:
             self.deposit_helper = helper
             return
 
-        self.close_deposit_helpers()
+        self.close_external_helpers()
         helper = FertilizerRefreshHelper(self)
         self.register_deposit_helper(helper)
         helper.show()
@@ -958,7 +960,7 @@ class LauncherPagesMixin:
             self.deposit_helper = helper
             return
 
-        self.close_deposit_helpers()
+        self.close_external_helpers()
         helper = AutoJoinServerHelper(self)
         self.register_deposit_helper(helper)
         helper.show()
@@ -977,7 +979,7 @@ class LauncherPagesMixin:
         return True
 
     def find_deposit_helper(self, route_kind, route_index):
-        for helper in list(getattr(self, "deposit_helpers", [])):
+        for helper in list(getattr(self, "external_helpers", [])):
             try:
                 if (
                     helper.route_kind == route_kind
@@ -989,26 +991,26 @@ class LauncherPagesMixin:
         return None
 
     def register_deposit_helper(self, helper):
-        if not hasattr(self, "deposit_helpers"):
-            self.deposit_helpers = []
-        if helper not in self.deposit_helpers:
-            self.deposit_helpers.append(helper)
+        if not hasattr(self, "external_helpers"):
+            self.external_helpers = []
+        if helper not in self.external_helpers:
+            self.external_helpers.append(helper)
         helper.destroyed.connect(
             lambda _=None, tracked=helper: self.forget_deposit_helper(tracked)
         )
 
     def forget_deposit_helper(self, helper):
-        helpers = getattr(self, "deposit_helpers", [])
+        helpers = getattr(self, "external_helpers", [])
         if helper in helpers:
             helpers.remove(helper)
 
-    def close_deposit_helpers(self):
-        for helper in list(getattr(self, "deposit_helpers", [])):
+    def close_external_helpers(self):
+        for helper in list(getattr(self, "external_helpers", [])):
             try:
                 helper.close()
             except RuntimeError:
                 pass
-        self.deposit_helpers.clear()
+        self.external_helpers.clear()
 
     def refresh_json_configs(self):
         try:
@@ -1021,7 +1023,7 @@ class LauncherPagesMixin:
             self.dialog("Refresh Configs", str(exc), "error")
             return
 
-        self.close_deposit_helpers()
+        self.close_external_helpers()
         self.settings = settings
         self.form_values = settings.copy()
         self.deposit_config = deposit_config
