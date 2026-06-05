@@ -99,6 +99,7 @@ ASSETS = {
     "dashboard": "assets/app/image/dashboard.png",
     "welcome": "assets/app/image/welcome.png",
     "icon.trash_junk": "assets/app/icons/trash_junk.png",
+    "icon.restore_settings": "assets/app/icons/restore_settings.png",
 }
 
 DEFAULT_SETTINGS = {

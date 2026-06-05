@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QSize
 from PySide6.QtWidgets import QLineEdit, QPushButton, QWidget
 from PySide6.QtWidgets import QApplication
 
@@ -218,6 +219,7 @@ class LauncherDashboardTests(unittest.TestCase):
             add_gacha_to_group=Mock(),
         )
         launcher._button = lambda text, _variant: QPushButton(text)
+        launcher._icon_button = MethodType(SettingsGUI._icon_button, launcher)
         launcher._deposit_line_edit = lambda value: QLineEdit(str(value))
         launcher.update_gacha_group_teleporter = Mock()
         launcher._gacha_row_card = lambda _index, _entry: QWidget()
@@ -271,15 +273,20 @@ class LauncherDashboardTests(unittest.TestCase):
         launcher.dialog.assert_called_once_with(APP_NAME, "Needs attention", "warning")
 
     def test_start_program_button_tooltip_mentions_hotkey(self):
+        buttons = [Mock(), Mock(), Mock(), Mock()]
+        restore_button = Mock()
         launcher = SimpleNamespace(
             _page=Mock(return_value=(Mock(), Mock())),
             _stat_card=Mock(return_value=Mock()),
             _panel=Mock(return_value=(Mock(), Mock())),
-            _button=Mock(return_value=Mock()),
+            _button=Mock(side_effect=buttons),
+            _icon_button=Mock(return_value=restore_button),
             toggle_program=Mock(),
             toggle_auto_start_program=Mock(),
             _update_auto_start_switch=Mock(),
             _update_start_stop_button=Mock(),
+            _update_start_game_button_visibility=Mock(),
+            _update_game_restore_button_visibility=Mock(),
             _console_widget=Mock(return_value=Mock()),
             set_log_filter=Mock(),
             show_page=Mock(),
@@ -306,6 +313,136 @@ class LauncherDashboardTests(unittest.TestCase):
         launcher.start_stop_button.setToolTip.assert_called_once_with(
             "Hotkey: Shift + Alt + N"
         )
+        launcher.start_game_button.setToolTip.assert_called_once_with(
+            "Set display to 1920x1080 and start ARK through Steam."
+        )
+        launcher._icon_button.assert_called_once_with(
+            "icon.restore_settings",
+            "Restore the original display mode and ARK config. "
+            "Right-click to clear saved restore data.",
+            "secondary",
+        )
+        self.assertIs(launcher.restore_game_settings_button, restore_button)
+        launcher._update_start_game_button_visibility.assert_called_once_with()
+
+    def test_icon_button_sets_icon_and_width_without_fixed_size(self):
+        button = Mock()
+        launcher = SimpleNamespace(_button=Mock(return_value=button))
+        icon = Mock()
+
+        with patch("source.launcher.pages.QIcon", return_value=icon) as qicon:
+            result = SettingsGUI._icon_button(
+                launcher, "icon.trash_junk", "Remove item", "danger"
+            )
+
+        self.assertIs(result, button)
+        launcher._button.assert_called_once_with("", "danger")
+        button.setObjectName.assert_called_once_with("HelperIconButton")
+        qicon.assert_called_once()
+        button.setIcon.assert_called_once_with(icon)
+        button.setIconSize.assert_called_once_with(QSize(18, 18))
+        button.setFixedWidth.assert_called_once_with(38)
+        button.setFixedSize.assert_not_called()
+        button.setToolTip.assert_called_once_with("Remove item")
+
+    @patch("source.launcher.gui.QTimer.singleShot")
+    @patch(
+        "source.launcher.gui.ark_game_setup.prepare_and_launch_game",
+        return_value="GameUserSettings.ini",
+    )
+    def test_start_game_disables_button_and_schedules_unlock(
+        self, _prepare_game, single_shot
+    ):
+        launcher = SimpleNamespace(
+            start_game_button=Mock(),
+            _unlock_start_game_button=Mock(),
+            append_log=Mock(),
+            _update_game_restore_button_visibility=Mock(),
+        )
+
+        SettingsGUI.start_game(launcher)
+
+        launcher.start_game_button.setEnabled.assert_called_once_with(False)
+        single_shot.assert_called_once_with(20000, launcher._unlock_start_game_button)
+        launcher._update_game_restore_button_visibility.assert_called_once_with()
+
+    def test_unlock_start_game_button_enables_and_refreshes_visibility(self):
+        launcher = SimpleNamespace(
+            start_game_button=Mock(),
+            _update_start_game_button_visibility=Mock(),
+        )
+
+        SettingsGUI._unlock_start_game_button(launcher)
+
+        launcher.start_game_button.setEnabled.assert_called_once_with(True)
+        launcher._update_start_game_button_visibility.assert_called_once_with()
+
+    @patch("source.launcher.gui.find_window_size", return_value=None)
+    def test_start_game_button_visible_when_ark_window_is_missing(self, _find_window):
+        launcher = SimpleNamespace(start_game_button=Mock())
+
+        SettingsGUI._update_start_game_button_visibility(launcher)
+
+        launcher.start_game_button.setVisible.assert_called_once_with(True)
+
+    @patch("source.launcher.gui.find_window_size", return_value=(1920, 1080))
+    def test_start_game_button_hidden_when_ark_is_supported_size(
+        self, _find_window
+    ):
+        launcher = SimpleNamespace(start_game_button=Mock())
+
+        SettingsGUI._update_start_game_button_visibility(launcher)
+
+        launcher.start_game_button.setVisible.assert_called_once_with(False)
+
+    @patch("source.launcher.gui.find_window_size", return_value=(2560, 1440))
+    def test_start_game_button_visible_when_ark_size_is_unsupported(
+        self, _find_window
+    ):
+        launcher = SimpleNamespace(start_game_button=Mock())
+
+        SettingsGUI._update_start_game_button_visibility(launcher)
+
+        launcher.start_game_button.setVisible.assert_called_once_with(True)
+
+    def test_tick_updates_start_game_button_visibility_on_dashboard(self):
+        memory = SimpleNamespace(used=4 * 1024**3, total=8 * 1024**3)
+        fake_psutil = SimpleNamespace(
+            virtual_memory=Mock(return_value=memory),
+            cpu_percent=Mock(return_value=12),
+        )
+        launcher = SimpleNamespace(
+            shutdown_started=False,
+            _poll_program_stop=Mock(),
+            _sync_runner_overlay=Mock(),
+            current_filter="ALL",
+            _render_logs=Mock(),
+            server_value=Mock(),
+            _update_start_stop_button=Mock(),
+            _update_start_game_button_visibility=Mock(),
+            form_values={},
+            settings={"server_number": "0"},
+            fields={},
+            active_value=Mock(),
+            waiting_value=Mock(),
+            queue_snapshot={"running": [], "active": [], "waiting": []},
+            start_time=None,
+            process=None,
+            uptime_value=Mock(),
+            memory_value=Mock(),
+            memory_meter=Mock(),
+            cpu_value=Mock(),
+            cpu_meter=Mock(),
+            runner_value=Mock(),
+            activity_value=Mock(),
+            clock_value=Mock(),
+            last_activity="--:--:--",
+        )
+
+        with patch("source.launcher.gui.psutil", fake_psutil):
+            SettingsGUI._tick(launcher)
+
+        launcher._update_start_game_button_visibility.assert_called_once_with()
 
 
 class LauncherStartProgramTests(unittest.TestCase):

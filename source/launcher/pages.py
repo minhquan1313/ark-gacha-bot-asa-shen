@@ -70,6 +70,19 @@ from source.launcher.widgets import (
 
 
 class LauncherPagesMixin:
+    def _icon_button(
+        self, icon_key, tooltip="", variant="secondary", width=36, icon_size=32
+    ):
+        button = self._button("", variant)
+        button.setObjectName("HelperIconButton")
+        button.setIcon(QIcon(ASSETS[icon_key]))
+        button.setIconSize(QSize(icon_size, icon_size))
+        button.setMinimumWidth(width)
+        # button.setFixedWidth(width)
+        if tooltip:
+            button.setToolTip(tooltip)
+        return button
+
     def _welcome_page(self):
         page, layout = self._page("WelcomePage")
         row = QHBoxLayout()
@@ -144,6 +157,37 @@ class LauncherPagesMixin:
         self.start_stop_button.setToolTip("Hotkey: Shift + Alt + N")
         self.start_stop_button.clicked.connect(self.toggle_program)
         action_layout.addWidget(self.start_stop_button)
+
+        start_game_row = QHBoxLayout()
+        start_game_row.setSpacing(8)
+        self.start_game_button = self._button("START GAME", "secondary")
+        self.start_game_button.setToolTip(
+            "Set display to 1920x1080 and start ARK through Steam."
+        )
+        self.start_game_button.clicked.connect(
+            getattr(self, "start_game", lambda: None)
+        )
+        start_game_row.addWidget(self.start_game_button, 1)
+        if hasattr(self, "_update_start_game_button_visibility"):
+            self._update_start_game_button_visibility()
+
+        self.restore_game_settings_button = self._icon_button(
+            "icon.restore_settings",
+            "Restore the original display mode and ARK config. "
+            "Right-click to clear saved restore data.",
+            "danger",
+        )
+        self.restore_game_settings_button.clicked.connect(
+            getattr(self, "restore_game_settings", lambda: None)
+        )
+        self.restore_game_settings_button.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.restore_game_settings_button.customContextMenuRequested.connect(
+            lambda _pos: getattr(self, "clear_game_restore_settings", lambda: None)()
+        )
+        start_game_row.addWidget(self.restore_game_settings_button)
+        action_layout.addLayout(start_game_row)
+        if hasattr(self, "_update_game_restore_button_visibility"):
+            self._update_game_restore_button_visibility()
 
         auto_start_box = QFrame()
         auto_start_box.setObjectName("InlineSwitchBox")
@@ -579,11 +623,7 @@ class LauncherPagesMixin:
         auto.clicked.connect(
             lambda checked=False, value=teleporter: self.auto_fill_gacha_group(value)
         )
-        remove = self._button("", "danger")
-        remove.setObjectName("HelperIconButton")
-        remove.setToolTip("Remove gacha group")
-        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
-        remove.setIconSize(QSize(18, 18))
+        remove = self._icon_button("icon.trash_junk", "Remove gacha group", "danger")
         remove.clicked.connect(
             lambda checked=False, value=teleporter: self.remove_gacha_group(value)
         )
@@ -654,11 +694,9 @@ class LauncherPagesMixin:
             layout, "name", entry.get("name", ""), entry_index, "gacha"
         )
         self._add_gacha_side_field(layout, entry.get("side", ""), entry_index)
-        remove = self._button("", "danger")
-        remove.setObjectName("HelperIconButton")
-        remove.setToolTip("Remove gacha from group")
-        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
-        remove.setIconSize(QSize(18, 18))
+        remove = self._icon_button(
+            "icon.trash_junk", "Remove gacha from group", "danger"
+        )
         remove.clicked.connect(
             lambda checked=False, index=entry_index: self.remove_gacha(index)
         )
@@ -719,11 +757,7 @@ class LauncherPagesMixin:
                 value
             )
         )
-        remove = self._button("", "danger")
-        remove.setObjectName("HelperIconButton")
-        remove.setToolTip("Remove pego entry")
-        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
-        remove.setIconSize(QSize(18, 18))
+        remove = self._icon_button("icon.trash_junk", "Remove pego entry", "danger")
         remove.clicked.connect(
             lambda checked=False, index=entry_index: self.remove_pego(index)
         )
@@ -860,11 +894,7 @@ class LauncherPagesMixin:
         )
         # helper.setFixedSize(38, 30)
         helper.clicked.connect(helper_handler)
-        remove = self._button("", "danger")
-        remove.setObjectName("HelperIconButton")
-        remove.setToolTip("Remove route")
-        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
-        remove.setIconSize(QSize(18, 18))
+        remove = self._icon_button("icon.trash_junk", "Remove route", "danger")
         remove.clicked.connect(remove_handler)
         header.addWidget(toggle)
         header.addWidget(label)
@@ -1066,11 +1096,7 @@ class LauncherPagesMixin:
         row.setSpacing(8)
         self._add_yaw_pitch_fields(row, item)
         row.addWidget(self._crouch_switch(item))
-        remove = self._button("", "danger")
-        remove.setObjectName("HelperIconButton")
-        remove.setToolTip("Remove dedi entry")
-        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
-        remove.setIconSize(QSize(18, 18))
+        remove = self._icon_button("icon.trash_junk", "Remove dedi entry", "danger")
         remove.clicked.connect(remove_handler)
         row.addWidget(remove)
         return row
@@ -1082,11 +1108,7 @@ class LauncherPagesMixin:
         top.setSpacing(8)
         self._add_yaw_pitch_fields(top, vault)
         top.addWidget(self._crouch_switch(vault))
-        remove = self._button("", "danger")
-        remove.setObjectName("HelperIconButton")
-        remove.setToolTip("Remove vault entry")
-        remove.setIcon(QIcon(ASSETS["icon.trash_junk"]))
-        remove.setIconSize(QSize(18, 18))
+        remove = self._icon_button("icon.trash_junk", "Remove vault entry", "danger")
         remove.clicked.connect(remove_handler)
         top.addWidget(remove)
         row.addLayout(top)

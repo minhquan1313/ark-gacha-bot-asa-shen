@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from source.launcher import ark_game_setup
 from source.launcher.constants import (
     APP_NAME,
     APP_TITLE,
@@ -40,6 +41,7 @@ from source.launcher.constants import (
     GAME_WINDOW_TITLE,
     MAX_LAUNCHER_LOG_LINES,
     PHONE_MINIMUM_SIZE,
+    SUPPORTED_GAME_RESOLUTIONS,
     WINDOW_RESIZE_BORDER_PX,
 )
 from source.launcher.deposit_helper_capture import (
@@ -68,6 +70,7 @@ from source.launcher.settings_store import load_settings, save_settings
 from source.launcher.styles import launcher_style_sheet
 from source.launcher.system import (
     calculate_cpu_percent,
+    find_window_size,
     get_cpu_times,
     get_memory_usage_gb,
     validate_ark_window,
@@ -80,8 +83,11 @@ from source.launcher.widgets import (
 )
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
 
+START_GAME_DISABLE_DELAY = 30000
+
 
 class SettingsGUI(LauncherPagesMixin, QMainWindow):
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{APP_NAME} Launcher")
@@ -454,6 +460,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         if name in self.nav_buttons:
             self.nav_buttons[name].setChecked(True)
         if name == "dashboard":
+            self._update_game_restore_button_visibility()
             self._render_logs()
             self._tick()
 
@@ -494,6 +501,84 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
     def is_program_running(self):
         return self.process is not None and self.process.poll() is None
+
+    def _update_game_restore_button_visibility(self):
+        button = getattr(self, "restore_game_settings_button", None)
+        if button is not None:
+            button.setVisible(ark_game_setup.restore_state_exists())
+
+    def _update_start_game_button_visibility(self):
+        button = getattr(self, "start_game_button", None)
+        if button is None:
+            return
+        game_size = find_window_size(GAME_WINDOW_TITLE)
+        button.setVisible(
+            game_size is None or game_size not in SUPPORTED_GAME_RESOLUTIONS
+        )
+
+    def _unlock_start_game_button(self):
+        button = getattr(self, "start_game_button", None)
+        if button is not None:
+            button.setEnabled(True)
+        self._update_start_game_button_visibility()
+
+    def _unlock_restore_game_button(self):
+        button = getattr(self, "restore_game_settings_button", None)
+        if button is not None:
+            button.setEnabled(True)
+        self._update_game_restore_button_visibility()
+
+    def start_game(self):
+        button = getattr(self, "start_game_button", None)
+        if button is not None:
+            button.setEnabled(False)
+            QTimer.singleShot(START_GAME_DISABLE_DELAY, self._unlock_start_game_button)
+
+        button = getattr(self, "restore_game_settings_button", None)
+        if button is not None:
+            button.setEnabled(False)
+            QTimer.singleShot(
+                START_GAME_DISABLE_DELAY, self._unlock_restore_game_button
+            )
+
+        try:
+            self.append_log("[INFO] Preparing ARK for 1920x1080 launch...\n")
+            settings_path = ark_game_setup.prepare_and_launch_game()
+            self.append_log(
+                f"[SUCCESS] ARK launch requested through Steam. Config: {settings_path}\n"
+            )
+        except Exception as exc:
+            self.append_log(f"[ERROR] Start game failed: {exc}\n")
+            self.dialog("Start Game Failed", str(exc), "error")
+        finally:
+            self._update_game_restore_button_visibility()
+
+    def restore_game_settings(self):
+        if not ark_game_setup.restore_state_exists():
+            self._update_game_restore_button_visibility()
+            return
+
+        try:
+            self.append_log("[INFO] Restoring ARK display and config settings...\n")
+            settings_path = ark_game_setup.restore_game_settings()
+            self.append_log(
+                f"[SUCCESS] Restored ARK display and config: {settings_path}\n"
+            )
+        except Exception as exc:
+            self.append_log(f"[ERROR] Restore game settings failed: {exc}\n")
+            self.dialog("Restore Game Settings Failed", str(exc), "error")
+        finally:
+            self._update_game_restore_button_visibility()
+
+    def clear_game_restore_settings(self):
+        try:
+            ark_game_setup.clear_restore_state()
+            self.append_log("[INFO] Cleared saved ARK restore settings.\n")
+        except Exception as exc:
+            self.append_log(f"[ERROR] Clear game restore settings failed: {exc}\n")
+            self.dialog("Clear Restore Settings Failed", str(exc), "error")
+        finally:
+            self._update_game_restore_button_visibility()
 
     def _register_start_stop_hotkey(self):
         if not hasattr(ctypes, "windll"):
@@ -1170,6 +1255,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self._render_logs()
         if hasattr(self, "server_value"):
             self._update_start_stop_button()
+            self._update_start_game_button_visibility()
             server_number = self.form_values.get(
                 "server_number", self.settings.get("server_number", "0")
             )
