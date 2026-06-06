@@ -1651,6 +1651,7 @@ class LauncherPagesMixin:
         return page
 
     def _tools_page(self):
+        # QTimer.singleShot(300, self.open_server_transfer_helper)
         page, layout = self._page("ToolsPage")
         layout.addWidget(self._page_title("TOOLS"))
         tools_grid = QGridLayout()

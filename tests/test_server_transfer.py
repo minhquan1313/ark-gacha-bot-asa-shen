@@ -1,9 +1,14 @@
 import threading
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock, call
+from unittest.mock import ANY, Mock, call, patch
 
-from source.gacha_bot.server_transfer import TransferConfigError, run_transfer_helper
+from source.gacha_bot.server_transfer import (
+    TransferConfigError,
+    ensure_ark_running,
+    run_transfer_helper,
+    switch_steam_account,
+)
 from source.launcher.transfer_helper_config import (
     default_transfer_ui_coords,
     normalize_transfer_dedis,
@@ -17,13 +22,15 @@ def ready_config(account_count=2, loop_count=1):
             "resource_server": "1111",
             "destination_server": "2222",
             "transmitter_teleport": "TX",
-            "account_count": account_count,
             "loop_count": loop_count,
-            "bed_prefix": "BedPlayer",
-            "bed_prefix_pad_start": 2,
         }
     )
     dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+    players = {
+        "players": [
+            {"bed_name": f"Bed{index}"} for index in range(1, account_count + 1)
+        ]
+    }
     coords = default_transfer_ui_coords()
     for key in ("menu", "change_account", "continue"):
         coords["steam"][key] = {"x": 1, "y": 1}
@@ -37,7 +44,12 @@ def ready_config(account_count=2, loop_count=1):
         coords["transfer"][key] = {"x": 1, "y": 1}
     coords["transfer"]["transmitter_title_template"] = "README.md"
     coords["transfer"]["not_ready_template"] = "README.md"
-    return {"settings": settings, "dedis": dedis, "ui_coords": coords}
+    return {
+        "settings": settings,
+        "dedis": dedis,
+        "ui_coords": coords,
+        "players": players,
+    }
 
 
 def deps():
@@ -86,7 +98,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
         dependencies.kill_ark.assert_called_once_with()
         dependencies.withdraw_resource.assert_called()
 
-    def test_flow_uses_padded_bed_names_and_transfer_servers(self):
+    def test_flow_uses_saved_player_bed_names_and_transfer_servers(self):
         dependencies = deps()
 
         self.assertTrue(
@@ -94,19 +106,85 @@ class ServerTransferRunnerTests(unittest.TestCase):
         )
 
         dependencies.fast_travel_to_bed.assert_has_calls(
-            [call("BedPlayer01"), call("BedPlayer02")]
+            [call("Bed1"), call("Bed2")]
         )
         dependencies.transfer_to_server.assert_has_calls(
             [call("2222"), call("1111"), call("2222"), call("1111")]
         )
         dependencies.spawn_bed.assert_has_calls(
             [
-                call("BedPlayer01"),
-                call("BedPlayer01"),
-                call("BedPlayer02"),
-                call("BedPlayer02"),
+                call("Bed1"),
+                call("Bed1"),
+                call("Bed2"),
+                call("Bed2"),
             ]
         )
+
+    def test_runtime_processes_only_first_four_configured_accounts(self):
+        dependencies = deps()
+        config = ready_config(account_count=12)
+        config["ui_coords"]["steam"]["account_slots"]["4"] = [
+            {"x": 1, "y": 1},
+            {"x": 2, "y": 1},
+            {"x": 3, "y": 1},
+            {"x": 4, "y": 1},
+        ]
+
+        self.assertTrue(
+            run_transfer_helper(config, threading.Event(), dependencies=dependencies)
+        )
+
+        dependencies.switch_account.assert_has_calls(
+            [call(1, 1), call(2, 1), call(3, 2), call(4, 3)]
+        )
+        self.assertEqual(dependencies.switch_account.call_count, 8)
+        dependencies.fast_travel_to_bed.assert_has_calls(
+            [call("Bed1"), call("Bed2"), call("Bed3"), call("Bed4")]
+        )
+
+    def test_single_account_flow_does_not_switch_accounts(self):
+        dependencies = deps()
+
+        self.assertTrue(
+            run_transfer_helper(
+                ready_config(account_count=1),
+                threading.Event(),
+                dependencies=dependencies,
+            )
+        )
+
+        dependencies.switch_account.assert_not_called()
+        dependencies.kill_ark.assert_not_called()
+
+    def test_single_account_tribelog_failure_stops_without_killing_ark(self):
+        dependencies = deps()
+        dependencies.verify_tribelog.return_value = False
+
+        self.assertFalse(
+            run_transfer_helper(
+                ready_config(account_count=1),
+                threading.Event(),
+                dependencies=dependencies,
+            )
+        )
+
+        dependencies.kill_ark.assert_not_called()
+        dependencies.withdraw_resource.assert_not_called()
+
+    def test_single_account_join_failure_stops_without_killing_ark(self):
+        dependencies = deps()
+        dependencies.join_server.return_value = False
+
+        self.assertFalse(
+            run_transfer_helper(
+                ready_config(account_count=1),
+                threading.Event(),
+                dependencies=dependencies,
+            )
+        )
+
+        dependencies.kill_ark.assert_not_called()
+        dependencies.verify_tribelog.assert_not_called()
 
     def test_stop_event_exits_before_first_account(self):
         stop_event = threading.Event()
@@ -118,6 +196,44 @@ class ServerTransferRunnerTests(unittest.TestCase):
         )
 
         dependencies.switch_account.assert_not_called()
+
+    def test_switch_account_kills_waits_focuses_steam_then_clicks_slot(self):
+        pyautogui = SimpleNamespace(click=Mock())
+        coords = default_transfer_ui_coords()
+        for key in ("menu", "change_account", "continue"):
+            coords["steam"][key] = {"x": 10, "y": 20}
+
+        with (
+            patch.dict("sys.modules", {"pyautogui": pyautogui}),
+            patch("source.gacha_bot.server_transfer.kill_ark") as kill,
+            patch("source.gacha_bot.server_transfer.stop_wait", return_value=False) as wait,
+            patch("source.launcher.system.focus_window_if_needed") as focus,
+        ):
+            account = switch_steam_account(
+                2, 1, 2, coords, threading.Event(), Mock()
+            )
+
+        self.assertEqual(account, 2)
+        kill.assert_called_once_with()
+        self.assertEqual(wait.call_args_list[0], call(ANY, 5))
+        focus.assert_called_once_with("Steam", center_cursor_when_switching=True)
+        self.assertEqual(pyautogui.click.call_args_list[-1], call(386, 242))
+
+    def test_ensure_ark_running_launches_url_and_waits_for_valid_window(self):
+        with (
+            patch(
+                "source.gacha_bot.server_transfer._process_running",
+                side_effect=[False, True],
+            ),
+            patch(
+                "source.launcher.ark_game_setup.launch_ark_through_steam"
+            ) as launch,
+            patch("source.launcher.system.validate_ark_window") as validate,
+        ):
+            self.assertTrue(ensure_ark_running(threading.Event()))
+
+        launch.assert_called_once_with()
+        validate.assert_called_once_with()
 
 
 if __name__ == "__main__":

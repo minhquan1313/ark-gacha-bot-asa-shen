@@ -1,26 +1,35 @@
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from source.gacha_bot.server_transfer import TransferConfigError, run_transfer_helper
 from source.launcher.deposit_helper_capture import (
+    capture_ccc_yaw_pitch,
+    preload_capture_view_dependencies,
     register_alt_n_hotkey,
     unregister_hotkey,
+    view_route_entry,
 )
 from source.launcher.helper_window import WorkerHelperWindow
 from source.launcher.transfer_helper_config import (
-    bed_name,
+    MAX_TRANSFER_RUNTIME_ACCOUNTS,
     load_transfer_runtime_config,
     missing_runtime_inputs,
+    normalize_transfer_players,
+    player_account_count,
     save_transfer_dedis,
+    save_transfer_players,
     save_transfer_settings,
     save_transfer_ui_coords,
     suggested_loop_count,
@@ -32,6 +41,8 @@ from source.launcher.widgets import (
     WrappedStatusLabel,
 )
 
+DEFAULT_PANELS_EXPANDED = True
+
 
 class ServerTransferHelper(WorkerHelperWindow):
     status_changed = Signal(str)
@@ -40,13 +51,14 @@ class ServerTransferHelper(WorkerHelperWindow):
     def __init__(self, owner):
         self.setting_fields = {}
         self.dedi_rows = []
+        self.player_rows = []
         self.config = load_transfer_runtime_config(create_missing=True)
 
         super().__init__(
             owner,
             "SERVER TRANSFER HELPER",
-            560,
-            700,
+            360,
+            540,
             route_kind="server_transfer",
             route_index=None,
             hotkey_hint="ALT + N toggles START / STOP",
@@ -56,6 +68,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         )
         self._build_ui()
         self._register_hotkey()
+        self._preload_capture_view()
         self.status_changed.connect(self._append_status)
         self.worker_finished.connect(self._on_worker_finished)
 
@@ -77,6 +90,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         scroll.setObjectName("SettingsScroll")
         scroll.setWidgetResizable(True)
         content = QWidget()
+        content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(8)
@@ -91,9 +105,18 @@ class ServerTransferHelper(WorkerHelperWindow):
         self._add_setting_fields(grid)
         content_layout.addWidget(settings_card)
 
+        players_card, players_layout = self._panel("PLAYER SETTINGS")
+        self.players_layout = QVBoxLayout()
+        self.players_layout.setSpacing(6)
+        players_layout.addLayout(self.players_layout)
+        self._refresh_player_rows()
+        content_layout.addWidget(players_card)
+
         dedis_card, dedis_layout = self._panel("TRANSFER DEDIS")
         self.dedi_teleport = self._line_edit(self.config["dedis"].get("teleport", ""))
         self.dedi_teleport.editingFinished.connect(self._sync_loop_hint)
+        self.dedi_teleport.editingFinished.connect(self._persist_dedis)
+        self.dedi_teleport.returnPressed.connect(self._persist_dedis)
         dedis_layout.addLayout(self._labeled_row("TELEPORT", self.dedi_teleport))
         self.dedi_rows_layout = QVBoxLayout()
         self.dedi_rows_layout.setSpacing(6)
@@ -101,13 +124,11 @@ class ServerTransferHelper(WorkerHelperWindow):
         for item in self.config["dedis"].get("items", []):
             self._add_dedi_row(item)
         add_dedi = AnimatedButton("ADD DEDI", "secondary")
-        add_dedi.clicked.connect(lambda: self._add_dedi_row())
+        add_dedi.clicked.connect(lambda: self._add_dedi_row(persist=True))
         dedis_layout.addWidget(add_dedi)
         content_layout.addWidget(dedis_card)
+        content_layout.addStretch(1)
 
-        self.loop_hint = WrappedStatusLabel("")
-        self.loop_hint.setObjectName("HelperStatus")
-        layout.addWidget(self.loop_hint)
         self.start_stop_button = AnimatedButton("START", "primary")
         self.start_stop_button.clicked.connect(self.toggle)
         layout.addWidget(self.start_stop_button)
@@ -145,69 +166,119 @@ class ServerTransferHelper(WorkerHelperWindow):
             ("resource_server", "Resource server"),
             ("destination_server", "Destination server"),
             ("account_count", "Accounts"),
-            ("loop_count", "Loops"),
-            ("bed_prefix", "Bed prefix"),
-            ("bed_prefix_pad_start", "Bed pad width"),
-            ("structure_load_delay", "Structure delay"),
-            ("transfer_retry_delay", "Retry delay"),
+            ("structure_load_delay", "Delay on logged in"),
+            ("transfer_retry_delay", "Retry transfer delay"),
         ]
         for index, (key, label_text) in enumerate(rows):
-            row = index // 2
-            column = 0 if index % 2 == 0 else 2
-            label = QLabel(label_text.upper())
+            row = index
+            column = 0
+            label = QLabel(label_text)
             label.setObjectName("FormLabel")
-            field = self._line_edit(settings.get(key, ""))
+            value = (
+                player_account_count(self.config.get("players", {}))
+                if key == "account_count"
+                else settings.get(key, "")
+            )
+            field = self._line_edit(value)
+            if key in {"resource_station_yaw", "destination_station_yaw"}:
+                row_layout = QHBoxLayout()
+                row_layout.setSpacing(4)
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                capture = self._helper_button("C", f"Capture {label_text.lower()}")
+                capture.clicked.connect(
+                    lambda checked=False, target=field: self._capture_yaw(target)
+                )
+                row_layout.addWidget(field, 1)
+                row_layout.addWidget(capture)
+                value_widget = QWidget()
+                value_widget.setLayout(row_layout)
+            else:
+                value_widget = field
+            if key == "account_count":
+                field.editingFinished.connect(
+                    lambda: self._refresh_player_rows(persist=True)
+                )
+                field.returnPressed.connect(
+                    lambda: self._refresh_player_rows(persist=True)
+                )
+            else:
+                field.editingFinished.connect(self._persist_settings)
+                field.returnPressed.connect(self._persist_settings)
             field.editingFinished.connect(self._sync_loop_hint)
             self.setting_fields[key] = field
             grid.addWidget(label, row, column)
-            grid.addWidget(field, row, column + 1)
+            grid.addWidget(value_widget, row, column + 1)
+        loop_row = len(rows) + 1
+        loop_label = QLabel("LOOPS")
+        loop_label.setObjectName("FormLabel")
+        loop_field = self._line_edit(settings.get("loop_count", ""))
+        loop_field.editingFinished.connect(self._sync_loop_hint)
+        loop_field.editingFinished.connect(self._persist_settings)
+        loop_field.returnPressed.connect(self._persist_settings)
+        self.setting_fields["loop_count"] = loop_field
+        grid.addWidget(loop_label, loop_row, 0)
+        grid.addWidget(loop_field, loop_row, 1)
+        self.loop_hint = WrappedStatusLabel("")
+        self.loop_hint.setObjectName("HelperStatus")
+        grid.addWidget(self.loop_hint, loop_row + 1, 0, 1, 2)
         grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(3, 1)
 
-    def _add_dedi_row(self, item=None):
+    def _add_dedi_row(self, item=None, persist=False):
         item = item or {
-            "enabled": True,
             "location": {"yaw": 0.0, "pitch": 0.0},
             "crouched": False,
         }
         row = QFrame()
         row.setObjectName("HelperRow")
-        layout = QHBoxLayout(row)
+        layout = QVBoxLayout(row)
         layout.setContentsMargins(8, 6, 8, 6)
-        enabled = CyberSwitch()
-        enabled.setChecked(bool(item.get("enabled", True)))
+        layout.setSpacing(6)
+        info = QHBoxLayout()
+        info.setSpacing(8)
         yaw = self._line_edit(item.get("location", {}).get("yaw", 0.0))
         pitch = self._line_edit(item.get("location", {}).get("pitch", 0.0))
-        crouched = CyberSwitch()
+        crouched = CyberSwitch("C")
         crouched.setChecked(bool(item.get("crouched", False)))
+        capture = self._helper_button("C", "Capture yaw and pitch")
+        view = self._helper_button("V", "View saved yaw and pitch in Ark")
         remove = AnimatedButton("X", "danger")
         remove.setObjectName("HelperIconButton")
-        layout.addWidget(QLabel("ON"))
-        layout.addWidget(enabled)
-        layout.addWidget(QLabel("YAW"))
-        layout.addWidget(yaw, 1)
-        layout.addWidget(QLabel("PITCH"))
-        layout.addWidget(pitch, 1)
-        layout.addWidget(QLabel("C"))
-        layout.addWidget(crouched)
-        layout.addWidget(remove)
+        info.addWidget(QLabel("YAW"))
+        info.addWidget(yaw, 1)
+        info.addWidget(QLabel("PITCH"))
+        info.addWidget(pitch, 1)
+        info.addWidget(crouched)
+        actions = QHBoxLayout()
+        actions.setSpacing(6)
+        actions.addWidget(capture, 1)
+        actions.addWidget(view)
+        actions.addWidget(remove)
+        layout.addLayout(info)
+        layout.addLayout(actions)
         data = {
             "frame": row,
-            "enabled": enabled,
             "yaw": yaw,
             "pitch": pitch,
             "crouched": crouched,
         }
         self.dedi_rows.append(data)
         remove.clicked.connect(lambda: self._remove_dedi_row(data))
-        for widget in (enabled, yaw, pitch, crouched):
+        capture.clicked.connect(
+            lambda checked=False, target=data: self._capture_dedi(target)
+        )
+        view.clicked.connect(lambda checked=False, target=data: self._view_dedi(target))
+        for widget in (yaw, pitch, crouched):
             if hasattr(widget, "editingFinished"):
                 widget.editingFinished.connect(self._sync_loop_hint)
+                widget.editingFinished.connect(self._persist_dedis)
             if hasattr(widget, "toggled"):
                 widget.toggled.connect(lambda _checked=False: self._sync_loop_hint())
+                widget.toggled.connect(lambda _checked=False: self._persist_dedis())
         self.dedi_rows_layout.addWidget(row)
         if hasattr(self, "loop_hint"):
             self._sync_loop_hint()
+        if persist:
+            self._persist_dedis()
 
     def _remove_dedi_row(self, row_data):
         if len(self.dedi_rows) <= 1:
@@ -216,43 +287,29 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.dedi_rows.remove(row_data)
         row_data["frame"].deleteLater()
         self._sync_loop_hint()
+        self._persist_dedis()
 
     def _current_config(self):
-        settings = {key: field.text() for key, field in self.setting_fields.items()}
-        dedis = {
-            "teleport": self.dedi_teleport.text(),
-            "items": [
-                {
-                    "enabled": row["enabled"].isChecked(),
-                    "location": {
-                        "yaw": row["yaw"].text(),
-                        "pitch": row["pitch"].text(),
-                    },
-                    "crouched": row["crouched"].isChecked(),
-                }
-                for row in self.dedi_rows
-            ],
-        }
-        self.config["settings"] = save_transfer_settings(settings)
-        self.config["dedis"] = save_transfer_dedis(dedis)
+        self.config["settings"] = save_transfer_settings(self._settings_from_fields())
+        self.config["dedis"] = save_transfer_dedis(self._dedis_from_rows())
+        self.config["players"] = self._save_players_from_rows()
         self.config["ui_coords"] = save_transfer_ui_coords(self.config["ui_coords"])
         return self.config
 
     def _sync_loop_hint(self):
         try:
             account_count = int(self.setting_fields["account_count"].text())
-            active_count = sum(
-                1 for row in self.dedi_rows if row["enabled"].isChecked()
-            )
-            suggested = suggested_loop_count(active_count, account_count)
-            sample = bed_name(
-                self.setting_fields["bed_prefix"].text(),
-                1,
-                int(self.setting_fields["bed_prefix_pad_start"].text() or 0),
+            active_count = len(self.dedi_rows)
+            effective_accounts = min(account_count, MAX_TRANSFER_RUNTIME_ACCOUNTS)
+            suggested = suggested_loop_count(active_count, effective_accounts)
+            suffix = (
+                f" Only first {effective_accounts} account(s) run."
+                if account_count > effective_accounts
+                else ""
             )
             self.loop_hint.setText(
-                f"{active_count} dedi x {account_count} account = {suggested} suggested loop(s). "
-                f"Account 1 bed: {sample}"
+                f"{active_count} dedi x {effective_accounts} account = "
+                f"{suggested} suggested loop(s).{suffix}"
             )
         except Exception as exc:
             self.loop_hint.setText(f"Loop hint unavailable: {exc}")
@@ -278,7 +335,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             )
             return
         missing = missing_runtime_inputs(
-            config["settings"], config["dedis"], config["ui_coords"]
+            config["settings"], config["dedis"], config["ui_coords"], config["players"]
         )
         if missing:
             message = "Missing required transfer helper inputs:\n" + "\n".join(
@@ -331,16 +388,251 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.start_stop_button.setText("STOP" if running else "START")
         self.start_stop_button.set_variant("danger" if running else "primary")
 
+    def _preload_capture_view(self):
+        try:
+            preload_capture_view_dependencies()
+        except Exception as exc:
+            self.status.setText(f"Capture preload skipped: {exc}")
+
+    def _refresh_player_rows(self, persist=False):
+        if not hasattr(self, "players_layout"):
+            return
+        try:
+            account_count = self._account_count_from_field()
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return
+        if self.player_rows:
+            source_players = self._players_from_rows()
+        else:
+            source_players = self.config.get("players", {})
+        try:
+            self.config["players"] = normalize_transfer_players(
+                source_players, account_count
+            )
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return
+        while self.players_layout.count():
+            item = self.players_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.player_rows = []
+        for account in range(1, account_count + 1):
+            self._add_player_row(account)
+        if persist:
+            try:
+                self.config["players"] = save_transfer_players(
+                    self.config["players"],
+                    account_count=account_count,
+                )
+            except ValueError as exc:
+                self.status.setText(str(exc))
+                return
+            self.status.setText("Player settings saved.")
+        self._sync_loop_hint()
+
+    def _add_player_row(self, account):
+        row = QFrame()
+        row.setObjectName("HelperRow")
+        if account > MAX_TRANSFER_RUNTIME_ACCOUNTS:
+            row.setStyleSheet("QFrame#HelperRow { border-color: #ff4d6d; }")
+            row.setToolTip(
+                f"Account {account} is ignored. Runtime support is currently "
+                f"limited to {MAX_TRANSFER_RUNTIME_ACCOUNTS} accounts."
+            )
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(8, 6, 8, 6)
+
+        label = QLabel(f"PLAYER {account}")
+        label.setObjectName("FormLabel")
+        info_header = QHBoxLayout()
+        info_header.addWidget(label)
+
+        name = self._line_edit(
+            self.config["players"]["players"][account - 1]["bed_name"]
+        )
+        name.editingFinished.connect(self._save_players_from_rows)
+        copy = self._helper_button("C", "Copy Bed/teleport name")
+        copy.clicked.connect(
+            lambda checked=False, field=name: self._copy_name(field.text())
+        )
+        info = QHBoxLayout()
+        info.addWidget(QLabel("Bed/Teleport"))
+        info.addWidget(name, 1)
+        info.addWidget(copy)
+
+        layout.addLayout(info_header)
+        layout.addLayout(info)
+        self.players_layout.addWidget(row)
+        self.player_rows.append({"frame": row, "name": name})
+
+    def _account_count_from_field(self):
+        try:
+            account_count = int(self.setting_fields["account_count"].text())
+        except KeyError as exc:
+            raise ValueError("account_count field is missing.") from exc
+        except ValueError as exc:
+            raise ValueError("account_count must be an integer.") from exc
+        if account_count < 1:
+            raise ValueError("account_count must be at least 1.")
+        return account_count
+
+    def _players_from_rows(self):
+        if self.player_rows:
+            return {
+                "players": [
+                    {"bed_name": row["name"].text()} for row in self.player_rows
+                ]
+            }
+        return self.config.get("players", {})
+
+    def _save_players_from_rows(self):
+        try:
+            players = save_transfer_players(
+                self._players_from_rows(),
+                account_count=self._account_count_from_field(),
+            )
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return self.config.get("players", {})
+        self.config["players"] = players
+        self.status.setText("Player settings saved.")
+        return players
+
+    def _settings_from_fields(self):
+        return {
+            key: field.text()
+            for key, field in self.setting_fields.items()
+            if key != "account_count"
+        }
+
+    def _dedis_from_rows(self):
+        return {
+            "teleport": self.dedi_teleport.text(),
+            "items": [
+                {
+                    "location": {
+                        "yaw": row["yaw"].text(),
+                        "pitch": row["pitch"].text(),
+                    },
+                    "crouched": row["crouched"].isChecked(),
+                }
+                for row in self.dedi_rows
+            ],
+        }
+
+    def _persist_settings(self):
+        try:
+            self.config["settings"] = save_transfer_settings(
+                self._settings_from_fields()
+            )
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return False
+        self.status.setText("Transfer settings saved.")
+        return True
+
+    def _persist_dedis(self):
+        try:
+            self.config["dedis"] = save_transfer_dedis(self._dedis_from_rows())
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return False
+        self.status.setText("Transfer dedis saved.")
+        return True
+
+    def _copy_name(self, value):
+        QApplication.clipboard().setText(str(value))
+        self.status.setText("Bed/teleport name copied.")
+
+    def _capture_yaw(self, field):
+        if not self._require_ark_window("capture yaw"):
+            return
+        cursor_position = QCursor.pos()
+        try:
+            yaw, _pitch = capture_ccc_yaw_pitch()
+            field.setText(f"{yaw:.2f}")
+            self._persist_settings()
+            self.status.setText(f"Captured yaw {yaw:.2f}.")
+        except Exception as exc:
+            self.status.setText(f"Capture failed: {exc}")
+        finally:
+            self.refocus_helper(cursor_position)
+
+    def _capture_dedi(self, row):
+        if not self._require_ark_window("capture transfer dedi"):
+            return
+        cursor_position = QCursor.pos()
+        try:
+            yaw, pitch = capture_ccc_yaw_pitch()
+            row["yaw"].setText(f"{yaw:.2f}")
+            row["pitch"].setText(f"{pitch:.2f}")
+            self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
+            self._sync_loop_hint()
+            self._persist_dedis()
+        except Exception as exc:
+            self.status.setText(f"Capture failed: {exc}")
+        finally:
+            self.refocus_helper(cursor_position)
+
+    def _view_dedi(self, row):
+        if not self._require_ark_window("view transfer dedi"):
+            return
+        cursor_position = QCursor.pos()
+        try:
+            view_route_entry(
+                float(row["yaw"].text()),
+                float(row["pitch"].text()),
+                row["crouched"].isChecked(),
+            )
+            self.status.setText("View applied.")
+        except Exception as exc:
+            self.status.setText(f"View failed: {exc}")
+        finally:
+            self.refocus_helper(cursor_position)
+
     def _panel(self, title):
         panel = QFrame()
         panel.setObjectName("Panel")
+        panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(8)
+        header = QHBoxLayout()
+        expanded = DEFAULT_PANELS_EXPANDED
+        toggle = self._helper_button(
+            "v" if expanded else ">", f"Expand or collapse {title.lower()}"
+        )
         label = QLabel(title)
         label.setObjectName("PanelTitle")
-        layout.addWidget(label)
-        return panel, layout
+        header.addWidget(toggle)
+        header.addWidget(label)
+        header.addStretch()
+        layout.addLayout(header)
+        body = QWidget()
+        body.setObjectName("DepositRouteCardBody")
+        body.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(8)
+        body.setVisible(expanded)
+        toggle.clicked.connect(
+            lambda checked=False, target=body, button=toggle: self._toggle_panel(
+                target, button
+            )
+        )
+        layout.addWidget(body)
+        panel.body_widget = body
+        panel.toggle_button = toggle
+        return panel, body_layout
+
+    @staticmethod
+    def _toggle_panel(body, button):
+        visible = body.isHidden()
+        body.setVisible(visible)
+        button.setText("v" if visible else ">")
 
     @staticmethod
     def _line_edit(value):

@@ -62,6 +62,13 @@ def view_route_entry(yaw, pitch, crouched):
         player_state.human.crouch()
 
 
+def preload_capture_view_dependencies():
+    from source.ASA.player import console, player_state
+    from source.utility import utils
+
+    return console, player_state, utils
+
+
 def parse_ccc_yaw_pitch(data):
     values = data if isinstance(data, (list, tuple)) else str(data).strip().split()
     if len(values) < 5:

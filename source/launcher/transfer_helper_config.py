@@ -7,29 +7,27 @@ TRANSFER_HELPER_DIR = Path("json_files/transfer_helper")
 TRANSFER_SETTINGS_PATH = TRANSFER_HELPER_DIR / "settings.json"
 TRANSFER_DEDIS_PATH = TRANSFER_HELPER_DIR / "dedis.json"
 TRANSFER_UI_COORDS_PATH = TRANSFER_HELPER_DIR / "ui_coords.json"
+TRANSFER_PLAYERS_PATH = TRANSFER_HELPER_DIR / "players.json"
 
-MAX_TRANSFER_ACCOUNTS = 4
+MAX_TRANSFER_RUNTIME_ACCOUNTS = 4
+MAX_TRANSFER_PLAYER_ROWS = 99
 
 DEFAULT_TRANSFER_SETTINGS = {
     "lag_offset": 1.0,
     "resource_station_yaw": 0.0,
     "destination_station_yaw": 0.0,
-    "transmitter_teleport": "",
+    "transmitter_teleport": "TRANSFER_TRANS",
     "resource_server": "0",
     "destination_server": "0",
-    "account_count": 1,
     "loop_count": 1,
-    "bed_prefix": "BedPlayer",
-    "bed_prefix_pad_start": 0,
     "structure_load_delay": 10,
     "transfer_retry_delay": 5,
 }
 
 DEFAULT_TRANSFER_DEDIS = {
-    "teleport": "",
+    "teleport": "TRANSFER_DEDI",
     "items": [
         {
-            "enabled": True,
             "location": {"yaw": 0.0, "pitch": 0.0},
             "crouched": False,
         }
@@ -77,12 +75,47 @@ def default_transfer_ui_coords():
     return copy.deepcopy(DEFAULT_TRANSFER_UI_COORDS)
 
 
-def bed_name(prefix, account_index, pad_width):
-    suffix = str(int(account_index))
-    pad_width = int(pad_width)
-    if pad_width > 0:
-        suffix = suffix.zfill(pad_width)
-    return f"{prefix}{suffix}"
+def default_transfer_players(account_count=1):
+    return {
+        "players": [
+            {"bed_name": name}
+            for name in generated_player_bed_names(int(account_count))
+        ]
+    }
+
+
+def generated_player_bed_names(account_count):
+    names = []
+    for account in range(1, int(account_count) + 1):
+        candidate = f"Player{account}"
+        if _has_numeric_prefix_collision(candidate, names):
+            candidate = f"Player_{account}"
+        names.append(candidate)
+    return names
+
+
+def player_bed_name(players, account_index):
+    try:
+        player = players["players"][int(account_index) - 1]
+    except (KeyError, IndexError, TypeError):
+        return generated_player_bed_names(int(account_index))[-1]
+    name = str(player.get("bed_name", "")).strip()
+    if name:
+        return name
+    return generated_player_bed_names(int(account_index))[-1]
+
+
+def player_account_count(players):
+    if not isinstance(players, dict):
+        return 1
+    raw_players = players.get("players", [])
+    if not isinstance(raw_players, list) or not raw_players:
+        return 1
+    return min(len(raw_players), MAX_TRANSFER_PLAYER_ROWS)
+
+
+def runtime_account_count(players):
+    return min(player_account_count(players), MAX_TRANSFER_RUNTIME_ACCOUNTS)
 
 
 def suggested_loop_count(dedi_count, account_count):
@@ -127,27 +160,48 @@ def save_transfer_dedis(data, path=TRANSFER_DEDIS_PATH):
 
 
 def load_transfer_ui_coords(path=TRANSFER_UI_COORDS_PATH, create_missing=True):
-    path = Path(path)
-    if not path.exists():
-        coords = default_transfer_ui_coords()
-        if create_missing:
-            save_transfer_ui_coords(coords, path)
-        return coords
-    with path.open("r", encoding="utf-8") as file:
-        return normalize_transfer_ui_coords(json.load(file))
+    return normalize_transfer_ui_coords(default_transfer_ui_coords())
 
 
 def save_transfer_ui_coords(data, path=TRANSFER_UI_COORDS_PATH):
-    normalized = normalize_transfer_ui_coords(data)
+    return normalize_transfer_ui_coords(data)
+
+
+def load_transfer_players(
+    path=TRANSFER_PLAYERS_PATH, account_count=None, create_missing=True
+):
+    path = Path(path)
+    if not path.exists():
+        account_count = account_count or 1
+        players = default_transfer_players(account_count)
+        if create_missing:
+            save_transfer_players(players, path, account_count)
+        return players
+    with path.open("r", encoding="utf-8") as file:
+        data = json.load(file)
+    return normalize_transfer_players(data, account_count or player_account_count(data))
+
+
+def save_transfer_players(data, path=TRANSFER_PLAYERS_PATH, account_count=1):
+    normalized = normalize_transfer_players(data, account_count)
     _write_json(normalized, path)
     return normalized
 
 
 def load_transfer_runtime_config(create_missing=True):
+    settings = load_transfer_settings(create_missing=create_missing)
+    player_count_hint = (
+        None
+        if TRANSFER_PLAYERS_PATH.exists()
+        else _old_account_count_hint(TRANSFER_SETTINGS_PATH)
+    )
     return {
-        "settings": load_transfer_settings(create_missing=create_missing),
+        "settings": settings,
         "dedis": load_transfer_dedis(create_missing=create_missing),
         "ui_coords": load_transfer_ui_coords(create_missing=create_missing),
+        "players": load_transfer_players(
+            account_count=player_count_hint, create_missing=create_missing
+        ),
     }
 
 
@@ -170,14 +224,7 @@ def normalize_transfer_settings(data):
     normalized["destination_server"] = _server_number(
         normalized["destination_server"], "destination_server"
     )
-    normalized["account_count"] = _int_range(
-        normalized["account_count"], "account_count", 1, MAX_TRANSFER_ACCOUNTS
-    )
     normalized["loop_count"] = _int_min(normalized["loop_count"], "loop_count", 1)
-    normalized["bed_prefix"] = str(normalized["bed_prefix"])
-    normalized["bed_prefix_pad_start"] = _int_min(
-        normalized["bed_prefix_pad_start"], "bed_prefix_pad_start", 0
-    )
     normalized["structure_load_delay"] = _int_min(
         normalized["structure_load_delay"], "structure_load_delay", 0
     )
@@ -185,6 +232,28 @@ def normalize_transfer_settings(data):
         normalized["transfer_retry_delay"], "transfer_retry_delay", 1
     )
     return normalized
+
+
+def normalize_transfer_players(data, account_count=1):
+    if not isinstance(data, dict):
+        data = {}
+    raw_players = data.get("players", [])
+    if not isinstance(raw_players, list):
+        raw_players = []
+    account_count = _int_range(
+        account_count, "account_count", 1, MAX_TRANSFER_PLAYER_ROWS
+    )
+    generated = generated_player_bed_names(account_count)
+    players = []
+    for index in range(account_count):
+        raw = raw_players[index] if index < len(raw_players) else {}
+        if not isinstance(raw, dict):
+            raw = {}
+        bed_name = str(raw.get("bed_name", "")).strip()
+        if not bed_name:
+            bed_name = generated[index]
+        players.append({"bed_name": bed_name})
+    return {"players": players}
 
 
 def normalize_transfer_dedis(data):
@@ -209,7 +278,7 @@ def normalize_transfer_ui_coords(data):
 
 
 def active_transfer_dedis(dedis):
-    return [item for item in dedis.get("items", []) if item.get("enabled", True)]
+    return list(dedis.get("items", []))
 
 
 def displayed_account_order(account_count, current_account):
@@ -243,7 +312,7 @@ def account_slot_for_target(ui_coords, account_count, current_account, target_ac
     return slot
 
 
-def missing_runtime_inputs(settings, dedis, ui_coords, project_root=None):
+def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_root=None):
     project_root = Path(project_root or ".")
     missing = []
     if not settings.get("transmitter_teleport"):
@@ -257,14 +326,15 @@ def missing_runtime_inputs(settings, dedis, ui_coords, project_root=None):
     if not dedis.get("teleport"):
         missing.append("dedis.teleport")
     if not active_transfer_dedis(dedis):
-        missing.append("dedis.items must include at least one enabled dedi")
+        missing.append("dedis.items must include at least one dedi")
 
     steam = ui_coords.get("steam", {})
-    if int(settings.get("account_count", 1)) > 1:
+    configured_accounts = player_account_count(players)
+    if configured_accounts > 1:
         for key in ("menu", "change_account", "continue"):
             if not _coord_complete(steam.get(key, {})):
                 missing.append(f"ui_coords.steam.{key}.x/y")
-        account_count = int(settings["account_count"])
+        account_count = runtime_account_count(players)
         slots = steam.get("account_slots", {}).get(str(account_count), [])
         if len(slots) < account_count:
             missing.append(f"ui_coords.steam.account_slots.{account_count}")
@@ -304,7 +374,6 @@ def _normalize_dedi_item(item):
     if not isinstance(location, dict):
         location = {}
     return {
-        "enabled": bool(item.get("enabled", True)),
         "location": {
             "yaw": _float_value(location.get("yaw", 0.0), "yaw"),
             "pitch": _float_value(location.get("pitch", 0.0), "pitch"),
@@ -332,6 +401,35 @@ def _coord_complete(value):
     if not isinstance(value, dict):
         return False
     return value.get("x") is not None and value.get("y") is not None
+
+
+def _old_account_count_hint(path):
+    path = Path(path)
+    if not path.exists():
+        return 1
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return 1
+    if not isinstance(data, dict) or "account_count" not in data:
+        return 1
+    try:
+        return _int_range(
+            data["account_count"], "account_count", 1, MAX_TRANSFER_PLAYER_ROWS
+        )
+    except ValueError:
+        return 1
+
+
+def _has_numeric_prefix_collision(candidate, existing_names):
+    for existing in existing_names:
+        if not candidate.startswith(existing):
+            continue
+        suffix = candidate[len(existing) :]
+        if suffix[:1].isdigit():
+            return True
+    return False
 
 
 def _float_value(value, name):
