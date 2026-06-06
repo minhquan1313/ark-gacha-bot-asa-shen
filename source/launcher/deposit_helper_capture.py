@@ -63,6 +63,11 @@ def view_route_entry(yaw, pitch, crouched):
 
 
 def preload_capture_view_dependencies():
+    try:
+        validate_ark_window()
+    except RuntimeError:
+        return None
+
     from source.ASA.player import console, player_state
     from source.utility import utils
 

@@ -53,12 +53,7 @@ DEFAULT_TRANSFER_UI_COORDS = {
     "transfer": {
         "transmitter_title_template": "assets/icons1080/transmitter_title.png",
         "not_ready_template": "assets/icons1080/transfer_not_ready_popup.png",
-        "transfer_button": {"x": None, "y": None},
-        "server_search": {"x": None, "y": None},
-        "first_server": {"x": None, "y": None},
-        "join_button": {"x": None, "y": None},
-        "not_ready_ok": {"x": None, "y": None},
-        "not_ready_region": {"start_x": 0, "start_y": 0, "width": 1920, "height": 1080},
+        "transfer_not_ready_cancel": {"x": 1070, "y": 730},
     },
 }
 
@@ -105,12 +100,43 @@ def player_bed_name(players, account_index):
     return generated_player_bed_names(int(account_index))[-1]
 
 
+def player_bed_name_search_conflicts(players, limit=None):
+    if not isinstance(players, dict):
+        players = {}
+    raw_players = players.get("players", [])
+    if not isinstance(raw_players, list):
+        raw_players = []
+    if limit is not None:
+        raw_players = raw_players[: int(limit)]
+
+    names = []
+    for player in raw_players:
+        if not isinstance(player, dict):
+            player = {}
+        names.append(str(player.get("bed_name", "")).strip())
+
+    conflicts = {}
+    for index, name in enumerate(names):
+        matches = []
+        if not name:
+            conflicts[index] = ["empty name"]
+            continue
+        for other_index, other_name in enumerate(names):
+            if index == other_index or not other_name:
+                continue
+            if other_name.startswith(name):
+                matches.append(other_name)
+        if matches:
+            conflicts[index] = matches
+    return conflicts
+
+
 def player_account_count(players):
     if not isinstance(players, dict):
-        return 1
+        return 0
     raw_players = players.get("players", [])
-    if not isinstance(raw_players, list) or not raw_players:
-        return 1
+    if not isinstance(raw_players, list):
+        return 0
     return min(len(raw_players), MAX_TRANSFER_PLAYER_ROWS)
 
 
@@ -159,11 +185,11 @@ def save_transfer_dedis(data, path=TRANSFER_DEDIS_PATH):
     return normalized
 
 
-def load_transfer_ui_coords(path=TRANSFER_UI_COORDS_PATH, create_missing=True):
+def load_transfer_ui_coords():
     return normalize_transfer_ui_coords(default_transfer_ui_coords())
 
 
-def save_transfer_ui_coords(data, path=TRANSFER_UI_COORDS_PATH):
+def save_transfer_ui_coords(data):
     return normalize_transfer_ui_coords(data)
 
 
@@ -172,14 +198,15 @@ def load_transfer_players(
 ):
     path = Path(path)
     if not path.exists():
-        account_count = account_count or 1
+        account_count = 1 if account_count is None else account_count
         players = default_transfer_players(account_count)
         if create_missing:
             save_transfer_players(players, path, account_count)
         return players
     with path.open("r", encoding="utf-8") as file:
         data = json.load(file)
-    return normalize_transfer_players(data, account_count or player_account_count(data))
+    count = player_account_count(data) if account_count is None else account_count
+    return normalize_transfer_players(data, count)
 
 
 def save_transfer_players(data, path=TRANSFER_PLAYERS_PATH, account_count=1):
@@ -198,7 +225,7 @@ def load_transfer_runtime_config(create_missing=True):
     return {
         "settings": settings,
         "dedis": load_transfer_dedis(create_missing=create_missing),
-        "ui_coords": load_transfer_ui_coords(create_missing=create_missing),
+        "ui_coords": load_transfer_ui_coords(),
         "players": load_transfer_players(
             account_count=player_count_hint, create_missing=create_missing
         ),
@@ -241,7 +268,7 @@ def normalize_transfer_players(data, account_count=1):
     if not isinstance(raw_players, list):
         raw_players = []
     account_count = _int_range(
-        account_count, "account_count", 1, MAX_TRANSFER_PLAYER_ROWS
+        account_count, "account_count", 0, MAX_TRANSFER_PLAYER_ROWS
     )
     generated = generated_player_bed_names(account_count)
     players = []
@@ -323,6 +350,8 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         missing.append("settings.destination_server")
     if settings.get("resource_server") == settings.get("destination_server"):
         missing.append("settings.destination_server must differ from resource_server")
+    if player_account_count(players) < 1:
+        missing.append("players must include at least one player")
     if not dedis.get("teleport"):
         missing.append("dedis.teleport")
     if not active_transfer_dedis(dedis):
@@ -351,7 +380,7 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         "server_search",
         "first_server",
         "join_button",
-        "not_ready_ok",
+        "transfer_not_ready_cancel",
     ):
         if not _coord_complete(transfer.get(key, {})):
             missing.append(f"ui_coords.transfer.{key}.x/y")

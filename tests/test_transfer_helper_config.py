@@ -17,7 +17,9 @@ from source.launcher.transfer_helper_config import (
     normalize_transfer_settings,
     player_account_count,
     player_bed_name,
+    player_bed_name_search_conflicts,
     runtime_account_count,
+    save_transfer_players,
     save_transfer_settings,
     save_transfer_ui_coords,
     suggested_loop_count,
@@ -36,7 +38,9 @@ class TransferHelperConfigTests(unittest.TestCase):
             self.assertEqual(settings["destination_server"], "0")
             self.assertNotIn("account_count", settings)
 
-    def test_normalize_settings_ignores_old_account_and_rejects_invalid_loop_values(self):
+    def test_normalize_settings_ignores_old_account_and_rejects_invalid_loop_values(
+        self,
+    ):
         settings = normalize_transfer_settings({"account_count": 100})
 
         self.assertNotIn("account_count", settings)
@@ -70,6 +74,27 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertEqual(player_bed_name(players, 1), "CustomBed")
         self.assertEqual(player_bed_name(players, 2), "Player2")
 
+    def test_player_bed_name_search_conflicts_use_prefix_matching(self):
+        conflicts = player_bed_name_search_conflicts(
+            {"players": [{"bed_name": "Player1"}, {"bed_name": "Player10"}]}
+        )
+
+        self.assertEqual(conflicts, {0: ["Player10"]})
+
+    def test_player_bed_name_search_conflicts_include_duplicates(self):
+        conflicts = player_bed_name_search_conflicts(
+            {"players": [{"bed_name": "Player2"}, {"bed_name": "Player2"}]}
+        )
+
+        self.assertEqual(conflicts, {0: ["Player2"], 1: ["Player2"]})
+
+    def test_player_bed_name_search_conflicts_allow_underscored_names(self):
+        conflicts = player_bed_name_search_conflicts(
+            {"players": [{"bed_name": "Player_1"}, {"bed_name": "Player10"}]}
+        )
+
+        self.assertEqual(conflicts, {})
+
     def test_transfer_players_load_save_preserves_edits_and_appends_missing(self):
         players = normalize_transfer_players(
             {
@@ -91,6 +116,27 @@ class TransferHelperConfigTests(unittest.TestCase):
                     {"bed_name": "Player4"},
                 ]
             },
+        )
+
+    def test_transfer_players_allow_zero_account_reset(self):
+        self.assertEqual(normalize_transfer_players({}, 0), {"players": []})
+
+    def test_transfer_players_save_and_load_zero_accounts(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "players.json"
+
+            saved = save_transfer_players({"players": [{"bed_name": "Old"}]}, path, 0)
+            loaded = load_transfer_players(path)
+
+            self.assertEqual(saved, {"players": []})
+            self.assertEqual(loaded, {"players": []})
+
+    def test_transfer_players_regenerate_after_zero_account_reset(self):
+        players = normalize_transfer_players({"players": []}, 2)
+
+        self.assertEqual(
+            players,
+            {"players": [{"bed_name": "Player1"}, {"bed_name": "Player2"}]},
         )
 
     def test_missing_players_file_creates_default_player_rows(self):
@@ -218,6 +264,21 @@ class TransferHelperConfigTests(unittest.TestCase):
         missing = missing_runtime_inputs(settings, dedis, coords, players)
 
         self.assertIn("ui_coords.steam.account_slots.4", missing)
+
+    def test_validation_blocks_zero_players(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        coords = default_transfer_ui_coords()
+
+        missing = missing_runtime_inputs(settings, dedis, coords, {"players": []})
+
+        self.assertIn("players must include at least one player", missing)
 
 
 if __name__ == "__main__":

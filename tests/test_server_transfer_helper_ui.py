@@ -123,7 +123,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                     "Player_12",
                 ],
             )
-            self.assertFalse(any(row["name"].isReadOnly() for row in helper.player_rows))
+            self.assertFalse(
+                any(row["name"].isReadOnly() for row in helper.player_rows)
+            )
             self.assertIn("ignored", helper.player_rows[4]["frame"].toolTip())
             self.assertIn("#ff4d6d", helper.player_rows[4]["frame"].styleSheet())
 
@@ -171,33 +173,50 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         finally:
             helper.close()
 
-    def test_collapsed_cards_keep_body_hidden_without_changing_window_height(self):
-        helper = self._transfer_helper(account_count=1)
+    def test_server_transfer_idle_height_stays_fixed_to_constructor_height(self):
+        with patch(
+            "source.launcher.server_transfer_helper.DEFAULT_PANELS_EXPANDED", True
+        ):
+            helper = self._transfer_helper(account_count=3)
 
         try:
             helper.show()
             self.app.processEvents()
 
-            self.assertEqual(helper.minimumHeight(), 700)
-            bodies = helper.findChildren(QWidget, "DepositRouteCardBody")
-            self.assertTrue(all(body.isHidden() for body in bodies))
-            panels = helper.findChildren(QFrame, "Panel")
-            self.assertTrue(
-                all(panel.sizePolicy().verticalPolicy() == QSizePolicy.Maximum for panel in panels)
-            )
-            self.assertTrue(all(panel.height() < 90 for panel in panels))
+            self.assertEqual(helper.minimumHeight(), helper.idle_min_height)
+            self.assertEqual(helper.height(), helper.idle_min_height)
+            self.assertGreater(helper.sizeHint().height(), helper.idle_min_height)
         finally:
             helper.close()
 
-    def test_dedi_entry_uses_two_rows_with_action_buttons(self):
+    def test_dedi_entry_defaults_collapsed_with_summary_and_index(self):
         helper = self._transfer_helper(account_count=1)
 
         try:
-            layout = helper.dedi_rows[0]["frame"].layout()
-            self.assertEqual(layout.count(), 2)
-            actions = layout.itemAt(1).layout()
-            self.assertEqual(actions.count(), 3)
-            self.assertEqual(actions.stretch(0), 1)
+            row = helper.dedi_rows[0]
+
+            self.assertEqual(row["index_label"].text(), "D1")
+            self.assertTrue(row["details"].isHidden())
+            self.assertEqual(row["toggle"].text(), ">")
+            self.assertIn("Yaw 0", row["summary"].text())
+            self.assertIn("Pitch 0", row["summary"].text())
+            self.assertIn("Crouch off", row["summary"].text())
+        finally:
+            helper.close()
+
+    def test_dedi_entry_expands_to_current_controls(self):
+        helper = self._transfer_helper(account_count=1)
+
+        try:
+            row = helper.dedi_rows[0]
+
+            helper._toggle_dedi_row(row)
+
+            self.assertFalse(row["details"].isHidden())
+            self.assertEqual(row["toggle"].text(), "v")
+            self.assertIs(row["yaw"].parent(), row["details"])
+            self.assertIs(row["pitch"].parent(), row["details"])
+            self.assertIs(row["crouched"].parent(), row["details"])
         finally:
             helper.close()
 
@@ -249,6 +268,144 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             finally:
                 helper.close()
 
+    def test_account_count_zero_resets_players_json(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_players",
+            side_effect=lambda data, account_count=1: data,
+        ) as save_players:
+            helper = self._transfer_helper(account_count=1)
+
+            try:
+                helper.setting_fields["account_count"].setText("0")
+                helper._refresh_player_rows(persist=True)
+
+                self.assertEqual(helper.player_rows, [])
+                save_players.assert_called_with({"players": []}, account_count=0)
+                self.assertEqual(
+                    helper.loop_hint.text(),
+                    "1 dedi x 0 account = no runnable accounts.",
+                )
+            finally:
+                helper.close()
+
+    def test_start_blocks_zero_players_before_runtime_validation(self):
+        helper = self._transfer_helper(account_count=0)
+
+        try:
+            helper.start()
+
+            helper.owner.dialog.assert_called_once()
+            self.assertEqual(helper.status.text(), "Add at least one player before starting.")
+        finally:
+            helper.close()
+
+    def test_player_search_prefix_conflict_gets_warning_outline(self):
+        helper = self._transfer_helper(
+            account_count=2, player_names=["Player1", "Player10"]
+        )
+
+        try:
+            self.assertIn("#ffb020", helper.player_rows[0]["frame"].styleSheet())
+            self.assertIn(
+                'Searching "Player1" may also match: Player10',
+                helper.player_rows[0]["frame"].toolTip(),
+            )
+            self.assertEqual(helper.player_rows[1]["frame"].styleSheet(), "")
+        finally:
+            helper.close()
+
+    def test_player_search_duplicate_conflict_gets_warning_outline(self):
+        helper = self._transfer_helper(
+            account_count=2, player_names=["Player2", "Player2"]
+        )
+
+        try:
+            self.assertIn("#ffb020", helper.player_rows[0]["frame"].styleSheet())
+            self.assertIn("#ffb020", helper.player_rows[1]["frame"].styleSheet())
+        finally:
+            helper.close()
+
+    def test_player_search_warning_clears_after_unique_edit(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_players",
+            side_effect=lambda data, account_count=1: data,
+        ):
+            helper = self._transfer_helper(
+                account_count=2, player_names=["Player2", "Player2"]
+            )
+
+            try:
+                helper.player_rows[1]["name"].setText("Player3")
+                helper._save_players_from_rows()
+
+                self.assertEqual(helper.player_rows[0]["frame"].styleSheet(), "")
+                self.assertEqual(helper.player_rows[1]["frame"].styleSheet(), "")
+            finally:
+                helper.close()
+
+    def test_ignored_player_row_keeps_red_outline_when_name_conflicts(self):
+        helper = self._transfer_helper(
+            account_count=5,
+            player_names=["Player1", "Player2", "Player3", "Player4", "Player1"],
+        )
+
+        try:
+            self.assertIn("#ff4d6d", helper.player_rows[4]["frame"].styleSheet())
+            self.assertIn("ignored", helper.player_rows[4]["frame"].toolTip())
+            self.assertIn(
+                'Searching "Player1" may also match: Player1',
+                helper.player_rows[4]["frame"].toolTip(),
+            )
+        finally:
+            helper.close()
+
+    def test_start_blocks_runtime_player_search_conflicts(self):
+        with (
+            patch(
+                "source.launcher.server_transfer_helper.save_transfer_settings",
+                side_effect=lambda data: data,
+            ),
+            patch(
+                "source.launcher.server_transfer_helper.save_transfer_dedis",
+                side_effect=lambda data: data,
+            ),
+            patch(
+                "source.launcher.server_transfer_helper.save_transfer_players",
+                side_effect=lambda data, account_count=1: data,
+            ),
+        ):
+            helper = self._transfer_helper(
+                account_count=2, player_names=["Player1", "Player10"]
+            )
+
+            try:
+                helper.start()
+
+                helper.owner.dialog.assert_called_once()
+                self.assertIn("Player1", helper.owner.dialog.call_args.args[1])
+                self.assertIn("Player10", helper.owner.dialog.call_args.args[1])
+                self.assertEqual(
+                    helper.status.text(),
+                    "Player bed/teleport names are not search-safe.",
+                )
+            finally:
+                helper.close()
+
+    def test_start_blocks_when_ignored_row_conflicts_with_runtime_row(self):
+        helper = self._transfer_helper(
+            account_count=5,
+            player_names=["Player1", "Player2", "Player3", "Player4", "Player10"],
+        )
+
+        try:
+            helper.start()
+
+            helper.owner.dialog.assert_called_once()
+            self.assertIn("Player1", helper.owner.dialog.call_args.args[1])
+            self.assertIn("Player10", helper.owner.dialog.call_args.args[1])
+        finally:
+            helper.close()
+
     def test_setting_edit_persists_without_account_count(self):
         with patch(
             "source.launcher.server_transfer_helper.save_transfer_settings",
@@ -284,6 +441,42 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             finally:
                 helper.close()
 
+    def test_dedi_summary_updates_after_edit_and_crouch_toggle(self):
+        helper = self._transfer_helper(account_count=1)
+
+        try:
+            row = helper.dedi_rows[0]
+            row["yaw"].setText("44")
+            row["pitch"].setText("-5")
+            row["crouched"].setChecked(True)
+            helper._sync_dedi_summary(row)
+
+            self.assertEqual(row["summary"].text(), "Yaw 44 | Pitch -5 | Crouch on")
+        finally:
+            helper.close()
+
+    def test_dedi_delete_reindexes_remaining_rows(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_dedis",
+            side_effect=lambda data: data,
+        ):
+            helper = self._transfer_helper(
+                account_count=1,
+                dedi_items=[
+                    {"location": {"yaw": 1, "pitch": 2}, "crouched": False},
+                    {"location": {"yaw": 3, "pitch": 4}, "crouched": True},
+                ],
+            )
+
+            try:
+                helper._remove_dedi_row(helper.dedi_rows[0])
+
+                self.assertEqual(len(helper.dedi_rows), 1)
+                self.assertEqual(helper.dedi_rows[0]["index_label"].text(), "D1")
+                self.assertIn("Yaw 3", helper.dedi_rows[0]["summary"].text())
+            finally:
+                helper.close()
+
     def test_transfer_helper_preloads_capture_view_dependencies(self):
         with patch(
             "source.launcher.server_transfer_helper.preload_capture_view_dependencies"
@@ -292,6 +485,18 @@ class ServerTransferHelperUiTests(unittest.TestCase):
 
         try:
             preload.assert_called_once_with()
+        finally:
+            helper.close()
+
+    def test_transfer_helper_open_survives_capture_preload_validation_failure(self):
+        with patch(
+            "source.launcher.deposit_helper_capture.validate_ark_window",
+            side_effect=RuntimeError("ARK missing"),
+        ):
+            helper = self._transfer_helper(account_count=1)
+
+        try:
+            self.assertEqual(helper.status.text(), "Ready.")
         finally:
             helper.close()
 
@@ -316,8 +521,30 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             dialog=Mock(),
         )
 
-    def _transfer_helper(self, account_count=1):
+    def _transfer_helper(self, account_count=1, player_names=None, dedi_items=None):
         owner = self._worker_owner()
+        if player_names is None:
+            player_names = [
+                "Player1",
+                "Player2",
+                "Player3",
+                "Player4",
+                "Player5",
+                "Player6",
+                "Player7",
+                "Player8",
+                "Player9",
+                "Player_10",
+                "Player_11",
+                "Player_12",
+            ][:account_count]
+        if dedi_items is None:
+            dedi_items = [
+                {
+                    "location": {"yaw": 0, "pitch": 0},
+                    "crouched": False,
+                }
+            ]
         with patch(
             "source.launcher.server_transfer_helper.load_transfer_runtime_config",
             return_value={
@@ -334,33 +561,12 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 },
                 "players": {
                     "players": [
-                        {"bed_name": name}
-                        for name in (
-                            [
-                                "Player1",
-                                "Player2",
-                                "Player3",
-                                "Player4",
-                                "Player5",
-                                "Player6",
-                                "Player7",
-                                "Player8",
-                                "Player9",
-                                "Player_10",
-                                "Player_11",
-                                "Player_12",
-                            ][:account_count]
-                        )
+                        {"bed_name": name} for name in player_names[:account_count]
                     ]
                 },
                 "dedis": {
                     "teleport": "",
-                    "items": [
-                        {
-                            "location": {"yaw": 0, "pitch": 0},
-                            "crouched": False,
-                        }
-                    ],
+                    "items": dedi_items,
                 },
                 "ui_coords": {},
             },

@@ -104,9 +104,9 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
         for account in accounts:
             if stopped():
                 return False
-            final_account = loop_number == int(
-                settings["loop_count"]
-            ) and account == account_count
+            final_account = (
+                loop_number == int(settings["loop_count"]) and account == account_count
+            )
             if account_count > 1:
                 current_account = deps.switch_account(account, current_account)
             deps.ensure_ark_running()
@@ -321,7 +321,7 @@ def transfer_to_server(server, settings, ui_coords, stop_event, status_callback=
         ):
             emit(f"Transfer to server {server} requested.")
             return True
-        _click_coord(transfer["not_ready_ok"])
+        _click_coord(transfer["transfer_not_ready_cancel"])
         emit(f"Server {server} transfer timer not ready; retrying.")
         stop_wait(stop_event, int(settings["transfer_retry_delay"]))
     return False

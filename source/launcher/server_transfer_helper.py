@@ -28,6 +28,7 @@ from source.launcher.transfer_helper_config import (
     missing_runtime_inputs,
     normalize_transfer_players,
     player_account_count,
+    player_bed_name_search_conflicts,
     save_transfer_dedis,
     save_transfer_players,
     save_transfer_settings,
@@ -42,6 +43,8 @@ from source.launcher.widgets import (
 )
 
 DEFAULT_PANELS_EXPANDED = True
+PLAYER_SEARCH_WARNING_COLOR = "#ffb020"
+IGNORED_PLAYER_COLOR = "#ff4d6d"
 
 
 class ServerTransferHelper(WorkerHelperWindow):
@@ -58,7 +61,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             owner,
             "SERVER TRANSFER HELPER",
             360,
-            540,
+            520,
             route_kind="server_transfer",
             route_index=None,
             hotkey_hint="ALT + N toggles START / STOP",
@@ -79,6 +82,9 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.content_layout.addWidget(self.idle_widget, 1)
         self.content_layout.addWidget(self.running_widget, 1)
         self.register_minimal_running_widgets(self.idle_widget)
+
+    def _idle_content_height(self):
+        return self.idle_min_height
 
     def _idle_widget(self):
         wrapper = QWidget()
@@ -233,11 +239,30 @@ class ServerTransferHelper(WorkerHelperWindow):
         layout = QVBoxLayout(row)
         layout.setContentsMargins(8, 6, 8, 6)
         layout.setSpacing(6)
+
+        header = QHBoxLayout()
+        header.setSpacing(6)
+        toggle = self._helper_button(">", "Expand or collapse dedi row")
+        index_label = QLabel("")
+        index_label.setObjectName("FormLabel")
+        summary = QLabel("")
+        summary.setObjectName("HelperRowSummary")
+        summary.setWordWrap(True)
+        header.addWidget(toggle)
+        header.addWidget(index_label)
+        header.addWidget(summary, 1)
+        layout.addLayout(header)
+
+        details = QWidget()
+        details_layout = QVBoxLayout(details)
+        details_layout.setContentsMargins(0, 0, 0, 0)
+        details_layout.setSpacing(6)
+        details.setVisible(False)
         info = QHBoxLayout()
         info.setSpacing(8)
         yaw = self._line_edit(item.get("location", {}).get("yaw", 0.0))
         pitch = self._line_edit(item.get("location", {}).get("pitch", 0.0))
-        crouched = CyberSwitch("C")
+        crouched = CyberSwitch("Crouch")
         crouched.setChecked(bool(item.get("crouched", False)))
         capture = self._helper_button("C", "Capture yaw and pitch")
         view = self._helper_button("V", "View saved yaw and pitch in Ark")
@@ -247,21 +272,29 @@ class ServerTransferHelper(WorkerHelperWindow):
         info.addWidget(yaw, 1)
         info.addWidget(QLabel("PITCH"))
         info.addWidget(pitch, 1)
-        info.addWidget(crouched)
         actions = QHBoxLayout()
         actions.setSpacing(6)
+        actions.addWidget(crouched)
         actions.addWidget(capture, 1)
         actions.addWidget(view)
         actions.addWidget(remove)
-        layout.addLayout(info)
-        layout.addLayout(actions)
+        details_layout.addLayout(info)
+        details_layout.addLayout(actions)
+        layout.addWidget(details)
         data = {
             "frame": row,
+            "toggle": toggle,
+            "index_label": index_label,
+            "summary": summary,
+            "details": details,
             "yaw": yaw,
             "pitch": pitch,
             "crouched": crouched,
         }
         self.dedi_rows.append(data)
+        toggle.clicked.connect(
+            lambda checked=False, target=data: self._toggle_dedi_row(target)
+        )
         remove.clicked.connect(lambda: self._remove_dedi_row(data))
         capture.clicked.connect(
             lambda checked=False, target=data: self._capture_dedi(target)
@@ -270,11 +303,18 @@ class ServerTransferHelper(WorkerHelperWindow):
         for widget in (yaw, pitch, crouched):
             if hasattr(widget, "editingFinished"):
                 widget.editingFinished.connect(self._sync_loop_hint)
+                widget.editingFinished.connect(
+                    lambda target=data: self._sync_dedi_summary(target)
+                )
                 widget.editingFinished.connect(self._persist_dedis)
             if hasattr(widget, "toggled"):
                 widget.toggled.connect(lambda _checked=False: self._sync_loop_hint())
+                widget.toggled.connect(
+                    lambda _checked=False, target=data: self._sync_dedi_summary(target)
+                )
                 widget.toggled.connect(lambda _checked=False: self._persist_dedis())
         self.dedi_rows_layout.addWidget(row)
+        self._renumber_dedi_rows()
         if hasattr(self, "loop_hint"):
             self._sync_loop_hint()
         if persist:
@@ -286,8 +326,26 @@ class ServerTransferHelper(WorkerHelperWindow):
             return
         self.dedi_rows.remove(row_data)
         row_data["frame"].deleteLater()
+        self._renumber_dedi_rows()
         self._sync_loop_hint()
         self._persist_dedis()
+
+    def _toggle_dedi_row(self, row_data):
+        visible = row_data["details"].isHidden()
+        row_data["details"].setVisible(visible)
+        row_data["toggle"].setText("v" if visible else ">")
+
+    def _renumber_dedi_rows(self):
+        for index, row in enumerate(self.dedi_rows, 1):
+            row["index_label"].setText(f"D{index}")
+            self._sync_dedi_summary(row)
+
+    def _sync_dedi_summary(self, row_data):
+        crouch_text = "Crouch on" if row_data["crouched"].isChecked() else "Crouch off"
+        row_data["summary"].setText(
+            f"Yaw {row_data['yaw'].text()} | "
+            f"Pitch {row_data['pitch'].text()} | {crouch_text}"
+        )
 
     def _current_config(self):
         self.config["settings"] = save_transfer_settings(self._settings_from_fields())
@@ -300,6 +358,11 @@ class ServerTransferHelper(WorkerHelperWindow):
         try:
             account_count = int(self.setting_fields["account_count"].text())
             active_count = len(self.dedi_rows)
+            if account_count == 0:
+                self.loop_hint.setText(
+                    f"{active_count} dedi x 0 account = no runnable accounts."
+                )
+                return
             effective_accounts = min(account_count, MAX_TRANSFER_RUNTIME_ACCOUNTS)
             suggested = suggested_loop_count(active_count, effective_accounts)
             suffix = (
@@ -325,6 +388,30 @@ class ServerTransferHelper(WorkerHelperWindow):
                 parent=self,
             )
             self.status.setText("Cannot start while the main program is running.")
+            return
+        if not self.player_rows:
+            self.status.setText("Add at least one player before starting.")
+            self.owner.dialog(
+                "Transfer Helper Not Ready",
+                "Add at least one player before starting.",
+                "warning",
+                parent=self,
+            )
+            return
+        player_conflicts = self._runtime_player_search_conflicts(
+            self._players_from_rows()
+        )
+        if player_conflicts:
+            conflict_lines = self._format_player_search_conflicts(
+                player_conflicts, self._players_from_rows()
+            )
+            message = "Player bed/teleport names are not search-safe:\n" + "\n".join(
+                f"- {line}" for line in conflict_lines
+            )
+            self.status.setText("Player bed/teleport names are not search-safe.")
+            self.owner.dialog(
+                "Transfer Helper Not Ready", message, "warning", parent=self
+            )
             return
         try:
             config = self._current_config()
@@ -421,6 +508,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.player_rows = []
         for account in range(1, account_count + 1):
             self._add_player_row(account)
+        self._sync_player_search_warnings()
         if persist:
             try:
                 self.config["players"] = save_transfer_players(
@@ -436,37 +524,30 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _add_player_row(self, account):
         row = QFrame()
         row.setObjectName("HelperRow")
-        if account > MAX_TRANSFER_RUNTIME_ACCOUNTS:
-            row.setStyleSheet("QFrame#HelperRow { border-color: #ff4d6d; }")
-            row.setToolTip(
-                f"Account {account} is ignored. Runtime support is currently "
-                f"limited to {MAX_TRANSFER_RUNTIME_ACCOUNTS} accounts."
-            )
         layout = QVBoxLayout(row)
         layout.setContentsMargins(8, 6, 8, 6)
 
-        label = QLabel(f"PLAYER {account}")
+        label = QLabel(f"P{account}")
         label.setObjectName("FormLabel")
-        info_header = QHBoxLayout()
-        info_header.addWidget(label)
 
         name = self._line_edit(
             self.config["players"]["players"][account - 1]["bed_name"]
         )
         name.editingFinished.connect(self._save_players_from_rows)
+        name.editingFinished.connect(self._sync_player_search_warnings)
         copy = self._helper_button("C", "Copy Bed/teleport name")
         copy.clicked.connect(
             lambda checked=False, field=name: self._copy_name(field.text())
         )
         info = QHBoxLayout()
+        info.addWidget(label)
         info.addWidget(QLabel("Bed/Teleport"))
         info.addWidget(name, 1)
         info.addWidget(copy)
 
-        layout.addLayout(info_header)
         layout.addLayout(info)
         self.players_layout.addWidget(row)
-        self.player_rows.append({"frame": row, "name": name})
+        self.player_rows.append({"frame": row, "name": name, "account": account})
 
     def _account_count_from_field(self):
         try:
@@ -475,8 +556,8 @@ class ServerTransferHelper(WorkerHelperWindow):
             raise ValueError("account_count field is missing.") from exc
         except ValueError as exc:
             raise ValueError("account_count must be an integer.") from exc
-        if account_count < 1:
-            raise ValueError("account_count must be at least 1.")
+        if account_count < 0:
+            raise ValueError("account_count must be at least 0.")
         return account_count
 
     def _players_from_rows(self):
@@ -499,7 +580,59 @@ class ServerTransferHelper(WorkerHelperWindow):
             return self.config.get("players", {})
         self.config["players"] = players
         self.status.setText("Player settings saved.")
+        self._sync_player_search_warnings()
         return players
+
+    def _sync_player_search_warnings(self):
+        conflicts = player_bed_name_search_conflicts(self._players_from_rows())
+        for index, row in enumerate(self.player_rows):
+            account = row["account"]
+            messages = []
+            if account > MAX_TRANSFER_RUNTIME_ACCOUNTS:
+                row["frame"].setStyleSheet(
+                    f"QFrame#HelperRow {{ border-color: {IGNORED_PLAYER_COLOR}; }}"
+                )
+                messages.append(
+                    f"Account {account} is ignored. Runtime support is currently "
+                    f"limited to {MAX_TRANSFER_RUNTIME_ACCOUNTS} accounts."
+                )
+            elif index in conflicts:
+                row["frame"].setStyleSheet(
+                    "QFrame#HelperRow { "
+                    f"border-color: {PLAYER_SEARCH_WARNING_COLOR}; "
+                    "}"
+                )
+            else:
+                row["frame"].setStyleSheet("")
+
+            if index in conflicts:
+                name = row["name"].text().strip()
+                if name:
+                    matches = ", ".join(conflicts[index])
+                    messages.append(f'Searching "{name}" may also match: {matches}.')
+                else:
+                    messages.append("Bed/teleport name cannot be empty.")
+            row["frame"].setToolTip(" ".join(messages))
+
+    def _runtime_player_search_conflicts(self, players):
+        conflicts = player_bed_name_search_conflicts(players)
+        return {
+            index: matches
+            for index, matches in conflicts.items()
+            if index < MAX_TRANSFER_RUNTIME_ACCOUNTS
+        }
+
+    def _format_player_search_conflicts(self, conflicts, players):
+        rows = players.get("players", [])
+        lines = []
+        for index in sorted(conflicts):
+            try:
+                name = str(rows[index].get("bed_name", "")).strip()
+            except (IndexError, AttributeError):
+                name = ""
+            label = name or f"Player {index + 1}"
+            lines.append(f'{label}: {", ".join(conflicts[index])}')
+        return lines
 
     def _settings_from_fields(self):
         return {
@@ -571,6 +704,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             row["pitch"].setText(f"{pitch:.2f}")
             self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
             self._sync_loop_hint()
+            self._sync_dedi_summary(row)
             self._persist_dedis()
         except Exception as exc:
             self.status.setText(f"Capture failed: {exc}")
