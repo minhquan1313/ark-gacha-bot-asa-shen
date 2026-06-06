@@ -10,6 +10,8 @@ from source.launcher.transfer_helper_config import (
     runtime_account_count,
 )
 
+RECOVERABLE_RUNTIME_ATTEMPTS = 3
+
 
 class TransferConfigError(RuntimeError):
     pass
@@ -95,7 +97,7 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
             )
             deps.kill_ark()
             continue
-        deps.check_state()
+        deps.check_state(account)
         deps.withdraw_resource()
         deps.fast_travel_to_bed(_bed_name(players, account))
         deps.enter_tekpod()
@@ -117,13 +119,13 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
                 return False
             deps.wait_structure()
             deps.leave_tekpod()
-            deps.transfer_to_server(settings["destination_server"])
+            deps.transfer_to_server(settings["destination_server"], account)
             deps.wait_for_bed_screen()
             deps.spawn_bed(_bed_name(players, account))
             deps.wait_structure()
             deps.stabilize_bed_position()
             deps.deposit_resource()
-            deps.transfer_to_server(settings["resource_server"])
+            deps.transfer_to_server(settings["resource_server"], account)
             deps.wait_for_bed_screen()
             deps.spawn_bed(_bed_name(players, account))
             deps.wait_structure()
@@ -153,7 +155,9 @@ def default_transfer_dependencies(config, stop_event, status_callback=None):
         ensure_ark_running=lambda: ensure_ark_running(stop_event, status_callback),
         join_server=lambda server: join_server(server, stop_event, status_callback),
         verify_tribelog=verify_tribelog,
-        check_state=check_player_state,
+        check_state=lambda account=None: check_transfer_player_state(
+            settings, players, account, settings["resource_server"]
+        ),
         wait_structure=lambda: stop_wait(
             stop_event, int(settings["structure_load_delay"])
         ),
@@ -163,8 +167,8 @@ def default_transfer_dependencies(config, stop_event, status_callback=None):
         fast_travel_to_bed=fast_travel_to_bed,
         enter_tekpod=enter_tekpod,
         leave_tekpod=leave_tekpod,
-        transfer_to_server=lambda server: transfer_to_server(
-            server, settings, ui_coords, stop_event, status_callback
+        transfer_to_server=lambda server, account=None: transfer_to_server(
+            server, settings, ui_coords, stop_event, status_callback, players, account
         ),
         wait_for_bed_screen=lambda: wait_for_bed_screen(stop_event),
         spawn_bed=spawn_bed,
@@ -194,49 +198,67 @@ def switch_steam_account(
     kill_ark()
     if stop_wait(stop_event, 5):
         return int(current_account)
-    if not _ensure_steam_window_ready(steam, stop_event, emit, launch_if_missing=True):
-        return int(current_account)
-    for key in ("menu", "change_account"):
-        if stop_wait(stop_event, 0.2):
-            return int(current_account)
-        coord = steam[key]
-        pyautogui.click(int(coord["x"]), int(coord["y"]))
     from source.utility import template
 
-    emit("Waiting for Steam change-account continue button.")
     change_ready_template = _register_template_region(
         steam["change_account_ready_template"], steam["change_account_ready_region"]
     )
-    if not _wait_for_template_visible(
-        template.check_template_no_bounds,
-        float(steam.get("change_account_ready_timeout", 60)),
-        stop_event,
-        change_ready_template,
-        0.75,
-    ):
-        if stop_event is not None and stop_event.is_set():
-            return int(current_account)
-        raise RuntimeError(
-            "Steam change-account continue button was not ready within 60 seconds."
-        )
-    if stop_wait(stop_event, 0.2):
-        return int(current_account)
-    coord = steam["continue"]
-    pyautogui.click(int(coord["x"]), int(coord["y"]))
-    emit(f"Waiting for Steam account picker for account {target_account}.")
     switch_account_template = _register_template_region(
         steam["switch_account_template"], steam["switch_account_region"]
     )
-    if not _wait_for_template_visible(
-        template.check_template_no_bounds,
-        float(steam.get("switch_account_timeout", 60)),
-        stop_event,
-        switch_account_template,
-        0.75,
-    ):
+    for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
         if stop_event is not None and stop_event.is_set():
             return int(current_account)
-        raise RuntimeError("Steam account picker was not detected within 60 seconds.")
+        if not _ensure_steam_window_ready(
+            steam, stop_event, emit, launch_if_missing=True
+        ):
+            return int(current_account)
+        for key in ("menu", "change_account"):
+            if stop_wait(stop_event, 0.2):
+                return int(current_account)
+            coord = steam[key]
+            pyautogui.click(int(coord["x"]), int(coord["y"]))
+        emit(
+            "Waiting for Steam change-account continue button "
+            f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
+        )
+        ready = _wait_for_template_visible(
+            template.check_template_no_bounds,
+            float(steam.get("change_account_ready_timeout", 60)),
+            stop_event,
+            change_ready_template,
+            0.75,
+        )
+        if stop_event is not None and stop_event.is_set():
+            return int(current_account)
+        if not ready:
+            emit("Steam change-account continue button was not ready; retrying.")
+            continue
+        if stop_wait(stop_event, 0.2):
+            return int(current_account)
+        coord = steam["continue"]
+        pyautogui.click(int(coord["x"]), int(coord["y"]))
+        emit(
+            f"Waiting for Steam account picker for account {target_account} "
+            f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
+        )
+        picker_ready = _wait_for_template_visible(
+            template.check_template_no_bounds,
+            float(steam.get("switch_account_timeout", 60)),
+            stop_event,
+            switch_account_template,
+            0.75,
+        )
+        if stop_event is not None and stop_event.is_set():
+            return int(current_account)
+        if picker_ready:
+            break
+        emit("Steam account picker was not detected; retrying.")
+    else:
+        raise RuntimeError(
+            "Steam account switch UI was not ready after "
+            f"{RECOVERABLE_RUNTIME_ATTEMPTS} attempts."
+        )
     pyautogui.click(int(slot["x"]), int(slot["y"]))
     if not _ensure_steam_window_ready(steam, stop_event, emit, launch_if_missing=False):
         return int(current_account)
@@ -287,9 +309,67 @@ def verify_tribelog():
 
 
 def check_player_state():
-    from source.ASA.player import player_state
+    check_transfer_player_state({})
 
-    player_state.check_state()
+
+def check_transfer_player_state(settings, players=None, account=None, server=None):
+    from source.ASA.strucutres import teleporter
+    from source.gacha_bot import render
+    from source.utility import template
+
+    check_transfer_disconnected(settings, server)
+    reset_transfer_state(settings, players, account)
+    if template.check_buffs("tek_pod_buff", 0.7) or render.render_flag:
+        render.leave_tekpod()
+    elif template.check_buffs("dehydration", 0.7) or template.check_buffs(
+        "starving", 0.7
+    ):
+        target = _bed_name(players or {}, account) if account is not None else ""
+        if not target:
+            target = str(settings.get("transmitter_teleport", "")).strip()
+        if target:
+            teleporter.teleport_not_default(target)
+            render.enter_tekpod()
+            time.sleep(30)
+            render.leave_tekpod()
+            time.sleep(1)
+
+
+def check_transfer_disconnected(settings, server):
+    from source.ASA.player import tribelog
+    from source.join_sim.source import main
+    from source.logs import gachalogs as logs
+    from source.utility import utils, windows
+
+    if not (main.is_menu() or main.is_crashed()):
+        return
+    target_server = str(server or settings.get("resource_server", ""))
+    logs.logger.critical("transfer helper disconnected from the server")
+    windows.hwnd = main.main_loop(target_server)
+    tribelog.close()
+    logs.logger.critical(
+        "transfer helper rejoined the server; waiting 30 seconds for structures"
+    )
+    time.sleep(30)
+    yaw_key = (
+        "destination_station_yaw"
+        if str(target_server) == str(settings.get("destination_server"))
+        else "resource_station_yaw"
+    )
+    utils.set_yaw(float(settings.get(yaw_key, 0.0)))
+
+
+def reset_transfer_state(settings, players=None, account=None):
+    from source.ASA.player import player_inventory, tribelog
+    from source.ASA.strucutres import bed, teleporter
+    from source.utility import utils
+
+    player_inventory.close()
+    teleporter.close()
+    tribelog.close()
+    if bed.is_open() and account is not None:
+        bed.spawn_in(_bed_name(players or {}, account))
+    utils.press_key("Run")
 
 
 def withdraw_from_transfer_dedis(dedis, settings, stop_event):
@@ -325,7 +405,15 @@ def deposit_to_transfer_dedis(dedis):
     return True
 
 
-def transfer_to_server(server, settings, ui_coords, stop_event, status_callback=None):
+def transfer_to_server(
+    server,
+    settings,
+    ui_coords,
+    stop_event,
+    status_callback=None,
+    players=None,
+    account=None,
+):
     import pyautogui
 
     from source.ASA.strucutres import inventory, teleporter
@@ -333,25 +421,39 @@ def transfer_to_server(server, settings, ui_coords, stop_event, status_callback=
 
     emit = status_callback or (lambda _message: None)
     transfer = ui_coords["transfer"]
-    teleporter.teleport_not_default(settings["transmitter_teleport"])
     yaw_key = (
         "resource_station_yaw"
         if str(server) == str(settings["destination_server"])
         else "destination_station_yaw"
     )
-    utils.set_yaw(float(settings[yaw_key]))
-    inventory.open()
-    emit("Checking transmitter inventory.")
     transmitter_template = _register_template_region(
         transfer["transmitter_title_template"], transfer["transmitter_title_region"]
     )
-    if not _wait_for_template_visible(
-        template.check_template,
-        2,
-        stop_event,
-        transmitter_template,
-        0.7,
-    ):
+    transmitter_open = False
+    for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
+        if stop_event is not None and stop_event.is_set():
+            return False
+        teleporter.teleport_not_default(settings["transmitter_teleport"])
+        utils.set_yaw(float(settings[yaw_key]))
+        inventory.open()
+        emit(
+            "Checking transmitter inventory "
+            f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
+        )
+        transmitter_open = _wait_for_template_visible(
+            template.check_template,
+            2,
+            stop_event,
+            transmitter_template,
+            0.7,
+        )
+        if transmitter_open:
+            break
+        if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
+            emit("Transmitter inventory was not detected; recovering player state.")
+            check_transfer_player_state(settings, players, account, server)
+            stop_wait(stop_event, 0.5)
+    if not transmitter_open:
         if stop_event is not None and stop_event.is_set():
             return False
         raise RuntimeError("Transmitter inventory was not detected.")
@@ -367,7 +469,7 @@ def transfer_to_server(server, settings, ui_coords, stop_event, status_callback=
         _click_coord(transfer["join_button"])
         stop_wait(stop_event, 1)
         if not _wait_for_template_visible(
-            template.check_template,
+            template.check_template_no_bounds,
             0,
             stop_event,
             not_ready_template,
