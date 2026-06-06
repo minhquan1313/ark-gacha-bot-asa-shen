@@ -468,7 +468,7 @@ def _transfer_deposit_to_dedi(route_metadata, item, label, settings, ui_coords):
                 _recover_transfer_dedi_position(route_metadata, item)
             continue
         if _wait_for_template_visible(
-            template.check_template_no_bounds,
+            template.check_template,
             0,
             None,
             ready_template,

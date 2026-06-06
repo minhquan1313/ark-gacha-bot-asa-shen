@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from source.gacha_bot.server_transfer import TransferConfigError, run_transfer_helper
+from source.launcher.constants import GAME_WINDOW_TITLE
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
     preload_capture_view_dependencies,
@@ -22,10 +23,12 @@ from source.launcher.deposit_helper_capture import (
     view_route_entry,
 )
 from source.launcher.helper_window import WorkerHelperWindow
+from source.launcher.system import focus_window_if_needed
 from source.launcher.transfer_helper_config import (
     MAX_TRANSFER_RUNTIME_ACCOUNTS,
     load_transfer_runtime_config,
     missing_runtime_inputs,
+    normalize_transfer_dedis,
     normalize_transfer_players,
     player_account_count,
     player_bed_name_search_conflicts,
@@ -33,7 +36,6 @@ from source.launcher.transfer_helper_config import (
     save_transfer_players,
     save_transfer_settings,
     save_transfer_ui_coords,
-    normalize_transfer_dedis,
     suggested_loop_count,
 )
 from source.launcher.widgets import (
@@ -469,6 +471,7 @@ class ServerTransferHelper(WorkerHelperWindow):
 
         self.running_log.clear()
         self.status.setText("Starting server transfer helper...")
+        focus_window_if_needed(GAME_WINDOW_TITLE)
         self._start_worker(self._run_worker, config)
 
     def stop(self):

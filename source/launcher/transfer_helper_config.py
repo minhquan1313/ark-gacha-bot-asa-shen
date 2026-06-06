@@ -110,7 +110,7 @@ DEFAULT_TRANSFER_UI_COORDS = {
             "width": 120,
             "height": 55,
         },
-        "dedi_init_click": {"x": None, "y": None},
+        "dedi_init_click": {"x": 312, "y": 280},
         "dedi_open_timeout": 60,
         "dedi_init_attempts": 3,
     },
