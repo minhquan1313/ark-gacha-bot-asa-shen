@@ -69,7 +69,10 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
             return False
         if account_count > 1:
             current_account = deps.switch_account(account, current_account)
-        deps.ensure_ark_running()
+        if stopped():
+            return False
+        if deps.ensure_ark_running() is False or stopped():
+            return False
         emit(
             f"Account {account}: joining resource server {settings['resource_server']}."
         )
@@ -98,9 +101,16 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
             )
             deps.kill_ark()
             continue
+        if stopped():
+            return False
         deps.check_state(account)
-        deps.withdraw_resource()
+        if stopped():
+            return False
+        if deps.withdraw_resource(account) is False or stopped():
+            return False
         deps.fast_travel_to_bed(_bed_name(players, account))
+        if stopped():
+            return False
         deps.enter_tekpod()
 
     for loop_number in range(1, int(settings["loop_count"]) + 1):
@@ -113,25 +123,56 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
             )
             if account_count > 1:
                 current_account = deps.switch_account(account, current_account)
-            deps.ensure_ark_running()
+            if stopped():
+                return False
+            if deps.ensure_ark_running() is False or stopped():
+                return False
             emit(f"Account {account}: joining resource server.")
             if not deps.join_server(settings["resource_server"]):
                 emit(f"Account {account}: resource join failed; stopping.")
                 return False
+            if stopped():
+                return False
             deps.wait_structure()
+            if stopped():
+                return False
             deps.leave_tekpod()
+            if stopped():
+                return False
             deps.transfer_to_server(settings["destination_server"], account)
+            if stopped():
+                return False
             deps.wait_for_bed_screen()
+            if stopped():
+                return False
             deps.spawn_bed(_bed_name(players, account))
+            if stopped():
+                return False
             deps.wait_structure()
+            if stopped():
+                return False
             deps.stabilize_bed_position()
-            deps.deposit_resource()
+            if stopped():
+                return False
+            if deps.deposit_resource(account) is False or stopped():
+                return False
             deps.transfer_to_server(settings["resource_server"], account)
+            if stopped():
+                return False
             deps.wait_for_bed_screen()
+            if stopped():
+                return False
             deps.spawn_bed(_bed_name(players, account))
+            if stopped():
+                return False
             deps.wait_structure()
-            deps.withdraw_resource()
+            if stopped():
+                return False
+            if deps.withdraw_resource(account) is False or stopped():
+                return False
             if not final_account:
+                if stopped():
+                    return False
                 deps.enter_tekpod()
 
     emit("Server transfer helper finished.")
@@ -162,19 +203,21 @@ def default_transfer_dependencies(config, stop_event, status_callback=None):
         wait_structure=lambda: stop_wait(
             stop_event, int(settings["structure_load_delay"])
         ),
-        withdraw_resource=lambda: withdraw_from_transfer_dedis(
-            dedis, settings, stop_event, ui_coords
+        withdraw_resource=lambda account=None: withdraw_from_transfer_dedis(
+            dedis, settings, stop_event, ui_coords, players, account
         ),
-        fast_travel_to_bed=fast_travel_to_bed,
+        fast_travel_to_bed=lambda name: fast_travel_to_bed(name, stop_event),
         enter_tekpod=enter_tekpod,
         leave_tekpod=leave_tekpod,
         transfer_to_server=lambda server, account=None: transfer_to_server(
             server, settings, ui_coords, stop_event, status_callback, players, account
         ),
         wait_for_bed_screen=lambda: wait_for_bed_screen(stop_event),
-        spawn_bed=spawn_bed,
+        spawn_bed=lambda name: spawn_bed(name, stop_event),
         stabilize_bed_position=stabilize_bed_position,
-        deposit_resource=lambda: deposit_to_transfer_dedis(dedis, ui_coords, settings),
+        deposit_resource=lambda account=None: deposit_to_transfer_dedis(
+            dedis, ui_coords, settings, stop_event, players, account
+        ),
         kill_ark=kill_ark,
     )
 
@@ -329,7 +372,7 @@ def check_transfer_player_state(settings, players=None, account=None, server=Non
         if not target:
             target = str(settings.get("transmitter_teleport", "")).strip()
         if target:
-            teleporter.teleport_not_default(target)
+            teleporter.transfer_teleport_not_default(target, fallback_bed_name=target)
             render.enter_tekpod()
             time.sleep(30)
             render.leave_tekpod()
@@ -373,7 +416,9 @@ def reset_transfer_state(settings, players=None, account=None):
     utils.press_key("Run")
 
 
-def withdraw_from_transfer_dedis(dedis, settings, stop_event, ui_coords=None):
+def withdraw_from_transfer_dedis(
+    dedis, settings, stop_event, ui_coords=None, players=None, account=None
+):
     import settings as global_settings
     from source.ASA.stations import custom_stations
     from source.ASA.strucutres import teleporter
@@ -384,39 +429,61 @@ def withdraw_from_transfer_dedis(dedis, settings, stop_event, ui_coords=None):
     global_settings.station_yaw = float(settings["resource_station_yaw"])
     resource_route = transfer_dedi_route(dedis, "resource")
     route_metadata = custom_stations.get_station_metadata(resource_route["teleport"])
-    teleporter.teleport_not_default(route_metadata)
+    fallback_bed_name = _fallback_bed_name(players, account)
+    teleporter.transfer_teleport_not_default(
+        route_metadata, fallback_bed_name=fallback_bed_name, stop_event=stop_event
+    )
     deposit._restore_route_view(route_metadata)
     for index, item in enumerate(active_transfer_dedis(dedis, "resource"), 1):
         if stop_event is not None and stop_event.is_set():
             return False
         label = f"Transfer dedi {index}"
         if not _transfer_withdraw_from_dedi(
-            route_metadata, item, label, settings, stop_event, ui_coords
+            route_metadata,
+            item,
+            label,
+            settings,
+            stop_event,
+            ui_coords,
+            fallback_bed_name,
         ):
             return False
     utils.set_yaw(float(settings["resource_station_yaw"]))
     return True
 
 
-def deposit_to_transfer_dedis(dedis, ui_coords=None, settings=None):
+def deposit_to_transfer_dedis(
+    dedis, ui_coords=None, settings=None, stop_event=None, players=None, account=None
+):
     from source.ASA.stations import custom_stations
 
     destination_route = transfer_dedi_route(dedis, "destination")
     route_metadata = custom_stations.get_station_metadata(destination_route["teleport"])
+    fallback_bed_name = _fallback_bed_name(players, account)
     for index, item in enumerate(active_transfer_dedis(dedis, "destination"), 1):
+        if stop_event is not None and stop_event.is_set():
+            return False
         if not _transfer_deposit_to_dedi(
             route_metadata,
             item,
             f"Transfer dedi {index}",
             settings or {},
             ui_coords or {},
+            stop_event,
+            fallback_bed_name,
         ):
             return False
     return True
 
 
 def _transfer_withdraw_from_dedi(
-    route_metadata, item, label, settings, stop_event=None, ui_coords=None
+    route_metadata,
+    item,
+    label,
+    settings,
+    stop_event=None,
+    ui_coords=None,
+    fallback_bed_name=None,
 ):
     from source.ASA.strucutres import inventory
     from source.gacha_bot import deposit
@@ -440,11 +507,21 @@ def _transfer_withdraw_from_dedi(
             f"on attempt {attempt} / {RECOVERABLE_RUNTIME_ATTEMPTS}"
         )
         if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
-            _recover_transfer_dedi_position(route_metadata, item)
+            _recover_transfer_dedi_position(
+                route_metadata, item, fallback_bed_name, stop_event
+            )
     return False
 
 
-def _transfer_deposit_to_dedi(route_metadata, item, label, settings, ui_coords):
+def _transfer_deposit_to_dedi(
+    route_metadata,
+    item,
+    label,
+    settings,
+    ui_coords,
+    stop_event=None,
+    fallback_bed_name=None,
+):
     from source.ASA.strucutres import inventory
     from source.logs import gachalogs as logs
     from source.utility import template, utils, variables, windows
@@ -458,14 +535,21 @@ def _transfer_deposit_to_dedi(route_metadata, item, label, settings, ui_coords):
     attempts = int(transfer.get("dedi_init_attempts", RECOVERABLE_RUNTIME_ATTEMPTS))
     attempts = max(1, attempts)
     for attempt in range(1, attempts + 1):
-        if not _open_transfer_dedi_inventory(route_metadata, item, label, timeout):
+        if stop_event is not None and stop_event.is_set():
+            inventory.close()
+            return False
+        if not _open_transfer_dedi_inventory(
+            route_metadata, item, label, timeout, stop_event
+        ):
             inventory.close()
             logs.logger.error(
                 f"{label} transfer deposit open timed out after {timeout} seconds "
                 f"on attempt {attempt} / {attempts}"
             )
             if attempt < attempts:
-                _recover_transfer_dedi_position(route_metadata, item)
+                _recover_transfer_dedi_position(
+                    route_metadata, item, fallback_bed_name, stop_event
+                )
             continue
         if _wait_for_template_visible(
             template.check_template,
@@ -482,20 +566,29 @@ def _transfer_deposit_to_dedi(route_metadata, item, label, settings, ui_coords):
             logs.logger.debug(f"{label} transfer deposit completed")
             return True
         logs.logger.warning(f"{label} destination dedi not initialized; initializing")
+        if stop_event is not None and stop_event.is_set():
+            inventory.close()
+            return False
         init_coord = transfer["dedi_init_click"]
         windows.click(int(init_coord["x"]), int(init_coord["y"]))
         utils.press_key("T")
         inventory.close()
         if attempt < attempts:
-            _recover_transfer_dedi_position(route_metadata, item)
+            _recover_transfer_dedi_position(
+                route_metadata, item, fallback_bed_name, stop_event
+            )
     return False
 
 
-def _recover_transfer_dedi_position(route_metadata, item):
+def _recover_transfer_dedi_position(
+    route_metadata, item, fallback_bed_name=None, stop_event=None
+):
     from source.ASA.strucutres import teleporter
     from source.gacha_bot import deposit
 
-    teleporter.teleport_not_default(route_metadata)
+    teleporter.transfer_teleport_not_default(
+        route_metadata, fallback_bed_name=fallback_bed_name, stop_event=stop_event
+    )
     deposit._restore_route_view(route_metadata)
     deposit._turn_to_object(route_metadata, item)
 
@@ -508,6 +601,7 @@ def _open_transfer_dedi_inventory(
     from source.utility import template, utils
 
     deposit._turn_to_object(route_metadata, item)
+    time.sleep(0.3 * float(settings_lag_offset()))
     deadline = time.monotonic() + float(timeout)
     while time.monotonic() < deadline:
         if stop_event is not None and stop_event.is_set():
@@ -575,10 +669,15 @@ def transfer_to_server(
         transfer["transmitter_title_template"], transfer["transmitter_title_region"]
     )
     transmitter_open = False
+    fallback_bed_name = _fallback_bed_name(players, account)
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
         if stop_event is not None and stop_event.is_set():
             return False
-        teleporter.teleport_not_default(settings["transmitter_teleport"])
+        teleporter.transfer_teleport_not_default(
+            settings["transmitter_teleport"],
+            fallback_bed_name=fallback_bed_name,
+            stop_event=stop_event,
+        )
         utils.set_yaw(float(settings[yaw_key]))
         inventory.open()
         emit(
@@ -638,16 +737,16 @@ def wait_for_bed_screen(stop_event):
     return False
 
 
-def spawn_bed(name):
+def spawn_bed(name, stop_event=None):
     from source.ASA.strucutres import bed
 
-    bed.spawn_in(name)
+    return bed.transfer_spawn_in(name, stop_event)
 
 
-def fast_travel_to_bed(name):
+def fast_travel_to_bed(name, stop_event=None):
     from source.ASA.strucutres import bed
 
-    bed.fast_travel(name)
+    return bed.transfer_fast_travel(name, stop_event)
 
 
 def stabilize_bed_position():
@@ -681,6 +780,12 @@ def stop_wait(stop_event, seconds):
 
 def _bed_name(players, account):
     return player_bed_name(players, account)
+
+
+def _fallback_bed_name(players, account):
+    if account is None:
+        return None
+    return _bed_name(players or {}, account)
 
 
 def _click_coord(coord):

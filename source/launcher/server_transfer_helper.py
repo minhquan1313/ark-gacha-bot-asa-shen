@@ -14,16 +14,15 @@ from PySide6.QtWidgets import (
 )
 
 from source.gacha_bot.server_transfer import TransferConfigError, run_transfer_helper
-from source.launcher.constants import GAME_WINDOW_TITLE
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
+    focus_game_window,
     preload_capture_view_dependencies,
     register_alt_n_hotkey,
     unregister_hotkey,
     view_route_entry,
 )
 from source.launcher.helper_window import WorkerHelperWindow
-from source.launcher.system import focus_window_if_needed
 from source.launcher.transfer_helper_config import (
     MAX_TRANSFER_RUNTIME_ACCOUNTS,
     load_transfer_runtime_config,
@@ -469,9 +468,16 @@ class ServerTransferHelper(WorkerHelperWindow):
             )
             return
 
+        if not self._require_ark_window("start server transfer", "Cannot start"):
+            return
+        try:
+            focus_game_window(center_cursor_when_switching=True)
+        except RuntimeError as exc:
+            self.status.setText(f"Cannot start: {exc}")
+            return
+
         self.running_log.clear()
         self.status.setText("Starting server transfer helper...")
-        focus_window_if_needed(GAME_WINDOW_TITLE)
         self._start_worker(self._run_worker, config)
 
     def stop(self):
@@ -507,7 +513,15 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _set_running_ui(self, running):
         super()._set_running_ui(running)
-        self.running_widget.setVisible(False)
+        self.running_widget.setVisible(running)
+        if running:
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(16777215)
+            self.setFixedWidth(self.idle_width)
+            running_height = self._height_for_width(self.idle_width)
+            self.setFixedHeight(running_height)
+            self.resize(self.idle_width, running_height)
+            self._position_middle_right()
         self.start_stop_button.setText("STOP" if running else "START")
         self.start_stop_button.set_variant("danger" if running else "primary")
 

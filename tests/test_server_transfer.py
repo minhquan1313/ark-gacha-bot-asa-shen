@@ -149,6 +149,10 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 call("Bed2"),
             ]
         )
+        dependencies.withdraw_resource.assert_has_calls(
+            [call(1), call(2), call(1), call(2)]
+        )
+        dependencies.deposit_resource.assert_has_calls([call(1), call(2)])
 
     def test_runtime_processes_only_first_four_configured_accounts(self):
         dependencies = deps()
@@ -234,6 +238,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             coords["steam"][key] = {"x": 10, "y": 20}
         template = SimpleNamespace(
             roi_regions={},
+            check_template=Mock(),
             check_template_no_bounds=Mock(),
         )
 
@@ -303,6 +308,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             coords["steam"][key] = {"x": 10, "y": 20}
         template = SimpleNamespace(
             roi_regions={},
+            check_template=Mock(),
             check_template_no_bounds=Mock(),
         )
 
@@ -349,6 +355,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             coords["steam"][key] = {"x": 10, "y": 20}
         template = SimpleNamespace(
             roi_regions={},
+            check_template=Mock(),
             check_template_no_bounds=Mock(),
         )
 
@@ -394,6 +401,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             coords["steam"][key] = {"x": 10, "y": 20}
         template = SimpleNamespace(
             roi_regions={},
+            check_template=Mock(),
             check_template_no_bounds=Mock(),
         )
 
@@ -459,7 +467,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
     def test_transfer_to_server_checks_transmitter_before_clicking_transfer(self):
         pyautogui = SimpleNamespace(hotkey=Mock(), write=Mock())
         inventory = SimpleNamespace(open=Mock())
-        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        teleporter = SimpleNamespace(transfer_teleport_not_default=Mock())
         template = SimpleNamespace(
             roi_regions={},
             check_template=Mock(),
@@ -517,7 +525,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
     def test_transfer_to_server_recovers_state_before_transmitter_retry(self):
         pyautogui = SimpleNamespace(hotkey=Mock(), write=Mock())
         inventory = SimpleNamespace(open=Mock())
-        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        teleporter = SimpleNamespace(transfer_teleport_not_default=Mock())
         template = SimpleNamespace(
             roi_regions={},
             check_template=Mock(),
@@ -563,7 +571,14 @@ class ServerTransferRunnerTests(unittest.TestCase):
             )
 
         self.assertEqual(inventory.open.call_count, 3)
-        self.assertEqual(teleporter.teleport_not_default.call_count, 3)
+        self.assertEqual(teleporter.transfer_teleport_not_default.call_count, 3)
+        teleporter.transfer_teleport_not_default.assert_has_calls(
+            [
+                call("TX", fallback_bed_name="Bed1", stop_event=ANY),
+                call("TX", fallback_bed_name="Bed1", stop_event=ANY),
+                call("TX", fallback_bed_name="Bed1", stop_event=ANY),
+            ]
+        )
         recover.assert_has_calls(
             [
                 call(config["settings"], config["players"], 1, "2222"),
@@ -575,7 +590,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
     def test_transfer_to_server_blocks_when_transmitter_title_missing(self):
         pyautogui = SimpleNamespace(hotkey=Mock(), write=Mock())
         inventory = SimpleNamespace(open=Mock())
-        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        teleporter = SimpleNamespace(transfer_teleport_not_default=Mock())
         template = SimpleNamespace(
             roi_regions={},
             check_template=Mock(),
@@ -618,7 +633,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
         custom_stations = SimpleNamespace(
             get_station_metadata=Mock(return_value=metadata)
         )
-        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        teleporter = SimpleNamespace(transfer_teleport_not_default=Mock())
         deposit = SimpleNamespace(_restore_route_view=Mock())
         utils = SimpleNamespace(set_yaw=Mock())
 
@@ -643,15 +658,21 @@ class ServerTransferRunnerTests(unittest.TestCase):
                     config["settings"],
                     threading.Event(),
                     config["ui_coords"],
+                    config["players"],
+                    1,
                 )
             )
 
         custom_stations.get_station_metadata.assert_called_once_with("RESOURCE_DEDI")
+        teleporter.transfer_teleport_not_default.assert_called_once_with(
+            metadata, fallback_bed_name="Bed1", stop_event=ANY
+        )
         withdraw.assert_called_once()
         self.assertEqual(
             withdraw.call_args.args[1],
             config["dedis"]["resource"]["items"][0],
         )
+        self.assertEqual(withdraw.call_args.args[6], "Bed1")
 
     def test_deposit_uses_destination_dedi_route(self):
         config = ready_config(account_count=1)
@@ -672,7 +693,12 @@ class ServerTransferRunnerTests(unittest.TestCase):
         ):
             self.assertTrue(
                 deposit_to_transfer_dedis(
-                    config["dedis"], config["ui_coords"], config["settings"]
+                    config["dedis"],
+                    config["ui_coords"],
+                    config["settings"],
+                    threading.Event(),
+                    config["players"],
+                    1,
                 )
             )
 
@@ -682,12 +708,45 @@ class ServerTransferRunnerTests(unittest.TestCase):
             deposit.call_args.args[1],
             config["dedis"]["destination"]["items"][0],
         )
+        self.assertEqual(deposit.call_args.args[6], "Bed1")
+
+    def test_destination_deposit_stops_before_opening_dedi(self):
+        config = ready_config(account_count=1)
+        metadata = SimpleNamespace(yaw=1, name="DEST_DEDI")
+        custom_stations = SimpleNamespace(
+            get_station_metadata=Mock(return_value=metadata)
+        )
+        stop_event = threading.Event()
+        stop_event.set()
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {"source.ASA.stations.custom_stations": custom_stations},
+            ),
+            patch(
+                "source.gacha_bot.server_transfer._transfer_deposit_to_dedi"
+            ) as deposit,
+        ):
+            self.assertFalse(
+                deposit_to_transfer_dedis(
+                    config["dedis"],
+                    config["ui_coords"],
+                    config["settings"],
+                    stop_event,
+                    config["players"],
+                    1,
+                )
+            )
+
+        deposit.assert_not_called()
 
     def test_destination_dedi_init_runs_before_retrying_deposit_ready(self):
         config = ready_config(account_count=1)
         inventory = SimpleNamespace(close=Mock())
         template = SimpleNamespace(
             roi_regions={},
+            check_template=Mock(),
             check_template_no_bounds=Mock(),
         )
         utils = SimpleNamespace(press_key=Mock())
@@ -740,6 +799,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
         inventory = SimpleNamespace(close=Mock())
         template = SimpleNamespace(
             roi_regions={},
+            check_template=Mock(),
             check_template_no_bounds=Mock(),
         )
         utils = SimpleNamespace(press_key=Mock())

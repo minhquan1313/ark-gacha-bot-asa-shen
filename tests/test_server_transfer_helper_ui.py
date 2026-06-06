@@ -90,15 +90,15 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         helper._set_running_ui(True)
 
         self.assertTrue(helper.idle_widget.isHidden())
-        self.assertTrue(helper.running_widget.isHidden())
-        self.assertEqual(helper.width(), MINIMAL_HELPER_RUNNING_WIDTH)
+        self.assertFalse(helper.running_widget.isHidden())
+        self.assertEqual(helper.width(), helper.idle_width)
         self.assertEqual(helper.hotkey_label.text(), "ALT + N stops this helper")
 
         helper._set_running_ui(False)
 
         self.assertFalse(helper.idle_widget.isHidden())
         self.assertTrue(helper.running_widget.isHidden())
-        self.assertEqual(helper.width(), 560)
+        self.assertEqual(helper.width(), helper.idle_width)
         self.assertEqual(helper.hotkey_label.text(), "ALT + N toggles START / STOP")
 
     def test_player_rows_follow_account_count_with_editable_names(self):
@@ -310,6 +310,69 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper.owner.dialog.assert_called_once()
             self.assertEqual(helper.status.text(), "Add at least one player before starting.")
         finally:
+            helper.close()
+
+    def test_start_blocks_invalid_ark_window_before_worker(self):
+        helper = self._transfer_helper(account_count=1)
+        helper.owner.require_ark_window.return_value = False
+        helper.owner.last_ark_window_error = "ArkAscended must run at 1920x1080."
+
+        try:
+            with (
+                patch.object(helper, "_current_config", return_value=helper.config),
+                patch(
+                    "source.launcher.server_transfer_helper.missing_runtime_inputs",
+                    return_value=[],
+                ),
+                patch(
+                    "source.launcher.server_transfer_helper.focus_game_window"
+                ) as focus,
+            ):
+                helper.start()
+
+            self.assertIsNone(helper.worker_thread)
+            focus.assert_not_called()
+            self.assertIn("1920x1080", helper.status.text())
+        finally:
+            helper.close()
+
+    def test_start_focus_failure_does_not_start_worker(self):
+        helper = self._transfer_helper(account_count=1)
+
+        try:
+            with (
+                patch.object(helper, "_current_config", return_value=helper.config),
+                patch(
+                    "source.launcher.server_transfer_helper.missing_runtime_inputs",
+                    return_value=[],
+                ),
+                patch(
+                    "source.launcher.server_transfer_helper.focus_game_window",
+                    side_effect=RuntimeError("unable to focus Ark"),
+                ) as focus,
+            ):
+                helper.start()
+
+            self.assertIsNone(helper.worker_thread)
+            focus.assert_called_once_with(center_cursor_when_switching=True)
+            self.assertEqual(helper.status.text(), "Cannot start: unable to focus Ark")
+        finally:
+            helper.close()
+
+    def test_hotkey_stops_running_transfer_helper(self):
+        helper = self._transfer_helper(account_count=1)
+        worker = Mock()
+        worker.is_alive.return_value = True
+        helper.worker_thread = worker
+
+        try:
+            helper.handle_hotkey()
+
+            self.assertTrue(helper.stop_event.is_set())
+            self.assertEqual(helper.running_summary.text(), "Stopping...")
+            self.assertFalse(helper.running_stop_button.isEnabled())
+        finally:
+            worker.is_alive.return_value = False
             helper.close()
 
     def test_player_search_prefix_conflict_gets_warning_outline(self):
