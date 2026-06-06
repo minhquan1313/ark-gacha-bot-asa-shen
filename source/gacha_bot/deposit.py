@@ -8,18 +8,22 @@ from source.ASA.strucutres import inventory, teleporter
 from source.gacha_bot.deposit_config import DEDI_CONFIG_PATH
 from source.gacha_bot.deposit_config import load_deposit_config as load_route_config
 from source.logs import gachalogs as logs
+from source.utility import template, utils, variables, windows
 from source.utility.debug_screenshots import (
-    CAPTURE_DEDI_DEPOSIT,
+    CAPTURE_DEDI_DEPOSIT_CRYSTAL,
+    CAPTURE_DEDI_DEPOSIT_GRIND,
     CAPTURE_GRINDER_WITHDRAW,
     CAPTURE_ROUTE_READY,
     CAPTURE_VAULT_TRANSFER,
     capture_for,
 )
-from source.utility import template, utils, variables, windows
 
 DEDI_REMOTE_POLL_INTERVAL = 0.05
-capture_dedi_deposit = capture_for(
-    "dedi_deposit_after_click", active=CAPTURE_DEDI_DEPOSIT
+capture_dedi_deposit_crystal = capture_for(
+    "dedi_deposit_crystal", active=CAPTURE_DEDI_DEPOSIT_CRYSTAL, delay=0.1
+)
+capture_dedi_deposit_grind = capture_for(
+    "dedi_deposit_grind", active=CAPTURE_DEDI_DEPOSIT_GRIND, delay=0.1
 )
 capture_route_ready = capture_for("deposit_route_ready", active=CAPTURE_ROUTE_READY)
 capture_grinder_after_withdraw = capture_for(
@@ -170,7 +174,12 @@ def _deposit_to_dedi(route_metadata, item, label):
                         variables.get_pixel_loc("dedi_deposit_x"),
                         variables.get_pixel_loc("dedi_deposit_y"),
                     )
-                    capture_dedi_deposit(label)
+                    # DEBUG START
+                    if label.startswith("crystal"):
+                        capture_dedi_deposit_crystal(label)
+                    elif label.startswith("grind"):
+                        capture_dedi_deposit_grind(label)
+                    # DEBUG END
                     inventory.close()
                     template.template_await_false(
                         template.check_template, 1, "inventory", 0.7
@@ -184,6 +193,63 @@ def _deposit_to_dedi(route_metadata, item, label):
         inventory.close()
         logs.logger.error(
             f"{label} deposit handshake timed out after "
+            f"{settings.dedi_handshake_timeout} seconds "
+            f"on attempt {attempt} / "
+            f"{attempts}"
+        )
+        if attempt < attempts:
+            _recover_dedi_position(route_metadata, item, label)
+
+    _recover_after_dedi_failure(label)
+    return False
+
+
+def _withdraw_from_dedi(route_metadata, item, label, stop_event=None):
+    attempts = source.gacha_bot.config.dedi_handshake_recovery_attempts
+    for attempt in range(1, attempts + 1):
+        _turn_to_object(route_metadata, item)
+        time.sleep(0.3 * settings.lag_offset)
+
+        deadline = time.monotonic() + settings.dedi_handshake_timeout
+        while time.monotonic() < deadline:
+            if stop_event is not None and stop_event.is_set():
+                inventory.close()
+                return False
+            utils.press_key("AccessInventory")
+            if template.template_await_true(
+                template.check_template, 2, "inventory", 0.7
+            ):
+                waiting_for_remote = template.template_await_true(
+                    template.check_template, 2, "waiting_inv", 0.8
+                )
+                while (
+                    waiting_for_remote
+                    and time.monotonic() < deadline
+                    and template.check_template("inventory", 0.7)
+                ):
+                    if stop_event is not None and stop_event.is_set():
+                        inventory.close()
+                        return False
+                    player_state.check_disconnected()
+                    time.sleep(DEDI_REMOTE_POLL_INTERVAL)
+                    waiting_for_remote = template.check_template("waiting_inv", 0.8)
+
+                if template.check_template("inventory", 0.7) and not waiting_for_remote:
+                    time.sleep(0.3 * settings.lag_offset)
+                    inventory.transfer_all_from()
+                    inventory.close()
+                    template.template_await_false(
+                        template.check_template, 1, "inventory", 0.7
+                    )
+                    logs.logger.debug(f"{label} withdraw handshake completed")
+                    return True
+
+            player_state.check_disconnected()
+            time.sleep(0.5 * settings.lag_offset)
+
+        inventory.close()
+        logs.logger.error(
+            f"{label} withdraw handshake timed out after "
             f"{settings.dedi_handshake_timeout} seconds "
             f"on attempt {attempt} / "
             f"{attempts}"

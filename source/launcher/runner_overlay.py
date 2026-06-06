@@ -121,10 +121,6 @@ class RunnerOverlay(QWidget):
         self.current_label.setWordWrap(True)
         layout.addWidget(self.current_label)
 
-        hint = QLabel("NEXT QUEUE")
-        hint.setObjectName("RunnerOverlayHint")
-        layout.addWidget(hint)
-
         for _ in range(RUNNER_OVERLAY_UPCOMING_LIMIT):
             label = QLabel("")
             label.setObjectName("RunnerOverlayTask")

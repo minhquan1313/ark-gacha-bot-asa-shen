@@ -1,7 +1,8 @@
 import json
 import settings
 
-class station_metadata():
+
+class station_metadata:
     def __init__(self):
         super().__init__()
         self.name = None
@@ -13,10 +14,11 @@ class station_metadata():
         self.side = None
         self.resource = None
 
+
 def get_custom_stations():
     file_path = "json_files/stations.json"
     try:
-        with open(file_path, 'r') as file:
+        with open(file_path, "r") as file:
             data = file.read().strip()
             if not data:
                 return []
@@ -25,7 +27,7 @@ def get_custom_stations():
         return []
 
 
-def get_station_metadata(teleporter_name:str):
+def get_station_metadata(teleporter_name: str):
     global custom_stations
     custom_stations = False
     stationdata = station_metadata()
@@ -41,12 +43,12 @@ def get_station_metadata(teleporter_name:str):
                 stationdata.xpos = entry_station["xpos"]
                 stationdata.ypos = entry_station["ypos"]
                 stationdata.zpos = entry_station["zpos"]
-                stationdata.yaw  = entry_station["yaw"]
-                #stationdata.pitch = entry_station["pitch"]
+                stationdata.yaw = entry_station["yaw"]
+                # stationdata.pitch = entry_station["pitch"]
                 foundstation = True
                 break
 
-    if not foundstation:   #setting up default station metadata
+    if not foundstation:  # setting up default station metadata
         stationdata.name = teleporter_name
         stationdata.xpos = 0
         stationdata.ypos = 0
