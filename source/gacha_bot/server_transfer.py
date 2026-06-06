@@ -8,6 +8,7 @@ from source.launcher.transfer_helper_config import (
     missing_runtime_inputs,
     player_bed_name,
     runtime_account_count,
+    transfer_dedi_route,
 )
 
 RECOVERABLE_RUNTIME_ATTEMPTS = 3
@@ -162,7 +163,7 @@ def default_transfer_dependencies(config, stop_event, status_callback=None):
             stop_event, int(settings["structure_load_delay"])
         ),
         withdraw_resource=lambda: withdraw_from_transfer_dedis(
-            dedis, settings, stop_event
+            dedis, settings, stop_event, ui_coords
         ),
         fast_travel_to_bed=fast_travel_to_bed,
         enter_tekpod=enter_tekpod,
@@ -173,7 +174,7 @@ def default_transfer_dependencies(config, stop_event, status_callback=None):
         wait_for_bed_screen=lambda: wait_for_bed_screen(stop_event),
         spawn_bed=spawn_bed,
         stabilize_bed_position=stabilize_bed_position,
-        deposit_resource=lambda: deposit_to_transfer_dedis(dedis),
+        deposit_resource=lambda: deposit_to_transfer_dedis(dedis, ui_coords, settings),
         kill_ark=kill_ark,
     )
 
@@ -372,7 +373,7 @@ def reset_transfer_state(settings, players=None, account=None):
     utils.press_key("Run")
 
 
-def withdraw_from_transfer_dedis(dedis, settings, stop_event):
+def withdraw_from_transfer_dedis(dedis, settings, stop_event, ui_coords=None):
     import settings as global_settings
     from source.ASA.stations import custom_stations
     from source.ASA.strucutres import teleporter
@@ -381,28 +382,172 @@ def withdraw_from_transfer_dedis(dedis, settings, stop_event):
 
     global_settings.lag_offset = float(settings["lag_offset"])
     global_settings.station_yaw = float(settings["resource_station_yaw"])
-    route_metadata = custom_stations.get_station_metadata(dedis["teleport"])
+    resource_route = transfer_dedi_route(dedis, "resource")
+    route_metadata = custom_stations.get_station_metadata(resource_route["teleport"])
     teleporter.teleport_not_default(route_metadata)
     deposit._restore_route_view(route_metadata)
-    for index, item in enumerate(active_transfer_dedis(dedis), 1):
+    for index, item in enumerate(active_transfer_dedis(dedis, "resource"), 1):
         if stop_event is not None and stop_event.is_set():
             return False
         label = f"Transfer dedi {index}"
-        if not deposit._withdraw_from_dedi(route_metadata, item, label, stop_event):
+        if not _transfer_withdraw_from_dedi(
+            route_metadata, item, label, settings, stop_event, ui_coords
+        ):
             return False
     utils.set_yaw(float(settings["resource_station_yaw"]))
     return True
 
 
-def deposit_to_transfer_dedis(dedis):
+def deposit_to_transfer_dedis(dedis, ui_coords=None, settings=None):
     from source.ASA.stations import custom_stations
-    from source.gacha_bot import deposit
 
-    route_metadata = custom_stations.get_station_metadata(dedis["teleport"])
-    for index, item in enumerate(active_transfer_dedis(dedis), 1):
-        if not deposit._deposit_to_dedi(route_metadata, item, f"Transfer dedi {index}"):
+    destination_route = transfer_dedi_route(dedis, "destination")
+    route_metadata = custom_stations.get_station_metadata(destination_route["teleport"])
+    for index, item in enumerate(active_transfer_dedis(dedis, "destination"), 1):
+        if not _transfer_deposit_to_dedi(
+            route_metadata,
+            item,
+            f"Transfer dedi {index}",
+            settings or {},
+            ui_coords or {},
+        ):
             return False
     return True
+
+
+def _transfer_withdraw_from_dedi(
+    route_metadata, item, label, settings, stop_event=None, ui_coords=None
+):
+    from source.ASA.strucutres import inventory
+    from source.gacha_bot import deposit
+    from source.logs import gachalogs as logs
+
+    timeout = _transfer_dedi_open_timeout(ui_coords)
+    for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
+        if stop_event is not None and stop_event.is_set():
+            inventory.close()
+            return False
+        if _open_transfer_dedi_inventory(
+            route_metadata, item, label, timeout, stop_event
+        ):
+            inventory.transfer_all_from()
+            inventory.close()
+            logs.logger.debug(f"{label} transfer withdraw completed")
+            return True
+        inventory.close()
+        logs.logger.error(
+            f"{label} transfer withdraw timed out after {timeout} seconds "
+            f"on attempt {attempt} / {RECOVERABLE_RUNTIME_ATTEMPTS}"
+        )
+        if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
+            _recover_transfer_dedi_position(route_metadata, item)
+    return False
+
+
+def _transfer_deposit_to_dedi(route_metadata, item, label, settings, ui_coords):
+    from source.ASA.strucutres import inventory
+    from source.logs import gachalogs as logs
+    from source.utility import template, utils, variables, windows
+
+    transfer = ui_coords.get("transfer", {})
+    ready_template = _register_template_region(
+        transfer["dedi_deposit_ready_template"],
+        transfer["dedi_deposit_ready_region"],
+    )
+    timeout = _transfer_dedi_open_timeout(ui_coords)
+    attempts = int(transfer.get("dedi_init_attempts", RECOVERABLE_RUNTIME_ATTEMPTS))
+    attempts = max(1, attempts)
+    for attempt in range(1, attempts + 1):
+        if not _open_transfer_dedi_inventory(route_metadata, item, label, timeout):
+            inventory.close()
+            logs.logger.error(
+                f"{label} transfer deposit open timed out after {timeout} seconds "
+                f"on attempt {attempt} / {attempts}"
+            )
+            if attempt < attempts:
+                _recover_transfer_dedi_position(route_metadata, item)
+            continue
+        if _wait_for_template_visible(
+            template.check_template_no_bounds,
+            0,
+            None,
+            ready_template,
+            0.75,
+        ):
+            windows.click(
+                variables.get_pixel_loc("dedi_deposit_x"),
+                variables.get_pixel_loc("dedi_deposit_y"),
+            )
+            inventory.close()
+            logs.logger.debug(f"{label} transfer deposit completed")
+            return True
+        logs.logger.warning(f"{label} destination dedi not initialized; initializing")
+        init_coord = transfer["dedi_init_click"]
+        windows.click(int(init_coord["x"]), int(init_coord["y"]))
+        utils.press_key("T")
+        inventory.close()
+        if attempt < attempts:
+            _recover_transfer_dedi_position(route_metadata, item)
+    return False
+
+
+def _recover_transfer_dedi_position(route_metadata, item):
+    from source.ASA.strucutres import teleporter
+    from source.gacha_bot import deposit
+
+    teleporter.teleport_not_default(route_metadata)
+    deposit._restore_route_view(route_metadata)
+    deposit._turn_to_object(route_metadata, item)
+
+
+def _open_transfer_dedi_inventory(
+    route_metadata, item, label, timeout, stop_event=None
+):
+    from source.ASA.strucutres import inventory
+    from source.gacha_bot import deposit
+    from source.utility import template, utils
+
+    deposit._turn_to_object(route_metadata, item)
+    deadline = time.monotonic() + float(timeout)
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            inventory.close()
+            return False
+        utils.press_key("AccessInventory")
+        if template.template_await_true(template.check_template, 2, "inventory", 0.7):
+            waiting_for_remote = template.template_await_true(
+                template.check_template, 2, "waiting_inv", 0.8
+            )
+            while (
+                waiting_for_remote
+                and time.monotonic() < deadline
+                and template.check_template("inventory", 0.7)
+            ):
+                if stop_event is not None and stop_event.is_set():
+                    inventory.close()
+                    return False
+                time.sleep(0.05)
+                waiting_for_remote = template.check_template("waiting_inv", 0.8)
+            if template.check_template("inventory", 0.7) and not waiting_for_remote:
+                return True
+        time.sleep(0.5 * float(settings_lag_offset()))
+    return False
+
+
+def _transfer_dedi_open_timeout(ui_coords):
+    try:
+        return float(ui_coords.get("transfer", {}).get("dedi_open_timeout", 60))
+    except (AttributeError, TypeError, ValueError):
+        return 60.0
+
+
+def settings_lag_offset():
+    try:
+        import settings
+
+        return float(getattr(settings, "lag_offset", 1))
+    except Exception:
+        return 1.0
 
 
 def transfer_to_server(

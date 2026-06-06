@@ -6,12 +6,15 @@ from unittest.mock import ANY, Mock, call, patch
 from source.gacha_bot.server_transfer import (
     TransferConfigError,
     _ensure_steam_window_ready,
+    _transfer_deposit_to_dedi,
     check_transfer_disconnected,
+    deposit_to_transfer_dedis,
     reset_transfer_state,
     ensure_ark_running,
     run_transfer_helper,
     switch_steam_account,
     transfer_to_server,
+    withdraw_from_transfer_dedis,
 )
 from source.launcher.transfer_helper_config import (
     default_transfer_ui_coords,
@@ -31,13 +34,24 @@ def ready_config(account_count=2, loop_count=1):
     )
     dedis = normalize_transfer_dedis(
         {
-            "teleport": "DEDI",
-            "items": [
-                {
-                    "location": {"yaw": 0, "pitch": 0},
-                    "crouched": False,
-                }
-            ],
+            "resource": {
+                "teleport": "RESOURCE_DEDI",
+                "items": [
+                    {
+                        "location": {"yaw": 0, "pitch": 0},
+                        "crouched": False,
+                    }
+                ],
+            },
+            "destination": {
+                "teleport": "DEST_DEDI",
+                "items": [
+                    {
+                        "location": {"yaw": 10, "pitch": 1},
+                        "crouched": True,
+                    }
+                ],
+            },
         }
     )
     players = {
@@ -58,6 +72,8 @@ def ready_config(account_count=2, loop_count=1):
         coords["transfer"][key] = {"x": 1, "y": 1}
     coords["transfer"]["transmitter_title_template"] = "README.md"
     coords["transfer"]["not_ready_template"] = "README.md"
+    coords["transfer"]["dedi_deposit_ready_template"] = "README.md"
+    coords["transfer"]["dedi_init_click"] = {"x": 1, "y": 1}
     return {
         "settings": settings,
         "dedis": dedis,
@@ -595,6 +611,177 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 )
 
         click_coord.assert_not_called()
+
+    def test_withdraw_uses_resource_dedi_route(self):
+        config = ready_config(account_count=1)
+        metadata = SimpleNamespace(yaw=1, name="RESOURCE_DEDI")
+        custom_stations = SimpleNamespace(
+            get_station_metadata=Mock(return_value=metadata)
+        )
+        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        deposit = SimpleNamespace(_restore_route_view=Mock())
+        utils = SimpleNamespace(set_yaw=Mock())
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "source.ASA.stations.custom_stations": custom_stations,
+                    "source.ASA.strucutres.teleporter": teleporter,
+                    "source.gacha_bot.deposit": deposit,
+                    "source.utility.utils": utils,
+                },
+            ),
+            patch(
+                "source.gacha_bot.server_transfer._transfer_withdraw_from_dedi",
+                return_value=True,
+            ) as withdraw,
+        ):
+            self.assertTrue(
+                withdraw_from_transfer_dedis(
+                    config["dedis"],
+                    config["settings"],
+                    threading.Event(),
+                    config["ui_coords"],
+                )
+            )
+
+        custom_stations.get_station_metadata.assert_called_once_with("RESOURCE_DEDI")
+        withdraw.assert_called_once()
+        self.assertEqual(
+            withdraw.call_args.args[1],
+            config["dedis"]["resource"]["items"][0],
+        )
+
+    def test_deposit_uses_destination_dedi_route(self):
+        config = ready_config(account_count=1)
+        metadata = SimpleNamespace(yaw=1, name="DEST_DEDI")
+        custom_stations = SimpleNamespace(
+            get_station_metadata=Mock(return_value=metadata)
+        )
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {"source.ASA.stations.custom_stations": custom_stations},
+            ),
+            patch(
+                "source.gacha_bot.server_transfer._transfer_deposit_to_dedi",
+                return_value=True,
+            ) as deposit,
+        ):
+            self.assertTrue(
+                deposit_to_transfer_dedis(
+                    config["dedis"], config["ui_coords"], config["settings"]
+                )
+            )
+
+        custom_stations.get_station_metadata.assert_called_once_with("DEST_DEDI")
+        deposit.assert_called_once()
+        self.assertEqual(
+            deposit.call_args.args[1],
+            config["dedis"]["destination"]["items"][0],
+        )
+
+    def test_destination_dedi_init_runs_before_retrying_deposit_ready(self):
+        config = ready_config(account_count=1)
+        inventory = SimpleNamespace(close=Mock())
+        template = SimpleNamespace(
+            roi_regions={},
+            check_template_no_bounds=Mock(),
+        )
+        utils = SimpleNamespace(press_key=Mock())
+        variables = SimpleNamespace(get_pixel_loc=Mock(return_value=967))
+        windows = SimpleNamespace(click=Mock())
+        logs = SimpleNamespace(
+            logger=SimpleNamespace(debug=Mock(), warning=Mock(), error=Mock())
+        )
+        route_metadata = SimpleNamespace(yaw=1, name="DEST_DEDI")
+        item = config["dedis"]["destination"]["items"][0]
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "source.ASA.strucutres.inventory": inventory,
+                    "source.utility.template": template,
+                    "source.utility.utils": utils,
+                    "source.logs.gachalogs": logs,
+                },
+            ),
+            patch("source.utility.variables", variables, create=True),
+            patch("source.utility.windows", windows, create=True),
+            patch(
+                "source.gacha_bot.server_transfer._open_transfer_dedi_inventory",
+                return_value=True,
+            ),
+            patch(
+                "source.gacha_bot.server_transfer._wait_for_template_visible",
+                side_effect=[False, True],
+            ),
+            patch("source.gacha_bot.server_transfer._recover_transfer_dedi_position"),
+        ):
+            self.assertTrue(
+                _transfer_deposit_to_dedi(
+                    route_metadata,
+                    item,
+                    "Transfer dedi 1",
+                    config["settings"],
+                    config["ui_coords"],
+                )
+            )
+
+        windows.click.assert_any_call(1, 1)
+        utils.press_key.assert_called_once_with("T")
+        windows.click.assert_any_call(967, 967)
+
+    def test_destination_dedi_init_failure_returns_false(self):
+        config = ready_config(account_count=1)
+        inventory = SimpleNamespace(close=Mock())
+        template = SimpleNamespace(
+            roi_regions={},
+            check_template_no_bounds=Mock(),
+        )
+        utils = SimpleNamespace(press_key=Mock())
+        windows = SimpleNamespace(click=Mock())
+        logs = SimpleNamespace(
+            logger=SimpleNamespace(debug=Mock(), warning=Mock(), error=Mock())
+        )
+        route_metadata = SimpleNamespace(yaw=1, name="DEST_DEDI")
+        item = config["dedis"]["destination"]["items"][0]
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "source.ASA.strucutres.inventory": inventory,
+                    "source.utility.template": template,
+                    "source.utility.utils": utils,
+                    "source.logs.gachalogs": logs,
+                },
+            ),
+            patch("source.utility.windows", windows, create=True),
+            patch(
+                "source.gacha_bot.server_transfer._open_transfer_dedi_inventory",
+                return_value=True,
+            ),
+            patch(
+                "source.gacha_bot.server_transfer._wait_for_template_visible",
+                return_value=False,
+            ),
+            patch("source.gacha_bot.server_transfer._recover_transfer_dedi_position"),
+        ):
+            self.assertFalse(
+                _transfer_deposit_to_dedi(
+                    route_metadata,
+                    item,
+                    "Transfer dedi 1",
+                    config["settings"],
+                    config["ui_coords"],
+                )
+            )
+
+        self.assertEqual(utils.press_key.call_count, 3)
 
     def test_transfer_disconnected_uses_transfer_server_and_yaw(self):
         main = SimpleNamespace(

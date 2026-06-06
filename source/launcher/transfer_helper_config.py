@@ -1,4 +1,5 @@
 import copy
+import copy
 import json
 import math
 from pathlib import Path
@@ -10,6 +11,7 @@ TRANSFER_PLAYERS_PATH = TRANSFER_HELPER_DIR / "players.json"
 
 MAX_TRANSFER_RUNTIME_ACCOUNTS = 4
 MAX_TRANSFER_PLAYER_ROWS = 99
+DEFAULT_BED_NAME_PREFIX = "BedPlayer"
 
 DEFAULT_TRANSFER_SETTINGS = {
     "lag_offset": 1.0,
@@ -24,8 +26,14 @@ DEFAULT_TRANSFER_SETTINGS = {
 }
 
 DEFAULT_TRANSFER_DEDIS = {
-    "teleport": "TRANSFER_DEDI",
-    "items": [],
+    "resource": {
+        "teleport": "TRANSFER_DEDI",
+        "items": [],
+    },
+    "destination": {
+        "teleport": "TRANSFER_DEDI",
+        "items": [],
+    },
 }
 
 DEFAULT_TRANSFER_UI_COORDS = {
@@ -95,6 +103,16 @@ DEFAULT_TRANSFER_UI_COORDS = {
         "first_server": {"x": 400, "y": 320},
         "join_button": {"x": 1640, "y": 890},
         "transfer_not_ready_cancel": {"x": 1070, "y": 730},
+        "dedi_deposit_ready_template": "assets/icons1080/dedi_deposit_ready.png",
+        "dedi_deposit_ready_region": {
+            "start_x": 880,
+            "start_y": 850,
+            "width": 120,
+            "height": 55,
+        },
+        "dedi_init_click": {"x": None, "y": None},
+        "dedi_open_timeout": 60,
+        "dedi_init_attempts": 3,
     },
 }
 
@@ -123,9 +141,9 @@ def default_transfer_players(account_count=1):
 def generated_player_bed_names(account_count):
     names = []
     for account in range(1, int(account_count) + 1):
-        candidate = f"Player{account}"
+        candidate = f"{DEFAULT_BED_NAME_PREFIX}{account}"
         if _has_numeric_prefix_collision(candidate, names):
-            candidate = f"Player_{account}"
+            candidate = f"{DEFAULT_BED_NAME_PREFIX}_{account}"
         names.append(candidate)
     return names
 
@@ -327,13 +345,26 @@ def normalize_transfer_players(data, account_count=1):
 def normalize_transfer_dedis(data):
     if not isinstance(data, dict):
         data = {}
+    if "resource" in data or "destination" in data:
+        return {
+            "resource": _normalize_dedi_route(data.get("resource", {})),
+            "destination": _normalize_dedi_route(data.get("destination", {})),
+        }
+    route = _normalize_dedi_route(data)
+    return {
+        "resource": copy.deepcopy(route),
+        "destination": copy.deepcopy(route),
+    }
+
+
+def _normalize_dedi_route(data):
+    if not isinstance(data, dict):
+        data = {}
     teleport = str(data.get("teleport", "")).strip()
     raw_items = data.get("items", [])
     if not isinstance(raw_items, list):
         raw_items = []
     items = [_normalize_dedi_item(item) for item in raw_items]
-    if not items:
-        items = default_transfer_dedis()["items"]
     return {"teleport": teleport, "items": items}
 
 
@@ -345,7 +376,22 @@ def normalize_transfer_ui_coords(data):
     return normalized
 
 
-def active_transfer_dedis(dedis):
+def transfer_dedi_route(dedis, side):
+    if not isinstance(dedis, dict):
+        dedis = {}
+    route = dedis.get(side, {})
+    if not isinstance(route, dict):
+        route = {}
+    if "resource" not in dedis and "destination" not in dedis:
+        route = dedis
+    return _normalize_dedi_route(route)
+
+
+def active_transfer_dedis(dedis, side=None):
+    if side is not None:
+        return list(transfer_dedi_route(dedis, side).get("items", []))
+    if isinstance(dedis, dict) and ("resource" in dedis or "destination" in dedis):
+        return list(transfer_dedi_route(dedis, "resource").get("items", []))
     return list(dedis.get("items", []))
 
 
@@ -393,10 +439,16 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         missing.append("settings.destination_server must differ from resource_server")
     if player_account_count(players) < 1:
         missing.append("players must include at least one player")
-    if not dedis.get("teleport"):
-        missing.append("dedis.teleport")
-    if not active_transfer_dedis(dedis):
-        missing.append("dedis.items must include at least one dedi")
+    resource_dedis = transfer_dedi_route(dedis, "resource")
+    destination_dedis = transfer_dedi_route(dedis, "destination")
+    if not resource_dedis.get("teleport"):
+        missing.append("dedis.resource.teleport")
+    if not active_transfer_dedis(dedis, "resource"):
+        missing.append("dedis.resource.items must include at least one dedi")
+    if not destination_dedis.get("teleport"):
+        missing.append("dedis.destination.teleport")
+    if not active_transfer_dedis(dedis, "destination"):
+        missing.append("dedis.destination.items must include at least one dedi")
 
     steam = ui_coords.get("steam", {})
     configured_accounts = player_account_count(players)
@@ -448,10 +500,21 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         _append_template_missing(
             missing, transfer, key, project_root, "ui_coords.transfer"
         )
+    _append_template_missing(
+        missing,
+        transfer,
+        "dedi_deposit_ready_template",
+        project_root,
+        "ui_coords.transfer",
+    )
     if not _region_complete(transfer.get("transmitter_title_region", {})):
         missing.append("ui_coords.transfer.transmitter_title_region")
     if not _region_complete(transfer.get("not_ready_region", {})):
         missing.append("ui_coords.transfer.not_ready_region")
+    if not _region_complete(transfer.get("dedi_deposit_ready_region", {})):
+        missing.append("ui_coords.transfer.dedi_deposit_ready_region")
+    if not _coord_complete(transfer.get("dedi_init_click", {})):
+        missing.append("ui_coords.transfer.dedi_init_click.x/y")
 
     return missing
 

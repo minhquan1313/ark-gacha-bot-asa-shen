@@ -23,6 +23,7 @@ from source.launcher.transfer_helper_config import (
     save_transfer_settings,
     save_transfer_ui_coords,
     suggested_loop_count,
+    transfer_dedi_route,
 )
 
 
@@ -208,10 +209,31 @@ class TransferHelperConfigTests(unittest.TestCase):
     def test_dedi_config_normalizes_items_without_enabled_flag(self):
         config = normalize_transfer_dedis(
             {
+                "resource": {
+                    "teleport": "TRANSFERDEDI",
+                    "items": [
+                        {
+                            "enabled": False,
+                            "location": {"yaw": "12.5", "pitch": "-4"},
+                            "crouched": True,
+                        }
+                    ],
+                },
+                "destination": {"teleport": "DESTDEDI", "items": []},
+            }
+        )
+
+        self.assertEqual(config["resource"]["teleport"], "TRANSFERDEDI")
+        self.assertEqual(config["resource"]["items"][0]["location"]["yaw"], 12.5)
+        self.assertNotIn("enabled", config["resource"]["items"][0])
+        self.assertTrue(config["resource"]["items"][0]["crouched"])
+
+    def test_flat_dedi_config_migrates_to_resource_and_destination(self):
+        config = normalize_transfer_dedis(
+            {
                 "teleport": "TRANSFERDEDI",
                 "items": [
                     {
-                        "enabled": False,
                         "location": {"yaw": "12.5", "pitch": "-4"},
                         "crouched": True,
                     }
@@ -219,10 +241,9 @@ class TransferHelperConfigTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(config["teleport"], "TRANSFERDEDI")
-        self.assertEqual(config["items"][0]["location"]["yaw"], 12.5)
-        self.assertNotIn("enabled", config["items"][0])
-        self.assertTrue(config["items"][0]["crouched"])
+        self.assertEqual(config["resource"], config["destination"])
+        self.assertEqual(config["resource"]["teleport"], "TRANSFERDEDI")
+        self.assertEqual(config["resource"]["items"][0]["location"]["pitch"], -4.0)
 
     def test_missing_dedis_file_creates_default_route(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -231,7 +252,8 @@ class TransferHelperConfigTests(unittest.TestCase):
             dedis = load_transfer_dedis(path)
 
             self.assertTrue(path.exists())
-            self.assertEqual(len(dedis["items"]), 0)
+            self.assertEqual(len(dedis["resource"]["items"]), 0)
+            self.assertEqual(len(dedis["destination"]["items"]), 0)
 
     def test_account_display_order_places_current_account_first(self):
         self.assertEqual(displayed_account_order(3, 1), [1, 2, 3])
@@ -282,6 +304,63 @@ class TransferHelperConfigTests(unittest.TestCase):
         missing = missing_runtime_inputs(settings, dedis, coords, players)
 
         self.assertIn("ui_coords.transfer.transmitter_title_region", missing)
+
+    def test_validation_blocks_missing_destination_dedi_route(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis(
+            {
+                "resource": {
+                    "teleport": "RESOURCE",
+                    "items": [{"location": {"yaw": 1, "pitch": 2}}],
+                },
+                "destination": {"teleport": "", "items": []},
+            }
+        )
+        coords = default_transfer_ui_coords()
+        players = normalize_transfer_players({}, 1)
+
+        missing = missing_runtime_inputs(settings, dedis, coords, players)
+
+        self.assertIn("dedis.destination.teleport", missing)
+        self.assertIn("dedis.destination.items must include at least one dedi", missing)
+
+    def test_validation_blocks_missing_destination_dedi_init_inputs(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis(
+            {
+                "resource": {
+                    "teleport": "RESOURCE",
+                    "items": [{"location": {"yaw": 1, "pitch": 2}}],
+                },
+                "destination": {
+                    "teleport": "DEST",
+                    "items": [{"location": {"yaw": 3, "pitch": 4}}],
+                },
+            }
+        )
+        coords = default_transfer_ui_coords()
+        coords["transfer"]["dedi_deposit_ready_template"] = ""
+        coords["transfer"]["dedi_deposit_ready_region"] = {}
+        coords["transfer"]["dedi_init_click"] = {}
+        players = normalize_transfer_players({}, 1)
+
+        missing = missing_runtime_inputs(settings, dedis, coords, players)
+
+        self.assertIn("ui_coords.transfer.dedi_deposit_ready_template", missing)
+        self.assertIn("ui_coords.transfer.dedi_deposit_ready_region", missing)
+        self.assertIn("ui_coords.transfer.dedi_init_click.x/y", missing)
 
     def test_validation_blocks_missing_steam_switch_region_for_multi_account(self):
         settings = normalize_transfer_settings(

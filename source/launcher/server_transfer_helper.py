@@ -33,6 +33,7 @@ from source.launcher.transfer_helper_config import (
     save_transfer_players,
     save_transfer_settings,
     save_transfer_ui_coords,
+    normalize_transfer_dedis,
     suggested_loop_count,
 )
 from source.launcher.widgets import (
@@ -54,8 +55,11 @@ class ServerTransferHelper(WorkerHelperWindow):
     def __init__(self, owner):
         self.setting_fields = {}
         self.dedi_rows = []
+        self.resource_dedi_rows = self.dedi_rows
+        self.destination_dedi_rows = []
         self.player_rows = []
         self.config = load_transfer_runtime_config(create_missing=True)
+        self.config["dedis"] = normalize_transfer_dedis(self.config.get("dedis", {}))
 
         super().__init__(
             owner,
@@ -118,21 +122,10 @@ class ServerTransferHelper(WorkerHelperWindow):
         self._refresh_player_rows()
         content_layout.addWidget(players_card)
 
-        dedis_card, dedis_layout = self._panel("TRANSFER DEDIS")
-        self.dedi_teleport = self._line_edit(self.config["dedis"].get("teleport", ""))
-        self.dedi_teleport.editingFinished.connect(self._sync_loop_hint)
-        self.dedi_teleport.editingFinished.connect(self._persist_dedis)
-        self.dedi_teleport.returnPressed.connect(self._persist_dedis)
-        dedis_layout.addLayout(self._labeled_row("TELEPORT", self.dedi_teleport))
-        self.dedi_rows_layout = QVBoxLayout()
-        self.dedi_rows_layout.setSpacing(6)
-        dedis_layout.addLayout(self.dedi_rows_layout)
-        for item in self.config["dedis"].get("items", []):
-            self._add_dedi_row(item)
-        add_dedi = AnimatedButton("ADD DEDI", "secondary")
-        add_dedi.clicked.connect(lambda: self._add_dedi_row(persist=True))
-        dedis_layout.addWidget(add_dedi)
-        content_layout.addWidget(dedis_card)
+        resource_card = self._build_dedi_section("resource", "RESOURCE DEDIS")
+        content_layout.addWidget(resource_card)
+        destination_card = self._build_dedi_section("destination", "DESTINATION DEDIS")
+        content_layout.addWidget(destination_card)
         content_layout.addStretch(1)
 
         self.start_stop_button = AnimatedButton("START", "primary")
@@ -229,7 +222,42 @@ class ServerTransferHelper(WorkerHelperWindow):
         grid.addWidget(self.loop_hint, loop_row + 1, 0, 1, 2)
         grid.setColumnStretch(1, 1)
 
-    def _add_dedi_row(self, item=None, persist=False):
+    def _build_dedi_section(self, side, title):
+        card, layout = self._panel(title)
+        route = self.config["dedis"].get(side, {})
+        teleport = self._line_edit(route.get("teleport", ""))
+        teleport.editingFinished.connect(self._sync_loop_hint)
+        teleport.editingFinished.connect(self._persist_dedis)
+        teleport.returnPressed.connect(self._persist_dedis)
+        setattr(self, f"{side}_dedi_teleport", teleport)
+        if side == "resource":
+            self.dedi_teleport = teleport
+        layout.addLayout(self._labeled_row("TELEPORT", teleport))
+        rows_layout = QVBoxLayout()
+        rows_layout.setSpacing(6)
+        setattr(self, f"{side}_dedi_rows_layout", rows_layout)
+        if side == "resource":
+            self.dedi_rows_layout = rows_layout
+        layout.addLayout(rows_layout)
+        for item in route.get("items", []):
+            self._add_dedi_row(item, side=side)
+        add_dedi = AnimatedButton("ADD DEDI", "secondary")
+        add_dedi.clicked.connect(
+            lambda checked=False, target_side=side: self._add_dedi_row(
+                side=target_side, persist=True
+            )
+        )
+        layout.addWidget(add_dedi)
+        return card
+
+    def _dedi_rows_for_side(self, side):
+        return (
+            self.destination_dedi_rows
+            if side == "destination"
+            else self.resource_dedi_rows
+        )
+
+    def _add_dedi_row(self, item=None, persist=False, side="resource"):
         item = item or {
             "location": {"yaw": 0.0, "pitch": 0.0},
             "crouched": False,
@@ -290,8 +318,10 @@ class ServerTransferHelper(WorkerHelperWindow):
             "yaw": yaw,
             "pitch": pitch,
             "crouched": crouched,
+            "side": side,
         }
-        self.dedi_rows.append(data)
+        rows = self._dedi_rows_for_side(side)
+        rows.append(data)
         toggle.clicked.connect(
             lambda checked=False, target=data: self._toggle_dedi_row(target)
         )
@@ -313,20 +343,23 @@ class ServerTransferHelper(WorkerHelperWindow):
                     lambda _checked=False, target=data: self._sync_dedi_summary(target)
                 )
                 widget.toggled.connect(lambda _checked=False: self._persist_dedis())
-        self.dedi_rows_layout.addWidget(row)
-        self._renumber_dedi_rows()
+        rows_layout = getattr(self, f"{side}_dedi_rows_layout")
+        rows_layout.addWidget(row)
+        self._renumber_dedi_rows(side)
         if hasattr(self, "loop_hint"):
             self._sync_loop_hint()
         if persist:
             self._persist_dedis()
 
     def _remove_dedi_row(self, row_data):
-        if len(self.dedi_rows) <= 1:
+        side = row_data.get("side", "resource")
+        rows = self._dedi_rows_for_side(side)
+        if len(rows) <= 1:
             self.status.setText("At least one transfer dedi row is required.")
             return
-        self.dedi_rows.remove(row_data)
+        rows.remove(row_data)
         row_data["frame"].deleteLater()
-        self._renumber_dedi_rows()
+        self._renumber_dedi_rows(side)
         self._sync_loop_hint()
         self._persist_dedis()
 
@@ -335,8 +368,8 @@ class ServerTransferHelper(WorkerHelperWindow):
         row_data["details"].setVisible(visible)
         row_data["toggle"].setText("v" if visible else ">")
 
-    def _renumber_dedi_rows(self):
-        for index, row in enumerate(self.dedi_rows, 1):
+    def _renumber_dedi_rows(self, side="resource"):
+        for index, row in enumerate(self._dedi_rows_for_side(side), 1):
             row["index_label"].setText(f"D{index}")
             self._sync_dedi_summary(row)
 
@@ -357,7 +390,7 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _sync_loop_hint(self):
         try:
             account_count = int(self.setting_fields["account_count"].text())
-            active_count = len(self.dedi_rows)
+            active_count = len(self.resource_dedi_rows)
             if account_count == 0:
                 self.loop_hint.setText(
                     f"{active_count} dedi x 0 account = no runnable accounts."
@@ -643,7 +676,14 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _dedis_from_rows(self):
         return {
-            "teleport": self.dedi_teleport.text(),
+            "resource": self._dedi_route_from_rows("resource"),
+            "destination": self._dedi_route_from_rows("destination"),
+        }
+
+    def _dedi_route_from_rows(self, side):
+        teleport = getattr(self, f"{side}_dedi_teleport")
+        return {
+            "teleport": teleport.text(),
             "items": [
                 {
                     "location": {
@@ -652,7 +692,7 @@ class ServerTransferHelper(WorkerHelperWindow):
                     },
                     "crouched": row["crouched"].isChecked(),
                 }
-                for row in self.dedi_rows
+                for row in self._dedi_rows_for_side(side)
             ],
         }
 

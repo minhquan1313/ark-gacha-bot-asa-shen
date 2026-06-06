@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QFrame, QSizePolicy, QWidget
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QSizePolicy, QWidget
 
 from source.launcher.auto_join_server_helper import AutoJoinServerHelper
 from source.launcher.constants import (
@@ -201,6 +201,19 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertIn("Yaw 0", row["summary"].text())
             self.assertIn("Pitch 0", row["summary"].text())
             self.assertIn("Crouch off", row["summary"].text())
+        finally:
+            helper.close()
+
+    def test_transfer_helper_renders_resource_and_destination_dedi_sections(self):
+        helper = self._transfer_helper(account_count=1)
+
+        try:
+            titles = [label.text() for label in helper.findChildren(QLabel, "PanelTitle")]
+
+            self.assertIn("RESOURCE DEDIS", titles)
+            self.assertIn("DESTINATION DEDIS", titles)
+            self.assertEqual(len(helper.resource_dedi_rows), 1)
+            self.assertEqual(len(helper.destination_dedi_rows), 1)
         finally:
             helper.close()
 
@@ -435,8 +448,34 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 helper._persist_dedis()
 
                 self.assertEqual(
-                    save_dedis.call_args.args[0]["items"][0]["location"]["yaw"],
+                    save_dedis.call_args.args[0]["resource"]["items"][0]["location"]["yaw"],
                     "44",
+                )
+            finally:
+                helper.close()
+
+    def test_destination_dedi_edit_persists_independently(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_dedis",
+            side_effect=lambda data: data,
+        ) as save_dedis:
+            helper = self._transfer_helper(account_count=1)
+
+            try:
+                helper.destination_dedi_rows[0]["yaw"].setText("88")
+                helper._persist_dedis()
+
+                self.assertEqual(
+                    save_dedis.call_args.args[0]["destination"]["items"][0][
+                        "location"
+                    ]["yaw"],
+                    "88",
+                )
+                self.assertEqual(
+                    save_dedis.call_args.args[0]["resource"]["items"][0][
+                        "location"
+                    ]["yaw"],
+                    "0.0",
                 )
             finally:
                 helper.close()
