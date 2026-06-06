@@ -185,8 +185,8 @@ class TransferHelperConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "ui_coords.json"
 
-            coords = load_transfer_ui_coords(path)
-            saved = save_transfer_ui_coords({"steam": {"menu": {"x": 1, "y": 2}}}, path)
+            coords = load_transfer_ui_coords()
+            saved = save_transfer_ui_coords({"steam": {"menu": {"x": 1, "y": 2}}})
 
             self.assertFalse(path.exists())
             self.assertIn("steam", coords)
@@ -231,7 +231,7 @@ class TransferHelperConfigTests(unittest.TestCase):
             dedis = load_transfer_dedis(path)
 
             self.assertTrue(path.exists())
-            self.assertEqual(len(dedis["items"]), 1)
+            self.assertEqual(len(dedis["items"]), 0)
 
     def test_account_display_order_places_current_account_first(self):
         self.assertEqual(displayed_account_order(3, 1), [1, 2, 3])
@@ -243,7 +243,7 @@ class TransferHelperConfigTests(unittest.TestCase):
 
         self.assertEqual(
             account_slot_for_target(coords, 3, current_account=2, target_account=3),
-            {"x": 447, "y": 242},
+            {"x": 1050, "y": 550},
         )
         self.assertIsNone(
             account_slot_for_target(coords, 3, current_account=2, target_account=2)
@@ -259,11 +259,82 @@ class TransferHelperConfigTests(unittest.TestCase):
         )
         dedis = normalize_transfer_dedis({"teleport": "DEDI"})
         coords = default_transfer_ui_coords()
+        coords["steam"]["account_slots"].pop("4", None)
         players = normalize_transfer_players({}, 4)
 
         missing = missing_runtime_inputs(settings, dedis, coords, players)
 
         self.assertIn("ui_coords.steam.account_slots.4", missing)
+
+    def test_validation_blocks_missing_transmitter_title_region(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        coords = default_transfer_ui_coords()
+        coords["transfer"]["transmitter_title_region"] = {}
+        players = normalize_transfer_players({}, 1)
+
+        missing = missing_runtime_inputs(settings, dedis, coords, players)
+
+        self.assertIn("ui_coords.transfer.transmitter_title_region", missing)
+
+    def test_validation_blocks_missing_steam_switch_region_for_multi_account(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        coords = default_transfer_ui_coords()
+        coords["steam"]["switch_account_region"] = {}
+        players = normalize_transfer_players({}, 2)
+
+        missing = missing_runtime_inputs(settings, dedis, coords, players)
+
+        self.assertIn("ui_coords.steam.switch_account_region", missing)
+
+    def test_validation_blocks_missing_steam_switch_template_for_multi_account(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        coords = default_transfer_ui_coords()
+        coords["steam"]["switch_account_template"] = ""
+        players = normalize_transfer_players({}, 2)
+
+        missing = missing_runtime_inputs(settings, dedis, coords, players)
+
+        self.assertIn("ui_coords.steam.switch_account_template", missing)
+
+    def test_validation_allows_missing_steam_switch_template_for_single_account(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        coords = default_transfer_ui_coords()
+        coords["steam"]["switch_account_template"] = ""
+        coords["steam"]["switch_account_region"] = {}
+        players = normalize_transfer_players({}, 1)
+
+        missing = missing_runtime_inputs(settings, dedis, coords, players)
+
+        self.assertNotIn("ui_coords.steam.switch_account_template", missing)
+        self.assertNotIn("ui_coords.steam.switch_account_region", missing)
 
     def test_validation_blocks_zero_players(self):
         settings = normalize_transfer_settings(

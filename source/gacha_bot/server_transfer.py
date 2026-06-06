@@ -1,5 +1,6 @@
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from source.launcher.transfer_helper_config import (
     account_slot_for_target,
@@ -190,23 +191,35 @@ def switch_steam_account(
     emit = status_callback or (lambda _message: None)
     import pyautogui
 
-    from source.launcher.system import focus_window_if_needed
-
     kill_ark()
     if stop_wait(stop_event, 5):
         return int(current_account)
-    focus_window_if_needed(
-        steam.get("window_title", "Steam"), center_cursor_when_switching=True
-    )
+    if not _ensure_steam_window_ready(steam, stop_event, emit, launch_if_missing=True):
+        return int(current_account)
     for key in ("menu", "change_account", "continue"):
         if stop_wait(stop_event, 0.2):
             return int(current_account)
         coord = steam[key]
         pyautogui.click(int(coord["x"]), int(coord["y"]))
-    emit(f"Waiting for Steam account picker to restart for account {target_account}.")
-    if stop_wait(stop_event, int(steam.get("restart_delay", 8))):
-        return int(current_account)
+    emit(f"Waiting for Steam account picker for account {target_account}.")
+    from source.utility import template
+
+    switch_account_template = _register_template_region(
+        steam["switch_account_template"], steam["switch_account_region"]
+    )
+    if not _wait_for_template_visible(
+        template.check_template_no_bounds,
+        float(steam.get("switch_account_timeout", 60)),
+        stop_event,
+        switch_account_template,
+        0.75,
+    ):
+        if stop_event is not None and stop_event.is_set():
+            return int(current_account)
+        raise RuntimeError("Steam account picker was not detected within 60 seconds.")
     pyautogui.click(int(slot["x"]), int(slot["y"]))
+    if not _ensure_steam_window_ready(steam, stop_event, emit, launch_if_missing=False):
+        return int(current_account)
     return int(target_account)
 
 
@@ -296,7 +309,7 @@ def transfer_to_server(server, settings, ui_coords, stop_event, status_callback=
     import pyautogui
 
     from source.ASA.strucutres import inventory, teleporter
-    from source.utility import utils
+    from source.utility import template, utils
 
     emit = status_callback or (lambda _message: None)
     transfer = ui_coords["transfer"]
@@ -308,7 +321,24 @@ def transfer_to_server(server, settings, ui_coords, stop_event, status_callback=
     )
     utils.set_yaw(float(settings[yaw_key]))
     inventory.open()
+    emit("Checking transmitter inventory.")
+    transmitter_template = _register_template_region(
+        transfer["transmitter_title_template"], transfer["transmitter_title_region"]
+    )
+    if not _wait_for_template_visible(
+        template.check_template,
+        2,
+        stop_event,
+        transmitter_template,
+        0.7,
+    ):
+        if stop_event is not None and stop_event.is_set():
+            return False
+        raise RuntimeError("Transmitter inventory was not detected.")
     _click_coord(transfer["transfer_button"])
+    not_ready_template = _register_template_region(
+        transfer["not_ready_template"], transfer["not_ready_region"]
+    )
     while not (stop_event is not None and stop_event.is_set()):
         _click_coord(transfer["server_search"])
         pyautogui.hotkey("ctrl", "a")
@@ -316,8 +346,12 @@ def transfer_to_server(server, settings, ui_coords, stop_event, status_callback=
         _click_coord(transfer["first_server"])
         _click_coord(transfer["join_button"])
         stop_wait(stop_event, 1)
-        if not _template_visible(
-            transfer["not_ready_template"], transfer["not_ready_region"]
+        if not _wait_for_template_visible(
+            template.check_template,
+            0,
+            stop_event,
+            not_ready_template,
+            0.75,
         ):
             emit(f"Transfer to server {server} requested.")
             return True
@@ -388,26 +422,82 @@ def _click_coord(coord):
     pyautogui.click(int(coord["x"]), int(coord["y"]))
 
 
-def _template_visible(template_path, region, threshold=0.75):
-    import cv2
-    import numpy as np
+def _wait_for_template_visible(check_func, timeout, stop_event, *args):
+    deadline = time.monotonic() + float(timeout)
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return False
+        if check_func(*args):
+            return True
+        time.sleep(0.05)
+    return bool(check_func(*args))
 
-    from source.utility import screen
 
-    image = cv2.imread(str(template_path))
-    if image is None:
+def _register_template_region(template_path, region):
+    from source.utility import template
+
+    item = Path(str(template_path)).stem
+    template.roi_regions[item] = {
+        "start_x": int(region["start_x"]),
+        "start_y": int(region["start_y"]),
+        "width": int(region["width"]),
+        "height": int(region["height"]),
+    }
+    return item
+
+
+def _ensure_steam_window_ready(
+    steam, stop_event, status_callback=None, launch_if_missing=True
+):
+    import subprocess
+
+    emit = status_callback or (lambda _message: None)
+    title = steam.get("window_title", "Steam")
+    timeout = float(steam.get("window_ready_timeout", 5))
+    deadline = time.monotonic() + timeout
+    launched = False
+    last_error = None
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return False
+        try:
+            if _focus_steam_window_maximized(title):
+                return True
+        except RuntimeError as exc:
+            last_error = exc
+        if launch_if_missing and not launched:
+            steam_exe = _running_steam_exe_path()
+            emit("Opening Steam window.")
+            subprocess.Popen([str(steam_exe)])
+            launched = True
+        time.sleep(0.5)
+    if last_error is not None:
+        raise RuntimeError(f"Steam window was not ready: {last_error}")
+    raise RuntimeError(f"{title} window was not found.")
+
+
+def _focus_steam_window_maximized(window_title):
+    import ctypes
+
+    from source.launcher.system import focus_window_if_needed
+
+    if not focus_window_if_needed(window_title, center_cursor_when_switching=True):
         return False
-    roi = screen.get_screen_roi(
-        int(region["start_x"]),
-        int(region["start_y"]),
-        int(region["width"]),
-        int(region["height"]),
-    )
-    gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    res = cv2.matchTemplate(gray_roi, gray_image, cv2.TM_CCOEFF_NORMED)
-    _min_val, max_val, _min_loc, _max_loc = cv2.minMaxLoc(res)
-    return bool(max_val >= threshold)
+    hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
+    if not hwnd:
+        return False
+    ctypes.windll.user32.ShowWindow(hwnd, 3)
+    ctypes.windll.user32.BringWindowToTop(hwnd)
+    return True
+
+
+def _running_steam_exe_path():
+    from source.launcher.ark_game_setup import find_running_steam_dir
+
+    steam_exe = find_running_steam_dir() / "steam.exe"
+    if not steam_exe.exists():
+        raise RuntimeError(f"steam.exe was not found: {steam_exe}")
+    return steam_exe
 
 
 def _process_running(process_name):

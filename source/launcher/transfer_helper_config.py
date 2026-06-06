@@ -6,7 +6,6 @@ from pathlib import Path
 TRANSFER_HELPER_DIR = Path("json_files/transfer_helper")
 TRANSFER_SETTINGS_PATH = TRANSFER_HELPER_DIR / "settings.json"
 TRANSFER_DEDIS_PATH = TRANSFER_HELPER_DIR / "dedis.json"
-TRANSFER_UI_COORDS_PATH = TRANSFER_HELPER_DIR / "ui_coords.json"
 TRANSFER_PLAYERS_PATH = TRANSFER_HELPER_DIR / "players.json"
 
 MAX_TRANSFER_RUNTIME_ACCOUNTS = 4
@@ -26,33 +25,67 @@ DEFAULT_TRANSFER_SETTINGS = {
 
 DEFAULT_TRANSFER_DEDIS = {
     "teleport": "TRANSFER_DEDI",
-    "items": [
-        {
-            "location": {"yaw": 0.0, "pitch": 0.0},
-            "crouched": False,
-        }
-    ],
+    "items": [],
 }
 
 DEFAULT_TRANSFER_UI_COORDS = {
     "steam": {
         "window_title": "Steam",
-        "menu": {"x": None, "y": None},
-        "change_account": {"x": None, "y": None},
-        "continue": {"x": None, "y": None},
+        "switch_account_template": "assets/icons1080/steam_switch_account.png",
+        "switch_account_region": {
+            "start_x": 600,
+            "start_y": 300,
+            "width": 750,
+            "height": 450,
+        },
+        "switch_account_timeout": 60,
+        "window_ready_timeout": 5,
+        "menu": {"x": 45, "y": 20},
+        "change_account": {"x": 45, "y": 50},
+        "continue": {"x": 1050, "y": 630},
         "restart_delay": 8,
         "account_slots": {
-            "2": [{"x": 266, "y": 242}, {"x": 386, "y": 242}],
+            "1": [
+                #
+                {"x": 930, "y": 550}
+            ],
+            "2": [
+                #
+                {"x": 880, "y": 550},
+                {"x": 990, "y": 550},
+            ],
             "3": [
-                {"x": 206, "y": 242},
-                {"x": 327, "y": 242},
-                {"x": 447, "y": 242},
+                {"x": 810, "y": 550},
+                {"x": 930, "y": 550},
+                {"x": 1050, "y": 550},
+            ],
+            "4": [
+                {"x": 750, "y": 550},
+                {"x": 880, "y": 550},
+                {"x": 1010, "y": 550},
+                {"x": 1110, "y": 550},
             ],
         },
     },
     "transfer": {
         "transmitter_title_template": "assets/icons1080/transmitter_title.png",
+        "transmitter_title_region": {
+            "start_x": 970,
+            "start_y": 110,
+            "width": 200,
+            "height": 70,
+        },
         "not_ready_template": "assets/icons1080/transfer_not_ready_popup.png",
+        "not_ready_region": {
+            "start_x": 730,
+            "start_y": 300,
+            "width": 560,
+            "height": 200,
+        },
+        "transfer_button": {"x": 960, "y": 790},
+        "server_search": {"x": 1500, "y": 180},
+        "first_server": {"x": 400, "y": 320},
+        "join_button": {"x": 1640, "y": 890},
         "transfer_not_ready_cancel": {"x": 1070, "y": 730},
     },
 }
@@ -363,6 +396,15 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         for key in ("menu", "change_account", "continue"):
             if not _coord_complete(steam.get(key, {})):
                 missing.append(f"ui_coords.steam.{key}.x/y")
+        _append_template_missing(
+            missing,
+            steam,
+            "switch_account_template",
+            project_root,
+            "ui_coords.steam",
+        )
+        if not _region_complete(steam.get("switch_account_region", {})):
+            missing.append("ui_coords.steam.switch_account_region")
         account_count = runtime_account_count(players)
         slots = steam.get("account_slots", {}).get(str(account_count), [])
         if len(slots) < account_count:
@@ -386,12 +428,13 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
             missing.append(f"ui_coords.transfer.{key}.x/y")
 
     for key in ("transmitter_title_template", "not_ready_template"):
-        template_path = str(transfer.get(key, "")).strip()
-        if not template_path:
-            missing.append(f"ui_coords.transfer.{key}")
-            continue
-        if not (project_root / template_path).exists():
-            missing.append(f"{template_path} file")
+        _append_template_missing(
+            missing, transfer, key, project_root, "ui_coords.transfer"
+        )
+    if not _region_complete(transfer.get("transmitter_title_region", {})):
+        missing.append("ui_coords.transfer.transmitter_title_region")
+    if not _region_complete(transfer.get("not_ready_region", {})):
+        missing.append("ui_coords.transfer.not_ready_region")
 
     return missing
 
@@ -430,6 +473,24 @@ def _coord_complete(value):
     if not isinstance(value, dict):
         return False
     return value.get("x") is not None and value.get("y") is not None
+
+
+def _region_complete(value):
+    if not isinstance(value, dict):
+        return False
+    for key in ("start_x", "start_y", "width", "height"):
+        if value.get(key) is None:
+            return False
+    return True
+
+
+def _append_template_missing(missing, data, key, project_root, label_prefix):
+    template_path = str(data.get(key, "")).strip()
+    if not template_path:
+        missing.append(f"{label_prefix}.{key}")
+        return
+    if not (project_root / template_path).exists():
+        missing.append(f"{template_path} file")
 
 
 def _old_account_count_hint(path):

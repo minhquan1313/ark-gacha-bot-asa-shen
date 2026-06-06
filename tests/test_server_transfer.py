@@ -5,9 +5,11 @@ from unittest.mock import ANY, Mock, call, patch
 
 from source.gacha_bot.server_transfer import (
     TransferConfigError,
+    _ensure_steam_window_ready,
     ensure_ark_running,
     run_transfer_helper,
     switch_steam_account,
+    transfer_to_server,
 )
 from source.launcher.transfer_helper_config import (
     default_transfer_ui_coords,
@@ -25,7 +27,17 @@ def ready_config(account_count=2, loop_count=1):
             "loop_count": loop_count,
         }
     )
-    dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+    dedis = normalize_transfer_dedis(
+        {
+            "teleport": "DEDI",
+            "items": [
+                {
+                    "location": {"yaw": 0, "pitch": 0},
+                    "crouched": False,
+                }
+            ],
+        }
+    )
     players = {
         "players": [
             {"bed_name": f"Bed{index}"} for index in range(1, account_count + 1)
@@ -39,7 +51,7 @@ def ready_config(account_count=2, loop_count=1):
         "server_search",
         "first_server",
         "join_button",
-        "not_ready_ok",
+        "transfer_not_ready_cancel",
     ):
         coords["transfer"][key] = {"x": 1, "y": 1}
     coords["transfer"]["transmitter_title_template"] = "README.md"
@@ -197,17 +209,34 @@ class ServerTransferRunnerTests(unittest.TestCase):
 
         dependencies.switch_account.assert_not_called()
 
-    def test_switch_account_kills_waits_focuses_steam_then_clicks_slot(self):
+    def test_switch_account_kills_waits_for_picker_then_clicks_slot(self):
         pyautogui = SimpleNamespace(click=Mock())
         coords = default_transfer_ui_coords()
         for key in ("menu", "change_account", "continue"):
             coords["steam"][key] = {"x": 10, "y": 20}
+        template = SimpleNamespace(
+            roi_regions={},
+            check_template_no_bounds=Mock(),
+        )
 
         with (
-            patch.dict("sys.modules", {"pyautogui": pyautogui}),
+            patch.dict(
+                "sys.modules",
+                {
+                    "pyautogui": pyautogui,
+                    "source.utility.template": template,
+                },
+            ),
             patch("source.gacha_bot.server_transfer.kill_ark") as kill,
             patch("source.gacha_bot.server_transfer.stop_wait", return_value=False) as wait,
-            patch("source.launcher.system.focus_window_if_needed") as focus,
+            patch(
+                "source.gacha_bot.server_transfer._ensure_steam_window_ready",
+                return_value=True,
+            ) as ready,
+            patch(
+                "source.gacha_bot.server_transfer._wait_for_template_visible",
+                return_value=True,
+            ) as wait_template,
         ):
             account = switch_steam_account(
                 2, 1, 2, coords, threading.Event(), Mock()
@@ -216,8 +245,129 @@ class ServerTransferRunnerTests(unittest.TestCase):
         self.assertEqual(account, 2)
         kill.assert_called_once_with()
         self.assertEqual(wait.call_args_list[0], call(ANY, 5))
-        focus.assert_called_once_with("Steam", center_cursor_when_switching=True)
-        self.assertEqual(pyautogui.click.call_args_list[-1], call(386, 242))
+        self.assertEqual(ready.call_count, 2)
+        self.assertTrue(ready.call_args_list[0].kwargs["launch_if_missing"])
+        self.assertFalse(ready.call_args_list[1].kwargs["launch_if_missing"])
+        wait_template.assert_called_once_with(
+            template.check_template_no_bounds,
+            60.0,
+            ANY,
+            "steam_switch_account",
+            0.75,
+        )
+        self.assertEqual(pyautogui.click.call_args_list[-1], call(990, 550))
+
+    def test_steam_window_ready_reopens_running_steam_when_window_missing(self):
+        steam = default_transfer_ui_coords()["steam"]
+        with (
+            patch(
+                "source.gacha_bot.server_transfer._focus_steam_window_maximized",
+                side_effect=[False, True],
+            ) as focus,
+            patch(
+                "source.gacha_bot.server_transfer._running_steam_exe_path",
+                return_value="C:\\Steam\\steam.exe",
+            ) as steam_path,
+            patch("subprocess.Popen") as popen,
+            patch("time.sleep"),
+        ):
+            self.assertTrue(
+                _ensure_steam_window_ready(steam, threading.Event(), Mock())
+            )
+
+        self.assertEqual(focus.call_count, 2)
+        steam_path.assert_called_once_with()
+        popen.assert_called_once_with(["C:\\Steam\\steam.exe"])
+
+    def test_transfer_to_server_checks_transmitter_before_clicking_transfer(self):
+        pyautogui = SimpleNamespace(hotkey=Mock(), write=Mock())
+        inventory = SimpleNamespace(open=Mock())
+        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        template = SimpleNamespace(
+            roi_regions={},
+            check_template=Mock(),
+            check_template_no_bounds=Mock(),
+        )
+        utils = SimpleNamespace(set_yaw=Mock())
+        config = ready_config(account_count=1)
+        clicks = []
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "pyautogui": pyautogui,
+                    "source.ASA.strucutres.inventory": inventory,
+                    "source.ASA.strucutres.teleporter": teleporter,
+                    "source.utility.template": template,
+                    "source.utility.utils": utils,
+                },
+            ),
+            patch(
+                "source.gacha_bot.server_transfer._wait_for_template_visible",
+                side_effect=[True, False],
+            ) as wait_template,
+            patch(
+                "source.gacha_bot.server_transfer._click_coord",
+                side_effect=lambda coord: clicks.append(coord),
+            ),
+        ):
+            self.assertTrue(
+                transfer_to_server(
+                    "2222",
+                    config["settings"],
+                    config["ui_coords"],
+                    threading.Event(),
+                )
+            )
+
+        self.assertEqual(wait_template.call_args_list[0], call(
+            template.check_template,
+            2,
+            ANY,
+            "README",
+            0.7,
+        ))
+        self.assertEqual(clicks[0], config["ui_coords"]["transfer"]["transfer_button"])
+
+    def test_transfer_to_server_blocks_when_transmitter_title_missing(self):
+        pyautogui = SimpleNamespace(hotkey=Mock(), write=Mock())
+        inventory = SimpleNamespace(open=Mock())
+        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        template = SimpleNamespace(
+            roi_regions={},
+            check_template=Mock(),
+            check_template_no_bounds=Mock(),
+        )
+        utils = SimpleNamespace(set_yaw=Mock())
+        config = ready_config(account_count=1)
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "pyautogui": pyautogui,
+                    "source.ASA.strucutres.inventory": inventory,
+                    "source.ASA.strucutres.teleporter": teleporter,
+                    "source.utility.template": template,
+                    "source.utility.utils": utils,
+                },
+            ),
+            patch(
+                "source.gacha_bot.server_transfer._wait_for_template_visible",
+                return_value=False,
+            ),
+            patch("source.gacha_bot.server_transfer._click_coord") as click_coord,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Transmitter inventory"):
+                transfer_to_server(
+                    "2222",
+                    config["settings"],
+                    config["ui_coords"],
+                    threading.Event(),
+                )
+
+        click_coord.assert_not_called()
 
     def test_ensure_ark_running_launches_url_and_waits_for_valid_window(self):
         with (
