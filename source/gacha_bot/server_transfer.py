@@ -196,14 +196,34 @@ def switch_steam_account(
         return int(current_account)
     if not _ensure_steam_window_ready(steam, stop_event, emit, launch_if_missing=True):
         return int(current_account)
-    for key in ("menu", "change_account", "continue"):
+    for key in ("menu", "change_account"):
         if stop_wait(stop_event, 0.2):
             return int(current_account)
         coord = steam[key]
         pyautogui.click(int(coord["x"]), int(coord["y"]))
-    emit(f"Waiting for Steam account picker for account {target_account}.")
     from source.utility import template
 
+    emit("Waiting for Steam change-account continue button.")
+    change_ready_template = _register_template_region(
+        steam["change_account_ready_template"], steam["change_account_ready_region"]
+    )
+    if not _wait_for_template_visible(
+        template.check_template_no_bounds,
+        float(steam.get("change_account_ready_timeout", 60)),
+        stop_event,
+        change_ready_template,
+        0.75,
+    ):
+        if stop_event is not None and stop_event.is_set():
+            return int(current_account)
+        raise RuntimeError(
+            "Steam change-account continue button was not ready within 60 seconds."
+        )
+    if stop_wait(stop_event, 0.2):
+        return int(current_account)
+    coord = steam["continue"]
+    pyautogui.click(int(coord["x"]), int(coord["y"]))
+    emit(f"Waiting for Steam account picker for account {target_account}.")
     switch_account_template = _register_template_region(
         steam["switch_account_template"], steam["switch_account_region"]
     )

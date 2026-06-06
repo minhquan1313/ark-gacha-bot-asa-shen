@@ -39,6 +39,14 @@ DEFAULT_TRANSFER_UI_COORDS = {
             "height": 450,
         },
         "switch_account_timeout": 60,
+        "change_account_ready_template": "assets/icons1080/steam_change_acc_ready.png",
+        "change_account_ready_region": {
+            "start_x": 630,
+            "start_y": 400,
+            "width": 660,
+            "height": 260,
+        },
+        "change_account_ready_timeout": 60,
         "window_ready_timeout": 5,
         "menu": {"x": 45, "y": 20},
         "change_account": {"x": 45, "y": 50},
@@ -403,8 +411,17 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
             project_root,
             "ui_coords.steam",
         )
+        _append_template_missing(
+            missing,
+            steam,
+            "change_account_ready_template",
+            project_root,
+            "ui_coords.steam",
+        )
         if not _region_complete(steam.get("switch_account_region", {})):
             missing.append("ui_coords.steam.switch_account_region")
+        if not _region_complete(steam.get("change_account_ready_region", {})):
+            missing.append("ui_coords.steam.change_account_ready_region")
         account_count = runtime_account_count(players)
         slots = steam.get("account_slots", {}).get(str(account_count), [])
         if len(slots) < account_count:

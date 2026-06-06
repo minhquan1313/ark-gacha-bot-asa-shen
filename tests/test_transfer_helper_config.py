@@ -317,6 +317,40 @@ class TransferHelperConfigTests(unittest.TestCase):
 
         self.assertIn("ui_coords.steam.switch_account_template", missing)
 
+    def test_validation_blocks_missing_steam_change_ready_region_for_multi_account(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        coords = default_transfer_ui_coords()
+        coords["steam"]["change_account_ready_region"] = {}
+        players = normalize_transfer_players({}, 2)
+
+        missing = missing_runtime_inputs(settings, dedis, coords, players)
+
+        self.assertIn("ui_coords.steam.change_account_ready_region", missing)
+
+    def test_validation_blocks_missing_steam_change_ready_template_for_multi_account(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+                "transmitter_teleport": "TX",
+            }
+        )
+        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        coords = default_transfer_ui_coords()
+        coords["steam"]["change_account_ready_template"] = ""
+        players = normalize_transfer_players({}, 2)
+
+        missing = missing_runtime_inputs(settings, dedis, coords, players)
+
+        self.assertIn("ui_coords.steam.change_account_ready_template", missing)
+
     def test_validation_allows_missing_steam_switch_template_for_single_account(self):
         settings = normalize_transfer_settings(
             {
@@ -329,12 +363,16 @@ class TransferHelperConfigTests(unittest.TestCase):
         coords = default_transfer_ui_coords()
         coords["steam"]["switch_account_template"] = ""
         coords["steam"]["switch_account_region"] = {}
+        coords["steam"]["change_account_ready_template"] = ""
+        coords["steam"]["change_account_ready_region"] = {}
         players = normalize_transfer_players({}, 1)
 
         missing = missing_runtime_inputs(settings, dedis, coords, players)
 
         self.assertNotIn("ui_coords.steam.switch_account_template", missing)
         self.assertNotIn("ui_coords.steam.switch_account_region", missing)
+        self.assertNotIn("ui_coords.steam.change_account_ready_template", missing)
+        self.assertNotIn("ui_coords.steam.change_account_ready_region", missing)
 
     def test_validation_blocks_zero_players(self):
         settings = normalize_transfer_settings(

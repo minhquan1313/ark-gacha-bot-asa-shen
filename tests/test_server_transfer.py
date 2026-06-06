@@ -235,7 +235,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             ) as ready,
             patch(
                 "source.gacha_bot.server_transfer._wait_for_template_visible",
-                return_value=True,
+                side_effect=[True, True],
             ) as wait_template,
         ):
             account = switch_steam_account(
@@ -248,14 +248,79 @@ class ServerTransferRunnerTests(unittest.TestCase):
         self.assertEqual(ready.call_count, 2)
         self.assertTrue(ready.call_args_list[0].kwargs["launch_if_missing"])
         self.assertFalse(ready.call_args_list[1].kwargs["launch_if_missing"])
-        wait_template.assert_called_once_with(
-            template.check_template_no_bounds,
-            60.0,
-            ANY,
-            "steam_switch_account",
-            0.75,
+        self.assertEqual(
+            wait_template.call_args_list,
+            [
+                call(
+                    template.check_template_no_bounds,
+                    60.0,
+                    ANY,
+                    "steam_change_acc_ready",
+                    0.75,
+                ),
+                call(
+                    template.check_template_no_bounds,
+                    60.0,
+                    ANY,
+                    "steam_switch_account",
+                    0.75,
+                ),
+            ],
+        )
+        self.assertEqual(
+            pyautogui.click.call_args_list,
+            [
+                call(10, 20),
+                call(10, 20),
+                call(10, 20),
+                call(990, 550),
+            ],
         )
         self.assertEqual(pyautogui.click.call_args_list[-1], call(990, 550))
+
+    def test_switch_account_blocks_continue_until_steam_ready_template(self):
+        pyautogui = SimpleNamespace(click=Mock())
+        coords = default_transfer_ui_coords()
+        for key in ("menu", "change_account", "continue"):
+            coords["steam"][key] = {"x": 10, "y": 20}
+        template = SimpleNamespace(
+            roi_regions={},
+            check_template_no_bounds=Mock(),
+        )
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "pyautogui": pyautogui,
+                    "source.utility.template": template,
+                },
+            ),
+            patch("source.gacha_bot.server_transfer.kill_ark"),
+            patch("source.gacha_bot.server_transfer.stop_wait", return_value=False),
+            patch(
+                "source.gacha_bot.server_transfer._ensure_steam_window_ready",
+                return_value=True,
+            ),
+            patch(
+                "source.gacha_bot.server_transfer._wait_for_template_visible",
+                return_value=False,
+            ),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "change-account continue button"
+            ):
+                switch_steam_account(
+                    2, 1, 2, coords, threading.Event(), Mock()
+                )
+
+        self.assertEqual(
+            pyautogui.click.call_args_list,
+            [
+                call(10, 20),
+                call(10, 20),
+            ],
+        )
 
     def test_steam_window_ready_reopens_running_steam_when_window_missing(self):
         steam = default_transfer_ui_coords()["steam"]
