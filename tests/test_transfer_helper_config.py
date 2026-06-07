@@ -37,6 +37,8 @@ class TransferHelperConfigTests(unittest.TestCase):
             self.assertTrue(path.exists())
             self.assertEqual(settings["resource_server"], "0")
             self.assertEqual(settings["destination_server"], "0")
+            self.assertEqual(settings["ark_window_ready_timeout"], 180)
+            self.assertEqual(settings["ark_launch_attempts"], 3)
             self.assertNotIn("account_count", settings)
 
     def test_normalize_settings_ignores_old_account_and_rejects_invalid_loop_values(
@@ -47,6 +49,8 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertNotIn("account_count", settings)
         with self.assertRaisesRegex(ValueError, "loop_count"):
             normalize_transfer_settings({"loop_count": 0})
+        with self.assertRaisesRegex(ValueError, "ark_window_ready_timeout"):
+            normalize_transfer_settings({"ark_window_ready_timeout": 0})
 
     def test_player_bed_names_add_underscore_only_for_search_collision(self):
         self.assertEqual(

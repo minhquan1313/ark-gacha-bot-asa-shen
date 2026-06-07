@@ -87,11 +87,15 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         ):
             helper = ServerTransferHelper(owner)
 
-        helper._set_running_ui(True)
+        with patch.object(
+            helper, "setFixedWidth", wraps=helper.setFixedWidth
+        ) as set_fixed_width:
+            helper._set_running_ui(True)
 
         self.assertTrue(helper.idle_widget.isHidden())
         self.assertFalse(helper.running_widget.isHidden())
         self.assertEqual(helper.width(), helper.idle_width)
+        set_fixed_width.assert_called_once_with(helper.idle_width)
         self.assertEqual(helper.hotkey_label.text(), "ALT + N stops this helper")
 
         helper._set_running_ui(False)

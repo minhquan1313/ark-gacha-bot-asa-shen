@@ -60,7 +60,6 @@ default_keymap = {
     "useitem10": "zero",
 }
 
-hwnd = windows.hwnd
 _VkKeyScanW = ctypes.WINFUNCTYPE(
     ctypes.c_short,
     ctypes.c_wchar,
@@ -92,13 +91,13 @@ def keymap_return(key_input):
 def press_key(input_action):
     vk_code = keymap_return(local_player.get_input_settings(input_action))
 
-    ctypes.windll.user32.PostMessageW(hwnd, WM_KEYDOWN, vk_code, 0)
+    ctypes.windll.user32.PostMessageW(windows.hwnd, WM_KEYDOWN, vk_code, 0)
     time.sleep(0.05)
-    ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, vk_code, 0)
+    ctypes.windll.user32.PostMessageW(windows.hwnd, WM_KEYUP, vk_code, 0)
 
 
 def post_charecter(char):
-    ctypes.windll.user32.PostMessageW(hwnd, WM_CHAR, ord(char), 0)
+    ctypes.windll.user32.PostMessageW(windows.hwnd, WM_CHAR, ord(char), 0)
 
 
 def write(text):

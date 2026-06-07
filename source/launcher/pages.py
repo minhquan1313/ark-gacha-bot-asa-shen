@@ -27,6 +27,7 @@ from source.gacha_bot.deposit_config import (
     load_deposit_config,
     save_deposit_config,
 )
+from source.launcher.auto_join_server_helper import AutoJoinServerHelper
 from source.launcher.constants import (
     APP_NAME,
     APP_TITLE,
@@ -37,7 +38,6 @@ from source.launcher.constants import (
     SETTINGS_GROUPS,
     setting_label,
 )
-from source.launcher.auto_join_server_helper import AutoJoinServerHelper
 from source.launcher.deposit_route_helper import DepositRouteHelper
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.position_render_helper import PositionRenderHelper
@@ -1607,6 +1607,17 @@ class LauncherPagesMixin:
         self.toast("Teleport name copied to clipboard.", "success")
 
     def _logs_page(self):
+        # DEBUG ONLY
+        # def debug_only():
+        #     print("Starting debugging...")
+        #     import psutil
+
+        #     for proc in psutil.process_iter(attrs=["name", "exe"]):
+        #         if proc.info["name"] == "CrashReportClient.exe":
+        #             print("Found target process!")
+
+        # QTimer.singleShot(300, debug_only)
+
         page, layout = self._page("LogsPage")
         layout.addWidget(self._page_title("LOGS"))
         filter_row = QHBoxLayout()

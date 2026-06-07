@@ -30,7 +30,7 @@ def capture_ccc_yaw_pitch():
             f"Unable to load existing console capture flow: {exc}"
         ) from exc
 
-    data = console.console_ccc()
+    data = console.console_ccc(reset_state_before_capture=False)
     if data is None:
         raise RuntimeError("CCC did not return clipboard data.")
 

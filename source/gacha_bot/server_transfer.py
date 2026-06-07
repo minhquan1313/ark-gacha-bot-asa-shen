@@ -22,6 +22,7 @@ class TransferConfigError(RuntimeError):
 class TransferDependencies:
     switch_account: object
     ensure_ark_running: object
+    is_menu: object
     join_server: object
     verify_tribelog: object
     check_state: object
@@ -73,10 +74,13 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
             return False
         if deps.ensure_ark_running() is False or stopped():
             return False
+        was_in_menu = deps.is_menu()
         emit(
             f"Account {account}: joining resource server {settings['resource_server']}."
         )
         if not deps.join_server(settings["resource_server"]):
+            if stopped():
+                return False
             if account_count == 1:
                 emit(
                     "Account 1: resource join did not complete; stopping without "
@@ -86,7 +90,6 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
             emit(
                 f"Account {account}: resource join did not complete; skipping account."
             )
-            deps.kill_ark()
             continue
         if not deps.verify_tribelog():
             if account_count == 1:
@@ -99,10 +102,13 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
                 f"Account {account}: tribe log unavailable on resource server; "
                 "assuming character is elsewhere and skipping."
             )
-            deps.kill_ark()
             continue
         if stopped():
             return False
+        if was_in_menu:
+            deps.wait_structure()
+            if stopped():
+                return False
         deps.check_state(account)
         if stopped():
             return False
@@ -194,7 +200,10 @@ def default_transfer_dependencies(config, stop_event, status_callback=None):
             stop_event,
             status_callback,
         ),
-        ensure_ark_running=lambda: ensure_ark_running(stop_event, status_callback),
+        ensure_ark_running=lambda: ensure_ark_running(
+            stop_event, status_callback, settings, ui_coords
+        ),
+        is_menu=is_menu,
         join_server=lambda server: join_server(server, stop_event, status_callback),
         verify_tribelog=verify_tribelog,
         check_state=lambda account=None: check_transfer_player_state(
@@ -218,7 +227,7 @@ def default_transfer_dependencies(config, stop_event, status_callback=None):
         deposit_resource=lambda account=None: deposit_to_transfer_dedis(
             dedis, ui_coords, settings, stop_event, players, account
         ),
-        kill_ark=kill_ark,
+        kill_ark=lambda: kill_ark(stop_event, ui_coords, status_callback),
     )
 
 
@@ -239,7 +248,8 @@ def switch_steam_account(
     emit = status_callback or (lambda _message: None)
     import pyautogui
 
-    kill_ark()
+    if not kill_ark(stop_event, ui_coords, emit):
+        return int(current_account)
     if stop_wait(stop_event, 5):
         return int(current_account)
     from source.utility import template
@@ -281,6 +291,7 @@ def switch_steam_account(
         if stop_wait(stop_event, 0.2):
             return int(current_account)
         coord = steam["continue"]
+        time.sleep(0.3 * settings_lag_offset())
         pyautogui.click(int(coord["x"]), int(coord["y"]))
         emit(
             f"Waiting for Steam account picker for account {target_account} "
@@ -309,36 +320,135 @@ def switch_steam_account(
     return int(target_account)
 
 
-def ensure_ark_running(stop_event, status_callback=None):
+def ensure_ark_running(stop_event, status_callback=None, settings=None, ui_coords=None):
+    import pyautogui
+
     from source.launcher.ark_game_setup import (
         ARK_PROCESS_NAME,
         launch_ark_through_steam,
     )
     from source.launcher.system import validate_ark_window
+    from source.utility import template
 
     emit = status_callback or (lambda _message: None)
-    if not _process_running(ARK_PROCESS_NAME):
-        emit("Launching ARK through Steam.")
-        launch_ark_through_steam()
-    deadline = time.monotonic() + 60
+    timeout = _settings_int(settings, "ark_window_ready_timeout", 180)
+    attempts = _settings_int(settings, "ark_launch_attempts", 3)
     last_error = None
-    while time.monotonic() < deadline:
+    launched = False
+
+    if ui_coords is None:
+        return False
+    steam = ui_coords["steam"]
+
+    steam_unable_to_sync_template = _register_template_region(
+        steam["steam_unable_to_sync_template"],
+        steam["steam_unable_to_sync_region"],
+    )
+
+    for attempt in range(1, attempts + 1):
         if stop_event is not None and stop_event.is_set():
             return False
-        if _process_running(ARK_PROCESS_NAME):
-            try:
-                validate_ark_window()
-                return True
-            except RuntimeError as exc:
-                last_error = exc
-        time.sleep(1)
+        if not _process_running(ARK_PROCESS_NAME):
+            emit("Launching ARK through Steam.")
+            launch_ark_through_steam()
+            launched = True
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if stop_event is not None and stop_event.is_set():
+                return False
+            if _process_running(ARK_PROCESS_NAME):
+                try:
+                    window_size = validate_ark_window()
+                    if launched:
+                        return _prepare_ark_window_for_join(
+                            stop_event, status_callback, window_size
+                        )
+                    return True
+                except RuntimeError as exc:
+                    last_error = exc
+            # Sometime started same ARK through Steam when switch account will cause sync issues
+            wont_sync = template.check_template_no_bounds(
+                steam_unable_to_sync_template, 0.8
+            )
+            if wont_sync:
+                if stop_wait(stop_event, 0.2):
+                    return False
+                coord = steam["steam_unable_to_sync_continue"]
+                pyautogui.click(int(coord["x"]), int(coord["y"]))
+            time.sleep(1)
+        if stop_event is not None and stop_event.is_set():
+            return False
+        if attempt >= attempts:
+            break
+        emit(
+            "ARK did not reach a usable window state; relaunching "
+            f"({attempt}/{attempts})."
+        )
+        if not kill_ark(stop_event, status_callback=status_callback):
+            return False
+        if stop_wait(stop_event, 2):
+            return False
+        launched = False
     if last_error is not None:
-        raise RuntimeError(f"ARK did not reach a usable window state: {last_error}")
-    raise RuntimeError("ARK did not start.")
+        raise RuntimeError(
+            "ARK did not reach a usable window state after "
+            f"{attempts} attempt(s): {last_error}"
+        )
+    raise RuntimeError(f"ARK did not start after {attempts} attempt(s).")
+
+
+def _prepare_ark_window_for_join(stop_event, status_callback=None, window_size=None):
+    emit = status_callback or (lambda _message: None)
+    emit("ARK detected. Focusing game before joining server.")
+    if stop_wait(stop_event, 2):
+        return False
+    _focus_ark_window_for_join(window_size)
+    return True
+
+
+def _focus_ark_window_for_join(window_size=None):
+    import pyautogui
+
+    from source.launcher.deposit_helper_capture import focus_game_window
+
+    focus_game_window(center_cursor_when_switching=True)
+    _refresh_join_sim_ark_handle()
+    width, height = window_size or (1920, 1080)
+    pyautogui.click(int(width) // 2, int(height) // 2)
+
+
+def _refresh_join_sim_ark_handle():
+    from source.join_sim.source.utility import windows
+    from source.launcher.constants import GAME_WINDOW_TITLE
+
+    hwnd = _ark_window_handle(GAME_WINDOW_TITLE)
+    if not hwnd:
+        raise RuntimeError(f"{GAME_WINDOW_TITLE} window was not found.")
+    windows.hwnd = hwnd
+    return hwnd
+
+
+def _ark_window_handle(window_title):
+    import ctypes
+
+    return ctypes.windll.user32.FindWindowW(None, window_title)
+
+
+def is_menu():
+    from source.join_sim.source import main
+
+    return bool(main.is_menu())
 
 
 def join_server(server, stop_event, status_callback=None):
     from source.join_sim.source.auto_join import run_auto_join_server
+    from source.launcher.system import validate_ark_window
+
+    if stop_event is not None and stop_event.is_set():
+        return False
+    _focus_ark_window_for_join(validate_ark_window())
+    if stop_event is not None and stop_event.is_set():
+        return False
 
     return run_auto_join_server(server, stop_event, status_callback)
 
@@ -357,17 +467,16 @@ def check_player_state():
 
 
 def check_transfer_player_state(settings, players=None, account=None, server=None):
+    from source.ASA.player import buffs
     from source.ASA.strucutres import teleporter
     from source.gacha_bot import render
-    from source.utility import template
 
     check_transfer_disconnected(settings, server)
     reset_transfer_state(settings, players, account)
-    if template.check_buffs("tek_pod_buff", 0.7) or render.render_flag:
+    buff_state = buffs.check_buffs().check_buffs()
+    if buff_state == 1 or render.render_flag:
         render.leave_tekpod()
-    elif template.check_buffs("dehydration", 0.7) or template.check_buffs(
-        "starving", 0.7
-    ):
+    elif buff_state == 2 or buff_state == 3:
         target = _bed_name(players or {}, account) if account is not None else ""
         if not target:
             target = str(settings.get("transmitter_teleport", "")).strip()
@@ -644,6 +753,18 @@ def settings_lag_offset():
         return 1.0
 
 
+def _settings_int(settings, key, default):
+    try:
+        value = settings.get(key, default)
+    except AttributeError:
+        value = default
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return int(default)
+    return max(1, value)
+
+
 def transfer_to_server(
     server,
     settings,
@@ -765,10 +886,114 @@ def leave_tekpod():
     render.leave_tekpod()
 
 
-def kill_ark():
+def kill_ark(stop_event=None, ui_coords=None, status_callback=None):
     from source.launcher.ark_game_setup import kill_running_ark
 
+    if not _logout_before_kill_ark(stop_event, ui_coords, status_callback):
+        return False
     kill_running_ark()
+    return True
+
+
+def _logout_before_kill_ark(stop_event=None, ui_coords=None, status_callback=None):
+    from source.launcher.deposit_helper_capture import focus_game_window
+
+    emit = status_callback or (lambda _message: None)
+    try:
+        focus_game_window(center_cursor_when_switching=True)
+    except RuntimeError:
+        return False
+    if stop_event is not None and stop_event.is_set():
+        return False
+    try:
+        _refresh_join_sim_ark_handle()
+    except RuntimeError:
+        return False
+    emit("Returning ARK to main menu before closing.")
+    return _open_main_menu_until_safe_to_kill(stop_event, emit)
+
+
+def _open_main_menu_until_safe_to_kill(stop_event, status_callback=None):
+    emit = status_callback or (lambda _message: None)
+    attempt = 0
+    while not (stop_event is not None and stop_event.is_set()):
+        attempt += 1
+        if not _send_open_main_menu(stop_event, emit, attempt):
+            continue
+        if _wait_for_ark_main_menu(stop_event, timeout=30):
+            return True
+        else:
+            emit("ARK main menu did not appear after loading; resetting console.")
+        if not _reset_open_main_menu_console(stop_event):
+            return False
+    return False
+
+
+def _send_open_main_menu(stop_event, status_callback=None, attempt=1):
+    from source.ASA.player import console, player_state
+
+    emit = status_callback or (lambda _message: None)
+    if stop_event is not None and stop_event.is_set():
+        return False
+    try:
+        emit(f"Opening ARK main menu (attempt {attempt}).")
+        player_state.reset_state()
+        console.console_write("open MainMenu")
+        return True
+    except Exception as exc:
+        emit(f"open MainMenu failed: {exc}; resetting console.")
+        _reset_open_main_menu_console(stop_event)
+        return False
+
+
+def _reset_open_main_menu_console(stop_event):
+    from source.utility import utils
+
+    utils.press_key("ConsoleKeys")
+    if stop_wait(stop_event, 0.1):
+        return False
+    utils.press_key("Enter")
+    return not (stop_event is not None and stop_event.is_set())
+
+
+def _wait_for_ark_loading_screen(stop_event, timeout=30):
+    deadline = time.monotonic() + float(timeout)
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return False
+        if _safe_check_join_template_no_bounds("loading_screen", 0.7):
+            return True
+        time.sleep(0.5)
+    return bool(_safe_check_join_template_no_bounds("loading_screen", 0.7))
+
+
+def _wait_for_ark_main_menu(stop_event, timeout=30):
+    deadline = time.monotonic() + float(timeout)
+    while time.monotonic() < deadline:
+        if stop_event is not None and stop_event.is_set():
+            return False
+        if _safe_is_ark_main_menu():
+            return True
+        time.sleep(0.5)
+    return bool(_safe_is_ark_main_menu())
+
+
+def _safe_check_join_template_no_bounds(item, threshold):
+    from source.join_sim.source.utility import recon_utils
+
+    try:
+        return bool(recon_utils.check_template_no_bounds(item, threshold))
+    except Exception:
+        return False
+
+
+def _safe_is_ark_main_menu():
+    from source.join_sim.source import main as join_main
+
+    try:
+        return bool(join_main.is_menu())
+    except Exception:
+        return False
 
 
 def stop_wait(stop_event, seconds):
@@ -826,26 +1051,35 @@ def _ensure_steam_window_ready(
     emit = status_callback or (lambda _message: None)
     title = steam.get("window_title", "Steam")
     timeout = float(steam.get("window_ready_timeout", 5))
-    deadline = time.monotonic() + timeout
-    launched = False
     last_error = None
-    while time.monotonic() < deadline:
+    steam_exe = _running_steam_exe_path()
+    if launch_if_missing:
+        emit("Opening Steam window.")
+        subprocess.Popen([str(steam_exe)])
+    for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if stop_event is not None and stop_event.is_set():
+                return False
+            try:
+                if _focus_steam_window_maximized(title):
+                    return True
+            except RuntimeError as exc:
+                last_error = exc
+            time.sleep(0.5)
         if stop_event is not None and stop_event.is_set():
             return False
-        try:
-            if _focus_steam_window_maximized(title):
-                return True
-        except RuntimeError as exc:
-            last_error = exc
-        if launch_if_missing and not launched:
-            steam_exe = _running_steam_exe_path()
-            emit("Opening Steam window.")
-            subprocess.Popen([str(steam_exe)])
-            launched = True
-        time.sleep(0.5)
+        emit(
+            "Steam window was not ready; restarting Steam "
+            f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
+        )
+        subprocess.run(["taskkill", "/f", "/im", "steam.exe"], check=False)
+        if stop_wait(stop_event, 1):
+            return False
+        subprocess.Popen([str(steam_exe)])
     if last_error is not None:
-        raise RuntimeError(f"Steam window was not ready: {last_error}")
-    raise RuntimeError(f"{title} window was not found.")
+        raise RuntimeError(f"Steam window was not ready after retries: {last_error}")
+    raise RuntimeError(f"{title} window was not found after retries.")
 
 
 def _focus_steam_window_maximized(window_title):

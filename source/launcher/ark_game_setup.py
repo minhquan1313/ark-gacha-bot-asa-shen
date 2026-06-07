@@ -237,6 +237,9 @@ def patch_game_settings(settings_path, target_settings=TARGET_GAME_SETTINGS):
 
 
 def kill_running_ark():
+    # from source.join_sim.source.crash.crash import close_game
+
+    # close_game()
     subprocess.run(
         ["taskkill", "/f", "/im", ARK_PROCESS_NAME],
         check=False,

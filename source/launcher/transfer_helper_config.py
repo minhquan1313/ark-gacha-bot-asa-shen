@@ -1,5 +1,4 @@
 import copy
-import copy
 import json
 import math
 from pathlib import Path
@@ -11,7 +10,7 @@ TRANSFER_PLAYERS_PATH = TRANSFER_HELPER_DIR / "players.json"
 
 MAX_TRANSFER_RUNTIME_ACCOUNTS = 4
 MAX_TRANSFER_PLAYER_ROWS = 99
-DEFAULT_BED_NAME_PREFIX = "BedPlayer"
+DEFAULT_BED_NAME_PREFIX = "BBedPlayer"
 
 DEFAULT_TRANSFER_SETTINGS = {
     "lag_offset": 1.0,
@@ -23,6 +22,8 @@ DEFAULT_TRANSFER_SETTINGS = {
     "loop_count": 1,
     "structure_load_delay": 10,
     "transfer_retry_delay": 5,
+    "ark_window_ready_timeout": 180,
+    "ark_launch_attempts": 3,
 }
 
 DEFAULT_TRANSFER_DEDIS = {
@@ -55,7 +56,15 @@ DEFAULT_TRANSFER_UI_COORDS = {
             "height": 260,
         },
         "change_account_ready_timeout": 60,
-        "window_ready_timeout": 5,
+        "steam_unable_to_sync_template": "assets/icons1080/steam_unable_to_sync.png",
+        "steam_unable_to_sync_region": {
+            "start_x": 630,
+            "start_y": 390,
+            "width": 250,
+            "height": 80,
+        },
+        "steam_unable_to_sync_continue": {"x": 1060, "y": 640},
+        "window_ready_timeout": 30,
         "menu": {"x": 45, "y": 20},
         "change_account": {"x": 45, "y": 50},
         "continue": {"x": 1050, "y": 630},
@@ -316,6 +325,12 @@ def normalize_transfer_settings(data):
     )
     normalized["transfer_retry_delay"] = _int_min(
         normalized["transfer_retry_delay"], "transfer_retry_delay", 1
+    )
+    normalized["ark_window_ready_timeout"] = _int_min(
+        normalized["ark_window_ready_timeout"], "ark_window_ready_timeout", 1
+    )
+    normalized["ark_launch_attempts"] = _int_min(
+        normalized["ark_launch_attempts"], "ark_launch_attempts", 1
     )
     return normalized
 

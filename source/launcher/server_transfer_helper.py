@@ -512,16 +512,27 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.status.setText(message)
 
     def _set_running_ui(self, running):
-        super()._set_running_ui(running)
-        self.running_widget.setVisible(running)
         if running:
+            self.running_ui_active = True
+            self.idle_widget.setVisible(False)
+            self.running_widget.setVisible(True)
+            self.hotkey_label.setText(self.running_hotkey_hint)
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215)
             self.setFixedWidth(self.idle_width)
             running_height = self._height_for_width(self.idle_width)
             self.setFixedHeight(running_height)
             self.resize(self.idle_width, running_height)
-            self._position_middle_right()
+        else:
+            self.setMaximumHeight(16777215)
+            self.setFixedWidth(self.idle_width)
+            self.setMinimumHeight(self.idle_min_height)
+            self.running_widget.setVisible(False)
+            self.idle_widget.setVisible(True)
+            self.hotkey_label.setText(self.hotkey_hint)
+            self.resize(self.idle_width, self._idle_content_height())
+            self.running_ui_active = False
+        self._position_middle_right()
         self.start_stop_button.setText("STOP" if running else "START")
         self.start_stop_button.set_variant("danger" if running else "primary")
 

@@ -3,12 +3,12 @@ import time
 import settings
 from source.ASA import config
 from source.ASA.player import player_state
-from source.ASA.player.player_state import capture_state
 from source.logs import gachalogs as logs
-from source.utility import local_player, screen, template, utils, variables, windows
-from source.utility.debug_screenshots import CAPTURE_VAULT_TRANSFER, capture_for
+from source.utility import template, utils, variables, windows
 
 resets = 0  # resets happen when char cannot tp therefore it is a major issue
+
+capture_state = player_state.capture_state
 
 
 def is_open():

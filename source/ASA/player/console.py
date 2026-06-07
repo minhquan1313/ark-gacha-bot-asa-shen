@@ -40,7 +40,7 @@ def enter_data(data: str):
     last_command = data
 
 
-def console_ccc():
+def console_ccc(reset_state_before_capture=True):
     data = None
     attempts = 0
     while data == None:
@@ -48,7 +48,8 @@ def console_ccc():
         logs.logger.debug(
             f"trying to get ccc data {attempts} / {source.ASA.config.console_ccc_attempts}"
         )
-        player_state.reset_state()  # reset state at the start to make sure we can open up the console window
+        if reset_state_before_capture:
+            player_state.reset_state()  # reset state at the start to make sure we can open up the console window
         count = 0
         while not is_open():
             count += 1

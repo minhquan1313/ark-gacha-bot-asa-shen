@@ -209,7 +209,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
         self.pc_nav_labels = {
             "dashboard": "DASHBOARD",
-            "setup": "SETUP GUIDE",
+            # "setup": "SETUP GUIDE",
             "settings": "SETTINGS",
             "logs": "LOGS",
             "tools": "TOOLS",

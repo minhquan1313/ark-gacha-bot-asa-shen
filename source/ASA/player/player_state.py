@@ -1,14 +1,13 @@
 import time
 
 import settings
-import source.ASA.config
 import source.gacha_bot.render
 from source.ASA.inventories import inventory
 from source.ASA.player import buffs, player_inventory, tribelog
 from source.ASA.strucutres import bed, teleporter
 from source.join_sim.source import main
 from source.logs import gachalogs as logs
-from source.utility import local_player, screen, template, utils, variables, windows
+from source.utility import utils, windows
 from source.utility.debug_screenshots import (
     CAPTURE_PLAYER_STATE,
     capture_for,

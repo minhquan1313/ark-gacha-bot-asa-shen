@@ -28,9 +28,9 @@ def _is_menu_cancellable():
 
 
 def _click_start_cancellable(stop_event):
+    from source.join_sim.source.logs import logger as logs
     from source.join_sim.source.menus import start_menu
     from source.join_sim.source.utility import recon_utils, windows
-    from source.join_sim.source.logs import logger as logs
 
     if _stopped(stop_event) or not start_menu.is_open():
         return
@@ -69,9 +69,9 @@ def _click_start_cancellable(stop_event):
 
 
 def _click_join_game_cancellable(stop_event):
+    from source.join_sim.source.logs import logger as logs
     from source.join_sim.source.menus import join_game_menu
     from source.join_sim.source.utility import recon_utils, windows
-    from source.join_sim.source.logs import logger as logs
 
     if _stopped(stop_event) or not join_game_menu.is_open():
         return
@@ -116,9 +116,9 @@ def _search_bar_search_cancellable(server, stop_event):
 
 
 def _join_server_cancellable(server, stop_event):
-    from source.join_sim.source.menus import multiplayer_menu
-    from source.join_sim.source.utility import windows
     from source.join_sim.source.logs import logger as logs
+    from source.join_sim.source.menus import multiplayer_menu
+    from source.join_sim.source.utility import recon_utils, windows
 
     if _stopped(stop_event):
         return
@@ -128,14 +128,17 @@ def _join_server_cancellable(server, stop_event):
     if not multiplayer_menu.is_open():
         return
     logs.logger.debug("joining server")
-    _search_bar_search_cancellable(server, stop_event)
+    while multiplayer_menu.clear_search():
+        _search_bar_search_cancellable(server, stop_event)
+        if _wait(stop_event, 0.2):
+            return
     if _wait(stop_event, 1):
         return
     windows.click(
         multiplayer_menu.get_pixel_loc("first_server_x"),
         multiplayer_menu.get_pixel_loc("first_server_y"),
     )
-    if _wait(stop_event, 0.5):
+    if _wait(stop_event, 0.2):
         return
     if (
         not _stopped(stop_event)
@@ -161,9 +164,9 @@ def _join_server_cancellable(server, stop_event):
 
 
 def _mod_menu_join_cancellable(stop_event):
+    from source.join_sim.source.logs import logger as logs
     from source.join_sim.source.menus import mod_menu
     from source.join_sim.source.utility import recon_utils, windows
-    from source.join_sim.source.logs import logger as logs
 
     if _stopped(stop_event) or not mod_menu.is_open():
         return
@@ -178,9 +181,9 @@ def _mod_menu_join_cancellable(stop_event):
 def _has_failure_cancellable(stop_event):
     import pyautogui
 
+    from source.join_sim.source.logs import logger as logs
     from source.join_sim.source.menus import failure
     from source.join_sim.source.utility import recon_utils, windows
-    from source.join_sim.source.logs import logger as logs
 
     if _stopped(stop_event):
         return
@@ -296,10 +299,12 @@ def run_auto_join_server(
 
     if join_round is None:
         join_round = join_round_cancellable
+
     if is_menu is None:
         from source.join_sim.source import main as join_main
 
         is_menu = join_main.is_menu
+
     if detect_crash is None or re_open_game is None:
         from source.join_sim.source.crash import crash
 
