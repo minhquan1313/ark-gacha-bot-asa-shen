@@ -101,8 +101,9 @@ ASSETS = {
     "logo_text": "assets/app/image/logoWText.png",
     "dashboard": "assets/app/image/dashboard.png",
     "welcome": "assets/app/image/welcome.png",
-    "icon.trash_junk": "assets/app/icons/trash_junk.png",
-    "icon.restore_settings": "assets/app/icons/restore_settings.png",
+    "icon.add": "assets/app/icons/add256.png",
+    "icon.trash_junk": "assets/app/icons/trash_junk256.png",
+    "icon.restore_settings": "assets/app/icons/restore_settings256.png",
 }
 
 DEFAULT_SETTINGS = {

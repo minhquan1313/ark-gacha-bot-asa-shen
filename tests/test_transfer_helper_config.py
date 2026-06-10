@@ -12,8 +12,8 @@ from source.launcher.transfer_helper_config import (
     load_transfer_settings,
     load_transfer_ui_coords,
     missing_runtime_inputs,
-    normalize_transfer_players,
     normalize_transfer_dedis,
+    normalize_transfer_players,
     normalize_transfer_settings,
     player_account_count,
     player_bed_name,
@@ -292,7 +292,7 @@ class TransferHelperConfigTests(unittest.TestCase):
 
         self.assertIn("ui_coords.steam.account_slots.4", missing)
 
-    def test_validation_blocks_missing_transmitter_title_region(self):
+    def test_validation_blocks_missing_transmitter_inv_region(self):
         settings = normalize_transfer_settings(
             {
                 "resource_server": "1111",
@@ -302,12 +302,12 @@ class TransferHelperConfigTests(unittest.TestCase):
         )
         dedis = normalize_transfer_dedis({"teleport": "DEDI"})
         coords = default_transfer_ui_coords()
-        coords["transfer"]["transmitter_title_region"] = {}
+        coords["transfer"]["transmitter_inv_region"] = {}
         players = normalize_transfer_players({}, 1)
 
         missing = missing_runtime_inputs(settings, dedis, coords, players)
 
-        self.assertIn("ui_coords.transfer.transmitter_title_region", missing)
+        self.assertIn("ui_coords.transfer.transmitter_inv_region", missing)
 
     def test_validation_blocks_missing_destination_dedi_route(self):
         settings = normalize_transfer_settings(
@@ -400,7 +400,9 @@ class TransferHelperConfigTests(unittest.TestCase):
 
         self.assertIn("ui_coords.steam.switch_account_template", missing)
 
-    def test_validation_blocks_missing_steam_change_ready_region_for_multi_account(self):
+    def test_validation_blocks_missing_steam_change_ready_region_for_multi_account(
+        self,
+    ):
         settings = normalize_transfer_settings(
             {
                 "resource_server": "1111",
@@ -417,7 +419,9 @@ class TransferHelperConfigTests(unittest.TestCase):
 
         self.assertIn("ui_coords.steam.change_account_ready_region", missing)
 
-    def test_validation_blocks_missing_steam_change_ready_template_for_multi_account(self):
+    def test_validation_blocks_missing_steam_change_ready_template_for_multi_account(
+        self,
+    ):
         settings = normalize_transfer_settings(
             {
                 "resource_server": "1111",

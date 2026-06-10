@@ -2,8 +2,7 @@ import ctypes
 from ctypes import wintypes
 
 from source.launcher.constants import GAME_WINDOW_TITLE
-
-from . import local_player, screen
+from source.utility import local_player, screen
 
 
 def find_window_by_title(title):
@@ -97,6 +96,11 @@ ctypes.windll.user32.PostMessageW.argtypes = [
     ctypes.c_ulong,
 ]
 ctypes.windll.user32.PostMessageW.restype = ctypes.c_int
+
+
+def refresh():
+    global hwnd
+    hwnd = find_window_by_title(GAME_WINDOW_TITLE)
 
 
 def move_mouse(x, y):

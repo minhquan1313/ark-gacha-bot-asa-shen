@@ -1,7 +1,7 @@
 import ctypes
 import time
 
-from source.ASA.player import console, player_state
+from source.ASA.player import console
 from source.logs import gachalogs as logs
 
 from . import local_player, windows
@@ -114,6 +114,10 @@ def ctrl_a():  # hotkey for sending ctrl a
     ctypes.windll.user32.SendMessageW(windows.hwnd, WM_KEYUP, 0x41, 0)
     time.sleep(0.1)
     ctypes.windll.user32.SendMessageW(windows.hwnd, WM_KEYUP, 0x11, 0)
+
+
+def time_now():
+    return time.monotonic()
 
 
 """

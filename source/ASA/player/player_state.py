@@ -59,7 +59,6 @@ human = charecter()
 
 
 def check_disconnected():
-
     if main.is_menu() or main.is_crashed():
         logs.logger.critical("we are disconnected from the server")
         # DEBUG START
@@ -67,7 +66,7 @@ def check_disconnected():
         # DEBUG END
         windows.hwnd = main.main_loop(str(settings.server_number))
         tribelog.close()
-        logs.logger.critical(
+        logs.logger.warning(
             "joined back into the server waiting 30 seconds to render everything "
         )
         # DEBUG START

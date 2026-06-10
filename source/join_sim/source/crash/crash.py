@@ -18,6 +18,7 @@ def detect_crash():
     for proc in psutil.process_iter(attrs=["name", "exe"]):
         if proc.info["name"] == "CrashReportClient.exe":
             crash_process = proc
+            logs.logger.critical(f"Crash detected")
             return True
     return False
 
@@ -27,6 +28,7 @@ def close_game():
         global crash_process
         if crash_process:
             print(f"terminating crash process")
+            logs.logger.critical(f"terminating crash process")
             crash_process.terminate()
             crash_process = None
 
@@ -34,7 +36,7 @@ def close_game():
         process = psutil.Process(pid)
         if process:
             process.terminate()
-        logs.logger.critical(f"game with pid {pid} terminated")
+            logs.logger.critical(f"game with pid {pid} terminated")
     except psutil.NoSuchProcess:
         logs.logger.critical("process not found")
     except psutil.AccessDenied:

@@ -17,10 +17,10 @@ from source.gacha_bot.server_transfer import (
     check_transfer_disconnected,
     check_transfer_player_state,
     deposit_to_transfer_dedis,
+    ensure_ark_running,
     join_server,
     kill_ark,
     reset_transfer_state,
-    ensure_ark_running,
     run_transfer_helper,
     switch_steam_account,
     transfer_to_server,
@@ -80,7 +80,7 @@ def ready_config(account_count=2, loop_count=1):
         "transfer_not_ready_cancel",
     ):
         coords["transfer"][key] = {"x": 1, "y": 1}
-    coords["transfer"]["transmitter_title_template"] = "README.md"
+    coords["transfer"]["transmitter_inv_template"] = "README.md"
     coords["transfer"]["not_ready_template"] = "README.md"
     coords["transfer"]["dedi_deposit_ready_template"] = "README.md"
     coords["transfer"]["dedi_init_click"] = {"x": 1, "y": 1}
@@ -133,7 +133,9 @@ class ServerTransferRunnerTests(unittest.TestCase):
         dependencies.verify_tribelog.side_effect = [False, True]
 
         self.assertTrue(
-            run_transfer_helper(ready_config(), threading.Event(), dependencies=dependencies)
+            run_transfer_helper(
+                ready_config(), threading.Event(), dependencies=dependencies
+            )
         )
 
         dependencies.kill_ark.assert_not_called()
@@ -159,12 +161,12 @@ class ServerTransferRunnerTests(unittest.TestCase):
         dependencies = deps()
 
         self.assertTrue(
-            run_transfer_helper(ready_config(), threading.Event(), dependencies=dependencies)
+            run_transfer_helper(
+                ready_config(), threading.Event(), dependencies=dependencies
+            )
         )
 
-        dependencies.fast_travel_to_bed.assert_has_calls(
-            [call("Bed1"), call("Bed2")]
-        )
+        dependencies.fast_travel_to_bed.assert_has_calls([call("Bed1"), call("Bed2")])
         dependencies.transfer_to_server.assert_has_calls(
             [call("2222", 1), call("1111", 1), call("2222", 2), call("1111", 2)]
         )
@@ -217,16 +219,16 @@ class ServerTransferRunnerTests(unittest.TestCase):
         dependencies.switch_account.assert_not_called()
         dependencies.kill_ark.assert_not_called()
 
-    def test_resource_fill_checks_tekpod_then_waits_before_withdraw_after_menu_join(self):
+    def test_resource_fill_checks_tekpod_then_waits_before_withdraw_after_menu_join(
+        self,
+    ):
         dependencies = deps()
         dependencies.is_menu.return_value = True
         order = []
-        dependencies.verify_tribelog.side_effect = lambda: order.append(
-            "verify_tribelog"
-        ) or True
-        dependencies.wait_structure.side_effect = lambda: order.append(
-            "wait_structure"
+        dependencies.verify_tribelog.side_effect = (
+            lambda: order.append("verify_tribelog") or True
         )
+        dependencies.wait_structure.side_effect = lambda: order.append("wait_structure")
         dependencies.check_state.side_effect = lambda _account: order.append(
             "check_state"
         )
@@ -248,12 +250,10 @@ class ServerTransferRunnerTests(unittest.TestCase):
         dependencies = deps()
         dependencies.is_menu.return_value = False
         order = []
-        dependencies.verify_tribelog.side_effect = lambda: order.append(
-            "verify_tribelog"
-        ) or True
-        dependencies.wait_structure.side_effect = lambda: order.append(
-            "wait_structure"
+        dependencies.verify_tribelog.side_effect = (
+            lambda: order.append("verify_tribelog") or True
         )
+        dependencies.wait_structure.side_effect = lambda: order.append("wait_structure")
         dependencies.check_state.side_effect = lambda _account: order.append(
             "check_state"
         )
@@ -336,7 +336,9 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 },
             ),
             patch("source.gacha_bot.server_transfer.kill_ark") as kill,
-            patch("source.gacha_bot.server_transfer.stop_wait", return_value=False) as wait,
+            patch(
+                "source.gacha_bot.server_transfer.stop_wait", return_value=False
+            ) as wait,
             patch(
                 "source.gacha_bot.server_transfer._ensure_steam_window_ready",
                 return_value=True,
@@ -346,9 +348,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 side_effect=[True, True],
             ) as wait_template,
         ):
-            account = switch_steam_account(
-                2, 1, 2, coords, threading.Event(), Mock()
-            )
+            account = switch_steam_account(2, 1, 2, coords, threading.Event(), Mock())
 
         self.assertEqual(account, 2)
         kill.assert_called_once()
@@ -418,9 +418,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "account switch UI"):
-                switch_steam_account(
-                    2, 1, 2, coords, threading.Event(), Mock()
-                )
+                switch_steam_account(2, 1, 2, coords, threading.Event(), Mock())
 
         self.assertEqual(
             pyautogui.click.call_args_list,
@@ -579,9 +577,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 _ensure_steam_window_ready(steam, threading.Event(), status)
             )
 
-        run.assert_called_once_with(
-            ["taskkill", "/f", "/im", "steam.exe"], check=False
-        )
+        run.assert_called_once_with(["taskkill", "/f", "/im", "steam.exe"], check=False)
         wait.assert_called_once_with(ANY, 1)
         self.assertEqual(
             popen.call_args_list,
@@ -591,9 +587,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             ],
         )
         focus.assert_called_once_with("Steam")
-        status.assert_any_call(
-            "Steam window was not ready; restarting Steam (1/3)."
-        )
+        status.assert_any_call("Steam window was not ready; restarting Steam (1/3).")
 
     def test_join_server_focuses_ark_and_clicks_center_before_auto_join(self):
         pyautogui = SimpleNamespace(click=Mock())
@@ -610,9 +604,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 "source.launcher.system.validate_ark_window",
                 return_value=(1920, 1080),
             ) as validate,
-            patch(
-                "source.launcher.deposit_helper_capture.focus_game_window"
-            ) as focus,
+            patch("source.launcher.deposit_helper_capture.focus_game_window") as focus,
             patch(
                 "source.gacha_bot.server_transfer._ark_window_handle",
                 return_value=123,
@@ -675,20 +667,26 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(wait_template.call_args_list[0], call(
-            template.check_template,
-            2,
-            ANY,
-            "README",
-            0.7,
-        ))
-        self.assertEqual(wait_template.call_args_list[1], call(
-            template.check_template_no_bounds,
-            0,
-            ANY,
-            "README",
-            0.75,
-        ))
+        self.assertEqual(
+            wait_template.call_args_list[0],
+            call(
+                template.check_template,
+                2,
+                ANY,
+                "README",
+                0.7,
+            ),
+        )
+        self.assertEqual(
+            wait_template.call_args_list[1],
+            call(
+                template.check_template_no_bounds,
+                0,
+                ANY,
+                "README",
+                0.75,
+            ),
+        )
         self.assertEqual(clicks[0], config["ui_coords"]["transfer"]["transfer_button"])
 
     def test_transfer_to_server_recovers_state_before_transmitter_retry(self):
@@ -756,7 +754,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
         )
         self.assertEqual(clicks[0], config["ui_coords"]["transfer"]["transfer_button"])
 
-    def test_transfer_to_server_blocks_when_transmitter_title_missing(self):
+    def test_transfer_to_server_blocks_when_transmitter_inv_missing(self):
         pyautogui = SimpleNamespace(hotkey=Mock(), write=Mock())
         inventory = SimpleNamespace(open=Mock())
         teleporter = SimpleNamespace(transfer_teleport_not_default=Mock())
@@ -1131,7 +1129,9 @@ class ServerTransferRunnerTests(unittest.TestCase):
     def test_logout_before_kill_uses_console_main_menu_before_kill(self):
         with (
             patch("source.launcher.deposit_helper_capture.focus_game_window") as focus,
-            patch("source.gacha_bot.server_transfer._refresh_join_sim_ark_handle") as refresh,
+            patch(
+                "source.gacha_bot.server_transfer._refresh_join_sim_ark_handle"
+            ) as refresh,
             patch(
                 "source.gacha_bot.server_transfer._open_main_menu_until_safe_to_kill",
                 return_value=True,
@@ -1223,7 +1223,9 @@ class ServerTransferRunnerTests(unittest.TestCase):
 
         with (
             patch.dict("sys.modules", {"source.utility.utils": utils}),
-            patch("source.gacha_bot.server_transfer.stop_wait", return_value=False) as wait,
+            patch(
+                "source.gacha_bot.server_transfer.stop_wait", return_value=False
+            ) as wait,
         ):
             self.assertTrue(_reset_open_main_menu_console(stop_event))
 
@@ -1296,9 +1298,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 "source.gacha_bot.server_transfer._process_running",
                 side_effect=[False, True],
             ),
-            patch(
-                "source.launcher.ark_game_setup.launch_ark_through_steam"
-            ) as launch,
+            patch("source.launcher.ark_game_setup.launch_ark_through_steam") as launch,
             patch(
                 "source.launcher.system.validate_ark_window",
                 return_value=(1920, 1080),
@@ -1306,9 +1306,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             patch(
                 "source.gacha_bot.server_transfer.stop_wait", return_value=False
             ) as wait,
-            patch(
-                "source.launcher.deposit_helper_capture.focus_game_window"
-            ) as focus,
+            patch("source.launcher.deposit_helper_capture.focus_game_window") as focus,
             patch(
                 "source.gacha_bot.server_transfer._ark_window_handle",
                 return_value=123,
@@ -1339,16 +1337,12 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 "source.gacha_bot.server_transfer._process_running",
                 return_value=True,
             ),
-            patch(
-                "source.launcher.ark_game_setup.launch_ark_through_steam"
-            ) as launch,
+            patch("source.launcher.ark_game_setup.launch_ark_through_steam") as launch,
             patch(
                 "source.launcher.system.validate_ark_window",
                 return_value=(1920, 1080),
             ) as validate,
-            patch(
-                "source.launcher.deposit_helper_capture.focus_game_window"
-            ) as focus,
+            patch("source.launcher.deposit_helper_capture.focus_game_window") as focus,
         ):
             self.assertTrue(ensure_ark_running(threading.Event(), settings=settings))
 
@@ -1365,7 +1359,10 @@ class ServerTransferRunnerTests(unittest.TestCase):
             ),
             patch(
                 "source.launcher.system.validate_ark_window",
-                side_effect=[RuntimeError("ArkAscended window was not found."), (1920, 1080)],
+                side_effect=[
+                    RuntimeError("ArkAscended window was not found."),
+                    (1920, 1080),
+                ],
             ) as validate,
             patch(
                 "source.gacha_bot.server_transfer.time.monotonic",
@@ -1399,12 +1396,13 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 "source.gacha_bot.server_transfer._process_running",
                 side_effect=[False, True, False, True],
             ),
-            patch(
-                "source.launcher.ark_game_setup.launch_ark_through_steam"
-            ) as launch,
+            patch("source.launcher.ark_game_setup.launch_ark_through_steam") as launch,
             patch(
                 "source.launcher.system.validate_ark_window",
-                side_effect=[RuntimeError("ArkAscended window was not found."), (1920, 1080)],
+                side_effect=[
+                    RuntimeError("ArkAscended window was not found."),
+                    (1920, 1080),
+                ],
             ),
             patch(
                 "source.gacha_bot.server_transfer.time.monotonic",
@@ -1415,9 +1413,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             patch(
                 "source.gacha_bot.server_transfer.stop_wait", return_value=False
             ) as wait,
-            patch(
-                "source.launcher.deposit_helper_capture.focus_game_window"
-            ) as focus,
+            patch("source.launcher.deposit_helper_capture.focus_game_window") as focus,
             patch(
                 "source.gacha_bot.server_transfer._ark_window_handle",
                 return_value=123,

@@ -16,7 +16,7 @@ DEFAULT_TRANSFER_SETTINGS = {
     "lag_offset": 1.0,
     "resource_station_yaw": 0.0,
     "destination_station_yaw": 0.0,
-    "transmitter_teleport": "TRANSFER_TRANS",
+    "transmitter_teleport": "TRANSFER_TTRANS",
     "resource_server": "0",
     "destination_server": "0",
     "loop_count": 1,
@@ -28,11 +28,11 @@ DEFAULT_TRANSFER_SETTINGS = {
 
 DEFAULT_TRANSFER_DEDIS = {
     "resource": {
-        "teleport": "TRANSFER_DEDI",
+        "teleport": "TRANSFER_DDEDI",
         "items": [],
     },
     "destination": {
-        "teleport": "TRANSFER_DEDI",
+        "teleport": "TRANSFER_DDEDI",
         "items": [],
     },
 }
@@ -93,8 +93,8 @@ DEFAULT_TRANSFER_UI_COORDS = {
         },
     },
     "transfer": {
-        "transmitter_title_template": "assets/icons1080/transmitter_title.png",
-        "transmitter_title_region": {
+        "transmitter_inv_template": "assets/icons1080/transmitter_inv.png",
+        "transmitter_inv_region": {
             "start_x": 970,
             "start_y": 110,
             "width": 200,
@@ -511,7 +511,7 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         if not _coord_complete(transfer.get(key, {})):
             missing.append(f"ui_coords.transfer.{key}.x/y")
 
-    for key in ("transmitter_title_template", "not_ready_template"):
+    for key in ("transmitter_inv_template", "not_ready_template"):
         _append_template_missing(
             missing, transfer, key, project_root, "ui_coords.transfer"
         )
@@ -522,8 +522,8 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         project_root,
         "ui_coords.transfer",
     )
-    if not _region_complete(transfer.get("transmitter_title_region", {})):
-        missing.append("ui_coords.transfer.transmitter_title_region")
+    if not _region_complete(transfer.get("transmitter_inv_region", {})):
+        missing.append("ui_coords.transfer.transmitter_inv_region")
     if not _region_complete(transfer.get("not_ready_region", {})):
         missing.append("ui_coords.transfer.not_ready_region")
     if not _region_complete(transfer.get("dedi_deposit_ready_region", {})):

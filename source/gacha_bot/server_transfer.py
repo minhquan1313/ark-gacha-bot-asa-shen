@@ -413,6 +413,7 @@ def _focus_ark_window_for_join(window_size=None):
 
     focus_game_window(center_cursor_when_switching=True)
     _refresh_join_sim_ark_handle()
+    # Click in middle of screen to skip the intro and quickly go to the main menu, which can help with faster joins
     width, height = window_size or (1920, 1080)
     pyautogui.click(int(width) // 2, int(height) // 2)
 
@@ -595,7 +596,6 @@ def _transfer_withdraw_from_dedi(
     fallback_bed_name=None,
 ):
     from source.ASA.strucutres import inventory
-    from source.gacha_bot import deposit
     from source.logs import gachalogs as logs
 
     timeout = _transfer_dedi_open_timeout(ui_coords)
@@ -787,7 +787,7 @@ def transfer_to_server(
         else "destination_station_yaw"
     )
     transmitter_template = _register_template_region(
-        transfer["transmitter_title_template"], transfer["transmitter_title_region"]
+        transfer["transmitter_inv_template"], transfer["transmitter_inv_region"]
     )
     transmitter_open = False
     fallback_bed_name = _fallback_bed_name(players, account)

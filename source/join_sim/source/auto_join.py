@@ -54,6 +54,7 @@ def _click_start_cancellable(stop_event):
         recon_utils.window_still_open_no_bounds("network_failure", 0.7, 1)
     if _stopped(stop_event):
         return
+
     logs.logger.debug("clicking start")
     windows.click(
         start_menu.get_pixel_loc("accept_x"),
@@ -61,6 +62,10 @@ def _click_start_cancellable(stop_event):
     )
     if _stopped(stop_event):
         return
+
+    recon_utils.template_await_false(
+        recon_utils.check_template, 10.0, "is_logging", 0.7
+    )
     windows.click(
         start_menu.get_pixel_loc("start_x"),
         start_menu.get_pixel_loc("start_y"),
@@ -128,12 +133,22 @@ def _join_server_cancellable(server, stop_event):
     if not multiplayer_menu.is_open():
         return
     logs.logger.debug("joining server")
+
+    _search_bar_search_cancellable(server, stop_event)
     while multiplayer_menu.clear_search():
         _search_bar_search_cancellable(server, stop_event)
-        if _wait(stop_event, 0.2):
-            return
-    if _wait(stop_event, 1):
+        multiplayer_menu.wait_clear_search(1)
+
+    if _wait(stop_event, 0.1):
         return
+
+    while not multiplayer_menu.is_server_list_loaded():
+        multiplayer_menu.refresh()
+        multiplayer_menu.wait_server_list_loaded(1)
+
+    if _wait(stop_event, 0.1):
+        return
+
     windows.click(
         multiplayer_menu.get_pixel_loc("first_server_x"),
         multiplayer_menu.get_pixel_loc("first_server_y"),
@@ -294,6 +309,10 @@ def run_auto_join_server(
     reopen_interval=REOPEN_INTERVAL_SECONDS,
     reopen_pause=5,
 ):
+    from source.join_sim.source.utility import windows
+
+    windows.refresh()
+
     server = normalize_server_number(server)
     use_cancellable_join_round = join_round is None
 

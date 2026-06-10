@@ -10,7 +10,7 @@ from source.join_sim.source.menus import (
     start_menu,
     success,
 )
-from source.join_sim.source.utility import recon_utils, utils, windows
+from source.join_sim.source.utility import recon_utils, windows
 
 server = 0000
 
@@ -31,7 +31,15 @@ def join_round(server: str) -> bool:
         logs.logger.debug("joined server")
         return success.joined_server()  # if we arent in the menu we need to restart
 
-    time.sleep(0.5)
+    if not recon_utils.template_await_false(
+        recon_utils.check_template, 10.0, "is_logging", 0.7
+    ):
+        logs.logger.debug("Game logged in")
+    else:
+        print("failed to log in")
+        logs.logger.error("Game failed to log in")
+        return False
+
     start_menu.click_start()
     time.sleep(0.5)
     join_game_menu.click_join_game()
@@ -68,10 +76,11 @@ def main_loop(server=server):
         logs.logger.debug("starting sim")
         while flag != True:
 
-            if time.time() - time1 >= 15 * 60:
+            if time.time() - time1 >= 15 * 60 or crash.detect_crash():
                 crash.re_open_game()
                 time1 = time.time()
                 time.sleep(5)
+
             time.sleep(0.2)
             flag = join_round(server)
             time.sleep(2)

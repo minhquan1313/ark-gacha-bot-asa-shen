@@ -4,8 +4,6 @@ import time
 import cv2
 import numpy as np
 
-import settings
-from source.ASA.player import console
 from source.logs import gachalogs as logs
 from source.utility import screen
 
@@ -53,6 +51,43 @@ roi_regions = {
     "turn_off": {"start_x": 900, "start_y": 870, "width": 150, "height": 30},
     "vault_full": {"start_x": 1065, "start_y": 525, "width": 113, "height": 30},
     "search": {"start_x": 337, "start_y": 952, "width": 90, "height": 30},
+    "server_list_trans_loaded": {
+        "start_x": 140,
+        "start_y": 280,
+        "width": 70,
+        "height": 160,
+    },
+    "server_trans_success": {"start_x": 765, "start_y": 0, "width": 382, "height": 60},
+    "transfer_join_button": {
+        "start_x": 1504,
+        "start_y": 857,
+        "width": 270,
+        "height": 68,
+    },
+    "transfer_not_ready_popup": {
+        "start_x": 730,
+        "start_y": 300,
+        "width": 560,
+        "height": 200,
+    },
+    "transmitter_inv": {
+        "start_x": 970,
+        "start_y": 110,
+        "width": 200,
+        "height": 70,
+    },
+    "transmitter_server_menu": {
+        "start_x": 200,
+        "start_y": 210,
+        "width": 350,
+        "height": 100,
+    },
+    "transmitter_server_search": {
+        "start_x": 1390,
+        "start_y": 160,
+        "width": 220,
+        "height": 50,
+    },
 }
 
 
@@ -105,9 +140,17 @@ def check_template(item: str, threshold: float) -> bool:
 
     # if item == "crop_plot_prompt":
     #     print(f"Max value: {max_val}, Threshold: {threshold}")
-    #     cv2.imshow("roi", gray_roi)
     #     cv2.imshow("template", image)
+    #     cv2.rectangle(
+    #         roi,
+    #         (max_loc[0], max_loc[1]),
+    #         (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
+    #         (0, 0, 255),
+    #         2,
+    #     )
+    #     cv2.imshow("roi_with_rectangle", gray_roi)
     #     cv2.waitKey(0)
+    #     cv2.destroyAllWindows()
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
