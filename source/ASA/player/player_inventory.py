@@ -97,9 +97,9 @@ def implant_eat():
     global resets
     resets += 1
     attempts = 0
-    # DEBUG START
+
     capture_state("implant eat")
-    # DEBUG END
+
     while not template.check_template("death_regions", 0.7):
         attempts += 1
         logs.logger.debug(

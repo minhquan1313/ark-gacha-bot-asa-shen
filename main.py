@@ -1,15 +1,10 @@
 import sys
 
-from PySide6.QtWidgets import QApplication
-
-from source.launcher.gui import SettingsGUI
+from source.launcher.app import run
 
 
 def main():
-    app = QApplication(sys.argv)
-    window = SettingsGUI()
-    window.show()
-    sys.exit(app.exec())
+    sys.exit(run())
 
 
 if __name__ == "__main__":
