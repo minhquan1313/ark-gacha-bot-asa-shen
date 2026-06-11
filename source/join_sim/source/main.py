@@ -10,7 +10,8 @@ from source.join_sim.source.menus import (
     start_menu,
     success,
 )
-from source.join_sim.source.utility import recon_utils, windows
+from source.join_sim.source.utility import recon_utils
+from source.utility import windows
 
 server = 0000
 
@@ -86,7 +87,7 @@ def main_loop(server=server):
             time.sleep(2)
 
         logs.logger.debug("stop sim")
-        return windows.hwnd
+        return windows.ark_hwnd()
 
 
 if __name__ == "__main__":

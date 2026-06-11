@@ -1,3 +1,7 @@
+import json
+import os
+import tempfile
+
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
@@ -13,7 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from source.gacha_bot.server_transfer import TransferConfigError, run_transfer_helper
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
     focus_game_window,
@@ -79,6 +82,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         self._preload_capture_view()
         self.status_changed.connect(self._append_status)
         self.worker_finished.connect(self._on_worker_finished)
+        self.runtime_config_path = None
 
     def _build_ui(self):
         self.idle_widget = self._idle_widget()
@@ -478,7 +482,8 @@ class ServerTransferHelper(WorkerHelperWindow):
 
         self.running_log.clear()
         self.status.setText("Starting server transfer helper...")
-        self._start_worker(self._run_worker, config)
+        self.runtime_config_path = self._write_runtime_config(config)
+        self._start_worker("server_transfer", "--config", self.runtime_config_path)
 
     def stop(self):
         if not self.is_running():
@@ -488,18 +493,6 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.running_summary.setText("Stopping...")
         self.status.setText("Stopping...")
 
-    def _run_worker(self, config):
-        try:
-            completed = run_transfer_helper(
-                config, self.stop_event, self.status_changed.emit
-            )
-        except TransferConfigError as exc:
-            self.worker_finished.emit(f"Config blocked: {exc}")
-        except Exception as exc:
-            self.worker_finished.emit(f"Failed: {exc}")
-        else:
-            self.worker_finished.emit("Finished." if completed else "Stopped.")
-
     def _append_status(self, message):
         self.running_summary.setText(message)
         self.status.setText(message)
@@ -508,6 +501,7 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _on_worker_finished(self, message):
         if self._finish_worker():
             return
+        self._cleanup_runtime_config()
         self.running_stop_button.setEnabled(True)
         self.status.setText(message)
 
@@ -841,6 +835,28 @@ class ServerTransferHelper(WorkerHelperWindow):
         field = QLineEdit(str(value))
         field.setObjectName("SettingField")
         return field
+
+    def _write_runtime_config(self, config):
+        handle = tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            delete=False,
+            prefix="ark_gacha_transfer_",
+            suffix=".json",
+        )
+        with handle:
+            json.dump(config, handle)
+        return handle.name
+
+    def _cleanup_runtime_config(self):
+        path = self.runtime_config_path
+        self.runtime_config_path = None
+        if not path:
+            return
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
     @staticmethod
     def _labeled_row(label_text, widget):

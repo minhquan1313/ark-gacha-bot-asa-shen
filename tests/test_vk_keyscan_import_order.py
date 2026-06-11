@@ -15,38 +15,7 @@ def remove_module(module_name):
 
 class VkKeyScanImportOrderTests(unittest.TestCase):
     def tearDown(self):
-        remove_module("source.join_sim.source.utility.utils")
         remove_module("source.utility.utils")
-
-    def test_join_sim_utils_does_not_mutate_global_vk_key_scan_a_signature(self):
-        marker = [object()]
-        fake_user32 = types.SimpleNamespace(
-            VkKeyScanA=types.SimpleNamespace(argtypes=marker),
-            VkKeyScanW=lambda _char: ord("a"),
-        )
-        fake_ctypes = types.SimpleNamespace(
-            c_short=object(),
-            c_wchar=object(),
-            windll=types.SimpleNamespace(user32=fake_user32),
-            WINFUNCTYPE=lambda *_types: lambda _spec: fake_user32.VkKeyScanW,
-        )
-        fake_windows = types.SimpleNamespace(hwnd=123)
-        fake_local_player = types.SimpleNamespace(
-            get_input_settings=lambda _action: "l"
-        )
-
-        with patch.dict(
-            sys.modules,
-            {
-                "ctypes": fake_ctypes,
-                "source.join_sim.source.utility.windows": fake_windows,
-                "source.join_sim.source.utility.local_player": fake_local_player,
-            },
-        ):
-            module = importlib.import_module("source.join_sim.source.utility.utils")
-
-        self.assertIs(fake_user32.VkKeyScanA.argtypes, marker)
-        self.assertEqual(module.keymap_return("a"), ord("a"))
 
     def test_main_utils_does_not_mutate_global_vk_key_scan_a_signature(self):
         marker = [object()]

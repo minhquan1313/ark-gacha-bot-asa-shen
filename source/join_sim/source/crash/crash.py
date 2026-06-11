@@ -6,8 +6,8 @@ import psutil
 import win32process
 
 from source.join_sim.source.logs import logger as logs
-from source.join_sim.source.utility import local_player, recon_utils, windows
-from source.launcher.constants import GAME_WINDOW_TITLE
+from source.join_sim.source.utility import local_player, recon_utils
+from source.utility import windows
 
 appid = "2399830"
 crash_process: psutil.Process | None = None
@@ -32,7 +32,7 @@ def close_game():
             crash_process.terminate()
             crash_process = None
 
-        _, pid = win32process.GetWindowThreadProcessId(windows.hwnd)
+        _, pid = win32process.GetWindowThreadProcessId(windows.ark_hwnd())
         process = psutil.Process(pid)
         if process:
             process.terminate()
@@ -61,9 +61,6 @@ def re_open_game():
     time.sleep(10)
     launch_game_with_steam()
     recon_utils.template_sleep_no_bounds("join_last_session", 0.7, 60)
-    windows.hwnd = windows.find_window_by_title(
-        GAME_WINDOW_TITLE
-    )  # new process ID as game as relaunced
 
 
 def crash_rejoin():
@@ -72,6 +69,3 @@ def crash_rejoin():
         time.sleep(10)
         launch_game_with_steam()
         recon_utils.template_sleep_no_bounds("join_last_session", 0.7, 60)
-        windows.hwnd = windows.find_window_by_title(
-            GAME_WINDOW_TITLE
-        )  # new process ID as game as relaunced

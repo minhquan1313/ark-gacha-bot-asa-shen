@@ -64,7 +64,7 @@ def check_disconnected():
         # DEBUG START
         capture_state("disconnected")
         # DEBUG END
-        windows.hwnd = main.main_loop(str(settings.server_number))
+        main.main_loop(str(settings.server_number))
         tribelog.close()
         logs.logger.warning(
             "joined back into the server waiting 30 seconds to render everything "

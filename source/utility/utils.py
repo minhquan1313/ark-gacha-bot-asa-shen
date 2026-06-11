@@ -90,14 +90,15 @@ def keymap_return(key_input):
 
 def press_key(input_action):
     vk_code = keymap_return(local_player.get_input_settings(input_action))
+    hwnd = windows.ark_hwnd()
 
-    ctypes.windll.user32.PostMessageW(windows.hwnd, WM_KEYDOWN, vk_code, 0)
+    ctypes.windll.user32.PostMessageW(hwnd, WM_KEYDOWN, vk_code, 0)
     time.sleep(0.05)
-    ctypes.windll.user32.PostMessageW(windows.hwnd, WM_KEYUP, vk_code, 0)
+    ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, vk_code, 0)
 
 
 def post_charecter(char):
-    ctypes.windll.user32.PostMessageW(windows.hwnd, WM_CHAR, ord(char), 0)
+    ctypes.windll.user32.PostMessageW(windows.ark_hwnd(), WM_CHAR, ord(char), 0)
 
 
 def write(text):
@@ -106,14 +107,15 @@ def write(text):
 
 
 def ctrl_a():  # hotkey for sending ctrl a
-    ctypes.windll.user32.SendMessageW(windows.hwnd, WM_KEYDOWN, 0x11, 0)
+    hwnd = windows.ark_hwnd()
+    ctypes.windll.user32.SendMessageW(hwnd, WM_KEYDOWN, 0x11, 0)
     time.sleep(0.1)
-    ctypes.windll.user32.SendMessageW(windows.hwnd, WM_KEYDOWN, 0x41, 0)
+    ctypes.windll.user32.SendMessageW(hwnd, WM_KEYDOWN, 0x41, 0)
     time.sleep(0.1)
 
-    ctypes.windll.user32.SendMessageW(windows.hwnd, WM_KEYUP, 0x41, 0)
+    ctypes.windll.user32.SendMessageW(hwnd, WM_KEYUP, 0x41, 0)
     time.sleep(0.1)
-    ctypes.windll.user32.SendMessageW(windows.hwnd, WM_KEYUP, 0x11, 0)
+    ctypes.windll.user32.SendMessageW(hwnd, WM_KEYUP, 0x11, 0)
 
 
 def time_now():

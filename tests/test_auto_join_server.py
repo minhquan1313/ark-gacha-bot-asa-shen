@@ -1,15 +1,7 @@
-import sys
-import threading
-import types
 import unittest
 from unittest.mock import Mock, patch
 
-from source.join_sim.source.auto_join import (
-    _join_server_cancellable,
-    join_round_cancellable,
-    normalize_server_number,
-    run_auto_join_server,
-)
+from source.join_sim.source.auto_join import normalize_server_number, run_auto_join_server
 
 
 class FakeClock:
@@ -33,14 +25,12 @@ class AutoJoinServerTests(unittest.TestCase):
         self.assertEqual(normalize_server_number(" 5147 "), "5147")
 
     def test_exits_successfully_when_join_round_returns_true(self):
-        stop_event = threading.Event()
         statuses = []
         calls = []
         clock = FakeClock()
 
         result = run_auto_join_server(
             "5147",
-            stop_event,
             status_callback=statuses.append,
             join_round=lambda server: calls.append(server) or True,
             is_menu=lambda: False,
@@ -55,14 +45,12 @@ class AutoJoinServerTests(unittest.TestCase):
         self.assertEqual(statuses[-1], "Joined server 5147.")
 
     def test_keeps_retrying_until_join_round_succeeds(self):
-        stop_event = threading.Event()
         clock = FakeClock()
         outcomes = [False, False, True]
         calls = []
 
         result = run_auto_join_server(
             "5147",
-            stop_event,
             join_round=lambda server: calls.append(server) or outcomes.pop(0),
             is_menu=lambda: False,
             detect_crash=lambda: False,
@@ -76,189 +64,25 @@ class AutoJoinServerTests(unittest.TestCase):
         self.assertEqual(calls, ["5147", "5147", "5147"])
         self.assertGreaterEqual(clock.value, 4)
 
-    def test_stops_when_stop_event_is_set(self):
-        stop_event = threading.Event()
+    def test_default_join_round_uses_join_sim_main_flow(self):
         clock = FakeClock()
-        calls = []
+        join_main = Mock()
+        join_main.is_menu.return_value = False
+        join_main.join_round.return_value = True
 
-        def join_round(server):
-            calls.append(server)
-            stop_event.set()
-            return False
-
-        result = run_auto_join_server(
-            "5147",
-            stop_event,
-            join_round=join_round,
-            is_menu=lambda: False,
-            detect_crash=lambda: False,
-            re_open_game=lambda: None,
-            sleep=clock.sleep,
-            now=clock.now,
-        )
-
-        self.assertFalse(result)
-        self.assertEqual(calls, ["5147"])
-
-    def test_default_join_round_receives_stop_event(self):
-        stop_event = threading.Event()
-        clock = FakeClock()
-        calls = []
-
-        def join_round(server, received_stop_event):
-            calls.append((server, received_stop_event))
-            received_stop_event.set()
-            return False
-
-        with patch(
-            "source.join_sim.source.auto_join.join_round_cancellable",
-            side_effect=join_round,
-        ):
+        with patch.dict("sys.modules", {"source.join_sim.source.main": join_main}):
             result = run_auto_join_server(
                 "5147",
-                stop_event,
-                is_menu=lambda: False,
                 detect_crash=lambda: False,
                 re_open_game=lambda: None,
                 sleep=clock.sleep,
                 now=clock.now,
             )
 
-        self.assertFalse(result)
-        self.assertEqual(calls, [("5147", stop_event)])
-
-    def test_cancellable_join_round_stops_before_first_action(self):
-        stop_event = threading.Event()
-        stop_event.set()
-
-        with (
-            patch("source.join_sim.source.auto_join._is_menu_cancellable", return_value=True),
-            patch("source.join_sim.source.auto_join._click_start_cancellable") as click_start,
-            patch("source.join_sim.source.auto_join._click_join_game_cancellable") as click_join_game,
-            patch("source.join_sim.source.auto_join._join_server_cancellable") as join_server,
-            patch("source.join_sim.source.auto_join._mod_menu_join_cancellable") as mod_menu_join,
-            patch("source.join_sim.source.auto_join._has_failure_cancellable") as has_failure,
-        ):
-            result = join_round_cancellable("5147", stop_event)
-
-        self.assertFalse(result)
-        click_start.assert_not_called()
-        click_join_game.assert_not_called()
-        join_server.assert_not_called()
-        mod_menu_join.assert_not_called()
-        has_failure.assert_not_called()
-
-    def test_cancellable_join_round_stops_during_wait_after_start(self):
-        stop_event = threading.Event()
-
-        def wait(_stop_event, _seconds):
-            if wait.call_count == 1:
-                stop_event.set()
-                return True
-            wait.call_count += 1
-            return False
-
-        wait.call_count = 0
-
-        with (
-            patch("source.join_sim.source.auto_join._is_menu_cancellable", return_value=True),
-            patch("source.join_sim.source.auto_join._wait", side_effect=wait),
-            patch("source.join_sim.source.auto_join._click_start_cancellable") as click_start,
-            patch("source.join_sim.source.auto_join._click_join_game_cancellable") as click_join_game,
-            patch("source.join_sim.source.auto_join._join_server_cancellable") as join_server,
-            patch("source.join_sim.source.auto_join._mod_menu_join_cancellable") as mod_menu_join,
-            patch("source.join_sim.source.auto_join._has_failure_cancellable") as has_failure,
-        ):
-            result = join_round_cancellable("5147", stop_event)
-
-        self.assertFalse(result)
-        click_start.assert_called_once_with(stop_event)
-        click_join_game.assert_not_called()
-        join_server.assert_not_called()
-        mod_menu_join.assert_not_called()
-        has_failure.assert_not_called()
-
-    def test_cancellable_join_round_runs_expected_menu_sequence_without_stop(self):
-        stop_event = threading.Event()
-        actions = []
-
-        with (
-            patch("source.join_sim.source.auto_join._is_menu_cancellable", return_value=True),
-            patch("source.join_sim.source.auto_join._wait", return_value=False),
-            patch(
-                "source.join_sim.source.auto_join._click_start_cancellable",
-                side_effect=lambda _stop_event: actions.append("start"),
-            ),
-            patch(
-                "source.join_sim.source.auto_join._click_join_game_cancellable",
-                side_effect=lambda _stop_event: actions.append("join_game"),
-            ),
-            patch(
-                "source.join_sim.source.auto_join._join_server_cancellable",
-                side_effect=lambda server, _stop_event: actions.append(f"server:{server}"),
-            ),
-            patch(
-                "source.join_sim.source.auto_join._mod_menu_join_cancellable",
-                side_effect=lambda _stop_event: actions.append("mod_menu"),
-            ),
-            patch(
-                "source.join_sim.source.auto_join._has_failure_cancellable",
-                side_effect=lambda _stop_event: actions.append("failure"),
-            ),
-        ):
-            result = join_round_cancellable("5147", stop_event)
-
-        self.assertFalse(result)
-        self.assertEqual(
-            actions,
-            ["start", "join_game", "server:5147", "mod_menu", "failure"],
-        )
-
-    def test_cancellable_join_server_backs_out_when_join_stalls(self):
-        stop_event = threading.Event()
-        multiplayer_menu = types.ModuleType("multiplayer_menu")
-        multiplayer_menu.mod_menu = Mock(side_effect=[False, False])
-        multiplayer_menu.is_open = Mock(side_effect=[True, True, True])
-        multiplayer_menu.join_button = Mock(return_value=True)
-        multiplayer_menu.get_pixel_loc = Mock(
-            side_effect=lambda key: {
-                "first_server_x": 10,
-                "first_server_y": 20,
-                "join_x": 30,
-                "join_y": 40,
-                "back_x": 50,
-                "back_y": 60,
-            }[key]
-        )
-        windows = types.ModuleType("windows")
-        windows.click = Mock()
-        logger = types.ModuleType("logger")
-        logger.logger = Mock()
-
-        with (
-            patch.dict(
-                sys.modules,
-                {
-                    "source.join_sim.source.menus.multiplayer_menu": multiplayer_menu,
-                    "source.join_sim.source.utility.windows": windows,
-                    "source.join_sim.source.logs.logger": logger,
-                },
-            ),
-            patch(
-                "source.join_sim.source.auto_join._search_bar_search_cancellable"
-            ) as search,
-            patch("source.join_sim.source.auto_join._wait", return_value=False),
-        ):
-            _join_server_cancellable("5147", stop_event)
-
-        search.assert_called_once_with("5147", stop_event)
-        self.assertEqual(
-            [call.args for call in windows.click.call_args_list],
-            [(10, 20), (30, 40), (50, 60)],
-        )
+        self.assertTrue(result)
+        join_main.join_round.assert_called_once_with("5147")
 
     def test_triggers_crash_reopen_before_retrying(self):
-        stop_event = threading.Event()
         clock = FakeClock()
         crash_checks = [True, False]
         reopened = []
@@ -266,7 +90,6 @@ class AutoJoinServerTests(unittest.TestCase):
 
         result = run_auto_join_server(
             "5147",
-            stop_event,
             join_round=lambda server: calls.append(server) or True,
             is_menu=lambda: False,
             detect_crash=lambda: crash_checks.pop(0),
@@ -282,7 +105,6 @@ class AutoJoinServerTests(unittest.TestCase):
         self.assertGreaterEqual(clock.value, 5)
 
     def test_triggers_periodic_reopen_while_still_in_menu(self):
-        stop_event = threading.Event()
         clock = FakeClock()
         reopened = []
         calls = []
@@ -290,7 +112,6 @@ class AutoJoinServerTests(unittest.TestCase):
 
         result = run_auto_join_server(
             "5147",
-            stop_event,
             join_round=lambda server: calls.append(server) or outcomes.pop(0),
             is_menu=lambda: True,
             detect_crash=lambda: False,

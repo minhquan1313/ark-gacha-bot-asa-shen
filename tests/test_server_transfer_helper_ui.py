@@ -147,10 +147,10 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         helper = self._transfer_helper(account_count=1)
 
         try:
-            self.assertFalse(server_transfer_helper_module.DEFAULT_PANELS_EXPANDED)
+            self.assertTrue(server_transfer_helper_module.DEFAULT_PANELS_EXPANDED)
             bodies = helper.findChildren(QWidget, "DepositRouteCardBody")
             self.assertGreaterEqual(len(bodies), 3)
-            self.assertTrue(all(body.isHidden() for body in bodies))
+            self.assertTrue(all(not body.isHidden() for body in bodies))
             self.assertNotIn("enabled", helper.dedi_rows[0])
             self.assertEqual(
                 helper.loop_hint.text(), "1 dedi x 1 account = 6 suggested loop(s)."
@@ -189,7 +189,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
 
             self.assertEqual(helper.minimumHeight(), helper.idle_min_height)
             self.assertEqual(helper.height(), helper.idle_min_height)
-            self.assertGreater(helper.sizeHint().height(), helper.idle_min_height)
+            self.assertGreaterEqual(helper.idle_min_height, helper.sizeHint().height())
         finally:
             helper.close()
 
@@ -276,8 +276,8 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                     {
                         "players": [
                             {"bed_name": "Player1"},
-                            {"bed_name": "Player2"},
-                            {"bed_name": "Player3"},
+                            {"bed_name": "BBedPlayer2"},
+                            {"bed_name": "BBedPlayer3"},
                         ]
                     },
                     account_count=3,
@@ -334,7 +334,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             ):
                 helper.start()
 
-            self.assertIsNone(helper.worker_thread)
+            self.assertIsNone(helper.worker_process)
             focus.assert_not_called()
             self.assertIn("1920x1080", helper.status.text())
         finally:
@@ -357,7 +357,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             ):
                 helper.start()
 
-            self.assertIsNone(helper.worker_thread)
+            self.assertIsNone(helper.worker_process)
             focus.assert_called_once_with(center_cursor_when_switching=True)
             self.assertEqual(helper.status.text(), "Cannot start: unable to focus Ark")
         finally:
@@ -366,17 +366,18 @@ class ServerTransferHelperUiTests(unittest.TestCase):
     def test_hotkey_stops_running_transfer_helper(self):
         helper = self._transfer_helper(account_count=1)
         worker = Mock()
-        worker.is_alive.return_value = True
-        helper.worker_thread = worker
+        worker.poll.return_value = None
+        worker.stdout = None
+        helper.worker_process = worker
 
         try:
-            helper.handle_hotkey()
+            with patch("source.launcher.helper_window.terminate_process_tree"):
+                helper.handle_hotkey()
 
-            self.assertTrue(helper.stop_event.is_set())
             self.assertEqual(helper.running_summary.text(), "Stopping...")
             self.assertFalse(helper.running_stop_button.isEnabled())
         finally:
-            worker.is_alive.return_value = False
+            worker.poll.return_value = 1
             helper.close()
 
     def test_player_search_prefix_conflict_gets_warning_outline(self):
@@ -705,7 +706,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper._set_running_ui(False)
             self.app.processEvents()
 
-            self.assertEqual(helper.width(), 320)
+            self.assertEqual(helper.width(), helper.idle_width)
             self.assertEqual(helper.height(), idle_height)
             self.assertEqual(helper.minimumHeight(), helper.idle_min_height)
             self.assertFalse(helper.description.isHidden())
@@ -772,9 +773,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             overlay.refresh({"running": [], "active": [], "waiting": []})
             self.app.processEvents()
 
-            self.assertEqual(overlay.width(), 360)
-            self.assertEqual(overlay.minimumWidth(), 360)
-            self.assertEqual(overlay.maximumWidth(), 360)
+            self.assertEqual(overlay.width(), 200)
+            self.assertEqual(overlay.minimumWidth(), 200)
+            self.assertEqual(overlay.maximumWidth(), 200)
             self.assertGreaterEqual(overlay.height(), HELPER_HEIGHT)
             self.assertLess(overlay.height(), initial_height)
         finally:

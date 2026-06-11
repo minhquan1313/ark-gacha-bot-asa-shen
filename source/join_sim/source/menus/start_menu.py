@@ -1,7 +1,8 @@
 import time
 
 from source.join_sim.source.logs import logger as logs
-from source.join_sim.source.utility import recon_utils, windows
+from source.join_sim.source.utility import recon_utils
+from source.utility import windows
 
 buttons = {
     "accept_x": 941,

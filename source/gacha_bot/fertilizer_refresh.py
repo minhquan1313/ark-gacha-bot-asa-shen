@@ -1,54 +1,34 @@
 import time
 
 
-def _template_await_true(stop_event, func, sleep_amount, *args):
-    count = 0
-    while not stop_event.is_set() and not func(*args):
-        if count >= sleep_amount * 20:
-            break
-        stop_event.wait(0.05)
-        count += 1
-    return not stop_event.is_set() and func(*args)
-
-
-def _template_await_false(stop_event, func, sleep_amount, *args):
-    count = 0
-    while not stop_event.is_set() and func(*args):
-        if count >= sleep_amount * 20:
-            break
-        stop_event.wait(0.05)
-        count += 1
-    return stop_event.is_set() or func(*args)
-
-
-def _open_crop_plot_inventory(stop_event):
+def _open_crop_plot_inventory():
     import settings
     import source.ASA.config
     from source.logs import gachalogs as logs
     from source.utility import template, utils
 
     attempts = 0
-    while not stop_event.is_set() and not template.check_template("inventory", 0.7):
+    while not template.check_template("inventory", 0.7):
         attempts += 1
         logs.logger.debug(
             f"trying to open crop plot inventory {attempts} / "
             f"{source.ASA.config.inventory_open_attempts}"
         )
         utils.press_key("AccessInventory")
-        if _template_await_true(
-            stop_event, template.check_template, 2, "inventory", 0.7
+        if template.template_await_true(
+            template.check_template, 2, "inventory", 0.7
         ):
             logs.logger.debug("crop plot inventory opened")
-            if _template_await_true(
-                stop_event, template.check_template, 1, "waiting_inv", 0.8
+            if template.template_await_true(
+                template.check_template, 1, "waiting_inv", 0.8
             ):
                 start = time.time()
                 logs.logger.debug(
                     "waiting for up too 10 seconds due to the reciving remote "
                     "inventory is present"
                 )
-                _template_await_false(
-                    stop_event, template.check_template, 10, "waiting_inv", 0.8
+                template.template_await_false(
+                    template.check_template, 10, "waiting_inv", 0.8
                 )
                 logs.logger.debug(
                     f"{time.time() - start} seconds taken for the reciving remote "
@@ -58,17 +38,17 @@ def _open_crop_plot_inventory(stop_event):
         if attempts >= source.ASA.config.inventory_open_attempts:
             logs.logger.error("unable to open up the crop plot inventory")
             break
-    stop_event.wait(0.3 * settings.lag_offset)
+    time.sleep(0.3 * settings.lag_offset)
 
 
-def _close_crop_plot_inventory(stop_event):
+def _close_crop_plot_inventory():
     import settings
     import source.ASA.config
     from source.logs import gachalogs as logs
     from source.utility import template, variables, windows
 
     attempts = 0
-    while not stop_event.is_set() and template.check_template("inventory", 0.7):
+    while template.check_template("inventory", 0.7):
         attempts += 1
         logs.logger.debug(
             f"trying to close crop plot inventory {attempts} / "
@@ -78,17 +58,16 @@ def _close_crop_plot_inventory(stop_event):
             variables.get_pixel_loc("close_inv_x"),
             variables.get_pixel_loc("close_inv_y"),
         )
-        _template_await_false(stop_event, template.check_template, 2, "inventory", 0.7)
+        template.template_await_false(template.check_template, 2, "inventory", 0.7)
         if attempts >= source.ASA.config.inventory_close_attempts:
             logs.logger.error(
                 f"unable to close the crop plot inventory after {attempts} attempts"
             )
             break
-    stop_event.wait(0.3 * settings.lag_offset)
+    time.sleep(0.3 * settings.lag_offset)
 
 
 def run_fertilizer_refresh(
-    stop_event,
     status_callback=None,
     poll_interval=0.02,
     crop_plot_is_open=None,
@@ -117,12 +96,8 @@ def run_fertilizer_refresh(
         from source.ASA.strucutres import inventory
 
         inventory_is_open = inventory_is_open or inventory.is_open
-        open_inventory = open_inventory or (
-            lambda: _open_crop_plot_inventory(stop_event)
-        )
-        close_inventory = close_inventory or (
-            lambda: _close_crop_plot_inventory(stop_event)
-        )
+        open_inventory = open_inventory or _open_crop_plot_inventory
+        close_inventory = close_inventory or _close_crop_plot_inventory
         transfer_all_from = transfer_all_from or inventory.transfer_all_from
     if transfer_all_inventory is None:
         from source.ASA.player import player_inventory
@@ -135,19 +110,17 @@ def run_fertilizer_refresh(
 
     def wait_for_prompt_to_clear():
         set_status("Aim away from the crop plot to continue...")
-        while not stop_event.is_set() and crop_plot_prompt_is_visible():
-            stop_event.wait(poll_interval)
+        while crop_plot_prompt_is_visible():
+            time.sleep(poll_interval)
 
-    while not stop_event.is_set():
+    while True:
         set_status("Aim at a crop plot to refresh fertilizer...")
-        while not stop_event.is_set():
+        while True:
             if crop_plot_is_open():
                 break
             if crop_plot_prompt_is_visible():
                 set_status("Opening crop plot inventory...")
                 open_inventory()
-                if stop_event.is_set():
-                    break
                 if crop_plot_is_open():
                     break
                 if inventory_is_open():
@@ -156,22 +129,12 @@ def run_fertilizer_refresh(
                 wait_for_prompt_to_clear()
                 set_status("Aim at a crop plot to refresh fertilizer...")
                 continue
-            stop_event.wait(poll_interval)
-        if stop_event.is_set():
-            break
+            time.sleep(poll_interval)
 
         set_status("Refreshing fertilizer...")
         transfer_all_from()
-        if stop_event.is_set():
-            break
         transfer_all_inventory()
-        if stop_event.is_set():
-            break
 
         set_status("Closing crop plot inventory...")
         close_inventory()
-        if stop_event.is_set():
-            break
         wait_for_prompt_to_clear()
-
-    set_status("Stopped.")

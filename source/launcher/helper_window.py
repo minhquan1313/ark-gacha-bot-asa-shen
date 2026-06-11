@@ -1,5 +1,9 @@
 import ctypes
+import os
+import subprocess
+import sys
 import threading
+import time
 
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -10,7 +14,11 @@ from source.launcher.deposit_helper_capture import (
     unregister_hotkey,
 )
 from source.launcher.native_window import WM_HOTKEY, WindowsMSG
+from source.launcher.process_control import terminate_process_tree
 from source.launcher.widgets import AnimatedButton
+
+HELPER_STATUS_PREFIX = "__HELPER_STATUS__ "
+HELPER_RESULT_PREFIX = "__HELPER_RESULT__ "
 
 
 class BaseHelperWindow(QWidget):
@@ -286,8 +294,12 @@ class BaseHelperWindow(QWidget):
 class WorkerHelperWindow(BaseHelperWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.worker_thread = None
-        self.stop_event = threading.Event()
+        self.worker_process = None
+        self.worker_stopping = False
+        self.worker_stop_deadline = None
+        self.output_reader_stop = threading.Event()
+        self.output_reader_thread = None
+        self.worker_result_message = None
         self.running_widgets = []
         self.running_ui_active = False
         self.running_hotkey_hint = "ALT + N stops this helper"
@@ -302,19 +314,77 @@ class WorkerHelperWindow(BaseHelperWindow):
             self.start()
 
     def is_running(self):
-        return self.worker_thread is not None and self.worker_thread.is_alive()
+        return self.worker_process is not None and self.worker_process.poll() is None
 
     def handle_hotkey(self):
         self.toggle()
 
-    def _start_worker(self, target, *args):
-        self.stop_event = threading.Event()
+    def _start_worker(self, *runner_args):
         self._set_running_ui(True)
-        self.worker_thread = threading.Thread(target=target, args=args, daemon=True)
-        self.worker_thread.start()
+        self.worker_stopping = False
+        self.worker_stop_deadline = None
+        self.worker_result_message = None
+        self.output_reader_stop = threading.Event()
+        self.worker_process = subprocess.Popen(
+            [sys.executable, "-u", "-m", "source.launcher.helper_runner", *runner_args],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            cwd=os.getcwd(),
+        )
+        self.output_reader_thread = threading.Thread(
+            target=self._read_worker_output, args=(self.worker_process,), daemon=True
+        )
+        self.output_reader_thread.start()
+
+    def _read_worker_output(self, process):
+        if process is None or process.stdout is None:
+            return
+        for line in process.stdout:
+            if self.output_reader_stop.is_set():
+                break
+            self._handle_worker_output(line.rstrip())
+        if not self.output_reader_stop.is_set():
+            message = self.worker_result_message
+            if not message:
+                return_code = process.poll()
+                if self.worker_stopping:
+                    message = "Stopped."
+                elif return_code == 0:
+                    message = "Finished."
+                else:
+                    message = f"Failed: helper exited with code {return_code}."
+            self._emit_worker_finished(message)
+
+    def _handle_worker_output(self, line):
+        if line.startswith(HELPER_STATUS_PREFIX):
+            self._emit_status(line[len(HELPER_STATUS_PREFIX) :])
+            return
+        if line.startswith(HELPER_RESULT_PREFIX):
+            self.worker_result_message = line[len(HELPER_RESULT_PREFIX) :]
+            return
+        if line:
+            self._emit_status(line)
+
+    def _emit_status(self, message):
+        signal = getattr(self, "status_changed", None)
+        if signal is not None:
+            signal.emit(message)
+        elif hasattr(self, "status"):
+            self.status.setText(message)
+
+    def _emit_worker_finished(self, message):
+        signal = getattr(self, "worker_finished", None)
+        if signal is not None:
+            signal.emit(message)
 
     def _finish_worker(self):
-        self.worker_thread = None
+        process = self.worker_process
+        self._close_output_reader(process)
+        self.worker_process = None
+        self.worker_stopping = False
+        self.worker_stop_deadline = None
         if self.closing:
             self.close()
             return True
@@ -346,15 +416,34 @@ class WorkerHelperWindow(BaseHelperWindow):
 
     def stop(self):
         if self.is_running():
-            self.stop_event.set()
+            self.worker_stopping = True
+            self.worker_stop_deadline = time.time() + 5
             if hasattr(self, "status"):
                 self.status.setText("Stopping...")
+            terminate_process_tree(self.worker_process)
+            self._emit_worker_finished("Stopped.")
+
+    def _close_output_reader(self, process):
+        self.output_reader_stop.set()
+        if process is not None and process.stdout is not None:
+            try:
+                process.stdout.close()
+            except (OSError, ValueError):
+                pass
+        thread = self.output_reader_thread
+        if (
+            thread is not None
+            and thread is not threading.current_thread()
+            and thread.is_alive()
+        ):
+            thread.join(timeout=1)
+        self.output_reader_thread = None
 
     def closeEvent(self, event):
         self.closing = True
-        self.stop_event.set()
-        thread = self.worker_thread
-        if thread is not None and thread.is_alive():
+        process = self.worker_process
+        if process is not None and process.poll() is None:
+            self.stop()
             if hasattr(self, "status"):
                 self.status.setText("Stopping...")
             if hasattr(self, "start_stop_button"):

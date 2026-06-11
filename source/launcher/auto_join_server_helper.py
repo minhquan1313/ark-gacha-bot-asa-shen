@@ -7,10 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 import settings
-from source.join_sim.source.auto_join import (
-    normalize_server_number,
-    run_auto_join_server,
-)
+from source.join_sim.source.auto_join import normalize_server_number
 from source.launcher.constants import HELPER_HEIGHT, HELPER_WIDTH
 from source.launcher.deposit_helper_capture import (
     focus_game_window,
@@ -110,7 +107,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.start_stop_button.set_variant("danger")
         self.start_stop_button.setEnabled(True)
         self.status.setText(f"Starting auto join for server {server}...")
-        self._start_worker(self._run_worker, server)
+        self._start_worker("auto_join_server", "--server", server)
 
     def stop(self):
         if not self.is_running():
@@ -122,22 +119,6 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.start_stop_button.set_variant("primary")
         self.start_stop_button.setEnabled(False)
         self.status.setText("Stopping...")
-
-    def _run_worker(self, server):
-        error = ""
-        joined = False
-        try:
-            joined = run_auto_join_server(
-                server, self.stop_event, self.status_changed.emit
-            )
-        except Exception as exc:
-            error = str(exc)
-        if error:
-            self.worker_finished.emit(f"Failed: {error}")
-        elif joined:
-            self.worker_finished.emit("Joined server.")
-        else:
-            self.worker_finished.emit("Stopped.")
 
     def _on_worker_finished(self, message):
         if self._finish_worker():

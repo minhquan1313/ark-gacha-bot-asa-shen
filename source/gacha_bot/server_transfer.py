@@ -39,7 +39,7 @@ class TransferDependencies:
     kill_ark: object
 
 
-def run_transfer_helper(config, stop_event, status_callback=None, dependencies=None):
+def run_transfer_helper(config, status_callback=None, dependencies=None):
     settings = config["settings"]
     dedis = config["dedis"]
     ui_coords = config["ui_coords"]
@@ -51,7 +51,7 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
         )
 
     deps = dependencies or default_transfer_dependencies(
-        config, stop_event, status_callback
+        config, status_callback
     )
     account_count = runtime_account_count(players)
     accounts = range(1, account_count + 1)
@@ -62,7 +62,7 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
             status_callback(message)
 
     def stopped():
-        return stop_event is not None and stop_event.is_set()
+        return False
 
     emit("Starting resource fill phase.")
     for account in accounts:
@@ -185,7 +185,7 @@ def run_transfer_helper(config, stop_event, status_callback=None, dependencies=N
     return True
 
 
-def default_transfer_dependencies(config, stop_event, status_callback=None):
+def default_transfer_dependencies(config, status_callback=None):
     settings = config["settings"]
     dedis = config["dedis"]
     ui_coords = config["ui_coords"]
@@ -197,37 +197,34 @@ def default_transfer_dependencies(config, stop_event, status_callback=None):
             current,
             runtime_account_count(players),
             ui_coords,
-            stop_event,
             status_callback,
         ),
         ensure_ark_running=lambda: ensure_ark_running(
-            stop_event, status_callback, settings, ui_coords
+            status_callback, settings, ui_coords
         ),
         is_menu=is_menu,
-        join_server=lambda server: join_server(server, stop_event, status_callback),
+        join_server=lambda server: join_server(server, status_callback),
         verify_tribelog=verify_tribelog,
         check_state=lambda account=None: check_transfer_player_state(
             settings, players, account, settings["resource_server"]
         ),
-        wait_structure=lambda: stop_wait(
-            stop_event, int(settings["structure_load_delay"])
-        ),
+        wait_structure=lambda: time.sleep(int(settings["structure_load_delay"])),
         withdraw_resource=lambda account=None: withdraw_from_transfer_dedis(
-            dedis, settings, stop_event, ui_coords, players, account
+            dedis, settings, ui_coords, players, account
         ),
-        fast_travel_to_bed=lambda name: fast_travel_to_bed(name, stop_event),
+        fast_travel_to_bed=fast_travel_to_bed,
         enter_tekpod=enter_tekpod,
         leave_tekpod=leave_tekpod,
         transfer_to_server=lambda server, account=None: transfer_to_server(
-            server, settings, ui_coords, stop_event, status_callback, players, account
+            server, settings, ui_coords, status_callback, players, account
         ),
-        wait_for_bed_screen=lambda: wait_for_bed_screen(stop_event),
-        spawn_bed=lambda name: spawn_bed(name, stop_event),
+        wait_for_bed_screen=wait_for_bed_screen,
+        spawn_bed=spawn_bed,
         stabilize_bed_position=stabilize_bed_position,
         deposit_resource=lambda account=None: deposit_to_transfer_dedis(
-            dedis, ui_coords, settings, stop_event, players, account
+            dedis, ui_coords, settings, players, account
         ),
-        kill_ark=lambda: kill_ark(stop_event, ui_coords, status_callback),
+        kill_ark=lambda: kill_ark(ui_coords, status_callback),
     )
 
 
@@ -236,7 +233,6 @@ def switch_steam_account(
     current_account,
     account_count,
     ui_coords,
-    stop_event,
     status_callback=None,
 ):
     if int(target_account) == int(current_account):
@@ -248,28 +244,18 @@ def switch_steam_account(
     emit = status_callback or (lambda _message: None)
     import pyautogui
 
-    if not kill_ark(stop_event, ui_coords, emit):
+    if not kill_ark(ui_coords, emit):
         return int(current_account)
-    if stop_wait(stop_event, 5):
-        return int(current_account)
+    time.sleep(5)
     from source.utility import template
 
-    change_ready_template = _register_template_region(
-        steam["change_account_ready_template"], steam["change_account_ready_region"]
-    )
-    switch_account_template = _register_template_region(
-        steam["switch_account_template"], steam["switch_account_region"]
-    )
+    change_ready_template = _template_item(steam["change_account_ready_template"])
+    switch_account_template = _template_item(steam["switch_account_template"])
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
-        if stop_event is not None and stop_event.is_set():
-            return int(current_account)
-        if not _ensure_steam_window_ready(
-            steam, stop_event, emit, launch_if_missing=True
-        ):
+        if not _ensure_steam_window_ready(steam, emit, launch_if_missing=True):
             return int(current_account)
         for key in ("menu", "change_account"):
-            if stop_wait(stop_event, 0.2):
-                return int(current_account)
+            time.sleep(0.2)
             coord = steam[key]
             pyautogui.click(int(coord["x"]), int(coord["y"]))
         emit(
@@ -279,17 +265,13 @@ def switch_steam_account(
         ready = _wait_for_template_visible(
             template.check_template_no_bounds,
             float(steam.get("change_account_ready_timeout", 60)),
-            stop_event,
             change_ready_template,
             0.75,
         )
-        if stop_event is not None and stop_event.is_set():
-            return int(current_account)
         if not ready:
             emit("Steam change-account continue button was not ready; retrying.")
             continue
-        if stop_wait(stop_event, 0.2):
-            return int(current_account)
+        time.sleep(0.2)
         coord = steam["continue"]
         time.sleep(0.3 * settings_lag_offset())
         pyautogui.click(int(coord["x"]), int(coord["y"]))
@@ -300,12 +282,9 @@ def switch_steam_account(
         picker_ready = _wait_for_template_visible(
             template.check_template_no_bounds,
             float(steam.get("switch_account_timeout", 60)),
-            stop_event,
             switch_account_template,
             0.75,
         )
-        if stop_event is not None and stop_event.is_set():
-            return int(current_account)
         if picker_ready:
             break
         emit("Steam account picker was not detected; retrying.")
@@ -315,12 +294,12 @@ def switch_steam_account(
             f"{RECOVERABLE_RUNTIME_ATTEMPTS} attempts."
         )
     pyautogui.click(int(slot["x"]), int(slot["y"]))
-    if not _ensure_steam_window_ready(steam, stop_event, emit, launch_if_missing=False):
+    if not _ensure_steam_window_ready(steam, emit, launch_if_missing=False):
         return int(current_account)
     return int(target_account)
 
 
-def ensure_ark_running(stop_event, status_callback=None, settings=None, ui_coords=None):
+def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
     import pyautogui
 
     from source.launcher.ark_game_setup import (
@@ -340,29 +319,22 @@ def ensure_ark_running(stop_event, status_callback=None, settings=None, ui_coord
         return False
     steam = ui_coords["steam"]
 
-    steam_unable_to_sync_template = _register_template_region(
-        steam["steam_unable_to_sync_template"],
-        steam["steam_unable_to_sync_region"],
+    steam_unable_to_sync_template = _template_item(
+        steam["steam_unable_to_sync_template"]
     )
 
     for attempt in range(1, attempts + 1):
-        if stop_event is not None and stop_event.is_set():
-            return False
         if not _process_running(ARK_PROCESS_NAME):
             emit("Launching ARK through Steam.")
             launch_ark_through_steam()
             launched = True
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if stop_event is not None and stop_event.is_set():
-                return False
             if _process_running(ARK_PROCESS_NAME):
                 try:
                     window_size = validate_ark_window()
                     if launched:
-                        return _prepare_ark_window_for_join(
-                            stop_event, status_callback, window_size
-                        )
+                        return _prepare_ark_window_for_join(status_callback, window_size)
                     return True
                 except RuntimeError as exc:
                     last_error = exc
@@ -371,23 +343,19 @@ def ensure_ark_running(stop_event, status_callback=None, settings=None, ui_coord
                 steam_unable_to_sync_template, 0.8
             )
             if wont_sync:
-                if stop_wait(stop_event, 0.2):
-                    return False
+                time.sleep(0.2)
                 coord = steam["steam_unable_to_sync_continue"]
                 pyautogui.click(int(coord["x"]), int(coord["y"]))
             time.sleep(1)
-        if stop_event is not None and stop_event.is_set():
-            return False
         if attempt >= attempts:
             break
         emit(
             "ARK did not reach a usable window state; relaunching "
             f"({attempt}/{attempts})."
         )
-        if not kill_ark(stop_event, status_callback=status_callback):
+        if not kill_ark(status_callback=status_callback):
             return False
-        if stop_wait(stop_event, 2):
-            return False
+        time.sleep(2)
         launched = False
     if last_error is not None:
         raise RuntimeError(
@@ -397,11 +365,10 @@ def ensure_ark_running(stop_event, status_callback=None, settings=None, ui_coord
     raise RuntimeError(f"ARK did not start after {attempts} attempt(s).")
 
 
-def _prepare_ark_window_for_join(stop_event, status_callback=None, window_size=None):
+def _prepare_ark_window_for_join(status_callback=None, window_size=None):
     emit = status_callback or (lambda _message: None)
     emit("ARK detected. Focusing game before joining server.")
-    if stop_wait(stop_event, 2):
-        return False
+    time.sleep(2)
     _focus_ark_window_for_join(window_size)
     return True
 
@@ -419,13 +386,11 @@ def _focus_ark_window_for_join(window_size=None):
 
 
 def _refresh_join_sim_ark_handle():
-    from source.join_sim.source.utility import windows
     from source.launcher.constants import GAME_WINDOW_TITLE
 
     hwnd = _ark_window_handle(GAME_WINDOW_TITLE)
     if not hwnd:
         raise RuntimeError(f"{GAME_WINDOW_TITLE} window was not found.")
-    windows.hwnd = hwnd
     return hwnd
 
 
@@ -441,17 +406,13 @@ def is_menu():
     return bool(main.is_menu())
 
 
-def join_server(server, stop_event, status_callback=None):
+def join_server(server, status_callback=None):
     from source.join_sim.source.auto_join import run_auto_join_server
     from source.launcher.system import validate_ark_window
 
-    if stop_event is not None and stop_event.is_set():
-        return False
     _focus_ark_window_for_join(validate_ark_window())
-    if stop_event is not None and stop_event.is_set():
-        return False
 
-    return run_auto_join_server(server, stop_event, status_callback)
+    return run_auto_join_server(server, status_callback)
 
 
 def verify_tribelog():
@@ -482,7 +443,7 @@ def check_transfer_player_state(settings, players=None, account=None, server=Non
         if not target:
             target = str(settings.get("transmitter_teleport", "")).strip()
         if target:
-            teleporter.transfer_teleport_not_default(target, fallback_bed_name=target)
+            teleporter.teleport_not_default(target, fallback_bed_name=target)
             render.enter_tekpod()
             time.sleep(30)
             render.leave_tekpod()
@@ -499,7 +460,7 @@ def check_transfer_disconnected(settings, server):
         return
     target_server = str(server or settings.get("resource_server", ""))
     logs.logger.critical("transfer helper disconnected from the server")
-    windows.hwnd = main.main_loop(target_server)
+    main.main_loop(target_server)
     tribelog.close()
     logs.logger.critical(
         "transfer helper rejoined the server; waiting 30 seconds for structures"
@@ -526,9 +487,7 @@ def reset_transfer_state(settings, players=None, account=None):
     utils.press_key("Run")
 
 
-def withdraw_from_transfer_dedis(
-    dedis, settings, stop_event, ui_coords=None, players=None, account=None
-):
+def withdraw_from_transfer_dedis(dedis, settings, ui_coords=None, players=None, account=None):
     import settings as global_settings
     from source.ASA.stations import custom_stations
     from source.ASA.strucutres import teleporter
@@ -540,20 +499,15 @@ def withdraw_from_transfer_dedis(
     resource_route = transfer_dedi_route(dedis, "resource")
     route_metadata = custom_stations.get_station_metadata(resource_route["teleport"])
     fallback_bed_name = _fallback_bed_name(players, account)
-    teleporter.transfer_teleport_not_default(
-        route_metadata, fallback_bed_name=fallback_bed_name, stop_event=stop_event
-    )
+    teleporter.teleport_not_default(route_metadata, fallback_bed_name=fallback_bed_name)
     deposit._restore_route_view(route_metadata)
     for index, item in enumerate(active_transfer_dedis(dedis, "resource"), 1):
-        if stop_event is not None and stop_event.is_set():
-            return False
         label = f"Transfer dedi {index}"
         if not _transfer_withdraw_from_dedi(
             route_metadata,
             item,
             label,
             settings,
-            stop_event,
             ui_coords,
             fallback_bed_name,
         ):
@@ -562,24 +516,19 @@ def withdraw_from_transfer_dedis(
     return True
 
 
-def deposit_to_transfer_dedis(
-    dedis, ui_coords=None, settings=None, stop_event=None, players=None, account=None
-):
+def deposit_to_transfer_dedis(dedis, ui_coords=None, settings=None, players=None, account=None):
     from source.ASA.stations import custom_stations
 
     destination_route = transfer_dedi_route(dedis, "destination")
     route_metadata = custom_stations.get_station_metadata(destination_route["teleport"])
     fallback_bed_name = _fallback_bed_name(players, account)
     for index, item in enumerate(active_transfer_dedis(dedis, "destination"), 1):
-        if stop_event is not None and stop_event.is_set():
-            return False
         if not _transfer_deposit_to_dedi(
             route_metadata,
             item,
             f"Transfer dedi {index}",
             settings or {},
             ui_coords or {},
-            stop_event,
             fallback_bed_name,
         ):
             return False
@@ -591,7 +540,6 @@ def _transfer_withdraw_from_dedi(
     item,
     label,
     settings,
-    stop_event=None,
     ui_coords=None,
     fallback_bed_name=None,
 ):
@@ -600,12 +548,7 @@ def _transfer_withdraw_from_dedi(
 
     timeout = _transfer_dedi_open_timeout(ui_coords)
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
-        if stop_event is not None and stop_event.is_set():
-            inventory.close()
-            return False
-        if _open_transfer_dedi_inventory(
-            route_metadata, item, label, timeout, stop_event
-        ):
+        if _open_transfer_dedi_inventory(route_metadata, item, label, timeout):
             inventory.transfer_all_from()
             inventory.close()
             logs.logger.debug(f"{label} transfer withdraw completed")
@@ -617,7 +560,7 @@ def _transfer_withdraw_from_dedi(
         )
         if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
             _recover_transfer_dedi_position(
-                route_metadata, item, fallback_bed_name, stop_event
+                route_metadata, item, fallback_bed_name
             )
     return False
 
@@ -628,7 +571,6 @@ def _transfer_deposit_to_dedi(
     label,
     settings,
     ui_coords,
-    stop_event=None,
     fallback_bed_name=None,
 ):
     from source.ASA.strucutres import inventory
@@ -636,20 +578,12 @@ def _transfer_deposit_to_dedi(
     from source.utility import template, utils, variables, windows
 
     transfer = ui_coords.get("transfer", {})
-    ready_template = _register_template_region(
-        transfer["dedi_deposit_ready_template"],
-        transfer["dedi_deposit_ready_region"],
-    )
+    ready_template = _template_item(transfer["dedi_deposit_ready_template"])
     timeout = _transfer_dedi_open_timeout(ui_coords)
     attempts = int(transfer.get("dedi_init_attempts", RECOVERABLE_RUNTIME_ATTEMPTS))
     attempts = max(1, attempts)
     for attempt in range(1, attempts + 1):
-        if stop_event is not None and stop_event.is_set():
-            inventory.close()
-            return False
-        if not _open_transfer_dedi_inventory(
-            route_metadata, item, label, timeout, stop_event
-        ):
+        if not _open_transfer_dedi_inventory(route_metadata, item, label, timeout):
             inventory.close()
             logs.logger.error(
                 f"{label} transfer deposit open timed out after {timeout} seconds "
@@ -657,13 +591,12 @@ def _transfer_deposit_to_dedi(
             )
             if attempt < attempts:
                 _recover_transfer_dedi_position(
-                    route_metadata, item, fallback_bed_name, stop_event
+                    route_metadata, item, fallback_bed_name
                 )
             continue
         if _wait_for_template_visible(
             template.check_template,
             0,
-            None,
             ready_template,
             0.75,
         ):
@@ -675,36 +608,27 @@ def _transfer_deposit_to_dedi(
             logs.logger.debug(f"{label} transfer deposit completed")
             return True
         logs.logger.warning(f"{label} destination dedi not initialized; initializing")
-        if stop_event is not None and stop_event.is_set():
-            inventory.close()
-            return False
         init_coord = transfer["dedi_init_click"]
         windows.click(int(init_coord["x"]), int(init_coord["y"]))
         utils.press_key("T")
         inventory.close()
         if attempt < attempts:
             _recover_transfer_dedi_position(
-                route_metadata, item, fallback_bed_name, stop_event
+                route_metadata, item, fallback_bed_name
             )
     return False
 
 
-def _recover_transfer_dedi_position(
-    route_metadata, item, fallback_bed_name=None, stop_event=None
-):
+def _recover_transfer_dedi_position(route_metadata, item, fallback_bed_name=None):
     from source.ASA.strucutres import teleporter
     from source.gacha_bot import deposit
 
-    teleporter.transfer_teleport_not_default(
-        route_metadata, fallback_bed_name=fallback_bed_name, stop_event=stop_event
-    )
+    teleporter.teleport_not_default(route_metadata, fallback_bed_name=fallback_bed_name)
     deposit._restore_route_view(route_metadata)
     deposit._turn_to_object(route_metadata, item)
 
 
-def _open_transfer_dedi_inventory(
-    route_metadata, item, label, timeout, stop_event=None
-):
+def _open_transfer_dedi_inventory(route_metadata, item, label, timeout):
     from source.ASA.strucutres import inventory
     from source.gacha_bot import deposit
     from source.utility import template, utils
@@ -713,9 +637,6 @@ def _open_transfer_dedi_inventory(
     time.sleep(0.3 * float(settings_lag_offset()))
     deadline = time.monotonic() + float(timeout)
     while time.monotonic() < deadline:
-        if stop_event is not None and stop_event.is_set():
-            inventory.close()
-            return False
         utils.press_key("AccessInventory")
         if template.template_await_true(template.check_template, 2, "inventory", 0.7):
             waiting_for_remote = template.template_await_true(
@@ -726,9 +647,6 @@ def _open_transfer_dedi_inventory(
                 and time.monotonic() < deadline
                 and template.check_template("inventory", 0.7)
             ):
-                if stop_event is not None and stop_event.is_set():
-                    inventory.close()
-                    return False
                 time.sleep(0.05)
                 waiting_for_remote = template.check_template("waiting_inv", 0.8)
             if template.check_template("inventory", 0.7) and not waiting_for_remote:
@@ -769,7 +687,6 @@ def transfer_to_server(
     server,
     settings,
     ui_coords,
-    stop_event,
     status_callback=None,
     players=None,
     account=None,
@@ -786,18 +703,13 @@ def transfer_to_server(
         if str(server) == str(settings["destination_server"])
         else "destination_station_yaw"
     )
-    transmitter_template = _register_template_region(
-        transfer["transmitter_inv_template"], transfer["transmitter_inv_region"]
-    )
+    transmitter_template = _template_item(transfer["transmitter_inv_template"])
     transmitter_open = False
     fallback_bed_name = _fallback_bed_name(players, account)
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
-        if stop_event is not None and stop_event.is_set():
-            return False
-        teleporter.transfer_teleport_not_default(
+        teleporter.teleport_not_default(
             settings["transmitter_teleport"],
             fallback_bed_name=fallback_bed_name,
-            stop_event=stop_event,
         )
         utils.set_yaw(float(settings[yaw_key]))
         inventory.open()
@@ -808,7 +720,6 @@ def transfer_to_server(
         transmitter_open = _wait_for_template_visible(
             template.check_template,
             2,
-            stop_event,
             transmitter_template,
             0.7,
         )
@@ -817,26 +728,21 @@ def transfer_to_server(
         if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
             emit("Transmitter inventory was not detected; recovering player state.")
             check_transfer_player_state(settings, players, account, server)
-            stop_wait(stop_event, 0.5)
+            time.sleep(0.5)
     if not transmitter_open:
-        if stop_event is not None and stop_event.is_set():
-            return False
         raise RuntimeError("Transmitter inventory was not detected.")
     _click_coord(transfer["transfer_button"])
-    not_ready_template = _register_template_region(
-        transfer["not_ready_template"], transfer["not_ready_region"]
-    )
-    while not (stop_event is not None and stop_event.is_set()):
+    not_ready_template = _template_item(transfer["not_ready_template"])
+    while True:
         _click_coord(transfer["server_search"])
         pyautogui.hotkey("ctrl", "a")
         pyautogui.write(str(server))
         _click_coord(transfer["first_server"])
         _click_coord(transfer["join_button"])
-        stop_wait(stop_event, 1)
+        time.sleep(1)
         if not _wait_for_template_visible(
             template.check_template_no_bounds,
             0,
-            stop_event,
             not_ready_template,
             0.75,
         ):
@@ -844,30 +750,30 @@ def transfer_to_server(
             return True
         _click_coord(transfer["transfer_not_ready_cancel"])
         emit(f"Server {server} transfer timer not ready; retrying.")
-        stop_wait(stop_event, int(settings["transfer_retry_delay"]))
-    return False
+        time.sleep(int(settings["transfer_retry_delay"]))
 
 
-def wait_for_bed_screen(stop_event):
+def wait_for_bed_screen():
     from source.ASA.strucutres import bed
 
-    while not (stop_event is not None and stop_event.is_set()):
+    while True:
         if bed.is_open():
             return True
         time.sleep(0.5)
-    return False
 
 
-def spawn_bed(name, stop_event=None):
+def spawn_bed(name):
     from source.ASA.strucutres import bed
 
-    return bed.transfer_spawn_in(name, stop_event)
+    bed.spawn_in(name)
+    return True
 
 
-def fast_travel_to_bed(name, stop_event=None):
+def fast_travel_to_bed(name):
     from source.ASA.strucutres import bed
 
-    return bed.transfer_fast_travel(name, stop_event)
+    bed.fast_travel(name)
+    return True
 
 
 def stabilize_bed_position():
@@ -886,16 +792,16 @@ def leave_tekpod():
     render.leave_tekpod()
 
 
-def kill_ark(stop_event=None, ui_coords=None, status_callback=None):
+def kill_ark(ui_coords=None, status_callback=None):
     from source.launcher.ark_game_setup import kill_running_ark
 
-    if not _logout_before_kill_ark(stop_event, ui_coords, status_callback):
+    if not _logout_before_kill_ark(ui_coords, status_callback):
         return False
     kill_running_ark()
     return True
 
 
-def _logout_before_kill_ark(stop_event=None, ui_coords=None, status_callback=None):
+def _logout_before_kill_ark(ui_coords=None, status_callback=None):
     from source.launcher.deposit_helper_capture import focus_game_window
 
     emit = status_callback or (lambda _message: None)
@@ -903,38 +809,33 @@ def _logout_before_kill_ark(stop_event=None, ui_coords=None, status_callback=Non
         focus_game_window(center_cursor_when_switching=True)
     except RuntimeError:
         return False
-    if stop_event is not None and stop_event.is_set():
-        return False
     try:
         _refresh_join_sim_ark_handle()
     except RuntimeError:
         return False
     emit("Returning ARK to main menu before closing.")
-    return _open_main_menu_until_safe_to_kill(stop_event, emit)
+    return _open_main_menu_until_safe_to_kill(emit)
 
 
-def _open_main_menu_until_safe_to_kill(stop_event, status_callback=None):
+def _open_main_menu_until_safe_to_kill(status_callback=None):
     emit = status_callback or (lambda _message: None)
     attempt = 0
-    while not (stop_event is not None and stop_event.is_set()):
+    while True:
         attempt += 1
-        if not _send_open_main_menu(stop_event, emit, attempt):
+        if not _send_open_main_menu(emit, attempt):
             continue
-        if _wait_for_ark_main_menu(stop_event, timeout=30):
+        if _wait_for_ark_main_menu(timeout=30):
             return True
         else:
             emit("ARK main menu did not appear after loading; resetting console.")
-        if not _reset_open_main_menu_console(stop_event):
+        if not _reset_open_main_menu_console():
             return False
-    return False
 
 
-def _send_open_main_menu(stop_event, status_callback=None, attempt=1):
+def _send_open_main_menu(status_callback=None, attempt=1):
     from source.ASA.player import console, player_state
 
     emit = status_callback or (lambda _message: None)
-    if stop_event is not None and stop_event.is_set():
-        return False
     try:
         emit(f"Opening ARK main menu (attempt {attempt}).")
         player_state.reset_state()
@@ -942,36 +843,31 @@ def _send_open_main_menu(stop_event, status_callback=None, attempt=1):
         return True
     except Exception as exc:
         emit(f"open MainMenu failed: {exc}; resetting console.")
-        _reset_open_main_menu_console(stop_event)
+        _reset_open_main_menu_console()
         return False
 
 
-def _reset_open_main_menu_console(stop_event):
+def _reset_open_main_menu_console():
     from source.utility import utils
 
     utils.press_key("ConsoleKeys")
-    if stop_wait(stop_event, 0.1):
-        return False
+    time.sleep(0.1)
     utils.press_key("Enter")
-    return not (stop_event is not None and stop_event.is_set())
+    return True
 
 
-def _wait_for_ark_loading_screen(stop_event, timeout=30):
+def _wait_for_ark_loading_screen(timeout=30):
     deadline = time.monotonic() + float(timeout)
     while time.monotonic() < deadline:
-        if stop_event is not None and stop_event.is_set():
-            return False
         if _safe_check_join_template_no_bounds("loading_screen", 0.7):
             return True
         time.sleep(0.5)
     return bool(_safe_check_join_template_no_bounds("loading_screen", 0.7))
 
 
-def _wait_for_ark_main_menu(stop_event, timeout=30):
+def _wait_for_ark_main_menu(timeout=30):
     deadline = time.monotonic() + float(timeout)
     while time.monotonic() < deadline:
-        if stop_event is not None and stop_event.is_set():
-            return False
         if _safe_is_ark_main_menu():
             return True
         time.sleep(0.5)
@@ -996,13 +892,6 @@ def _safe_is_ark_main_menu():
         return False
 
 
-def stop_wait(stop_event, seconds):
-    if stop_event is not None:
-        return stop_event.wait(seconds)
-    time.sleep(seconds)
-    return False
-
-
 def _bed_name(players, account):
     return player_bed_name(players, account)
 
@@ -1019,33 +908,20 @@ def _click_coord(coord):
     pyautogui.click(int(coord["x"]), int(coord["y"]))
 
 
-def _wait_for_template_visible(check_func, timeout, stop_event, *args):
+def _wait_for_template_visible(check_func, timeout, *args):
     deadline = time.monotonic() + float(timeout)
     while time.monotonic() < deadline:
-        if stop_event is not None and stop_event.is_set():
-            return False
         if check_func(*args):
             return True
         time.sleep(0.05)
     return bool(check_func(*args))
 
 
-def _register_template_region(template_path, region):
-    from source.utility import template
-
-    item = Path(str(template_path)).stem
-    template.roi_regions[item] = {
-        "start_x": int(region["start_x"]),
-        "start_y": int(region["start_y"]),
-        "width": int(region["width"]),
-        "height": int(region["height"]),
-    }
-    return item
+def _template_item(template_path):
+    return Path(str(template_path)).stem
 
 
-def _ensure_steam_window_ready(
-    steam, stop_event, status_callback=None, launch_if_missing=True
-):
+def _ensure_steam_window_ready(steam, status_callback=None, launch_if_missing=True):
     import subprocess
 
     emit = status_callback or (lambda _message: None)
@@ -1059,23 +935,18 @@ def _ensure_steam_window_ready(
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            if stop_event is not None and stop_event.is_set():
-                return False
             try:
                 if _focus_steam_window_maximized(title):
                     return True
             except RuntimeError as exc:
                 last_error = exc
             time.sleep(0.5)
-        if stop_event is not None and stop_event.is_set():
-            return False
         emit(
             "Steam window was not ready; restarting Steam "
             f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
         )
         subprocess.run(["taskkill", "/f", "/im", "steam.exe"], check=False)
-        if stop_wait(stop_event, 1):
-            return False
+        time.sleep(1)
         subprocess.Popen([str(steam_exe)])
     if last_error is not None:
         raise RuntimeError(f"Steam window was not ready after retries: {last_error}")

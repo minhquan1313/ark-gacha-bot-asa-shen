@@ -3,7 +3,6 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 
-from source.gacha_bot.fertilizer_refresh import run_fertilizer_refresh
 from source.launcher.constants import HELPER_HEIGHT, HELPER_WIDTH
 from source.launcher.deposit_helper_capture import (
     focus_game_window,
@@ -82,7 +81,7 @@ class FertilizerRefreshHelper(WorkerHelperWindow):
         self.start_stop_button.set_variant("danger")
         self.start_stop_button.setEnabled(True)
         self.status.setText("Aim at a crop plot to refresh fertilizer...")
-        self._start_worker(self._run_worker)
+        self._start_worker("fertilizer_refresh")
 
     def stop(self):
         if not self.is_running():
@@ -93,18 +92,10 @@ class FertilizerRefreshHelper(WorkerHelperWindow):
         self.start_stop_button.setEnabled(False)
         self.status.setText("Stopped.")
 
-    def _run_worker(self):
-        error = ""
-        try:
-            run_fertilizer_refresh(self.stop_event, self.status_changed.emit)
-        except Exception as exc:
-            error = str(exc)
-        self.worker_finished.emit(error)
-
-    def _on_worker_finished(self, error):
+    def _on_worker_finished(self, message):
         if self._finish_worker():
             return
         self.start_stop_button.setText("START")
         self.start_stop_button.set_variant("primary")
         self.start_stop_button.setEnabled(True)
-        self.status.setText(f"Failed: {error}" if error else "Stopped.")
+        self.status.setText(message)

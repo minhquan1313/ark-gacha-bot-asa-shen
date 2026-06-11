@@ -204,7 +204,7 @@ def _deposit_to_dedi(route_metadata, item, label):
     return False
 
 
-def _withdraw_from_dedi(route_metadata, item, label, stop_event=None):
+def _withdraw_from_dedi(route_metadata, item, label):
     attempts = source.gacha_bot.config.dedi_handshake_recovery_attempts
     for attempt in range(1, attempts + 1):
         _turn_to_object(route_metadata, item)
@@ -212,9 +212,6 @@ def _withdraw_from_dedi(route_metadata, item, label, stop_event=None):
 
         deadline = time.monotonic() + settings.dedi_handshake_timeout
         while time.monotonic() < deadline:
-            if stop_event is not None and stop_event.is_set():
-                inventory.close()
-                return False
             utils.press_key("AccessInventory")
             if template.template_await_true(
                 template.check_template, 2, "inventory", 0.7
@@ -227,9 +224,6 @@ def _withdraw_from_dedi(route_metadata, item, label, stop_event=None):
                     and time.monotonic() < deadline
                     and template.check_template("inventory", 0.7)
                 ):
-                    if stop_event is not None and stop_event.is_set():
-                        inventory.close()
-                        return False
                     player_state.check_disconnected()
                     time.sleep(DEDI_REMOTE_POLL_INTERVAL)
                     waiting_for_remote = template.check_template("waiting_inv", 0.8)

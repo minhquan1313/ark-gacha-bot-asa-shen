@@ -65,6 +65,7 @@ from source.launcher.native_window import (
     global_pos_from_lparam,
 )
 from source.launcher.pages import LauncherPagesMixin
+from source.launcher.process_control import terminate_process_tree
 from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.settings_store import load_settings, save_settings
 from source.launcher.styles import launcher_style_sheet
@@ -345,17 +346,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
 
         process = self.process
         if process is not None and process.poll() is None:
-            try:
-                process.terminate()
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                try:
-                    process.kill()
-                    process.wait(timeout=2)
-                except (OSError, subprocess.TimeoutExpired):
-                    pass
-            except OSError:
-                pass
+            terminate_process_tree(process)
         self._close_output_reader(process)
         self.process = None
         self.program_stopping = False
@@ -829,7 +820,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             self.stop_deadline = time.time() + 5
             self.append_log("[WARN] Stopping program...\n")
             self._update_start_stop_button()
-            self.process.terminate()
+            terminate_process_tree(self.process)
             self._hide_runner_overlay()
 
     def _poll_program_stop(self):

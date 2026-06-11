@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 from source.join_sim.source.logs import logger as logs
-from source.join_sim.source.utility import screen
+from source.utility import screen
 
 location = {
     "accept": {"start_x": 915, "start_y": 718, "width": 75, "height": 23},

@@ -1,8 +1,9 @@
 import time
 
 from source.join_sim.source.logs import logger as logs
-from source.join_sim.source.utility import recon_utils, utils, windows
-from source.join_sim.source.utility.utils import time_now
+from source.join_sim.source.utility import recon_utils
+from source.utility import utils, windows
+from source.utility.utils import time_now
 
 buttons = {
     "search_x": 1672,

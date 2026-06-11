@@ -9,8 +9,6 @@ def find_window_by_title(title):
     return ctypes.windll.user32.FindWindowW(None, title)
 
 
-hwnd = find_window_by_title(GAME_WINDOW_TITLE)
-
 INPUT_MOUSE = 0
 MOUSEEVENTF_MOVE = 0x0001
 MOUSEEVENTF_MOVE_NOCOALESCE = 0x2000
@@ -98,9 +96,8 @@ ctypes.windll.user32.PostMessageW.argtypes = [
 ctypes.windll.user32.PostMessageW.restype = ctypes.c_int
 
 
-def refresh():
-    global hwnd
-    hwnd = find_window_by_title(GAME_WINDOW_TITLE)
+def ark_hwnd():
+    return find_window_by_title(GAME_WINDOW_TITLE)
 
 
 def move_mouse(x, y):
@@ -115,5 +112,6 @@ def move_mouse(x, y):
 
 def click(x, y):
     lparam = (y << 16) | x
+    hwnd = ark_hwnd()
     ctypes.windll.user32.PostMessageW(hwnd, WM_LBUTTONDOWN, 0, lparam)
     ctypes.windll.user32.PostMessageW(hwnd, WM_LBUTTONUP, 0, lparam)

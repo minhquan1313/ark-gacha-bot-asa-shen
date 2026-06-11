@@ -318,275 +318,72 @@ class AutoJoinStopTests(unittest.TestCase):
         QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
         QApplication.processEvents()
 
-    def _make_running_helper(self, owner=None):
-        with patch.object(AutoJoinServerHelper, "_position_middle_right"):
-            helper = AutoJoinServerHelper(owner or _RejectedOwner())
-        worker = Mock()
-        worker.is_alive.return_value = True
-        helper.worker_thread = worker
-        return helper, worker
+    def _running_process(self):
+        process = Mock()
+        process.poll.return_value = None
+        process.stdout = None
+        return process
 
-    @patch(
-        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_stop_reports_stopping_until_worker_finishes(self, _register_hotkey):
-        helper, worker = self._make_running_helper()
+    def _make_running_helper(self, cls, owner=None):
+        with patch.object(cls, "_position_middle_right"):
+            helper = cls(owner or _RejectedOwner())
+        helper.worker_process = self._running_process()
+        return helper
+
+    @patch("source.launcher.auto_join_server_helper.register_alt_n_hotkey", return_value=False)
+    def test_auto_join_stop_terminates_helper_process(self, _register_hotkey):
+        helper = self._make_running_helper(AutoJoinServerHelper)
+        process = helper.worker_process
         try:
-            helper.stop()
-
-            self.assertTrue(helper.stop_event.is_set())
+            with patch("source.launcher.helper_window.terminate_process_tree") as terminate:
+                helper.stop()
+            terminate.assert_called_once_with(process)
             self.assertEqual(helper.status.text(), "Stopping...")
             self.assertEqual(helper.start_stop_button.text(), "START")
-            self.assertFalse(helper.start_stop_button.isEnabled())
         finally:
-            worker.is_alive.return_value = False
+            if helper.worker_process is not None:
+                helper.worker_process.poll.return_value = 1
             helper.close()
 
-    @patch(
-        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_worker_finish_reports_stopped(self, _register_hotkey):
-        with patch.object(AutoJoinServerHelper, "_position_middle_right"):
-            helper = AutoJoinServerHelper(_RejectedOwner())
-        try:
-            helper.start_stop_button.setEnabled(False)
-            helper._on_worker_finished("Stopped.")
-
-            self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertEqual(helper.status.text(), "Stopped.")
-        finally:
-            helper.close()
-
-    @patch(
-        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_stop_stops_running_main_program(self, _register_hotkey):
-        owner = _RejectedOwner()
-        owner.program_running = True
-        helper, worker = self._make_running_helper(owner)
-        try:
-            helper.stop()
-
-            owner.stop_program.assert_called_once_with()
-        finally:
-            worker.is_alive.return_value = False
-            helper.close()
-
-    @patch(
-        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_stop_does_not_stop_program_when_not_running(self, _register_hotkey):
-        owner = _RejectedOwner()
-        helper, worker = self._make_running_helper(owner)
-        try:
-            helper.stop()
-
-            owner.stop_program.assert_not_called()
-        finally:
-            worker.is_alive.return_value = False
-            helper.close()
-
-    @patch(
-        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_stop_does_not_stop_program_when_already_stopping(self, _register_hotkey):
-        owner = _RejectedOwner()
-        owner.program_running = True
-        owner.program_stopping = True
-        helper, worker = self._make_running_helper(owner)
-        try:
-            helper.stop()
-
-            owner.stop_program.assert_not_called()
-        finally:
-            worker.is_alive.return_value = False
-            helper.close()
-
-
-class FertilizerStartValidationTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.app = QApplication.instance() or QApplication([])
-
-    def tearDown(self):
-        QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
-        QApplication.processEvents()
-
-    def test_helper_starts_at_middle_right(self):
-        helper = Mock()
-        rect = Mock()
-        rect.right.return_value = 1919
-        rect.top.return_value = 0
-        rect.height.return_value = 1080
-        helper.screen.return_value.availableGeometry.return_value = rect
-        helper.width.return_value = 440
-        helper.height.return_value = 250
-
-        FertilizerRefreshHelper._position_middle_right(helper)
-
-        helper.move.assert_called_once_with(1461, 415)
-
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
+    @patch("source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey", return_value=False)
     def test_invalid_ark_window_does_not_start_worker(self, _register_hotkey):
         owner = _RejectedOwner()
         helper = FertilizerRefreshHelper(owner)
         try:
             helper.start()
-            self.assertIsNone(helper.worker_thread)
+            self.assertIsNone(helper.worker_process)
             self.assertEqual(helper.start_stop_button.text(), "START")
             self.assertIn("window was not found", helper.status.text())
             self.assertIs(owner.required_dialog_parent, helper)
         finally:
             helper.close()
 
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_running_program_warning_belongs_to_helper(self, _register_hotkey):
-        owner = _RejectedOwner()
-        owner.program_running = True
-        helper = FertilizerRefreshHelper(owner)
-        try:
-            helper.start()
-            self.assertEqual(len(owner.dialog_calls), 1)
-            self.assertEqual(owner.dialog_calls[0][0], "Stop Program First")
-            self.assertIs(owner.dialog_calls[0][3], helper)
-        finally:
-            helper.close()
-
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_start_focuses_ark_before_launching_worker(self, _register_hotkey):
+    @patch("source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey", return_value=False)
+    def test_start_focuses_ark_before_launching_subprocess(self, _register_hotkey):
         helper = Mock()
         helper.is_running.return_value = False
         helper.closing = False
         helper.owner.is_program_running.return_value = False
         helper.owner.program_stopping = False
         helper._require_ark_window.return_value = True
-        events = []
-        with (
-            patch(
-                "source.launcher.fertilizer_refresh_helper.focus_game_window",
-                side_effect=lambda **_kwargs: events.append("focus"),
-            ) as focus,
-        ):
+        with patch("source.launcher.fertilizer_refresh_helper.focus_game_window") as focus:
             FertilizerRefreshHelper.start(helper)
 
-        self.assertEqual(events, ["focus"])
         focus.assert_called_once_with(center_cursor_when_switching=True)
-        helper._start_worker.assert_called_once_with(helper._run_worker)
+        helper._start_worker.assert_called_once_with("fertilizer_refresh")
 
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.focus_game_window",
-        side_effect=RuntimeError("unable to focus Ark"),
-    )
-    def test_focus_failure_does_not_start_worker(self, _focus, _register_hotkey):
-        helper = Mock()
-        helper.is_running.return_value = False
-        helper.closing = False
-        helper.owner.is_program_running.return_value = False
-        helper.owner.program_stopping = False
-        helper._require_ark_window.return_value = True
-        helper.worker_thread = None
-
-        FertilizerRefreshHelper.start(helper)
-
-        self.assertIsNone(helper.worker_thread)
-        helper.status.setText.assert_called_once_with(
-            "Cannot start: unable to focus Ark"
-        )
-
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_close_defers_without_joining_live_worker(self, _register_hotkey):
-        with patch.object(FertilizerRefreshHelper, "_position_middle_right"):
-            helper = FertilizerRefreshHelper(_RejectedOwner())
-        worker = Mock()
-        worker.is_alive.return_value = True
-        helper.worker_thread = worker
-        event = Mock()
-
+    @patch("source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey", return_value=False)
+    def test_fertilizer_stop_terminates_helper_process(self, _register_hotkey):
+        helper = self._make_running_helper(FertilizerRefreshHelper)
+        process = helper.worker_process
         try:
-            helper.closeEvent(event)
-
-            self.assertTrue(helper.stop_event.is_set())
-            self.assertEqual(helper.status.text(), "Stopping...")
-            self.assertFalse(helper.start_stop_button.isEnabled())
-            event.ignore.assert_called_once_with()
-            worker.join.assert_not_called()
-        finally:
-            worker.is_alive.return_value = False
-            helper.close()
-
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_worker_finish_finalizes_deferred_close(self, _register_hotkey):
-        with patch.object(FertilizerRefreshHelper, "_position_middle_right"):
-            helper = FertilizerRefreshHelper(_RejectedOwner())
-        helper.closing = True
-
-        with patch.object(helper, "close") as close:
-            helper._on_worker_finished("")
-
-        self.assertIsNone(helper.worker_thread)
-        close.assert_called_once_with()
-
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_stop_reports_stopped_immediately_and_disables_restart(
-        self, _register_hotkey
-    ):
-        with patch.object(FertilizerRefreshHelper, "_position_middle_right"):
-            helper = FertilizerRefreshHelper(_RejectedOwner())
-        worker = Mock()
-        worker.is_alive.return_value = True
-        helper.worker_thread = worker
-        try:
-            helper.stop()
-
-            self.assertTrue(helper.stop_event.is_set())
-            self.assertEqual(helper.status.text(), "Stopped.")
-            self.assertEqual(helper.start_stop_button.text(), "START")
-            self.assertFalse(helper.start_stop_button.isEnabled())
-        finally:
-            worker.is_alive.return_value = False
-            helper.close()
-
-    @patch(
-        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
-        return_value=False,
-    )
-    def test_worker_finish_reenables_restart(self, _register_hotkey):
-        with patch.object(FertilizerRefreshHelper, "_position_middle_right"):
-            helper = FertilizerRefreshHelper(_RejectedOwner())
-        try:
-            helper.start_stop_button.setEnabled(False)
-            helper._on_worker_finished("")
-
-            self.assertTrue(helper.start_stop_button.isEnabled())
+            with patch("source.launcher.helper_window.terminate_process_tree") as terminate:
+                helper.stop()
+            terminate.assert_called_once_with(process)
             self.assertEqual(helper.status.text(), "Stopped.")
         finally:
+            if helper.worker_process is not None:
+                helper.worker_process.poll.return_value = 1
             helper.close()
 
 

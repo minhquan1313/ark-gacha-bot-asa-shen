@@ -88,6 +88,30 @@ roi_regions = {
         "width": 220,
         "height": 50,
     },
+    "steam_switch_account": {
+        "start_x": 600,
+        "start_y": 300,
+        "width": 750,
+        "height": 450,
+    },
+    "steam_change_acc_ready": {
+        "start_x": 630,
+        "start_y": 400,
+        "width": 660,
+        "height": 260,
+    },
+    "steam_unable_to_sync": {
+        "start_x": 630,
+        "start_y": 390,
+        "width": 250,
+        "height": 80,
+    },
+    "dedi_deposit_ready": {
+        "start_x": 880,
+        "start_y": 850,
+        "width": 120,
+        "height": 55,
+    },
 }
 
 
