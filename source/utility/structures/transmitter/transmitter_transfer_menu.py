@@ -1,6 +1,7 @@
 import time
 
 from source.utility import template, utils, windows
+from source.utility.utils import time_now
 
 buttons = {
     "server_search_x": 1500,
@@ -48,8 +49,10 @@ def is_join_button_visible():
     return template.check_template_no_bounds("transfer_join_button", 0.7)
 
 
-def now():
-    return time.monotonic()
+def wait_server_list_loaded(delay=10):
+    return template.template_await_true(
+        template.check_template_no_bounds, delay, "server_list_trans_loaded", 0.7
+    )
 
 
 def refresh():
@@ -98,17 +101,17 @@ def do_join_server(server: str) -> bool:
     if not is_open():
         return False
 
-    deadline = now() + 3
-    while is_clear_search() and now() < deadline:
-        search_bar_search(server)
-    if not is_clear_search():
+    timeout = time_now() + 60
+    while not is_server_list_loaded() and time_now() < timeout:
+        if not wait_server_list_loaded(1):
+            refresh()
+    if not is_server_list_loaded():
         return False
 
-    deadline = now() + 60
-    while not is_server_list_loaded() and now() < deadline:
-        refresh()
-        time.sleep(0.3)
-    if not is_server_list_loaded():
+    timeout = time_now() + 10
+    while is_clear_search() and time_now() < timeout:
+        search_bar_search(server)
+    if not is_clear_search():
         return False
 
     time.sleep(0.1)

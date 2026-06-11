@@ -20,17 +20,18 @@ berry_station = True
 class base_task(ABC):
     def __init__(self):
         self.has_run_before = False
+        self.name = ""
 
     @abstractmethod
     def execute(self):
         pass
 
     @abstractmethod
-    def get_priority_level(self):
+    def get_priority_level(self) -> int:
         pass
 
     @abstractmethod
-    def get_requeue_delay(self):
+    def get_requeue_delay(self) -> int:
         pass
 
     def mark_as_run(self):

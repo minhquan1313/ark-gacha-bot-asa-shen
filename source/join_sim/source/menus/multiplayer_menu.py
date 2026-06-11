@@ -2,7 +2,7 @@ import time
 
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.utility import recon_utils, utils, windows
-from source.utility.utils import time_now
+from source.join_sim.source.utility.utils import time_now
 
 buttons = {
     "search_x": 1672,
@@ -46,7 +46,7 @@ def is_server_list_loaded():
     return recon_utils.check_template_no_bounds("server_list_loaded", 0.7)
 
 
-def wait_server_list_loaded(delay=0.1):
+def wait_server_list_loaded(delay=10):
     return recon_utils.template_await_true(
         recon_utils.check_template_no_bounds, delay, "server_list_loaded", 0.7
     )
@@ -92,25 +92,19 @@ def join_server(server: str):
 
     logs.logger.debug("joining server")
 
-    now = time_now()
-    timeout = now + 10
-    while clear_search() and now < timeout:
-        search_bar_search(server)
-        wait_clear_search(1)
-
-    if not clear_search():
-        return False
-
-    now = time_now()
-    timeout = now + 60
-    while not is_server_list_loaded() and now < timeout:
+    timeout = time_now() + 60
+    while not is_server_list_loaded() and time_now() < timeout:
         if not wait_server_list_loaded(1):
             refresh()
-
     if not is_server_list_loaded():
         return False
 
-    time.sleep(0.1)
+    timeout = time_now() + 10
+    while clear_search() and time_now() < timeout:
+        search_bar_search(server)
+        wait_clear_search(1)
+    if clear_search():
+        return False
     windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
     time.sleep(0.5)
     if is_open() and join_button():

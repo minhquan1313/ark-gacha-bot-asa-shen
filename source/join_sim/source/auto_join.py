@@ -1,5 +1,7 @@
 import time
 
+from source.join_sim.source.utility.utils import time_now
+
 REOPEN_INTERVAL_SECONDS = 15 * 60
 
 
@@ -134,20 +136,17 @@ def _join_server_cancellable(server, stop_event):
         return
     logs.logger.debug("joining server")
 
-    _search_bar_search_cancellable(server, stop_event)
-    while multiplayer_menu.clear_search():
+    timeout = time_now() + 60
+    while not multiplayer_menu.is_server_list_loaded() and time_now() < timeout:
+        if not multiplayer_menu.wait_server_list_loaded(1):
+            multiplayer_menu.refresh()
+    if _wait(stop_event, 0.1):
+        return
+
+    timeout = time_now() + 10
+    while multiplayer_menu.clear_search() and time_now() < timeout:
         _search_bar_search_cancellable(server, stop_event)
         multiplayer_menu.wait_clear_search(1)
-
-    if _wait(stop_event, 0.1):
-        return
-
-    while not multiplayer_menu.is_server_list_loaded():
-        multiplayer_menu.refresh()
-        multiplayer_menu.wait_server_list_loaded(1)
-
-    if _wait(stop_event, 0.1):
-        return
 
     windows.click(
         multiplayer_menu.get_pixel_loc("first_server_x"),

@@ -1,9 +1,10 @@
-from source.utility import utils, template, windows, variables, local_player
-from source.logs import gachalogs as logs
-from source.ASA.player import player_state
 import time
+
 import settings
 import source.ASA.config
+from source.ASA.player import player_state
+from source.logs import gachalogs as logs
+from source.utility import template, utils, variables, windows
 
 inv_slots = {"x": 1245, "y": 240, "distance": 93}
 
@@ -20,10 +21,10 @@ def open():
             f"trying to open strucuture inventory {attempts} / {source.ASA.config.inventory_open_attempts}"
         )
         utils.press_key("AccessInventory")
-        if template.template_await_true(template.check_template, 2, "inventory", 0.7):
+        if template.template_await_true(template.check_template, 60, "inventory", 0.7):
             logs.logger.debug(f"inventory opened")
             if template.template_await_true(
-                template.check_template, 1, "waiting_inv", 0.8
+                template.check_template, 60, "waiting_inv", 0.8
             ):
                 start = time.time()
                 logs.logger.debug(

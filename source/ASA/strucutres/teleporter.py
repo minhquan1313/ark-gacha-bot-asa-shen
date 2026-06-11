@@ -26,7 +26,7 @@ def open():
         utils.press_key("Use")
 
         if not template.template_await_true(
-            template.check_template, 2, "teleporter_title", 0.7
+            template.check_template, 60 * settings.lag_offset, "teleporter_title", 0.7
         ):
             logs.logger.warning("teleporter didnt open retrying now")
             player_state.check_state()

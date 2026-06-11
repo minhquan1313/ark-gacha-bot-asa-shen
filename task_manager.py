@@ -26,19 +26,22 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
+TaskItem = tuple[float, int, int, stations.base_task]
+
+
 class priority_queue_exc:
     def __init__(self):
-        self.queue = []
+        self.queue: list[TaskItem] = []
 
-    def add(self, task, priority, execution_time):
+    def add(self, task: stations.base_task, priority: int, execution_time: float):
         heapq.heappush(self.queue, (execution_time, len(self.queue), priority, task))
 
-    def pop(self):
+    def pop(self) -> TaskItem:
         if not self.is_empty():
             return heapq.heappop(self.queue)
         return None
 
-    def peek(self):
+    def peek(self) -> TaskItem:
         if not self.is_empty():
             return self.queue[0]
         return None
@@ -49,17 +52,17 @@ class priority_queue_exc:
 
 class priority_queue_prio:
     def __init__(self):
-        self.queue = []
+        self.queue: list[TaskItem] = []
 
-    def add(self, task, priority, execution_time):
+    def add(self, task: stations.base_task, priority: int, execution_time: float):
         heapq.heappush(self.queue, (priority, execution_time, len(self.queue), task))
 
-    def pop(self):
+    def pop(self) -> TaskItem:
         if not self.is_empty():
             return heapq.heappop(self.queue)
         return None
 
-    def peek(self):
+    def peek(self) -> TaskItem:
         if not self.is_empty():
             return self.queue[0]
         return None
@@ -96,8 +99,7 @@ class task_scheduler(metaclass=SingletonMeta):
             flush=True,
         )
 
-    def add_task(self, task):
-
+    def add_task(self, task: stations.base_task):
         if not getattr(task, "has_run_before", False):
             next_execution_time = time.time()
         else:
@@ -123,7 +125,6 @@ class task_scheduler(metaclass=SingletonMeta):
                 time.sleep(5)
 
     def move_ready_tasks_to_active_queue(self, current_time):
-
         while not self.waiting_queue.is_empty():
             task_tuple = self.waiting_queue.peek()
             exec_time, _, priority, task = task_tuple
@@ -142,7 +143,6 @@ class task_scheduler(metaclass=SingletonMeta):
         exec_time, priority, _, task = task_tuple
 
         if exec_time <= current_time:
-
             if task.name != self.prev_task_name:
                 logs.logger.info(f"Executing task: {task.name}")
             self.running_task = task

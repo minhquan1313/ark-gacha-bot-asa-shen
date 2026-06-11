@@ -5,9 +5,9 @@ import win32clipboard
 
 import settings
 import source.ASA.config
-from source.ASA.player import player_inventory, player_state
+from source.ASA.player import player_state
 from source.logs import gachalogs as logs
-from source.utility import local_player, screen, template, utils, variables, windows
+from source.utility import template, utils
 
 last_command = ""
 
@@ -20,24 +20,30 @@ def is_open():
 
 def enter_data(data: str):
     global last_command
-    if source.ASA.config.up_arrow and data == last_command:
-        logs.logger.debug(f"using uparrow to put {data} into the console")
-        pyautogui.press("up")
-    else:
-        logs.logger.debug(f"using clipboard to put {data} into the console")
-        clipboard_opened = False
-        try:  # my pc had issues where it would run threw this and not open clipoard then crash trying to close it
-            win32clipboard.OpenClipboard()
-            clipboard_opened = True
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardText(data, win32clipboard.CF_TEXT)
-        except Exception as e:
-            print(f"Clipboard error: {e}")
-        finally:
-            if clipboard_opened:
-                win32clipboard.CloseClipboard()
-        pyautogui.hotkey("ctrl", "v")
+    # if source.ASA.config.up_arrow and data == last_command:
+    #     logs.logger.debug(f"using uparrow to put {data} into the console")
+    #     pyautogui.press("up")
+    # else:
+    logs.logger.debug(f"using clipboard to put {data} into the console")
+    clipboard_opened = False
+    try:  # my pc had issues where it would run threw this and not open clipoard then crash trying to close it
+        win32clipboard.OpenClipboard()
+        clipboard_opened = True
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(data, win32clipboard.CF_TEXT)
+    except Exception as e:
+        print(f"Clipboard error: {e}")
+    finally:
+        if clipboard_opened:
+            win32clipboard.CloseClipboard()
+    pyautogui.hotkey("ctrl", "v")
     last_command = data
+
+
+def console_reset():
+    utils.press_key("ConsoleKeys")
+    time.sleep(0.1)
+    utils.press_key("Enter")
 
 
 def console_ccc(reset_state_before_capture=True):
@@ -53,6 +59,11 @@ def console_ccc(reset_state_before_capture=True):
         count = 0
         while not is_open():
             count += 1
+            # RESET
+            console_reset()
+            time.sleep(0.1)
+
+            # OPEN AGAIN
             utils.press_key("ConsoleKeys")
             template.template_await_true(is_open, 1)
             if count >= source.ASA.config.console_open_attempts:
@@ -91,11 +102,8 @@ def console_ccc(reset_state_before_capture=True):
             # When somehow console has some weird value command already there, and the compare function of is_open will never return true,
             # then we have to try and open the console with the key press then press Enter to clear that current command
             # so the command console will be clear and ready for the is_open to check again.
-            utils.press_key("ConsoleKeys")  # Open console again
-            time.sleep(0.1)
-            utils.press_key(
-                "Enter"
-            )  # Enter current command to clear it and also close console
+            console_reset()
+            # Enter current command to clear it and also close console
             break
     if data != None:
         ccc_data = data.split()
@@ -108,6 +116,9 @@ def console_write(text: str):
     attempts = 0
     while not is_open():
         attempts += 1
+        console_reset()
+        time.sleep(0.1)
+
         utils.press_key("ConsoleKeys")
         template.template_await_true(is_open, 1)
         if attempts >= source.ASA.config.console_open_attempts:

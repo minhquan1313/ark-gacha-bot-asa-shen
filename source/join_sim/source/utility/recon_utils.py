@@ -35,6 +35,12 @@ location = {
         "width": 40,
         "height": 180,
     },
+    "term_and_conditions": {
+        "start_x": 567,
+        "start_y": 307,
+        "width": 784,
+        "height": 420,
+    },
 }
 
 
@@ -51,9 +57,7 @@ def template_await_true(func, sleep_amount: float, *args) -> bool:
 def template_await_false(func, sleep_amount: float, *args) -> bool:
     count = 0
     v = func(*args)
-    print(f"v = {v}")
     while v == True:
-        print(f"v = {v}")
         v = func(*args)
         if count >= sleep_amount * 20:
             break

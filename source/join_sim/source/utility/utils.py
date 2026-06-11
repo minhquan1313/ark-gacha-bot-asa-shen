@@ -111,3 +111,7 @@ def ctrl_a():  # hotkey for sending ctrl a
     ctypes.windll.user32.SendMessageW(windows.hwnd, WM_KEYUP, 0x41, 0)
     time.sleep(0.1)
     ctypes.windll.user32.SendMessageW(windows.hwnd, WM_KEYUP, 0x11, 0)
+
+
+def time_now():
+    return time.monotonic()
