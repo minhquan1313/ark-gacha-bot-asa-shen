@@ -25,18 +25,22 @@ class QueueController(QObject):
     @Property(str, notify=changed)
     def currentTask(self):
         running = self._snapshot.get("running", [])
-        return running[0].get("name", "IDLE") if running else "IDLE"
+        return self._task_name(running[0], "unknown") if running else "IDLE"
 
     @Property("QVariantList", notify=changed)
     def upcomingTasks(self):
         return self._format_queue_snapshot()
 
     @Property("QVariantList", notify=changed)
+    def runnerUpcomingTasks(self):
+        return self._format_runner_overlay_snapshot()
+
+    @Property("QVariantList", notify=changed)
     def runningLines(self):
         lines = list(self._running_history)
         running = self._snapshot.get("running", [])
         if running:
-            lines.append(f"[RUNNING] CURRENT   {running[0].get('name', 'unknown')}")
+            lines.append(f"[RUNNING] CURRENT   {self._task_name(running[0])}")
         else:
             lines.append("[RUNNING] IDLE")
         return lines
@@ -45,7 +49,7 @@ class QueueController(QObject):
     def updateSnapshot(self, snapshot):
         self._snapshot = dict(snapshot or {})
         running = self._snapshot.get("running", [])
-        running_task_name = running[0].get("name", "unknown") if running else None
+        running_task_name = self._task_name(running[0], "unknown") if running else None
         if running_task_name and running_task_name != self._running_task_name:
             self._running_history.append(f"[RUNNING] STARTED   {running_task_name}")
         self._running_task_name = running_task_name
@@ -62,18 +66,51 @@ class QueueController(QObject):
         now = time.time()
         lines = []
         queued = self._snapshot.get("active", []) + self._snapshot.get("waiting", [])
-        queued.sort(
-            key=lambda task: float(task.get("execution_time", now)), reverse=True
-        )
+        queued.sort(key=lambda task: self._task_execution_time(task, now), reverse=True)
         for task in queued:
-            remaining = max(0, int(float(task.get("execution_time", now)) - now))
-            if task.get("state") == "READY" or remaining == 0:
-                timer = "READY"
-            else:
-                hours, remainder = divmod(remaining, 3600)
-                minutes, seconds = divmod(remainder, 60)
-                timer = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-            lines.append(f"[QUEUE] {timer:<9} {task.get('name', 'unknown')}")
+            timer = self._format_task_timer(task, now)
+            lines.append(f"[QUEUE] {timer:<9} {self._task_name(task)}")
         for task in self._snapshot.get("running", []):
-            lines.append(f"[QUEUE] RUNNING   {task.get('name', 'unknown')}")
+            lines.append(f"[QUEUE] RUNNING   {self._task_name(task)}")
         return lines or ["[QUEUE] No upcoming tasks."]
+
+    def _format_runner_overlay_snapshot(self):
+        now = time.time()
+        queued = self._snapshot.get("active", []) + self._snapshot.get("waiting", [])
+        queued.sort(key=lambda task: self._task_execution_time(task, now))
+        lines = [self._format_runner_overlay_task(task, now) for task in queued[:5]]
+        return lines or ["No upcoming tasks."]
+
+    def _format_runner_overlay_task(self, task, now):
+        timer = self._format_task_timer(task, now)
+        return f"{timer:<8} {self._task_name(task)}"
+
+    def _format_task_timer(self, task, now):
+        execution_time = self._task_execution_time(task, now)
+        remaining = max(0, int(execution_time - now))
+        if self._task_state(task) == "READY" or remaining == 0:
+            return "READY"
+        hours, remainder = divmod(remaining, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+    @staticmethod
+    def _task_execution_time(task, fallback):
+        if not isinstance(task, dict):
+            return fallback
+        try:
+            return float(task.get("execution_time", fallback))
+        except (TypeError, ValueError):
+            return fallback
+
+    @staticmethod
+    def _task_name(task, fallback="unknown"):
+        if not isinstance(task, dict):
+            return fallback
+        return str(task.get("name") or fallback)
+
+    @staticmethod
+    def _task_state(task):
+        if not isinstance(task, dict):
+            return ""
+        return str(task.get("state", "")).upper()

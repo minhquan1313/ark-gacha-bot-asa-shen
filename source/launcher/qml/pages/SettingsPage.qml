@@ -17,33 +17,50 @@ Item {
             font.bold: true
         }
 
-        Panel {
+        Rectangle {
+            objectName: "SettingsShell"
+            color: ThemeModule.Theme.colors.panelTranslucent
+            border.color: ThemeModule.Theme.colors.border
+            border.width: ThemeModule.Theme.border.thin
+            radius: ThemeModule.Theme.radius.panel
             Layout.fillWidth: true
             Layout.fillHeight: true
 
             RowLayout {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                anchors.fill: parent
+                anchors.margins: ThemeModule.Theme.spacing.lg
                 spacing: ThemeModule.Theme.spacing.md
 
-                ColumnLayout {
+                Flickable {
+                    id: tabScroll
+                    objectName: "SettingsTabs"
                     Layout.preferredWidth: ThemeModule.Theme.size.settingsTabsWidth
+                    Layout.minimumWidth: ThemeModule.Theme.size.settingsTabsWidth
+                    Layout.maximumWidth: ThemeModule.Theme.size.settingsTabsWidth
                     Layout.fillHeight: true
-                    spacing: ThemeModule.Theme.spacing.sm
+                    clip: true
+                    contentHeight: tabsColumn.implicitHeight
 
-                    Repeater {
-                        model: settingsController.groups
-                        delegate: CyberButton {
-                            text: modelData
-                            variant: settingsController.currentGroup === modelData ? "primary" : "secondary"
-                            Layout.fillWidth: true
-                            onClicked: settingsController.setGroup(modelData)
+                    ColumnLayout {
+                        id: tabsColumn
+                        width: tabScroll.width
+                        spacing: ThemeModule.Theme.spacing.sm
+
+                        Repeater {
+                            model: settingsController.groups
+                            delegate: CyberButton {
+                                text: modelData
+                                variant: settingsController.currentGroup === modelData ? "primary" : "secondary"
+                                Layout.fillWidth: true
+                                onClicked: settingsController.setGroup(modelData)
+                            }
                         }
+                        Item { Layout.fillHeight: true }
                     }
-                    Item { Layout.fillHeight: true }
                 }
 
                 Flickable {
+                    objectName: "SettingsContent"
                     clip: true
                     contentHeight: formColumn.implicitHeight
                     Layout.fillWidth: true
@@ -62,9 +79,35 @@ Item {
                             Layout.fillWidth: true
                         }
 
+                        Flow {
+                            visible: settingsController.groupActions.length > 0
+                            Layout.fillWidth: true
+                            spacing: ThemeModule.Theme.spacing.sm
+
+                            Repeater {
+                                model: settingsController.groupActions
+                                delegate: RowLayout {
+                                    spacing: ThemeModule.Theme.spacing.sm
+                                    CyberTextField {
+                                        id: actionInput
+                                        visible: Boolean(modelData.input)
+                                        placeholderText: modelData.input || ""
+                                        text: ""
+                                        Layout.preferredWidth: ThemeModule.Theme.size.settingsActionInputWidth
+                                    }
+                                    CyberButton {
+                                        text: modelData.label
+                                        variant: modelData.variant || "secondary"
+                                        onClicked: settingsController.runGroupAction(modelData.key, actionInput.text)
+                                    }
+                                }
+                            }
+                        }
+
                         Repeater {
                             model: settingsController.fields
                             delegate: RowLayout {
+                                objectName: modelData.type === "options" ? "SettingsOptionRow" : "SettingsFieldRow"
                                 Layout.fillWidth: true
                                 spacing: ThemeModule.Theme.spacing.md
 
@@ -78,20 +121,14 @@ Item {
                                     Layout.fillWidth: true
                                     sourceComponent: modelData.type === "bool" ? boolEditor
                                         : modelData.type === "summary" ? summaryEditor
+                                        : modelData.type === "options" ? optionsEditor
                                         : textEditor
                                 }
 
                                 Component {
                                     id: textEditor
-                                    TextField {
+                                    CyberTextField {
                                         text: String(modelData.value)
-                                        color: ThemeModule.Theme.colors.text
-                                        selectByMouse: true
-                                        background: Rectangle {
-                                            color: ThemeModule.Theme.colors.panelStrong
-                                            border.color: ThemeModule.Theme.colors.border
-                                            radius: ThemeModule.Theme.radius.sm
-                                        }
                                         onEditingFinished: settingsController.setValue(modelData.key, text)
                                     }
                                 }
@@ -101,6 +138,16 @@ Item {
                                     CyberSwitch {
                                         checked: Boolean(modelData.value)
                                         onToggled: settingsController.setValue(modelData.key, checked)
+                                    }
+                                }
+
+                                Component {
+                                    id: optionsEditor
+                                    CyberComboBox {
+                                        objectName: "SettingsOptionEditor"
+                                        model: modelData.options || []
+                                        currentIndex: Math.max(0, (modelData.options || []).indexOf(String(modelData.value)))
+                                        onActivated: settingsController.setValue(modelData.key, currentText)
                                     }
                                 }
 

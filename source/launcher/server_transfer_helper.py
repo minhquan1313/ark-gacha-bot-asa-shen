@@ -50,6 +50,7 @@ from source.launcher.widgets import (
 DEFAULT_PANELS_EXPANDED = True
 PLAYER_SEARCH_WARNING_COLOR = "#ffb020"
 IGNORED_PLAYER_COLOR = "#ff4d6d"
+ADDED_PLAYER_BED_PREFIX = "BBedPlayer"
 
 
 class ServerTransferHelper(WorkerHelperWindow):
@@ -548,6 +549,9 @@ class ServerTransferHelper(WorkerHelperWindow):
             source_players = self._players_from_rows()
         else:
             source_players = self.config.get("players", {})
+        source_players = self._players_with_added_account_defaults(
+            source_players, account_count
+        )
         try:
             self.config["players"] = normalize_transfer_players(
                 source_players, account_count
@@ -623,6 +627,19 @@ class ServerTransferHelper(WorkerHelperWindow):
                 ]
             }
         return self.config.get("players", {})
+
+    def _players_with_added_account_defaults(self, players, account_count):
+        if not isinstance(players, dict):
+            players = {}
+        raw_players = players.get("players", [])
+        if not isinstance(raw_players, list):
+            raw_players = []
+        merged = [
+            dict(player) if isinstance(player, dict) else {} for player in raw_players
+        ]
+        for account in range(len(merged) + 1, int(account_count) + 1):
+            merged.append({"bed_name": f"{ADDED_PLAYER_BED_PREFIX}{account}"})
+        return {"players": merged}
 
     def _save_players_from_rows(self):
         try:

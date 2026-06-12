@@ -9,6 +9,7 @@ Rectangle {
     property bool narrow: false
     property var pages: [
         { "key": "dashboard", "label": narrow ? "DASH" : "DASHBOARD" },
+        { "key": "setup", "label": "SETUP" },
         { "key": "settings", "label": narrow ? "SET" : "SETTINGS" },
         { "key": "logs", "label": "LOGS" },
         { "key": "tools", "label": "TOOLS" },
@@ -17,7 +18,7 @@ Rectangle {
     ]
 
     width: narrow ? ThemeModule.Theme.size.sidebarNarrowWidth : ThemeModule.Theme.size.sidebarWidth
-    color: "#050A10"
+    color: ThemeModule.Theme.colors.sidebar
 
     ColumnLayout {
         anchors.fill: parent
@@ -28,8 +29,8 @@ Rectangle {
             source: assetPaths.logo
             fillMode: Image.PreserveAspectFit
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: narrow ? 54 : 88
-            Layout.preferredHeight: narrow ? 54 : 88
+            Layout.preferredWidth: narrow ? ThemeModule.Theme.size.sidebarLogoNarrow : ThemeModule.Theme.size.sidebarLogo
+            Layout.preferredHeight: narrow ? ThemeModule.Theme.size.sidebarLogoNarrow : ThemeModule.Theme.size.sidebarLogo
         }
 
         Text {

@@ -27,7 +27,8 @@ Item {
                     { "key": "autoJoin", "title": "AUTO JOIN SERVER", "body": "Retry the existing join flow until the character is detected back in-server." },
                     { "key": "transfer", "title": "SERVER TRANSFER HELPER", "body": "Move resources between servers across Steam accounts." },
                     { "key": "fertilizer", "title": "CROP PLOT FERTILIZER REFRESH", "body": "Refresh crop plot fertilizer with one quick helper." },
-                    { "key": "position", "title": "POSITION / RENDER HELPER", "body": "Capture and view render yaw settings." }
+                    { "key": "position", "title": "POSITION / RENDER HELPER", "body": "Capture and view render yaw settings." },
+                    { "key": "deposit", "title": "DEPOSIT ROUTE HELPER", "body": "Capture and tune crystal and grindable deposit route entries." }
                 ]
                 delegate: Panel {
                     title: modelData.title

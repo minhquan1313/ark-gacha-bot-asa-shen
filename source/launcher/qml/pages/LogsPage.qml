@@ -4,6 +4,8 @@ import "../components"
 import "../theme" as ThemeModule
 
 Item {
+    objectName: "LogsPage"
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: ThemeModule.Theme.spacing.lg
@@ -16,7 +18,7 @@ Item {
             font.bold: true
         }
 
-        RowLayout {
+        Flow {
             Layout.fillWidth: true
             spacing: ThemeModule.Theme.spacing.sm
 
@@ -28,7 +30,6 @@ Item {
                     onClicked: logController.setFilter(modelData)
                 }
             }
-            Item { Layout.fillWidth: true }
             CyberButton { text: "CLEAR LOGS"; variant: "danger"; onClicked: logController.clearLogs() }
             CyberButton { text: "COPY LOGS"; variant: "primary"; onClicked: logController.copyLogs() }
         }
@@ -36,11 +37,27 @@ Item {
         Panel {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            fillBody: true
 
             ConsoleView {
                 lines: logController.lines
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            CyberButton {
+                text: "TEST CONSOLE COLOURS"
+                variant: "secondary"
+                onClicked: launcherController.checkColours()
+            }
+            Item { Layout.fillWidth: true }
+            CyberButton {
+                text: "COPY LOGS"
+                variant: "primary"
+                onClicked: logController.copyLogs()
             }
         }
     }

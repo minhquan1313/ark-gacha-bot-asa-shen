@@ -6,12 +6,12 @@ Switch {
     id: control
 
     indicator: Rectangle {
-        implicitWidth: 50
-        implicitHeight: 22
+        implicitWidth: ThemeModule.Theme.size.switchWidth
+        implicitHeight: ThemeModule.Theme.size.switchHeight
         x: control.leftPadding
         y: parent.height / 2 - height / 2
         radius: height / 2
-        color: control.checked ? "#0E3A4D" : "#101820"
+        color: control.checked ? ThemeModule.Theme.colors.switchOn : ThemeModule.Theme.colors.switchOff
         border.color: control.checked ? ThemeModule.Theme.colors.cyan : ThemeModule.Theme.colors.border
 
         Rectangle {

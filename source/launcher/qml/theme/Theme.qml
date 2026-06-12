@@ -6,9 +6,18 @@ QtObject {
     readonly property QtObject colors: QtObject {
         readonly property color bg: "#070A0F"
         readonly property color panel: "#0A1019"
+        readonly property color panelTranslucent: "#EB0A1019"
         readonly property color panelStrong: "#03070C"
         readonly property color panelSoft: "#101C2B"
         readonly property color glass: "#8C121C2A"
+        readonly property color sidebar: "#050A10"
+        readonly property color buttonPrimaryFill: "#2900D8FF"
+        readonly property color buttonDangerFill: "#29FF4D6D"
+        readonly property color buttonHoverFill: "#42182B3A"
+        readonly property color buttonDownFill: "#3311536B"
+        readonly property color switchOn: "#0E3A4D"
+        readonly property color switchOff: "#101820"
+        readonly property color meterTrack: "#24566A"
         readonly property color cyan: "#00D8FF"
         readonly property color blue: "#2F80FF"
         readonly property color green: "#6BFF9E"
@@ -52,23 +61,42 @@ QtObject {
         readonly property int titleBarHeight: 42
         readonly property int sidebarWidth: 190
         readonly property int sidebarNarrowWidth: 96
+        readonly property int sidebarLogo: 88
+        readonly property int sidebarLogoNarrow: 54
         readonly property int breakpointNarrow: 720
         readonly property int buttonHeight: 34
         readonly property int iconButton: 36
         readonly property int heroHeight: 180
-        readonly property int helperWidth: 280
-        readonly property int helperHeight: 180
-        readonly property int overlayWidth: 240
+        readonly property int helperWidth: 380
+        readonly property int helperHeight: 320
+        readonly property int helperRunningWidth: 240
+        readonly property int helperRunningMinHeight: 100
+        readonly property int overlayWidth: 520
+        readonly property int overlayMinHeight: 120
+        readonly property int overlayQueueWidth: 220
+        readonly property int overlayLogWidth: 248
         readonly property int statCardHeight: 96
+        readonly property int meterHeight: 11
         readonly property int quickActionsWidth: 260
         readonly property int settingsTabsWidth: 240
         readonly property int settingsLabelWidth: 190
+        readonly property int settingsActionInputWidth: 100
+        readonly property int helperLabelWidth: 124
+        readonly property int playerLabelWidth: 36
         readonly property int toolCardHeight: 160
         readonly property int contentCardWidth: 460
+        readonly property int aboutCardHeight: 450
+        readonly property int updateCardHeight: 380
         readonly property int logoLarge: 110
         readonly property int transferHelperWidth: 520
+        readonly property int depositHelperWidth: 520
+        readonly property int depositHelperHeight: 640
         readonly property int dialogWidth: 430
         readonly property int switchKnob: 14
+        readonly property int switchWidth: 50
+        readonly property int switchHeight: 22
+        readonly property int formFieldHeight: 30
+        readonly property int comboPopupHeight: 220
     }
 
     readonly property QtObject fonts: QtObject {
@@ -87,6 +115,7 @@ QtObject {
         readonly property int consoleText: 11
         readonly property int formText: 11
         readonly property int buttonText: 11
+        readonly property int badge: 10
     }
 
     readonly property QtObject motion: QtObject {

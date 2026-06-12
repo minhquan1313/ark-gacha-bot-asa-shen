@@ -43,6 +43,8 @@ from source.launcher.system import (
 )
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
 
+START_GAME_DISABLE_DELAY = 20000
+
 
 class LauncherHotkeyFilter(QAbstractNativeEventFilter):
     def __init__(self, controller):
@@ -63,18 +65,35 @@ class LauncherHotkeyFilter(QAbstractNativeEventFilter):
 
 
 class LauncherController(QObject):
+    VALID_PAGES = {
+        "welcome",
+        "dashboard",
+        "setup",
+        "settings",
+        "logs",
+        "tools",
+        "update",
+        "about",
+    }
+
     changed = Signal()
     dialogRequested = Signal(str, str, str)
     toastRequested = Signal(str, str)
     logLine = Signal(str)
 
     def __init__(
-        self, settings_controller, log_controller, queue_controller, parent=None
+        self,
+        settings_controller,
+        log_controller,
+        queue_controller,
+        helper_window_controller=None,
+        parent=None,
     ):
         super().__init__(parent)
         self.settings_controller = settings_controller
         self.log_controller = log_controller
         self.queue_controller = queue_controller
+        self.helper_window_controller = helper_window_controller
         self.process = None
         self.program_stopping = False
         self.stop_deadline = None
@@ -89,14 +108,19 @@ class LauncherController(QObject):
         self._cpu_times = get_cpu_times()
         self._memory = "N/A"
         self._cpu = "0%"
+        self._memory_percent = 0
+        self._cpu_percent = 0
         self._clock = time.strftime("%I:%M:%S %p")
         self._current_page = "dashboard"
+        self._start_game_locked = False
+        self._restore_game_locked = False
         self._root_window = None
         self.start_stop_hotkey_id = (id(self) & 0x3FFF) + 0x4000
         self.start_stop_hotkey_registered = False
         self.hotkey_filter = LauncherHotkeyFilter(self)
 
         self.log_controller.activityChanged.connect(self._mark_activity)
+        self.log_controller.setQueueController(self.queue_controller)
         self.log_controller.queueSnapshotReceived.connect(
             self.queue_controller.updateSnapshot
         )
@@ -149,6 +173,16 @@ class LauncherController(QObject):
     def serverNumber(self):
         return self.settings_controller.serverNumber
 
+    @Property(bool, notify=changed)
+    def autoStartAllowed(self):
+        return self._is_auto_start_allowed()
+
+    @Property(str, notify=changed)
+    def autoStartHint(self):
+        if self._is_auto_start_allowed():
+            return "Start program when launcher opens"
+        return "Set server number first"
+
     @Property(str, notify=changed)
     def uptime(self):
         if self.start_time and self.is_running():
@@ -166,6 +200,14 @@ class LauncherController(QObject):
     def cpuUsage(self):
         return self._cpu
 
+    @Property(int, notify=changed)
+    def memoryPercent(self):
+        return self._memory_percent
+
+    @Property(int, notify=changed)
+    def cpuPercent(self):
+        return self._cpu_percent
+
     @Property(str, notify=changed)
     def runnerState(self):
         return "RUNNING" if self.is_running() else "STOPPED"
@@ -178,8 +220,27 @@ class LauncherController(QObject):
     def clock(self):
         return self._clock
 
+    @Property(bool, notify=changed)
+    def showStartGame(self):
+        return self._should_show_start_game()
+
+    @Property(bool, notify=changed)
+    def showRestoreGameSettings(self):
+        return ark_game_setup.restore_state_exists()
+
+    @Property(bool, notify=changed)
+    def startGameEnabled(self):
+        return not self._start_game_locked
+
+    @Property(bool, notify=changed)
+    def restoreGameSettingsEnabled(self):
+        return not self._restore_game_locked
+
     @Slot(str)
     def showPage(self, page_name):
+        page_name = str(page_name)
+        if page_name not in self.VALID_PAGES:
+            return
         self._current_page = page_name
         self.changed.emit()
 
@@ -207,6 +268,20 @@ class LauncherController(QObject):
             self.startProgram()
 
     @Slot()
+    def scheduleAutoStart(self):
+        if not self.settings_controller.autoStartProgram:
+            return
+        if not self._is_auto_start_allowed():
+            self.log_controller.append(
+                "[WARN] Auto start enabled but server number is not set.\n"
+            )
+            return
+        self.log_controller.append(
+            "[INFO] Auto start enabled. Starting program after launcher initialization.\n"
+        )
+        QTimer.singleShot(1000, self.startProgram)
+
+    @Slot()
     def startProgram(self):
         if self.shutdown_started or self.program_stopping:
             return
@@ -221,6 +296,8 @@ class LauncherController(QObject):
             return
 
         try:
+            if self.helper_window_controller is not None:
+                self.helper_window_controller.closeActiveHelper()
             cleanup_debug_screenshots_on_program_start()
             self.process = subprocess.Popen(
                 [sys.executable, "-u", "main_program.py"],
@@ -251,6 +328,11 @@ class LauncherController(QObject):
 
     @Slot()
     def startGame(self):
+        if self._start_game_locked:
+            return
+        self._start_game_locked = True
+        self.changed.emit()
+        QTimer.singleShot(START_GAME_DISABLE_DELAY, self._unlock_start_game)
         try:
             self.log_controller.append("[INFO] Preparing ARK for 1920x1080 launch...\n")
             settings_path = ark_game_setup.prepare_and_launch_game()
@@ -264,8 +346,10 @@ class LauncherController(QObject):
 
     @Slot()
     def restoreGameSettings(self):
-        if not ark_game_setup.restore_state_exists():
+        if self._restore_game_locked or not ark_game_setup.restore_state_exists():
             return
+        self._restore_game_locked = True
+        self.changed.emit()
         try:
             self.log_controller.append(
                 "[INFO] Restoring ARK display and config settings...\n"
@@ -277,6 +361,47 @@ class LauncherController(QObject):
         except Exception as exc:
             self.log_controller.append(f"[ERROR] Restore game settings failed: {exc}\n")
             self.dialogRequested.emit("Restore Game Settings Failed", str(exc), "error")
+        finally:
+            self._restore_game_locked = False
+            self.changed.emit()
+
+    @Slot()
+    def clearGameRestoreSettings(self):
+        try:
+            ark_game_setup.clear_restore_state()
+            self.log_controller.append("[INFO] Cleared saved ARK restore settings.\n")
+        except Exception as exc:
+            self.log_controller.append(
+                f"[ERROR] Clear game restore settings failed: {exc}\n"
+            )
+            self.dialogRequested.emit(
+                "Clear Restore Settings Failed", str(exc), "error"
+            )
+        self.changed.emit()
+
+    @Slot()
+    def checkColours(self):
+        if not self.require_ark_window("check console colours"):
+            return
+        try:
+            from source.utility.colour_checks import console_output
+        except ImportError:
+            self.dialogRequested.emit(
+                "Missing Dependency",
+                "Console colour check dependencies are not installed.",
+                "error",
+            )
+            return
+        try:
+            colour = console_output.output_mean_colour()
+        except Exception as exc:
+            self.dialogRequested.emit("Colour Check Failed", str(exc), "error")
+            return
+        self.log_controller.append(
+            "[INFO] Average console colour: "
+            f"{colour}. Set console.json lower_bound to average - 5 "
+            "and upper_bound to average + 5.\n"
+        )
 
     @Slot()
     def shutdown(self):
@@ -292,8 +417,18 @@ class LauncherController(QObject):
 
     @Slot(result=bool)
     def shouldShowStartGame(self):
+        return self._should_show_start_game()
+
+    def _should_show_start_game(self):
         game_size = find_window_size(GAME_WINDOW_TITLE)
         return game_size is None or game_size not in SUPPORTED_GAME_RESOLUTIONS
+
+    def _is_auto_start_allowed(self):
+        return str(self.settings_controller.serverNumber).strip() not in ("", "0")
+
+    def _unlock_start_game(self):
+        self._start_game_locked = False
+        self.changed.emit()
 
     def tick(self):
         if self.shutdown_started:
@@ -370,14 +505,19 @@ class LauncherController(QObject):
             used_gb = memory.used / (1024**3)
             total_gb = memory.total / (1024**3)
             self._memory = f"{used_gb:.1f}G / {total_gb:.1f}G"
-            self._cpu = f"{psutil.cpu_percent(interval=None):.0f}%"
+            self._memory_percent = int(memory.percent)
+            cpu_percent = psutil.cpu_percent(interval=None)
+            self._cpu_percent = int(cpu_percent)
+            self._cpu = f"{cpu_percent:.0f}%"
             return
         memory = get_memory_usage_gb()
         if memory:
             self._memory = f"{memory[0]:.1f}G / {memory[1]:.1f}G"
+            self._memory_percent = int(memory[0] / memory[1] * 100) if memory[1] else 0
         current_times = get_cpu_times()
         cpu_percent = calculate_cpu_percent(self._cpu_times, current_times)
         self._cpu_times = current_times or self._cpu_times
+        self._cpu_percent = int(cpu_percent) if cpu_percent is not None else 0
         self._cpu = f"{cpu_percent:.0f}%" if cpu_percent is not None else "0%"
 
     def _mark_activity(self, _line):

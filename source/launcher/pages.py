@@ -72,14 +72,13 @@ from source.launcher.widgets import (
 
 class LauncherPagesMixin:
     def _icon_button(
-        self, icon_key, tooltip="", variant="secondary", width=36, icon_size=32
+        self, icon_key, tooltip="", variant="secondary", width=38, icon_size=18
     ):
         button = self._button("", variant)
         button.setObjectName("HelperIconButton")
         button.setIcon(QIcon(ASSETS[icon_key]))
         button.setIconSize(QSize(icon_size, icon_size))
-        button.setMinimumWidth(width)
-        # button.setFixedWidth(width)
+        button.setFixedWidth(width)
         if tooltip:
             button.setToolTip(tooltip)
         return button
@@ -176,7 +175,7 @@ class LauncherPagesMixin:
             "icon.restore_settings",
             "Restore the original display mode and ARK config. "
             "Right-click to clear saved restore data.",
-            "danger",
+            "secondary",
         )
         self.restore_game_settings_button.clicked.connect(
             getattr(self, "restore_game_settings", lambda: None)

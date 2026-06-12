@@ -30,7 +30,7 @@ Button {
         color: control.variant === "danger" && control.hovered
             ? ThemeModule.Theme.colors.red
             : control.hovered
-                ? "#2900D8FF"
+                ? ThemeModule.Theme.colors.buttonPrimaryFill
                 : "transparent"
         border.color: control.hovered ? ThemeModule.Theme.colors.borderActive : "transparent"
         border.width: ThemeModule.Theme.border.thin

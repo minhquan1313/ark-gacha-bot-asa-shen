@@ -17,6 +17,7 @@ Popup {
         parent ? parent.width - ThemeModule.Theme.spacing.xxl * 2 : ThemeModule.Theme.size.dialogWidth,
         ThemeModule.Theme.size.dialogWidth
     )
+    height: dialogContent.implicitHeight + ThemeModule.Theme.spacing.xl * 2
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     background: Rectangle {
@@ -29,6 +30,7 @@ Popup {
     }
 
     ColumnLayout {
+        id: dialogContent
         anchors.fill: parent
         anchors.margins: ThemeModule.Theme.spacing.xl
         spacing: ThemeModule.Theme.spacing.lg

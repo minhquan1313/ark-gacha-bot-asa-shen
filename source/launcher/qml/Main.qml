@@ -19,12 +19,17 @@ ApplicationWindow {
     title: launcherController.appName
 
     property bool narrow: width < ThemeModule.Theme.size.breakpointNarrow
-    property var helperWindows: ({})
+    property var activeHelperWindow: null
 
-    Component.onCompleted: launcherController.registerWindow(root)
+    Component.onCompleted: {
+        launcherController.registerWindow(root);
+        helperWindowController.registerWindow(root);
+    }
 
     onClosing: {
         launcherController.persistWindowSize(width, height);
+        helperWindowController.closeActiveHelper();
+        helperWindowController.shutdown();
         launcherController.shutdown();
     }
 
@@ -92,48 +97,75 @@ ApplicationWindow {
             appDialog.open();
         }
         function onHelperRequested(helperName) {
-            openHelper(helperName);
+            helperWindowController.openHelper(helperName, {});
         }
     }
 
-    Component {
-        id: autoJoinComponent
-        AutoJoinHelper {}
-    }
-    Component {
-        id: transferComponent
-        TransferHelper {}
-    }
-    Component {
-        id: fertilizerComponent
-        FertilizerRefreshHelper {}
-    }
-    Component {
-        id: depositComponent
-        DepositRouteHelper {}
-    }
-    Component {
-        id: positionComponent
-        PositionRenderHelper {}
+    Connections {
+        target: helperWindowController
+        function onCloseRequested() {
+            if (root.activeHelperWindow) {
+                root.activeHelperWindow.close();
+                root.activeHelperWindow = null;
+            }
+        }
+        function onHelperRequested(helperName, payload) {
+            openHelper(helperName, payload);
+        }
+        function onToggleRequested(helperName) {
+            var helper = root.activeHelperWindow;
+            if (helper && helper.controller && helperWindowController.activeHelperName === helperName) {
+                helper.controller.toggle();
+            }
+        }
+        function onFocusRequested() {
+            var helper = root.activeHelperWindow;
+            if (helper) {
+                helper.show();
+                helper.raise();
+                helper.requestActivate();
+            }
+        }
     }
 
-    function openHelper(helperName) {
-        var existing = helperWindows[helperName];
-        if (existing) {
-            existing.show();
-            existing.raise();
-            existing.requestActivate();
+    Component { id: autoJoinComponent; AutoJoinHelper {} }
+    Component { id: transferComponent; TransferHelper {} }
+    Component { id: fertilizerComponent; FertilizerRefreshHelper {} }
+    Component { id: depositComponent; DepositRouteHelper {} }
+    Component { id: positionComponent; PositionRenderHelper {} }
+
+    function openHelper(helperName, payload) {
+        var component = helperName === "autoJoin" ? autoJoinComponent : helperName === "transfer" ? transferComponent : helperName === "fertilizer" ? fertilizerComponent : helperName === "position" ? positionComponent : helperName === "deposit" ? depositComponent : null;
+        var controller = helperName === "autoJoin" ? autoJoinHelperController : helperName === "transfer" ? transferHelperController : helperName === "fertilizer" ? fertilizerHelperController : helperName === "position" ? positionRenderHelperController : helperName === "deposit" ? depositRouteHelperController : null;
+        if (!component || !controller) {
             return;
         }
-
-        var component = helperName === "transfer" ? transferComponent : helperName === "fertilizer" ? fertilizerComponent : helperName === "position" ? positionComponent : helperName === "deposit" ? depositComponent : autoJoinComponent;
-        var helper = component.createObject(root);
-        helperWindows[helperName] = helper;
-        helper.closing.connect(function () {
-            helperWindows[helperName] = null;
+        var helper = component.createObject(root, {"controller": controller});
+        root.activeHelperWindow = helper;
+        positionHelper(helper);
+        helper.closing.connect(function() {
+            if (root.activeHelperWindow === helper) {
+                root.activeHelperWindow = null;
+                helperWindowController.markClosed(helperName);
+            }
+        });
+        helper.widthChanged.connect(function() {
+            if (root.activeHelperWindow === helper) {
+                positionHelper(helper);
+            }
+        });
+        helper.heightChanged.connect(function() {
+            if (root.activeHelperWindow === helper) {
+                positionHelper(helper);
+            }
         });
         helper.show();
         helper.raise();
         helper.requestActivate();
+    }
+
+    function positionHelper(helper) {
+        helper.x = Math.max(root.x + ThemeModule.Theme.spacing.lg, root.x + root.width - helper.width - ThemeModule.Theme.spacing.lg);
+        helper.y = Math.max(root.y + ThemeModule.Theme.spacing.lg, root.y + (root.height - helper.height) / 2);
     }
 }

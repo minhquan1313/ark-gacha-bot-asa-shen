@@ -12,9 +12,9 @@ Button {
     property color normalText: variant === "primary" ? ThemeModule.Theme.colors.cyan
         : variant === "danger" ? ThemeModule.Theme.colors.red
         : ThemeModule.Theme.colors.text
-    property color normalFill: variant === "primary" ? "#2900D8FF"
-        : variant === "danger" ? "#29FF4D6D"
-        : "#8C121C2A"
+    property color normalFill: variant === "primary" ? ThemeModule.Theme.colors.buttonPrimaryFill
+        : variant === "danger" ? ThemeModule.Theme.colors.buttonDangerFill
+        : ThemeModule.Theme.colors.glass
 
     implicitHeight: ThemeModule.Theme.size.buttonHeight
     padding: ThemeModule.Theme.spacing.md
@@ -24,7 +24,9 @@ Button {
 
     contentItem: Text {
         text: control.text
-        color: control.hovered ? ThemeModule.Theme.colors.text : control.normalText
+        color: !control.enabled ? ThemeModule.Theme.colors.dim
+            : control.hovered ? ThemeModule.Theme.colors.text
+            : control.normalText
         font.family: ThemeModule.Theme.fonts.body
         font.pixelSize: ThemeModule.Theme.fonts.buttonText
         font.bold: true
@@ -35,8 +37,13 @@ Button {
 
     background: Rectangle {
         radius: ThemeModule.Theme.radius.sm
-        color: control.down ? "#3311536B" : control.hovered ? "#42182B3A" : control.normalFill
-        border.color: control.hovered ? ThemeModule.Theme.colors.borderActive : control.normalBorder
+        color: !control.enabled ? ThemeModule.Theme.colors.sidebar
+            : control.down ? ThemeModule.Theme.colors.buttonDownFill
+            : control.hovered ? ThemeModule.Theme.colors.buttonHoverFill
+            : control.normalFill
+        border.color: !control.enabled ? ThemeModule.Theme.colors.border
+            : control.hovered ? ThemeModule.Theme.colors.borderActive
+            : control.normalBorder
         border.width: ThemeModule.Theme.border.thin
     }
 }

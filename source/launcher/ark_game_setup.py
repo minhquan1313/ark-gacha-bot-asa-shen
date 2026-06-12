@@ -296,6 +296,8 @@ def restore_game_settings(state_path=RESTORE_STATE_PATH):
     state = load_restore_state(state_path)
     settings_path = Path(state["settings_path"])
     backup_path = Path(state["backup_path"])
+    if not backup_path.exists():
+        raise RuntimeError(f"GameUserSettings.ini backup was not found: {backup_path}")
 
     kill_running_ark()
 
@@ -309,7 +311,6 @@ def restore_game_settings(state_path=RESTORE_STATE_PATH):
     )
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
-    if backup_path.exists():
-        shutil.copy2(backup_path, settings_path)
+    shutil.copy2(backup_path, settings_path)
     clear_restore_state(state_path)
     return settings_path

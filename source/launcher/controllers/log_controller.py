@@ -5,19 +5,29 @@ from collections import deque
 from PySide6.QtCore import Property, QObject, Signal, Slot
 from PySide6.QtGui import QGuiApplication
 
-from source.launcher.constants import GACHA_LOG_FILE, MAX_LAUNCHER_LOG_LINES
+from source.launcher.constants import (
+    GACHA_LOG_FILE,
+    MAX_LAUNCHER_LOG_LINES,
+)
 
 
 class LogController(QObject):
+    FILTERS = ["ALL", "INFO", "DEBUG", "WARN", "ERROR", "CRITICAL", "RUNNING", "QUEUE"]
+
     changed = Signal()
     activityChanged = Signal(str)
     queueSnapshotReceived = Signal("QVariant")
 
-    def __init__(self, parent=None):
+    def __init__(self, persistent_log_file=None, parent=None):
         super().__init__(parent)
         self._lines = []
         self._filter = "ALL"
         self._log_file_position = 0
+        self._queue_controller = None
+        self._persistent_log_file = persistent_log_file
+
+    def setQueueController(self, queue_controller):
+        self._queue_controller = queue_controller
 
     @Property("QVariantList", notify=changed)
     def lines(self):
@@ -33,10 +43,13 @@ class LogController(QObject):
 
     @Property("QVariantList", constant=True)
     def filters(self):
-        return ["ALL", "INFO", "DEBUG", "WARN", "ERROR", "CRITICAL", "RUNNING", "QUEUE"]
+        return self.FILTERS
 
     @Slot(str)
     def setFilter(self, value):
+        value = str(value).upper()
+        if value not in self.FILTERS:
+            return
         self._filter = value
         self.changed.emit()
 
@@ -52,6 +65,7 @@ class LogController(QObject):
             return
 
         text = self._normalize_runtime_line(text)
+        self._append_launcher_log_file(text)
         self._lines.append(text)
         if len(self._lines) > MAX_LAUNCHER_LOG_LINES:
             self._lines = self._lines[-MAX_LAUNCHER_LOG_LINES:]
@@ -90,6 +104,10 @@ class LogController(QObject):
     def _filtered_lines(self):
         if self._filter == "ALL":
             return self._lines
+        if self._filter == "QUEUE" and self._queue_controller is not None:
+            return self._queue_controller.upcomingTasks
+        if self._filter == "RUNNING" and self._queue_controller is not None:
+            return self._queue_controller.runningLines
         if self._filter in {"QUEUE", "RUNNING"}:
             return [line for line in self._lines if f"[{self._filter}]" in line]
         return [
@@ -97,6 +115,18 @@ class LogController(QObject):
             for line in self._lines
             if f"[{self._filter}]" in line or self._filter in line.upper()
         ]
+
+    def _append_launcher_log_file(self, text):
+        if not self._persistent_log_file:
+            return
+        try:
+            parent = os.path.dirname(self._persistent_log_file)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
+            with open(self._persistent_log_file, "a", encoding="utf-8") as f:
+                f.write(text)
+        except Exception:
+            pass
 
     @staticmethod
     def normalize_file_log_line(line):
