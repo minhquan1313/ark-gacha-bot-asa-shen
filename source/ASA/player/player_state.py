@@ -7,7 +7,7 @@ from source.ASA.player import buffs, player_inventory, tribelog
 from source.ASA.strucutres import bed, teleporter
 from source.join_sim.source import main
 from source.logs import gachalogs as logs
-from source.utility import utils, windows
+from source.utility import utils
 from source.utility.debug_screenshots import (
     CAPTURE_PLAYER_STATE,
     capture_for,

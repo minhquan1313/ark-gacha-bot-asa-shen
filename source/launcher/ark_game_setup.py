@@ -256,11 +256,11 @@ def prepare_and_launch_game():
     settings_path = find_game_user_settings_path()
     if restore_state_exists():
         state = load_restore_state()
-        backup_path = Path(state.get("backup_path", CONFIG_BACKUP_PATH))
-        if not backup_path.exists():
-            raise RuntimeError(
-                f"GameUserSettings.ini backup was not found: {backup_path}"
-            )
+        # backup_path = Path(state.get("backup_path", CONFIG_BACKUP_PATH))
+        # if not backup_path.exists():
+        #     raise RuntimeError(
+        #         f"GameUserSettings.ini backup was not found: {backup_path}"
+        #     )
     else:
         backup_game_settings_once(settings_path, CONFIG_BACKUP_PATH)
         state = save_restore_state_once(settings_path, backup_path=CONFIG_BACKUP_PATH)
