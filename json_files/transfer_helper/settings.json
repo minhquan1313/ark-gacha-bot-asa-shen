@@ -1,0 +1,13 @@
+{
+  "lag_offset": 1.0,
+  "resource_station_yaw": 11.43,
+  "destination_station_yaw": -138.67,
+  "transmitter_teleport": "TRANSFER_TTRANS",
+  "resource_server": "5147",
+  "destination_server": "6389",
+  "loop_count": 1,
+  "structure_load_delay": 10,
+  "transfer_retry_delay": 5,
+  "ark_window_ready_timeout": 180,
+  "ark_launch_attempts": 3
+}

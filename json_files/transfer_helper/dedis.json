@@ -1,0 +1,82 @@
+{
+  "resource": {
+    "teleport": "TRANSFER_DDEDI",
+    "items": [
+      {
+        "location": {
+          "yaw": 13.16,
+          "pitch": -16.98
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 11.94,
+          "pitch": 5.07
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 13.0,
+          "pitch": 13.56
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 62.08,
+          "pitch": 13.79
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 61.0,
+          "pitch": -10.81
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 60.43,
+          "pitch": -16.18
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 119.06,
+          "pitch": -21.56
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 118.82,
+          "pitch": 7.69
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 121.48,
+          "pitch": 17.11
+        },
+        "crouched": false
+      }
+    ]
+  },
+  "destination": {
+    "teleport": "TRANSFER_DDEDI",
+    "items": [
+      {
+        "location": {
+          "yaw": 13.19,
+          "pitch": -18.78
+        },
+        "crouched": true
+      }
+    ]
+  }
+}

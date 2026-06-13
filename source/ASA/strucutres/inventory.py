@@ -21,10 +21,10 @@ def open():
             f"trying to open strucuture inventory {attempts} / {source.ASA.config.inventory_open_attempts}"
         )
         utils.press_key("AccessInventory")
-        if template.template_await_true(template.check_template, 60, "inventory", 0.7):
+        if template.template_await_true(template.check_template, 3, "inventory", 0.7):
             logs.logger.debug(f"inventory opened")
             if template.template_await_true(
-                template.check_template, 60, "waiting_inv", 0.8
+                template.check_template, 3, "waiting_inv", 0.8
             ):
                 start = time.time()
                 logs.logger.debug(

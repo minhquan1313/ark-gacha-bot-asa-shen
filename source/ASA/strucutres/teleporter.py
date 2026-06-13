@@ -26,7 +26,7 @@ def open():
         utils.press_key("Use")
 
         if not template.template_await_true(
-            template.check_template, 60 * settings.lag_offset, "teleporter_title", 0.7
+            template.check_template, 3, "teleporter_title", 0.7
         ):
             logs.logger.warning("teleporter didnt open retrying now")
             player_state.check_state()
@@ -161,4 +161,3 @@ def teleport_not_default(arg, fallback_bed_name=None):
         utils.turn_up(80)
         time.sleep(0.2)
         utils.set_yaw(stationdata.yaw)
-

@@ -1,0 +1,19 @@
+{
+  "players": [
+    {
+      "bed_name": "BBedPlayer1"
+    },
+    {
+      "bed_name": "BBedPlayer2"
+    },
+    {
+      "bed_name": "BBedPlayer3"
+    },
+    {
+      "bed_name": "BBedPlayer4"
+    },
+    {
+      "bed_name": "BBedPlayer5"
+    }
+  ]
+}

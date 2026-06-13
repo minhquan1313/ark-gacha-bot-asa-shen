@@ -1,52 +1,202 @@
 [
-    {
-        "name": "gacha1",
-        "teleporter": "GACHAPAIR1",
-        "resource_type": "element",
-        "side": "left"
-    },
-    {
-        "name": "gacha2",
-        "teleporter": "GACHAPAIR1",
-        "resource_type": "element",
-        "side": "right"
-    },
-    {
-        "name": "gacha3",
-        "teleporter": "GACHAPAIR2",
-        "resource_type": "element",
-        "side": "left"
-    },
-    {
-        "name": "gacha4",
-        "teleporter": "GACHAPAIR2",
-        "resource_type": "element",
-        "side": "right"
-    },
-    {
-        "name": "gacha5",
-        "teleporter": "GACHAPAIR3",
-        "resource_type": "element",
-        "side": "left"
-    },
-    {
-        "name": "gacha6",
-        "teleporter": "GACHAPAIR3",
-        "resource_type": "element",
-        "side": "right"
-    },
-    {
-        "name": "gacha7",
-        "teleporter": "GACHAPAIR4",
-        "resource_type": "element",
-        "side": "left"
-    },
-    {
-        "name": "gacha8",
-        "teleporter": "GACHAPAIR4",
-        "resource_type": "element",
-        "side": "right"
-    }
-    
-    
+  {
+    "name": "GACHAPAIR_1_left",
+    "teleporter": "GACHAPAIR_1",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR_1_right",
+    "teleporter": "GACHAPAIR_1",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR_2_left",
+    "teleporter": "GACHAPAIR_2",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR_2_right",
+    "teleporter": "GACHAPAIR_2",
+    "side": "right"
+  },
+  {
+    "name": "gacha5",
+    "teleporter": "GACHAPAIR3",
+    "side": "left"
+  },
+  {
+    "name": "gacha6",
+    "teleporter": "GACHAPAIR3",
+    "side": "right"
+  },
+  {
+    "name": "gacha7",
+    "teleporter": "GACHAPAIR4",
+    "side": "left"
+  },
+  {
+    "name": "gacha8",
+    "teleporter": "GACHAPAIR4",
+    "side": "right"
+  },
+  {
+    "name": "gacha9",
+    "teleporter": "GACHAPAIR5",
+    "side": "left"
+  },
+  {
+    "name": "gacha10",
+    "teleporter": "GACHAPAIR5",
+    "side": "right"
+  },
+  {
+    "name": "gacha11",
+    "teleporter": "GACHAPAIR6",
+    "side": "left"
+  },
+  {
+    "name": "gacha12",
+    "teleporter": "GACHAPAIR6",
+    "side": "right"
+  },
+  {
+    "name": "gacha13",
+    "teleporter": "GACHAPAIR7",
+    "side": "left"
+  },
+  {
+    "name": "gacha14",
+    "teleporter": "GACHAPAIR7",
+    "side": "right"
+  },
+  {
+    "name": "gacha15",
+    "teleporter": "GACHAPAIR8",
+    "side": "left"
+  },
+  {
+    "name": "gacha16",
+    "teleporter": "GACHAPAIR8",
+    "side": "right"
+  },
+  {
+    "name": "gacha17",
+    "teleporter": "GACHAPAIR9",
+    "side": "left"
+  },
+  {
+    "name": "gacha18",
+    "teleporter": "GACHAPAIR9",
+    "side": "right"
+  },
+  {
+    "name": "gacha19",
+    "teleporter": "GACHAPAIR10",
+    "side": "left"
+  },
+  {
+    "name": "gacha20",
+    "teleporter": "GACHAPAIR10",
+    "side": "right"
+  },
+  {
+    "name": "gacha21",
+    "teleporter": "GACHAPAIR11",
+    "side": "left"
+  },
+  {
+    "name": "gacha22",
+    "teleporter": "GACHAPAIR11",
+    "side": "right"
+  },
+  {
+    "name": "gacha23",
+    "teleporter": "GACHAPAIR12",
+    "side": "left"
+  },
+  {
+    "name": "gacha24",
+    "teleporter": "GACHAPAIR12",
+    "side": "right"
+  },
+  {
+    "name": "gacha25",
+    "teleporter": "GACHAPAIR13",
+    "side": "left"
+  },
+  {
+    "name": "gacha26",
+    "teleporter": "GACHAPAIR13",
+    "side": "right"
+  },
+  {
+    "name": "gacha27",
+    "teleporter": "GACHAPAIR14",
+    "side": "left"
+  },
+  {
+    "name": "gacha28",
+    "teleporter": "GACHAPAIR14",
+    "side": "right"
+  },
+  {
+    "name": "gacha29",
+    "teleporter": "GACHAPAIR15",
+    "side": "left"
+  },
+  {
+    "name": "gacha30",
+    "teleporter": "GACHAPAIR15",
+    "side": "right"
+  },
+  {
+    "name": "gacha31",
+    "teleporter": "GACHAPAIR16",
+    "side": "left"
+  },
+  {
+    "name": "gacha32",
+    "teleporter": "GACHAPAIR16",
+    "side": "right"
+  },
+  {
+    "name": "gacha33",
+    "teleporter": "GACHAPAIR17",
+    "side": "left"
+  },
+  {
+    "name": "gacha34",
+    "teleporter": "GACHAPAIR17",
+    "side": "right"
+  },
+  {
+    "name": "gacha35",
+    "teleporter": "GACHAPAIR18",
+    "side": "left"
+  },
+  {
+    "name": "gacha36",
+    "teleporter": "GACHAPAIR18",
+    "side": "right"
+  },
+  {
+    "name": "gacha37",
+    "teleporter": "GACHAPAIR19",
+    "side": "left"
+  },
+  {
+    "name": "gacha38",
+    "teleporter": "GACHAPAIR19",
+    "side": "right"
+  },
+  {
+    "name": "gacha39",
+    "teleporter": "GACHAPAIR20",
+    "side": "left"
+  },
+  {
+    "name": "gacha40",
+    "teleporter": "GACHAPAIR20",
+    "side": "right"
+  }
 ]

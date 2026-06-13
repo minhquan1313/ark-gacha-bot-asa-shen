@@ -80,7 +80,14 @@ def transfer_berries_to_iguanodon(attempts=1):
 def _reopen_iguanodon_inventory_and_measure_wait():
     inventory.close()
     start = time.time()
-    inventory.open()
+
+    timeout = utils.timed_out_counter(120)
+    while not inventory.is_open() and not timeout():
+        inventory.open()
+        if not inventory.is_open():
+            player_state.check_state()
+            time.sleep(0.2 * settings.lag_offset)
+
     return time.time() - start
 
 
@@ -95,6 +102,12 @@ def seed(type):
     if inventory.is_open():
         time.sleep(0.1 * settings.lag_offset)
         inventory.transfer_all_from()  # doing this should prevent the seed not appearing first try
+
+        _reopen_iguanodon_inventory_and_measure_wait()
+
+        if not inventory.is_open():
+            return
+
         transfer_berries_to_iguanodon()
         if type == 2:
             time.sleep(0.2 * settings.lag_offset)

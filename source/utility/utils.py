@@ -122,6 +122,15 @@ def time_now():
     return time.monotonic()
 
 
+def timed_out_counter(limit_seconds=3):
+    timeout = time_now() + limit_seconds
+
+    def is_excess():
+        return time_now() >= timeout
+
+    return is_excess
+
+
 """
 FUNCTIONS FOR MOUSE MOVEMENT
 """

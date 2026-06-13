@@ -6,8 +6,8 @@
         "items": [
           {
             "location": {
-              "yaw": 33.0,
-              "pitch": 44.0
+              "yaw": -102.58,
+              "pitch": 20.0
             },
             "crouched": false
           },
@@ -56,7 +56,9 @@
               "pitch": -10.64
             },
             "crouched": true,
-            "items": ["tree"]
+            "items": [
+              "riot"
+            ]
           },
           {
             "location": {
@@ -64,7 +66,12 @@
               "pitch": -11.27
             },
             "crouched": true,
-            "items": ["assault", "tree", "gate", "riot"]
+            "items": [
+              "assault",
+              "tree",
+              "gate",
+              "riot"
+            ]
           }
         ]
       }
@@ -76,8 +83,8 @@
       "grinder": {
         "active": true,
         "location": {
-          "yaw": 0.0,
-          "pitch": 0.0
+          "yaw": 18.47,
+          "pitch": -18.82
         },
         "crouched": false
       },
@@ -124,6 +131,48 @@
               "pitch": -36.29
             },
             "crouched": true
+          },
+          {
+            "location": {
+              "yaw": -179.43,
+              "pitch": -20.23
+            },
+            "crouched": true
+          },
+          {
+            "location": {
+              "yaw": 154.93,
+              "pitch": -17.43
+            },
+            "crouched": true
+          },
+          {
+            "location": {
+              "yaw": 153.54,
+              "pitch": 5.03
+            },
+            "crouched": true
+          },
+          {
+            "location": {
+              "yaw": -176.02,
+              "pitch": 4.51
+            },
+            "crouched": true
+          },
+          {
+            "location": {
+              "yaw": -175.15,
+              "pitch": 11.25
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 155.45,
+              "pitch": 6.22
+            },
+            "crouched": false
           }
         ]
       }
