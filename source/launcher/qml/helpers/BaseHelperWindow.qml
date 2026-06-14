@@ -17,10 +17,15 @@ Window {
     property string hotkeyHint: "ALT + N focuses this helper"
     property bool stopControllerOnClose: true
     property bool mouseInside: false
+    property bool ownerActive: false
     property bool compactWhenRunning: false
     property bool showStatus: true
+    property bool closeWhenStopped: false
     property int idleWidth: ThemeModule.Theme.size.helperWidth
     property int idleHeight: ThemeModule.Theme.size.helperHeight
+    readonly property bool bodySlotVisible: !(compactWhenRunning && running)
+
+    signal helperClosed()
 
     width: compactWhenRunning && running ? ThemeModule.Theme.size.helperRunningWidth : idleWidth
     height: compactWhenRunning && running
@@ -30,11 +35,31 @@ Window {
     minimumHeight: compactWhenRunning && running ? ThemeModule.Theme.size.helperRunningMinHeight : ThemeModule.Theme.size.helperHeight
     flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     color: "transparent"
-    opacity: active || mouseInside ? 1.0 : settingsController.helperInactiveOpacity
+    opacity: active || mouseInside || ownerActive ? 1.0 : settingsController.helperInactiveOpacity
 
     onClosing: {
         if (stopControllerOnClose && controller && controller.running) {
-            controller.stop();
+            close.accepted = false;
+            if (!closeWhenStopped) {
+                closeWhenStopped = true;
+                Qt.callLater(function() {
+                    if (helper.controller && helper.controller.running) {
+                        helper.controller.stop();
+                    }
+                });
+            }
+        } else {
+            helperClosed();
+        }
+    }
+
+    Connections {
+        target: helper.controller
+        function onChanged() {
+            if (helper.closeWhenStopped && helper.controller && !helper.controller.running) {
+                helper.closeWhenStopped = false;
+                helper.close();
+            }
         }
     }
 
@@ -45,30 +70,56 @@ Window {
         border.width: ThemeModule.Theme.border.thin
         radius: ThemeModule.Theme.radius.md
 
+        MouseArea {
+            objectName: "HelperTopDragArea"
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: ThemeModule.Theme.spacing.md
+            acceptedButtons: Qt.LeftButton
+            onPressed: helper.startSystemMove()
+        }
+
         ColumnLayout {
             id: helperContent
             anchors.fill: parent
             anchors.margins: ThemeModule.Theme.spacing.md
             spacing: ThemeModule.Theme.spacing.sm
 
-            RowLayout {
+            Item {
+                objectName: "HelperHeader"
                 Layout.fillWidth: true
+                implicitHeight: Math.max(headerTitle.implicitHeight, closeButton.implicitHeight)
+
+                MouseArea {
+                    objectName: "HelperHeaderDragArea"
+                    anchors.left: parent.left
+                    anchors.right: closeButton.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    acceptedButtons: Qt.LeftButton
+                    onPressed: helper.startSystemMove()
+                }
+
                 Text {
+                    id: headerTitle
+                    objectName: "HelperHeaderTitle"
                     text: helper.helperTitle
                     color: ThemeModule.Theme.colors.text
                     font.pixelSize: ThemeModule.Theme.fonts.sectionHeading
                     font.bold: true
-                    Layout.fillWidth: true
+                    anchors.left: parent.left
+                    anchors.right: closeButton.left
+                    anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onPressed: helper.startSystemMove()
-                    }
                 }
                 IconButton {
+                    id: closeButton
+                    objectName: "HelperHeaderCloseButton"
                     text: "X"
                     variant: "danger"
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
                     onClicked: helper.close()
                 }
             }
@@ -90,9 +141,11 @@ Window {
 
             ColumnLayout {
                 id: helperBodyColumn
+                visible: helper.bodySlotVisible
                 spacing: ThemeModule.Theme.spacing.sm
                 Layout.fillWidth: true
-                Layout.fillHeight: helper.contentFill
+                Layout.fillHeight: helper.contentFill && helper.bodySlotVisible
+                Layout.preferredHeight: helper.bodySlotVisible ? implicitHeight : 0
             }
 
             Text {

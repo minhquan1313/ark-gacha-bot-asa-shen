@@ -5,6 +5,7 @@ from source.launcher.constants import APP_VERSION
 
 class ToolsController(QObject):
     helperRequested = Signal(str)
+    helperPayloadRequested = Signal(str, "QVariant")
     messageRequested = Signal(str, str, str)
     updateChanged = Signal()
 
@@ -37,6 +38,10 @@ class ToolsController(QObject):
     @Slot(str)
     def openHelper(self, helper_name):
         self.helperRequested.emit(helper_name)
+
+    @Slot(str, "QVariant")
+    def openHelperPayload(self, helper_name, payload):
+        self.helperPayloadRequested.emit(helper_name, payload or {})
 
     @Slot()
     def checkUpdates(self):

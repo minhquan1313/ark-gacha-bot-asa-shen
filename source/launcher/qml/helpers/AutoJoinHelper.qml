@@ -22,12 +22,16 @@ BaseHelperWindow {
             Layout.preferredWidth: ThemeModule.Theme.size.helperLabelWidth
         }
         CyberTextField {
+            id: serverInput
             objectName: "AutoJoinServerInput"
             text: controller ? controller.serverNumber : ""
             enabled: controller && !controller.running
             Layout.fillWidth: true
             onEditingFinished: controller.setServerNumber(text)
-            onAccepted: controller.start()
+            onAccepted: {
+                controller.setServerNumber(text);
+                controller.start();
+            }
         }
     }
 
@@ -37,6 +41,9 @@ BaseHelperWindow {
         text: controller ? controller.startStopText : "START"
         variant: controller ? controller.startStopVariant : "primary"
         Layout.fillWidth: true
-        onClicked: controller.toggle()
+        onClicked: {
+            controller.setServerNumber(serverInput.text);
+            controller.toggle();
+        }
     }
 }

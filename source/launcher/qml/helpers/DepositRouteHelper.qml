@@ -43,6 +43,24 @@ BaseHelperWindow {
 
     Component.onCompleted: guideDialog.open()
 
+    function commitEditableFields(item) {
+        if (!item || item.visible === false) {
+            return;
+        }
+        if (item.commitField) {
+            item.commitField();
+        }
+        var childList = item.children || [];
+        for (var i = 0; i < childList.length; ++i) {
+            commitEditableFields(childList[i]);
+        }
+    }
+
+    function commitFormEdits() {
+        commitEditableFields(teleportField);
+        commitEditableFields(routeRows);
+    }
+
     RowLayout {
         Layout.fillWidth: true
         Item { Layout.fillWidth: true }
@@ -69,6 +87,7 @@ BaseHelperWindow {
             enabled: controller && controller.routes.length > 0
             Layout.fillWidth: true
             onActivated: {
+                helper.commitFormEdits()
                 var row = model[index]
                 controller.selectRoute(row.kind, row.index)
             }
@@ -83,26 +102,39 @@ BaseHelperWindow {
             Layout.preferredWidth: ThemeModule.Theme.size.settingsLabelWidth
         }
         CyberTextField {
+            id: teleportField
+            objectName: "DepositTeleportField"
             text: controller ? controller.teleport : ""
             enabled: controller && controller.hasRoute
             Layout.fillWidth: true
-            onEditingFinished: controller.setTeleport(text)
+            function commitField() {
+                controller.setTeleport(text);
+            }
+            onEditingFinished: commitField()
         }
     }
 
     RowLayout {
         Layout.fillWidth: true
         CyberButton {
+            objectName: "DepositAddCrystalRouteButton"
             text: "ADD CRYSTAL ROUTE"
             variant: "secondary"
             Layout.fillWidth: true
-            onClicked: controller.addRoute("crystal")
+            onClicked: {
+                helper.commitFormEdits()
+                controller.addRoute("crystal")
+            }
         }
         CyberButton {
+            objectName: "DepositAddGrindableRouteButton"
             text: "ADD GRINDABLE ROUTE"
             variant: "secondary"
             Layout.fillWidth: true
-            onClicked: controller.addRoute("grindable")
+            onClicked: {
+                helper.commitFormEdits()
+                controller.addRoute("grindable")
+            }
         }
         CyberButton {
             text: "REMOVE ROUTE"
@@ -122,6 +154,7 @@ BaseHelperWindow {
     }
 
     Flickable {
+        objectName: "DepositRouteScroll"
         visible: controller && controller.hasRoute
         clip: true
         contentHeight: routeRows.implicitHeight
@@ -151,15 +184,29 @@ BaseHelperWindow {
                             Layout.fillWidth: true
                             Text { text: "Yaw"; color: ThemeModule.Theme.colors.muted }
                             CyberTextField {
+                                objectName: "DepositRouteValueField"
+                                property string rowKind: modelData.kind
+                                property int rowIndex: modelData.index
+                                property string rowKey: "yaw"
                                 text: modelData.yaw
                                 Layout.fillWidth: true
-                                onEditingFinished: controller.updateRow(modelData.kind, modelData.index, "yaw", text)
+                                function commitField() {
+                                    controller.updateRow(rowKind, rowIndex, rowKey, text);
+                                }
+                                onEditingFinished: commitField()
                             }
                             Text { text: "Pitch"; color: ThemeModule.Theme.colors.muted }
                             CyberTextField {
+                                objectName: "DepositRouteValueField"
+                                property string rowKind: modelData.kind
+                                property int rowIndex: modelData.index
+                                property string rowKey: "pitch"
                                 text: modelData.pitch
                                 Layout.fillWidth: true
-                                onEditingFinished: controller.updateRow(modelData.kind, modelData.index, "pitch", text)
+                                function commitField() {
+                                    controller.updateRow(rowKind, rowIndex, rowKey, text);
+                                }
+                                onEditingFinished: commitField()
                             }
                         }
 
@@ -170,25 +217,36 @@ BaseHelperWindow {
                         }
 
                         CyberTextField {
+                            objectName: "DepositVaultItemsField"
+                            property string rowKind: modelData.kind
+                            property int rowIndex: modelData.index
                             visible: modelData.kind === "vault"
                             text: modelData.items || ""
                             placeholderText: "Vault items, comma separated"
                             Layout.fillWidth: true
-                            onEditingFinished: controller.updateRow(modelData.kind, modelData.index, "items", text)
+                            function commitField() {
+                                controller.updateRow(rowKind, rowIndex, "items", text);
+                            }
+                            onEditingFinished: commitField()
                         }
                         RowLayout {
                             visible: modelData.kind === "vault"
                             Layout.fillWidth: true
                             CyberComboBox {
                                 id: vaultItemCombo
+                                objectName: modelData.kind === "vault" ? "VaultItemCombo" : ""
                                 editable: true
                                 model: controller ? controller.vaultItems : []
                                 Layout.fillWidth: true
                             }
                             CyberButton {
+                                property int vaultIndex: modelData.index
                                 text: "ADD ITEM"
                                 variant: "secondary"
-                                onClicked: controller.addVaultItem(modelData.index, vaultItemCombo.editText || vaultItemCombo.currentText)
+                                onClicked: {
+                                    helper.commitFormEdits();
+                                    controller.addVaultItem(vaultIndex, vaultItemCombo.editText || vaultItemCombo.currentText);
+                                }
                             }
                         }
                         ColumnLayout {
@@ -221,10 +279,38 @@ BaseHelperWindow {
 
                     RowLayout {
                         Layout.fillWidth: true
-                        CyberButton { text: "CAPTURE"; enabled: controller && !controller.busy; onClicked: controller.captureRow(modelData.kind, modelData.index) }
-                        CyberButton { text: "VIEW"; enabled: controller && !controller.busy; onClicked: controller.viewRow(modelData.kind, modelData.index) }
+                        CyberButton {
+                            property string rowKind: modelData.kind
+                            property int rowIndex: modelData.index
+                            text: "CAPTURE"
+                            enabled: controller && !controller.busy
+                            onClicked: {
+                                helper.commitFormEdits();
+                                controller.captureRow(rowKind, rowIndex);
+                            }
+                        }
+                        CyberButton {
+                            objectName: "DepositRouteViewButton"
+                            property string rowKind: modelData.kind
+                            property int rowIndex: modelData.index
+                            text: "VIEW"
+                            enabled: controller && !controller.busy
+                            onClicked: {
+                                helper.commitFormEdits();
+                                controller.viewRow(rowKind, rowIndex);
+                            }
+                        }
                         Item { Layout.fillWidth: true }
-                        CyberButton { text: "REMOVE"; variant: "danger"; onClicked: controller.removeRow(modelData.kind, modelData.index) }
+                        CyberButton {
+                            property string rowKind: modelData.kind
+                            property int rowIndex: modelData.index
+                            text: "REMOVE"
+                            variant: "danger"
+                            onClicked: {
+                                helper.commitFormEdits();
+                                controller.removeRow(rowKind, rowIndex);
+                            }
+                        }
                     }
                 }
             }
@@ -237,22 +323,49 @@ BaseHelperWindow {
         Layout.fillWidth: true
         rowSpacing: ThemeModule.Theme.spacing.sm
         columnSpacing: ThemeModule.Theme.spacing.sm
-        CyberButton { text: "ADD DEDI"; variant: "secondary"; Layout.fillWidth: true; onClicked: controller.addRow("dedi") }
-        CyberButton { text: "CAPTURE DEDI"; variant: "primary"; Layout.fillWidth: true; enabled: controller && !controller.busy; onClicked: controller.captureNewRow("dedi") }
         CyberButton {
+            objectName: "DepositAddDediButton"
+            text: "ADD DEDI"
+            variant: "secondary"
+            Layout.fillWidth: true
+            onClicked: {
+                helper.commitFormEdits()
+                controller.addRow("dedi")
+            }
+        }
+        CyberButton {
+            objectName: "DepositCaptureDediButton"
+            text: "CAPTURE DEDI"
+            variant: "primary"
+            Layout.fillWidth: true
+            enabled: controller && !controller.busy
+            onClicked: {
+                helper.commitFormEdits()
+                controller.captureNewRow("dedi")
+            }
+        }
+        CyberButton {
+            objectName: "DepositAddVaultButton"
             text: "ADD VAULT"
             visible: controller && controller.routeKind === "crystal"
             variant: "secondary"
             Layout.fillWidth: true
-            onClicked: controller.addRow("vault")
+            onClicked: {
+                helper.commitFormEdits()
+                controller.addRow("vault")
+            }
         }
         CyberButton {
+            objectName: "DepositCaptureVaultButton"
             text: "CAPTURE VAULT"
             visible: controller && controller.routeKind === "crystal"
             variant: "primary"
             Layout.fillWidth: true
             enabled: controller && !controller.busy
-            onClicked: controller.captureNewRow("vault")
+            onClicked: {
+                helper.commitFormEdits()
+                controller.captureNewRow("vault")
+            }
         }
     }
 

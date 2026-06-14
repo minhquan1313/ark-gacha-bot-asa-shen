@@ -8,8 +8,6 @@ from source.utility import template, utils, variables, windows
 
 resets = 0  # resets happen when char cannot tp therefore it is a major issue
 
-capture_state = player_state.capture_state
-
 
 def is_open():
     return template.check_template("inventory", 0.7)
@@ -98,7 +96,7 @@ def implant_eat():
     resets += 1
     attempts = 0
 
-    capture_state("implant eat")
+    player_state.capture_state("implant eat")
 
     while not template.check_template("death_regions", 0.7):
         attempts += 1

@@ -97,7 +97,7 @@ class QmlLauncherControllerActionTests(unittest.TestCase):
         with (
             patch(
                 "source.launcher.controllers.launcher_controller.QTimer.singleShot"
-            ),
+            ) as single_shot,
             patch(
                 "source.launcher.controllers.launcher_controller.ark_game_setup.prepare_and_launch_game",
                 return_value="GameUserSettings.ini",
@@ -107,7 +107,14 @@ class QmlLauncherControllerActionTests(unittest.TestCase):
             controller.startGame()
 
         self.assertFalse(controller.startGameEnabled)
+        self.assertFalse(controller.restoreGameSettingsEnabled)
+        single_shot.assert_called_once_with(10000, controller._unlock_start_game)
         launch.assert_called_once()
+
+        controller._unlock_start_game()
+
+        self.assertTrue(controller.startGameEnabled)
+        self.assertTrue(controller.restoreGameSettingsEnabled)
 
     def test_auto_start_allowed_requires_server_number(self):
         controller, _logs, settings = self.make_controller()
@@ -118,6 +125,14 @@ class QmlLauncherControllerActionTests(unittest.TestCase):
 
         settings._settings["server_number"] = "5147"
         self.assertTrue(controller.autoStartAllowed)
+
+    def test_auto_start_properties_tolerate_missing_settings_controller(self):
+        controller, _logs, _settings = self.make_controller()
+        del controller.settings_controller
+
+        self.assertEqual(controller.serverNumber, "0")
+        self.assertFalse(controller.autoStartAllowed)
+        self.assertEqual(controller.autoStartHint, "Set server number first")
 
     def test_show_page_ignores_unknown_page_name(self):
         controller, _logs, _settings = self.make_controller()
@@ -256,6 +271,22 @@ class QmlLauncherControllerActionTests(unittest.TestCase):
             with open(log_path, "r", encoding="utf-8") as log_file:
                 self.assertEqual(log_file.read(), "[INFO] first\n[WARN] second\n")
 
+    def test_log_controller_overlay_lines_are_concise_and_truncated(self):
+        logs = LogController()
+
+        logs.append("[DEBUG] source.gacha_bot.deposit: first hidden by row limit\n")
+        logs.append("[INFO] 12:00:00 - INFO - source.logs.gachalogs - joined server\n")
+        logs.append("[WARN] source.gacha_bot.render: " + ("x" * 90) + "\n")
+        logs.append("[ERROR] final message\n")
+
+        self.assertEqual(len(logs.overlayLines), 3)
+        self.assertEqual(logs.overlayLines[0], "joined server")
+        self.assertNotIn("[WARN]", logs.overlayLines[1])
+        self.assertNotIn("source.gacha_bot.render", logs.overlayLines[1])
+        self.assertTrue(logs.overlayLines[1].endswith("..."))
+        self.assertLessEqual(len(logs.overlayLines[1]), 64)
+        self.assertEqual(logs.overlayLines[2], "final message")
+
     def test_log_controller_queue_and_running_filters_use_queue_snapshot(self):
         queue = QueueController()
         logs = LogController()
@@ -288,6 +319,94 @@ class QmlLauncherControllerActionTests(unittest.TestCase):
                     "[RUNNING] CURRENT   current",
                 ],
             )
+
+    def test_log_controller_clear_logs_also_clears_queue_state(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = os.path.join(temp_dir, "log.txt")
+            gacha_log_path = os.path.join(temp_dir, "logs.txt")
+            queue = QueueController()
+            logs = LogController(log_path)
+            logs.setQueueController(queue)
+            snapshot = {
+                "running": [{"name": "current"}],
+                "active": [{"name": "later", "execution_time": 130, "state": "WAITING"}],
+                "waiting": [{"name": "sooner", "execution_time": 110, "state": "WAITING"}],
+            }
+
+            with (
+                patch(
+                    "source.launcher.controllers.log_controller.GACHA_LOG_FILE",
+                    gacha_log_path,
+                ),
+                patch(
+                    "source.launcher.controllers.queue_controller.time.time",
+                    return_value=100,
+                ),
+            ):
+                queue.updateSnapshot(snapshot)
+                logs.setFilter("QUEUE")
+                self.assertNotEqual(logs.lines, ["[QUEUE] No upcoming tasks."])
+
+                logs.clearLogs()
+
+                self.assertEqual(queue.activeCount, 0)
+                self.assertEqual(queue.waitingCount, 0)
+                self.assertEqual(queue.currentTask, "IDLE")
+                self.assertEqual(logs.lines, ["[QUEUE] No upcoming tasks."])
+
+    def test_launcher_tail_log_file_reads_new_lines_once(self):
+        controller, logs, _settings = self.make_controller()
+
+        class OnePassStop:
+            def __init__(self):
+                self.stopped = False
+
+            def is_set(self):
+                return self.stopped
+
+            def wait(self, _timeout):
+                self.stopped = True
+                return True
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            gacha_log_path = os.path.join(temp_dir, "logs.txt")
+            with open(gacha_log_path, "w", encoding="utf-8") as log_file:
+                log_file.write("2026-06-13 09:00:00 - DEBUG - loaded route\n")
+
+            controller.log_tail_stop = OnePassStop()
+            controller.log_file_position = 0
+
+            with patch(
+                "source.launcher.controllers.launcher_controller.GACHA_LOG_FILE",
+                gacha_log_path,
+            ):
+                controller.tail_log_file()
+
+        self.assertEqual(
+            logs.lines,
+            ["[DEBUG] 2026-06-13 09:00:00 - DEBUG - loaded route\n"],
+        )
+
+    def test_launcher_finalize_program_stop_stops_live_log_tail(self):
+        controller, _logs, _settings = self.make_controller()
+        tail_thread = types.SimpleNamespace(
+            is_alive=Mock(return_value=True),
+            join=Mock(),
+        )
+        process = types.SimpleNamespace(
+            stdout=None,
+            poll=Mock(return_value=0),
+        )
+
+        controller.process = process
+        controller.program_stopping = True
+        controller.log_tail_thread = tail_thread
+
+        controller._finalize_program_stop()
+
+        self.assertTrue(controller.log_tail_stop.is_set())
+        tail_thread.join.assert_called_once_with(timeout=1)
+        self.assertIsNone(controller.log_tail_thread)
 
     def test_log_controller_ignores_unknown_filter(self):
         logs = LogController()
@@ -352,6 +471,24 @@ class QmlLauncherControllerActionTests(unittest.TestCase):
         self.assertFalse(tools.updateAvailable)
         self.assertEqual(messages[1][0], "DOWNLOAD")
         self.assertIn("not configured", messages[1][1])
+
+    def test_tools_controller_emits_payload_helper_requests(self):
+        tools = ToolsController()
+        requests = []
+        payload_requests = []
+        tools.helperRequested.connect(requests.append)
+        tools.helperPayloadRequested.connect(
+            lambda name, payload: payload_requests.append((name, payload))
+        )
+
+        tools.openHelper("autoJoin")
+        tools.openHelperPayload("deposit", {"routeKind": "grindable", "routeIndex": 0})
+
+        self.assertEqual(requests, ["autoJoin"])
+        self.assertEqual(
+            payload_requests,
+            [("deposit", {"routeKind": "grindable", "routeIndex": 0})],
+        )
 
 
 if __name__ == "__main__":

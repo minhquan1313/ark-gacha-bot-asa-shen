@@ -12,6 +12,7 @@ BaseHelperWindow {
     showStatus: !(controller && controller.running)
 
     CyberButton {
+        objectName: "FertilizerStartButton"
         visible: controller && !controller.running
         text: controller ? controller.startStopText : "START"
         variant: controller ? controller.startStopVariant : "primary"

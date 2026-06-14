@@ -14,6 +14,9 @@ BaseHelperWindow {
     helperTitle: "POSITION / RENDER HELPER"
     helperBody: "Capture stores the current yaw only. View applies the saved yaw with pitch zero."
     statusText: controller ? controller.status : "Ready."
+    property bool guideOpen: guideDialog.opened
+
+    Component.onCompleted: Qt.callLater(guideDialog.open)
 
     RowLayout {
         Layout.fillWidth: true

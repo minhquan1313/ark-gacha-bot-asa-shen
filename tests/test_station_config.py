@@ -2,10 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from types import MethodType, SimpleNamespace
-from unittest.mock import Mock
 
-from source.launcher.pages import LauncherPagesMixin
 from source.launcher.station_config import (
     auto_fill_gacha_group,
     default_gacha_entry,
@@ -171,122 +168,6 @@ class StationConfigTests(unittest.TestCase):
         set_all_pego_delays(entries, "1800")
 
         self.assertEqual([entry["delay"] for entry in entries], [1800, 1800])
-
-    def test_gacha_auto_fill_requires_confirmation(self):
-        launcher = SimpleNamespace(
-            gacha_config=[default_gacha_entry("wrong", "GACHAPAIR_1", "banana")],
-            confirm=Mock(return_value=False),
-            save_gacha_config=Mock(),
-            _render_settings_group=Mock(),
-            _ensure_gacha_config=lambda: None,
-        )
-        launcher.auto_fill_gacha_group = MethodType(
-            LauncherPagesMixin.auto_fill_gacha_group, launcher
-        )
-
-        launcher.auto_fill_gacha_group("GACHAPAIR_1")
-
-        self.assertEqual(launcher.gacha_config[0]["name"], "wrong")
-        launcher.save_gacha_config.assert_not_called()
-        launcher._render_settings_group.assert_not_called()
-
-    def test_gacha_auto_fill_updates_after_confirmation(self):
-        launcher = SimpleNamespace(
-            gacha_config=[default_gacha_entry("wrong", "GACHAPAIR_1", "banana")],
-            confirm=Mock(return_value=True),
-            save_gacha_config=Mock(),
-            _render_settings_group=Mock(),
-            _ensure_gacha_config=lambda: None,
-        )
-        launcher.auto_fill_gacha_group = MethodType(
-            LauncherPagesMixin.auto_fill_gacha_group, launcher
-        )
-
-        launcher.auto_fill_gacha_group("GACHAPAIR_1")
-
-        self.assertEqual(launcher.gacha_config[0]["name"], "GACHAPAIR_1_left")
-        self.assertEqual(launcher.gacha_config[0]["side"], "left")
-        launcher.save_gacha_config.assert_called_once_with()
-        launcher._render_settings_group.assert_called_once_with("GACHA")
-
-    def test_gacha_auto_fill_replaces_bad_teleporter_with_next_available(self):
-        launcher = SimpleNamespace(
-            gacha_config=[
-                default_gacha_entry("existing_left", "GACHAPAIR_1", "left"),
-                default_gacha_entry("existing_right", "GACHAPAIR_1", "right"),
-                default_gacha_entry("wrong", "bad_name", "banana"),
-            ],
-            gacha_group_expanded={"bad_name": True},
-            confirm=Mock(return_value=True),
-            save_gacha_config=Mock(),
-            _render_settings_group=Mock(),
-            _ensure_gacha_config=lambda: None,
-        )
-        launcher.auto_fill_gacha_group = MethodType(
-            LauncherPagesMixin.auto_fill_gacha_group, launcher
-        )
-
-        launcher.auto_fill_gacha_group("bad_name")
-
-        self.assertEqual(launcher.gacha_config[2]["teleporter"], "GACHAPAIR_2")
-        self.assertEqual(launcher.gacha_config[2]["name"], "GACHAPAIR_2_left")
-        self.assertEqual(launcher.gacha_config[2]["side"], "left")
-        self.assertIn("GACHAPAIR_2", launcher.gacha_group_expanded)
-        self.assertNotIn("bad_name", launcher.gacha_group_expanded)
-
-    def test_gacha_side_update_saves_without_rerender(self):
-        launcher = SimpleNamespace(
-            gacha_config=[default_gacha_entry("gacha", "GACHAPAIR_1", "left")],
-            save_gacha_config=Mock(),
-            _render_settings_group=Mock(),
-            _ensure_gacha_config=lambda: None,
-        )
-        launcher.update_gacha_side = MethodType(
-            LauncherPagesMixin.update_gacha_side, launcher
-        )
-        field = SimpleNamespace(currentText=Mock(return_value="right"))
-
-        launcher.update_gacha_side(0, field)
-
-        self.assertEqual(launcher.gacha_config[0]["side"], "right")
-        launcher.save_gacha_config.assert_called_once_with()
-        launcher._render_settings_group.assert_not_called()
-
-    def test_gacha_name_update_saves_without_rerender(self):
-        launcher = SimpleNamespace(
-            gacha_config=[default_gacha_entry("old", "GACHAPAIR_1", "left")],
-            save_gacha_config=Mock(),
-            _render_settings_group=Mock(),
-            _ensure_gacha_config=lambda: None,
-        )
-        launcher.update_station_field = MethodType(
-            LauncherPagesMixin.update_station_field, launcher
-        )
-        field = SimpleNamespace(text=Mock(return_value="new"))
-
-        launcher.update_station_field("gacha", 0, "name", field)
-
-        self.assertEqual(launcher.gacha_config[0]["name"], "new")
-        launcher.save_gacha_config.assert_called_once_with()
-        launcher._render_settings_group.assert_not_called()
-
-    def test_gacha_teleporter_update_still_rerenders(self):
-        launcher = SimpleNamespace(
-            gacha_config=[default_gacha_entry("gacha", "OLD", "left")],
-            save_gacha_config=Mock(),
-            _render_settings_group=Mock(),
-            _ensure_gacha_config=lambda: None,
-        )
-        launcher.update_station_field = MethodType(
-            LauncherPagesMixin.update_station_field, launcher
-        )
-        field = SimpleNamespace(text=Mock(return_value="NEW"))
-
-        launcher.update_station_field("gacha", 0, "teleporter", field)
-
-        self.assertEqual(launcher.gacha_config[0]["teleporter"], "NEW")
-        launcher.save_gacha_config.assert_called_once_with()
-        launcher._render_settings_group.assert_called_once_with("GACHA")
 
 
 if __name__ == "__main__":

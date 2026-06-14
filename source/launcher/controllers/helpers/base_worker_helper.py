@@ -49,6 +49,8 @@ class BaseWorkerHelperController(QObject):
 
     @Slot()
     def stop(self):
+        if not self.running:
+            return
         self._set_status("Stopping...")
         self.worker.stop()
 

@@ -44,13 +44,21 @@ Item {
                     objectName: "AboutGithubButton"
                     text: "GITHUB"
                     variant: "secondary"
-                    enabled: false
+                    onClicked: toolsController.showMessage(
+                        "GITHUB",
+                        "GITHUB link is not configured yet.",
+                        "info"
+                    )
                 }
                 CyberButton {
                     objectName: "AboutWebsiteButton"
                     text: "WEBSITE"
                     variant: "secondary"
-                    enabled: false
+                    onClicked: toolsController.showMessage(
+                        "WEBSITE",
+                        "WEBSITE link is not configured yet.",
+                        "info"
+                    )
                 }
             }
             Text {

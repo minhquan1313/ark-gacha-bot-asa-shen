@@ -5,6 +5,7 @@ import "../theme" as ThemeModule
 
 Window {
     id: overlay
+    objectName: "RunnerOverlayWindow"
 
     width: ThemeModule.Theme.size.overlayWidth
     height: Math.max(ThemeModule.Theme.size.overlayMinHeight, content.implicitHeight + ThemeModule.Theme.spacing.lg * 2)
@@ -22,87 +23,110 @@ Window {
             id: content
             anchors.fill: parent
             anchors.margins: ThemeModule.Theme.spacing.md
-            spacing: ThemeModule.Theme.spacing.sm
+            spacing: ThemeModule.Theme.spacing.xxs
 
-            RowLayout {
+            Item {
+                objectName: "RunnerOverlayHeader"
                 Layout.fillWidth: true
+                implicitHeight: Math.max(overlayTitle.implicitHeight, stopButton.implicitHeight)
+
+                MouseArea {
+                    objectName: "RunnerOverlayHeaderDragArea"
+                    anchors.left: parent.left
+                    anchors.right: stopButton.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    acceptedButtons: Qt.LeftButton
+                    onPressed: overlay.startSystemMove()
+                }
+
                 Text {
+                    id: overlayTitle
                     text: launcherController.appTitle + "\n" + launcherController.uptime
                     color: ThemeModule.Theme.colors.cyan
                     font.bold: true
-                    Layout.fillWidth: true
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onPressed: overlay.startSystemMove()
-                    }
+                    anchors.left: parent.left
+                    anchors.right: stopButton.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
                 }
                 CyberButton {
+                    id: stopButton
+                    objectName: "RunnerOverlayStopButton"
                     text: "STOP"
                     variant: "danger"
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
                     onClicked: launcherController.stopProgram()
                 }
             }
 
-            RowLayout {
+            Text {
+                objectName: "RunnerOverlayCurrent"
                 Layout.fillWidth: true
-                spacing: ThemeModule.Theme.spacing.md
+                text: queueController.currentTask === "IDLE" ? "Idle, waiting for task" : "Task: " + queueController.currentTask
+                color: ThemeModule.Theme.colors.text
+                font.bold: true
+                elide: Text.ElideRight
+            }
 
-                ColumnLayout {
-                    Layout.preferredWidth: ThemeModule.Theme.size.overlayQueueWidth
-                    spacing: ThemeModule.Theme.spacing.xs
-
-                    Text {
-                        objectName: "RunnerOverlayCurrent"
-                        text: queueController.currentTask === "IDLE"
-                            ? "Waiting for running task..."
-                            : "Running " + queueController.currentTask
-                        color: ThemeModule.Theme.colors.text
-                        font.bold: true
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-
-                    Repeater {
-                        model: queueController.runnerUpcomingTasks.slice(0, 5)
-                        Text {
-                            objectName: "RunnerOverlayTask"
-                            text: modelData
-                            color: ThemeModule.Theme.colors.muted
-                            font.family: ThemeModule.Theme.fonts.mono
-                            wrapMode: Text.WordWrap
-                            Layout.fillWidth: true
-                        }
-                    }
+            Text {
+                objectName: "RunnerOverlayNextTask"
+                visible: queueController.runnerUpcomingTasks.length > 0
+                text: "Next: " + queueController.runnerUpcomingTasks[0]
+                color: ThemeModule.Theme.colors.muted
+                font.family: ThemeModule.Theme.fonts.mono
+                font.pixelSize: ThemeModule.Theme.fonts.consoleText
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
+        
+            Repeater {
+                model: queueController.runnerUpcomingTasks.slice(1, 3)
+                visible: queueController.runnerUpcomingTasks.length > 1
+                Text {
+                    objectName: "RunnerOverlayTask"
+                    text: modelData
+                    color: ThemeModule.Theme.colors.muted
+                    font.family: ThemeModule.Theme.fonts.mono
+                    font.pixelSize: ThemeModule.Theme.fonts.consoleText
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
                 }
+            }
 
-                Rectangle {
-                    Layout.fillHeight: true
-                    Layout.preferredWidth: ThemeModule.Theme.border.thin
-                    color: ThemeModule.Theme.colors.border
-                }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: ThemeModule.Theme.border.thin
+                color: ThemeModule.Theme.colors.border
+            }
 
-                ColumnLayout {
-                    Layout.preferredWidth: ThemeModule.Theme.size.overlayLogWidth
-                    spacing: ThemeModule.Theme.spacing.xs
+            Text {
+                text: "LATEST"
+                color: ThemeModule.Theme.colors.cyan
+                font.pixelSize: ThemeModule.Theme.fonts.badge
+                font.bold: true
+                Layout.fillWidth: true
+            }
 
-                    Text {
-                        text: "LATEST LOGS"
-                        color: ThemeModule.Theme.colors.cyan
-                        font.pixelSize: ThemeModule.Theme.fonts.badge
-                        font.bold: true
-                        Layout.fillWidth: true
-                    }
+            Repeater {
+                model: logController.overlayLines.length > 0
+                    ? logController.overlayLines.slice(0, 3)
+                    : ["No recent logs."]
 
-                    Text {
-                        objectName: "RunnerOverlayLatestLogs"
-                        text: logController.dashboardLines.slice(-5).join("")
-                        color: ThemeModule.Theme.colors.dim
-                        font.family: ThemeModule.Theme.fonts.mono
-                        font.pixelSize: ThemeModule.Theme.fonts.consoleText
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
+                Text {
+                    text: modelData
+                    Layout.fillWidth: true
+                    width: parent ? parent.width : 0
+
+                    color: ThemeModule.Theme.colors.dim
+                    font.family: ThemeModule.Theme.fonts.mono
+                    font.pixelSize: ThemeModule.Theme.fonts.consoleText
+                    lineHeight: 0.9
+                    
+                    elide: Text.ElideRight
+                    wrapMode: Text.NoWrap
+                    clip: true
                 }
             }
         }

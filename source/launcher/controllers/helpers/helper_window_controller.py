@@ -103,6 +103,11 @@ class HelperWindowController(QObject):
         else:
             self.focusRequested.emit()
 
+    @Slot()
+    def focusActiveHelper(self):
+        if self._active_helper_name:
+            self.focusRequested.emit()
+
     def _register_hotkey(self, window):
         if self._hotkey_registered or not hasattr(ctypes, "windll") or window is None:
             return

@@ -9,8 +9,24 @@ ComboBox {
     leftPadding: ThemeModule.Theme.spacing.sm
     rightPadding: ThemeModule.Theme.size.iconButton
     font.pixelSize: ThemeModule.Theme.fonts.formText
+    property bool popupOpen: popup.visible
+    property bool inputFocused: Boolean(inputField && inputField.activeFocus)
+
+    function openFromField() {
+        if (!enabled) {
+            return
+        }
+        if (editable) {
+            inputField.forceActiveFocus()
+        } else {
+            forceActiveFocus()
+        }
+        popup.open()
+    }
 
     contentItem: TextInput {
+        id: inputField
+        objectName: "CyberComboBoxInput"
         text: control.editable ? control.editText : control.displayText
         readOnly: !control.editable
         color: ThemeModule.Theme.colors.text
@@ -19,7 +35,26 @@ ComboBox {
         verticalAlignment: TextInput.AlignVCenter
         font: control.font
         clip: true
+        selectByMouse: true
         onEditingFinished: if (control.editable) control.editText = text
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            onPressed: {
+                Qt.callLater(control.openFromField)
+                mouse.accepted = false
+            }
+        }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
+        onPressed: {
+            Qt.callLater(control.openFromField)
+            mouse.accepted = false
+        }
     }
 
     indicator: Text {

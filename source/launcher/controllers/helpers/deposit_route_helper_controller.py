@@ -218,6 +218,7 @@ class DepositRouteHelperController(QObject):
             self.dialogRequested.emit("Capture Failed", str(exc), "error")
         finally:
             self._set_busy(False)
+            self._refocus_helper()
 
     @Slot(str, int)
     def removeRow(self, kind, index):
@@ -310,6 +311,7 @@ class DepositRouteHelperController(QObject):
             self.dialogRequested.emit("Capture Failed", str(exc), "error")
         finally:
             self._set_busy(False)
+            self._refocus_helper()
 
     @Slot(str, int)
     def viewRow(self, kind, index):
@@ -335,6 +337,7 @@ class DepositRouteHelperController(QObject):
             self.dialogRequested.emit("View Failed", str(exc), "error")
         finally:
             self._set_busy(False)
+            self._refocus_helper()
 
     def _route_key(self):
         return self._route_key_for(self._route_kind)
@@ -418,3 +421,8 @@ class DepositRouteHelperController(QObject):
         if message:
             self._status = message
         self.changed.emit()
+
+    def _refocus_helper(self):
+        refocus = getattr(self.launcher_controller, "refocus_active_helper", None)
+        if refocus is not None:
+            refocus()

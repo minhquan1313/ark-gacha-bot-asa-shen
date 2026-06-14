@@ -67,14 +67,12 @@ QtObject {
         readonly property int buttonHeight: 34
         readonly property int iconButton: 36
         readonly property int heroHeight: 180
-        readonly property int helperWidth: 380
-        readonly property int helperHeight: 320
-        readonly property int helperRunningWidth: 240
-        readonly property int helperRunningMinHeight: 100
-        readonly property int overlayWidth: 520
-        readonly property int overlayMinHeight: 120
-        readonly property int overlayQueueWidth: 220
-        readonly property int overlayLogWidth: 248
+        readonly property int helperWidth: 240
+        readonly property int helperHeight: 240
+        readonly property int helperRunningWidth: 200
+        readonly property int helperRunningMinHeight: 40
+        readonly property int overlayWidth: 200
+        readonly property int overlayMinHeight: 112
         readonly property int statCardHeight: 96
         readonly property int meterHeight: 11
         readonly property int quickActionsWidth: 260

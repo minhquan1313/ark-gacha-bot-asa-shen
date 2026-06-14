@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import "shell"
 import "dialogs"
 import "helpers"
@@ -20,6 +21,10 @@ ApplicationWindow {
 
     property bool narrow: width < ThemeModule.Theme.size.breakpointNarrow
     property var activeHelperWindow: null
+    property string pendingHelperName: ""
+    property var pendingHelperPayload: ({})
+    property bool closeConfirmed: false
+    property var pendingConfirmCallback: null
 
     Component.onCompleted: {
         launcherController.registerWindow(root);
@@ -27,6 +32,16 @@ ApplicationWindow {
     }
 
     onClosing: {
+        if (launcherController.running && !closeConfirmed) {
+            close.accepted = false;
+            showConfirmDialog(
+                "Stop Program And Exit",
+                "The automation is still running. Stop it and close the launcher?",
+                "STOP AND EXIT",
+                "CANCEL"
+            );
+            return;
+        }
         launcherController.persistWindowSize(width, height);
         helperWindowController.closeActiveHelper();
         helperWindowController.shutdown();
@@ -67,37 +82,92 @@ ApplicationWindow {
 
     AppDialog {
         id: appDialog
+        objectName: "AppDialog"
         x: (root.width - width) / 2
         y: (root.height - height) / 2
+        onConfirmed: {
+            if (root.pendingConfirmCallback) {
+                var callback = root.pendingConfirmCallback;
+                root.pendingConfirmCallback = null;
+                callback();
+            }
+        }
     }
 
     RunnerOverlay {
         id: runnerOverlay
         visible: launcherController.running
-        x: root.x + root.width - width - ThemeModule.Theme.spacing.lg
-        y: root.y + (root.height - height) / 2
+        x: Screen.virtualX + Screen.desktopAvailableWidth - width - ThemeModule.Theme.spacing.lg
+        y: Screen.virtualY + (Screen.desktopAvailableHeight - height) / 2
     }
 
     Connections {
         target: launcherController
         function onDialogRequested(title, message, variant) {
-            appDialog.title = title;
-            appDialog.message = message;
-            appDialog.variant = variant;
-            appDialog.open();
+            showMessageDialog(title, message, variant);
+        }
+    }
+
+    Connections {
+        target: settingsController
+        function onFieldActionConfirmationRequested(title, message, confirmText, value) {
+            showConfirmDialog(
+                title,
+                message,
+                confirmText,
+                "CANCEL",
+                function() {
+                    settingsController.confirmFieldAction("auto_fill_gacha_group", value);
+                }
+            );
         }
     }
 
     Connections {
         target: toolsController
         function onMessageRequested(title, message, variant) {
-            appDialog.title = title;
-            appDialog.message = message;
-            appDialog.variant = variant;
-            appDialog.open();
+            showMessageDialog(title, message, variant);
         }
         function onHelperRequested(helperName) {
-            helperWindowController.openHelper(helperName, {});
+            requestHelperOpen(helperName, {});
+        }
+        function onHelperPayloadRequested(helperName, payload) {
+            requestHelperOpen(helperName, payload || {});
+        }
+    }
+
+    Connections {
+        target: autoJoinHelperController
+        function onDialogRequested(title, message, variant) {
+            showMessageDialog(title, message, variant);
+        }
+    }
+
+    Connections {
+        target: fertilizerHelperController
+        function onDialogRequested(title, message, variant) {
+            showMessageDialog(title, message, variant);
+        }
+    }
+
+    Connections {
+        target: positionRenderHelperController
+        function onDialogRequested(title, message, variant) {
+            showMessageDialog(title, message, variant);
+        }
+    }
+
+    Connections {
+        target: depositRouteHelperController
+        function onDialogRequested(title, message, variant) {
+            showMessageDialog(title, message, variant);
+        }
+    }
+
+    Connections {
+        target: transferHelperController
+        function onDialogRequested(title, message, variant) {
+            showMessageDialog(title, message, variant);
         }
     }
 
@@ -106,7 +176,6 @@ ApplicationWindow {
         function onCloseRequested() {
             if (root.activeHelperWindow) {
                 root.activeHelperWindow.close();
-                root.activeHelperWindow = null;
             }
         }
         function onHelperRequested(helperName, payload) {
@@ -134,19 +203,58 @@ ApplicationWindow {
     Component { id: depositComponent; DepositRouteHelper {} }
     Component { id: positionComponent; PositionRenderHelper {} }
 
+    function applyHelperPayload(helperName, controller, payload) {
+        if (!payload) {
+            return;
+        }
+        if (helperName === "deposit" && payload.routeKind !== undefined && payload.routeIndex !== undefined) {
+            controller.selectRoute(String(payload.routeKind), Number(payload.routeIndex));
+        }
+    }
+
+    function requestHelperOpen(helperName, payload) {
+        if (launcherController.running || launcherController.programStopping) {
+            showMessageDialog(
+                "Stop Program First",
+                "Stop the running automation before opening a setup helper.",
+                "warning"
+            );
+            return;
+        }
+        helperWindowController.openHelper(helperName, payload || {});
+    }
+
     function openHelper(helperName, payload) {
         var component = helperName === "autoJoin" ? autoJoinComponent : helperName === "transfer" ? transferComponent : helperName === "fertilizer" ? fertilizerComponent : helperName === "position" ? positionComponent : helperName === "deposit" ? depositComponent : null;
         var controller = helperName === "autoJoin" ? autoJoinHelperController : helperName === "transfer" ? transferHelperController : helperName === "fertilizer" ? fertilizerHelperController : helperName === "position" ? positionRenderHelperController : helperName === "deposit" ? depositRouteHelperController : null;
         if (!component || !controller) {
             return;
         }
-        var helper = component.createObject(root, {"controller": controller});
+        if (root.activeHelperWindow) {
+            root.pendingHelperName = helperName;
+            root.pendingHelperPayload = payload || {};
+            root.activeHelperWindow.close();
+            return;
+        }
+        applyHelperPayload(helperName, controller, payload);
+        var helper = component.createObject(root, {
+            "controller": controller,
+            "ownerActive": Qt.binding(function() { return root.active; })
+        });
         root.activeHelperWindow = helper;
         positionHelper(helper);
-        helper.closing.connect(function() {
+        helper.helperClosed.connect(function() {
             if (root.activeHelperWindow === helper) {
                 root.activeHelperWindow = null;
-                helperWindowController.markClosed(helperName);
+                if (root.pendingHelperName.length > 0) {
+                    var nextName = root.pendingHelperName;
+                    var nextPayload = root.pendingHelperPayload;
+                    root.pendingHelperName = "";
+                    root.pendingHelperPayload = {};
+                    openHelper(nextName, nextPayload);
+                } else {
+                    helperWindowController.markClosed(helperName);
+                }
             }
         });
         helper.widthChanged.connect(function() {
@@ -165,7 +273,31 @@ ApplicationWindow {
     }
 
     function positionHelper(helper) {
-        helper.x = Math.max(root.x + ThemeModule.Theme.spacing.lg, root.x + root.width - helper.width - ThemeModule.Theme.spacing.lg);
-        helper.y = Math.max(root.y + ThemeModule.Theme.spacing.lg, root.y + (root.height - helper.height) / 2);
+        helper.x = Screen.virtualX + Screen.desktopAvailableWidth - helper.width - ThemeModule.Theme.spacing.lg;
+        helper.y = Screen.virtualY + (Screen.desktopAvailableHeight - helper.height) / 2;
+    }
+
+    function showMessageDialog(title, message, variant) {
+        appDialog.confirmMode = false;
+        appDialog.confirmText = "OK";
+        appDialog.cancelText = "CANCEL";
+        appDialog.title = title;
+        appDialog.message = message;
+        appDialog.variant = variant;
+        appDialog.open();
+    }
+
+    function showConfirmDialog(title, message, confirmText, cancelText, callback) {
+        appDialog.confirmMode = true;
+        appDialog.confirmText = confirmText;
+        appDialog.cancelText = cancelText;
+        appDialog.title = title;
+        appDialog.message = message;
+        appDialog.variant = "confirm";
+        root.pendingConfirmCallback = callback || function() {
+            root.closeConfirmed = true;
+            root.close();
+        };
+        appDialog.open();
     }
 }

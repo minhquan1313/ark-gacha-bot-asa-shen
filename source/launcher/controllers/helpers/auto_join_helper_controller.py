@@ -45,3 +45,14 @@ class AutoJoinHelperController(BaseWorkerHelperController):
             return
         self._set_status(f"Starting auto join for server {server}...")
         self._start_worker("--server", server)
+
+    @Slot()
+    def stop(self):
+        if not self.running:
+            return
+        super().stop()
+        if (
+            self.launcher_controller.is_running()
+            and not self.launcher_controller.program_stopping
+        ):
+            self.launcher_controller.stopProgram()

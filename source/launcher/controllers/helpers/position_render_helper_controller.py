@@ -46,6 +46,7 @@ class PositionRenderHelperController(QObject):
             self.dialogRequested.emit("Capture Failed", str(exc), "error")
         finally:
             self._set_busy(False)
+            self._refocus_helper()
 
     @Slot()
     def viewStationYaw(self):
@@ -62,6 +63,7 @@ class PositionRenderHelperController(QObject):
             self.dialogRequested.emit("View Failed", str(exc), "error")
         finally:
             self._set_busy(False)
+            self._refocus_helper()
 
     def _set_status(self, message):
         self._status = str(message)
@@ -72,3 +74,8 @@ class PositionRenderHelperController(QObject):
         if message:
             self._status = message
         self.changed.emit()
+
+    def _refocus_helper(self):
+        refocus = getattr(self.launcher_controller, "refocus_active_helper", None)
+        if refocus is not None:
+            refocus()

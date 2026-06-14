@@ -10,12 +10,14 @@ from source.launcher.controllers.helpers.base_worker_helper import (
 )
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
+    preload_capture_view_dependencies,
     view_route_entry,
 )
 from source.launcher.transfer_helper_config import (
     MAX_TRANSFER_RUNTIME_ACCOUNTS,
     load_transfer_runtime_config,
     missing_runtime_inputs,
+    normalize_transfer_dedis,
     normalize_transfer_players,
     player_account_count,
     player_bed_name_search_conflicts,
@@ -32,7 +34,9 @@ class TransferHelperController(BaseWorkerHelperController):
     def __init__(self, launcher_controller, parent=None):
         super().__init__(launcher_controller, "server_transfer", parent)
         self.config = load_transfer_runtime_config(create_missing=True)
+        self.config["dedis"] = normalize_transfer_dedis(self.config.get("dedis", {}))
         self.runtime_config_path = None
+        self._preload_capture_view()
 
     @Property("QVariantList", notify=configChanged)
     def settingRows(self):
@@ -217,6 +221,8 @@ class TransferHelperController(BaseWorkerHelperController):
         except Exception as exc:
             self._set_status(f"Capture failed: {exc}")
             self.dialogRequested.emit("Capture Failed", str(exc), "error")
+        finally:
+            self._refocus_helper()
 
     @Slot(str, str)
     def setTeleport(self, side, value):
@@ -282,6 +288,8 @@ class TransferHelperController(BaseWorkerHelperController):
         except Exception as exc:
             self._set_status(f"Capture failed: {exc}")
             self.dialogRequested.emit("Capture Failed", str(exc), "error")
+        finally:
+            self._refocus_helper()
 
     @Slot(str, int)
     def viewDedi(self, side, index):
@@ -299,10 +307,36 @@ class TransferHelperController(BaseWorkerHelperController):
         except Exception as exc:
             self._set_status(f"View failed: {exc}")
             self.dialogRequested.emit("View Failed", str(exc), "error")
+        finally:
+            self._refocus_helper()
 
     @Slot()
     def start(self):
         if self.running:
+            return
+        if (
+            self.launcher_controller.is_running()
+            or self.launcher_controller.program_stopping
+        ):
+            self._set_status("Cannot start while the main program is running.")
+            self.dialogRequested.emit(
+                "Stop Program First",
+                "Stop the running automation before starting this tool.",
+                "warning",
+            )
+            return
+        conflicts = player_bed_name_search_conflicts(
+            self.config.get("players", {}), limit=MAX_TRANSFER_RUNTIME_ACCOUNTS
+        )
+        if conflicts:
+            conflict_lines = self._format_player_search_conflicts(
+                conflicts, self.config.get("players", {})
+            )
+            message = "Player bed/teleport names are not search-safe:\n" + "\n".join(
+                f"- {line}" for line in conflict_lines
+            )
+            self._set_status("Player bed/teleport names are not search-safe.")
+            self.dialogRequested.emit("Transfer Helper Not Ready", message, "warning")
             return
         missing = missing_runtime_inputs(
             self.config["settings"],
@@ -310,15 +344,8 @@ class TransferHelperController(BaseWorkerHelperController):
             self.config["ui_coords"],
             self.config["players"],
         )
-        conflicts = player_bed_name_search_conflicts(
-            self.config.get("players", {}), limit=MAX_TRANSFER_RUNTIME_ACCOUNTS
-        )
-        if missing or conflicts:
+        if missing:
             message = "\n".join(missing)
-            if conflicts:
-                message = (
-                    f"{message}\nPlayer bed/teleport names are not search-safe.".strip()
-                )
             self._set_status("Transfer config is incomplete.")
             self.dialogRequested.emit("Transfer Config Blocked", message, "warning")
             return
@@ -341,6 +368,18 @@ class TransferHelperController(BaseWorkerHelperController):
             except OSError:
                 pass
         self.runtime_config_path = None
+
+    def _format_player_search_conflicts(self, conflicts, players):
+        rows = players.get("players", []) if isinstance(players, dict) else []
+        lines = []
+        for index in sorted(conflicts):
+            try:
+                name = str(rows[index].get("bed_name", "")).strip()
+            except (IndexError, AttributeError):
+                name = ""
+            label = name or f"Player {index + 1}"
+            lines.append(f'{label}: {", ".join(conflicts[index])}')
+        return lines
 
     def _dedi_rows(self, side):
         rows = []
@@ -425,3 +464,14 @@ class TransferHelperController(BaseWorkerHelperController):
         except Exception as exc:
             self.dialogRequested.emit("Invalid Transfer Dedis", str(exc), "error")
         self.configChanged.emit()
+
+    def _refocus_helper(self):
+        refocus = getattr(self.launcher_controller, "refocus_active_helper", None)
+        if refocus is not None:
+            refocus()
+
+    def _preload_capture_view(self):
+        try:
+            preload_capture_view_dependencies()
+        except Exception as exc:
+            self._set_status(f"Capture preload skipped: {exc}")

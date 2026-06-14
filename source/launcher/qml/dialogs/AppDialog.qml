@@ -10,6 +10,11 @@ Popup {
     property string title: ""
     property string message: ""
     property string variant: "info"
+    property bool confirmMode: false
+    property string confirmText: "OK"
+    property string cancelText: "CANCEL"
+
+    signal confirmed()
 
     modal: true
     focus: true
@@ -23,6 +28,7 @@ Popup {
     background: Rectangle {
         color: ThemeModule.Theme.colors.panelStrong
         border.color: dialog.variant === "error" ? ThemeModule.Theme.colors.red
+            : dialog.variant === "confirm" ? ThemeModule.Theme.colors.red
             : dialog.variant === "warning" ? ThemeModule.Theme.colors.yellow
             : ThemeModule.Theme.colors.cyan
         border.width: ThemeModule.Theme.border.thin
@@ -38,6 +44,7 @@ Popup {
         Text {
             text: dialog.title.toUpperCase()
             color: dialog.variant === "error" ? ThemeModule.Theme.colors.red
+                : dialog.variant === "confirm" ? ThemeModule.Theme.colors.red
                 : dialog.variant === "warning" ? ThemeModule.Theme.colors.yellow
                 : ThemeModule.Theme.colors.cyan
             font.pixelSize: ThemeModule.Theme.fonts.sectionHeading
@@ -56,9 +63,22 @@ Popup {
             Layout.fillWidth: true
             Item { Layout.fillWidth: true }
             CyberButton {
-                text: "OK"
-                variant: "primary"
+                objectName: "DialogCancelButton"
+                visible: dialog.confirmMode
+                text: dialog.cancelText
+                variant: "secondary"
                 onClicked: dialog.close()
+            }
+            CyberButton {
+                objectName: "DialogConfirmButton"
+                text: dialog.confirmMode ? dialog.confirmText : "OK"
+                variant: dialog.variant === "confirm" ? "danger" : "primary"
+                onClicked: {
+                    if (dialog.confirmMode) {
+                        dialog.confirmed();
+                    }
+                    dialog.close();
+                }
             }
         }
     }

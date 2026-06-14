@@ -20,6 +20,9 @@ from source.launcher.controllers.helpers.fertilizer_helper_controller import (
 from source.launcher.controllers.helpers.helper_window_controller import (
     HelperWindowController,
 )
+from source.launcher.controllers.helpers.position_render_helper_controller import (
+    PositionRenderHelperController,
+)
 
 
 def _runtime_config():
@@ -82,11 +85,68 @@ class QmlHelperControllerTests(unittest.TestCase):
                 "save_transfer_dedis",
                 side_effect=normalize_transfer_dedis,
             ),
+            patch.object(transfer_helper_controller, "preload_capture_view_dependencies"),
         ]
         started = [patcher.start() for patcher in patches]
         self.addCleanup(lambda: [patcher.stop() for patcher in patches])
         controller = transfer_helper_controller.TransferHelperController(launcher)
         return controller, launcher, started
+
+    def test_transfer_controller_normalizes_old_single_route_dedi_config(self):
+        from source.launcher.controllers.helpers import transfer_helper_controller
+
+        launcher = SimpleNamespace(
+            is_running=Mock(return_value=False),
+            program_stopping=False,
+            require_ark_window=Mock(return_value=True),
+        )
+        old_shape = _runtime_config()
+        old_shape["dedis"] = {
+            "teleport": "LEGACY_DEDI",
+            "items": [
+                {
+                    "location": {"yaw": "12.5", "pitch": "-3.25"},
+                    "crouched": True,
+                }
+            ],
+        }
+        with patch.object(
+            transfer_helper_controller,
+            "load_transfer_runtime_config",
+            return_value=old_shape,
+        ), patch.object(
+            transfer_helper_controller, "preload_capture_view_dependencies"
+        ):
+            controller = transfer_helper_controller.TransferHelperController(launcher)
+
+        self.assertEqual(controller.resourceTeleport, "LEGACY_DEDI")
+        self.assertEqual(controller.destinationTeleport, "LEGACY_DEDI")
+        self.assertEqual(controller.resourceDedis[0]["yaw"], "12.5")
+        self.assertEqual(controller.destinationDedis[0]["pitch"], "-3.25")
+
+    def test_transfer_controller_reports_skipped_capture_preload(self):
+        from source.launcher.controllers.helpers import transfer_helper_controller
+
+        launcher = SimpleNamespace(
+            is_running=Mock(return_value=False),
+            program_stopping=False,
+            require_ark_window=Mock(return_value=True),
+        )
+        with (
+            patch.object(
+                transfer_helper_controller,
+                "load_transfer_runtime_config",
+                return_value=_runtime_config(),
+            ),
+            patch.object(
+                transfer_helper_controller,
+                "preload_capture_view_dependencies",
+                side_effect=RuntimeError("missing dependency"),
+            ),
+        ):
+            controller = transfer_helper_controller.TransferHelperController(launcher)
+
+        self.assertEqual(controller.status, "Capture preload skipped: missing dependency")
 
     def make_auto_join_controller(self):
         launcher = SimpleNamespace(
@@ -114,6 +174,18 @@ class QmlHelperControllerTests(unittest.TestCase):
 
         self.assertEqual(controller.status, "Stopped.")
 
+    def test_worker_helper_idle_stop_is_noop(self):
+        launcher = SimpleNamespace(
+            is_running=Mock(return_value=False),
+            program_stopping=False,
+            require_ark_window=Mock(return_value=True),
+        )
+        controller = FertilizerHelperController(launcher)
+
+        controller.stop()
+
+        self.assertEqual(controller.status, "Ready.")
+
     def test_auto_join_valid_server_edit_persists_to_launcher_settings(self):
         controller, settings = self.make_auto_join_controller()
 
@@ -129,6 +201,37 @@ class QmlHelperControllerTests(unittest.TestCase):
 
         self.assertEqual(controller.serverNumber, "abc")
         settings.setValue.assert_not_called()
+
+    def test_auto_join_stop_also_stops_running_main_program(self):
+        controller, _settings = self.make_auto_join_controller()
+        controller.worker._process = SimpleNamespace(
+            poll=Mock(return_value=None), stdout=None
+        )
+        controller.launcher_controller.is_running.return_value = True
+        controller.launcher_controller.stopProgram = Mock()
+
+        with patch(
+            "source.launcher.services.worker_process_service.terminate_process_tree"
+        ):
+            controller.stop()
+
+        controller.launcher_controller.stopProgram.assert_called_once_with()
+
+    def test_auto_join_stop_does_not_stop_program_twice(self):
+        controller, _settings = self.make_auto_join_controller()
+        controller.worker._process = SimpleNamespace(
+            poll=Mock(return_value=None), stdout=None
+        )
+        controller.launcher_controller.is_running.return_value = True
+        controller.launcher_controller.program_stopping = True
+        controller.launcher_controller.stopProgram = Mock()
+
+        with patch(
+            "source.launcher.services.worker_process_service.terminate_process_tree"
+        ):
+            controller.stop()
+
+        controller.launcher_controller.stopProgram.assert_not_called()
 
     def test_transfer_controller_account_count_resize_uses_helper_defaults(self):
         controller, _launcher, _patches = self.make_transfer_controller()
@@ -168,6 +271,7 @@ class QmlHelperControllerTests(unittest.TestCase):
 
     def test_transfer_controller_capture_setting_yaw_persists_yaw_only(self):
         controller, launcher, _patches = self.make_transfer_controller()
+        launcher.refocus_active_helper = Mock()
 
         with patch(
             "source.launcher.controllers.helpers.transfer_helper_controller.capture_ccc_yaw_pitch",
@@ -176,6 +280,7 @@ class QmlHelperControllerTests(unittest.TestCase):
             controller.captureSettingYaw("resource_station_yaw")
 
         launcher.require_ark_window.assert_called_once_with("capture transfer yaw")
+        launcher.refocus_active_helper.assert_called_once()
         self.assertEqual(controller.config["settings"]["resource_station_yaw"], 123.45)
 
     def test_transfer_invalid_setting_does_not_mutate_active_config(self):
@@ -259,6 +364,62 @@ class QmlHelperControllerTests(unittest.TestCase):
         can_start.assert_called_once_with("start server transfer")
         self.assertEqual(dialogs, [])
 
+    def test_transfer_start_reports_player_search_conflict_details(self):
+        controller, _launcher, _patches = self.make_transfer_controller()
+        controller.config["players"] = normalize_transfer_players(
+            {
+                "players": [
+                    {"bed_name": "Player"},
+                    {"bed_name": "Player1"},
+                ]
+            },
+            2,
+        )
+        dialogs = []
+        controller.dialogRequested.connect(
+            lambda title, message, variant: dialogs.append((title, message, variant))
+        )
+
+        with patch(
+            "source.launcher.controllers.helpers.transfer_helper_controller.missing_runtime_inputs"
+        ) as missing_runtime:
+            controller.start()
+
+        missing_runtime.assert_not_called()
+        self.assertEqual(controller.status, "Player bed/teleport names are not search-safe.")
+        self.assertEqual(len(dialogs), 1)
+        title, message, variant = dialogs[0]
+        self.assertEqual(title, "Transfer Helper Not Ready")
+        self.assertEqual(variant, "warning")
+        self.assertIn("Player bed/teleport names are not search-safe:", message)
+        self.assertIn("- Player: Player1", message)
+
+    def test_transfer_start_blocks_running_main_program_before_config_validation(self):
+        controller, launcher, _patches = self.make_transfer_controller()
+        launcher.is_running.return_value = True
+        dialogs = []
+        controller.dialogRequested.connect(
+            lambda title, message, variant: dialogs.append((title, message, variant))
+        )
+
+        with patch(
+            "source.launcher.controllers.helpers.transfer_helper_controller.missing_runtime_inputs"
+        ) as missing_runtime:
+            controller.start()
+
+        missing_runtime.assert_not_called()
+        self.assertEqual(controller.status, "Cannot start while the main program is running.")
+        self.assertEqual(
+            dialogs,
+            [
+                (
+                    "Stop Program First",
+                    "Stop the running automation before starting this tool.",
+                    "warning",
+                )
+            ],
+        )
+
     def test_transfer_controller_blocks_removing_last_dedi(self):
         controller, _launcher, _patches = self.make_transfer_controller()
         controller.config["dedis"]["resource"]["items"] = [
@@ -304,7 +465,10 @@ class QmlHelperControllerTests(unittest.TestCase):
     def make_deposit_controller(self):
         from source.launcher.controllers.helpers import deposit_route_helper_controller
 
-        launcher = SimpleNamespace(require_ark_window=Mock(return_value=True))
+        launcher = SimpleNamespace(
+            require_ark_window=Mock(return_value=True),
+            refocus_active_helper=Mock(),
+        )
         config = default_deposit_config("CRYSTAL", "GRIND")
         patches = [
             patch.object(
@@ -340,8 +504,26 @@ class QmlHelperControllerTests(unittest.TestCase):
             controller.captureNewRow("dedi")
 
         launcher.require_ark_window.assert_called_once_with("capture route location")
+        launcher.refocus_active_helper.assert_called_once()
         row = controller._config["depositCrystalData"][0]["dedi"]["items"][0]
         self.assertEqual(row["location"], {"yaw": 11.5, "pitch": 22.5})
+
+    def test_position_view_refocuses_helper_after_applying_view(self):
+        launcher = SimpleNamespace(
+            require_ark_window=Mock(return_value=True),
+            refocus_active_helper=Mock(),
+        )
+        settings = SimpleNamespace(settings=Mock(return_value={"station_yaw": 123.0}))
+        controller = PositionRenderHelperController(launcher, settings)
+
+        with patch(
+            "source.launcher.controllers.helpers.position_render_helper_controller.view_yaw"
+        ) as view_yaw:
+            controller.viewStationYaw()
+
+        launcher.require_ark_window.assert_called_once_with("view render position")
+        view_yaw.assert_called_once_with(123.0)
+        launcher.refocus_active_helper.assert_called_once()
 
     def test_deposit_controller_add_vault_item_uses_known_item_list(self):
         controller, _launcher = self.make_deposit_controller()
@@ -458,6 +640,17 @@ class QmlHelperControllerTests(unittest.TestCase):
         controller.handleHotkey()
 
         self.assertEqual(toggles, ["autoJoin"])
+        self.assertEqual(focuses, [True])
+
+    def test_helper_controller_can_focus_active_helper_directly(self):
+        controller = HelperWindowController()
+        focuses = []
+        controller.focusRequested.connect(lambda: focuses.append(True))
+
+        controller.focusActiveHelper()
+        controller.openHelper("position", {})
+        controller.focusActiveHelper()
+
         self.assertEqual(focuses, [True])
 
     def test_helper_controller_ignores_unknown_helper_names(self):

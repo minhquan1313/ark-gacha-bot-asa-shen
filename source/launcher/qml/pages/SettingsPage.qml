@@ -96,9 +96,17 @@ Item {
                                         Layout.preferredWidth: ThemeModule.Theme.size.settingsActionInputWidth
                                     }
                                     CyberButton {
+                                        objectName: "SettingsGroupActionButton"
                                         text: modelData.label
                                         variant: modelData.variant || "secondary"
-                                        onClicked: settingsController.runGroupAction(modelData.key, actionInput.text)
+                                        onClicked: {
+                                            var actionKey = String(modelData.key);
+                                            if (actionKey.indexOf("open_helper:") === 0) {
+                                                toolsController.openHelper(actionKey.slice(String("open_helper:").length));
+                                                return;
+                                            }
+                                            settingsController.runGroupAction(actionKey, actionInput.text);
+                                        }
                                     }
                                 }
                             }
@@ -123,6 +131,23 @@ Item {
                                         : modelData.type === "summary" ? summaryEditor
                                         : modelData.type === "options" ? optionsEditor
                                         : textEditor
+                                }
+
+                                Repeater {
+                                    model: modelData.actions || []
+                                    delegate: CyberButton {
+                                        objectName: "SettingsFieldActionButton"
+                                        text: modelData.label || ""
+                                        variant: modelData.variant || "secondary"
+                                        onClicked: {
+                                            var actionKey = String(modelData.key);
+                                            if (actionKey.indexOf("open_helper:") === 0) {
+                                                toolsController.openHelperPayload(actionKey.slice(String("open_helper:").length), modelData.value || {});
+                                                return;
+                                            }
+                                            settingsController.runFieldAction(actionKey, modelData.value);
+                                        }
+                                    }
                                 }
 
                                 Component {
@@ -153,10 +178,23 @@ Item {
 
                                 Component {
                                     id: summaryEditor
-                                    Text {
-                                        text: String(modelData.value)
-                                        color: ThemeModule.Theme.colors.text
-                                        wrapMode: Text.WordWrap
+                                    ColumnLayout {
+                                        spacing: ThemeModule.Theme.spacing.xs
+                                        Text {
+                                            text: String(modelData.value)
+                                            color: ThemeModule.Theme.colors.text
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                        Text {
+                                            objectName: "SettingsFieldWarning"
+                                            visible: Boolean(modelData.warning)
+                                            text: modelData.warning || ""
+                                            color: ThemeModule.Theme.colors.yellow
+                                            font.family: ThemeModule.Theme.fonts.mono
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
                                     }
                                 }
                             }

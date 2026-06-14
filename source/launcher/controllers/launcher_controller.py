@@ -1,4 +1,5 @@
 import ctypes
+import os
 import subprocess
 import sys
 import threading
@@ -24,6 +25,7 @@ from source.launcher.constants import (
     APP_NAME,
     APP_TITLE,
     APP_VERSION,
+    GACHA_LOG_FILE,
     GAME_WINDOW_TITLE,
     SUPPORTED_GAME_RESOLUTIONS,
 )
@@ -43,7 +45,7 @@ from source.launcher.system import (
 )
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
 
-START_GAME_DISABLE_DELAY = 20000
+START_GAME_DISABLE_DELAY = 10000
 
 
 class LauncherHotkeyFilter(QAbstractNativeEventFilter):
@@ -125,9 +127,7 @@ class LauncherController(QObject):
             self.queue_controller.updateSnapshot
         )
         self.settings_controller.saved.connect(self.log_controller.append)
-        self.settings_controller.error.connect(
-            lambda title, message: self.dialogRequested.emit(title, message, "error")
-        )
+        self.settings_controller.error.connect(self._handle_settings_error)
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -169,9 +169,16 @@ class LauncherController(QObject):
             return "danger"
         return "primary"
 
+    @Property(bool, notify=changed)
+    def programStopping(self):
+        return self.program_stopping
+
     @Property(str, notify=changed)
     def serverNumber(self):
-        return self.settings_controller.serverNumber
+        settings_controller = self._settings_controller_or_none()
+        if settings_controller is None:
+            return "0"
+        return settings_controller.serverNumber
 
     @Property(bool, notify=changed)
     def autoStartAllowed(self):
@@ -308,6 +315,7 @@ class LauncherController(QObject):
             )
             self.start_time = time.time()
             self.log_controller.append("[INFO] Started offline runner.\n")
+            self.start_log_tail()
             self.output_reader_stop = threading.Event()
             self.output_reader_thread = threading.Thread(
                 target=self._read_output, args=(self.process,), daemon=True
@@ -331,6 +339,7 @@ class LauncherController(QObject):
         if self._start_game_locked:
             return
         self._start_game_locked = True
+        self._restore_game_locked = True
         self.changed.emit()
         QTimer.singleShot(START_GAME_DISABLE_DELAY, self._unlock_start_game)
         try:
@@ -411,6 +420,7 @@ class LauncherController(QObject):
         self.timer.stop()
         self._unregister_start_stop_hotkey()
         self.output_reader_stop.set()
+        self.stop_log_tail()
         if self.is_running():
             terminate_process_tree(self.process)
         self._close_output_reader(self.process)
@@ -424,10 +434,17 @@ class LauncherController(QObject):
         return game_size is None or game_size not in SUPPORTED_GAME_RESOLUTIONS
 
     def _is_auto_start_allowed(self):
-        return str(self.settings_controller.serverNumber).strip() not in ("", "0")
+        settings_controller = self._settings_controller_or_none()
+        if settings_controller is None:
+            return False
+        return str(settings_controller.serverNumber).strip() not in ("", "0")
+
+    def _settings_controller_or_none(self):
+        return getattr(self, "settings_controller", None)
 
     def _unlock_start_game(self):
         self._start_game_locked = False
+        self._restore_game_locked = False
         self.changed.emit()
 
     def tick(self):
@@ -451,6 +468,14 @@ class LauncherController(QObject):
             return False
         return True
 
+    def refocus_active_helper(self):
+        if self.helper_window_controller is not None:
+            self.helper_window_controller.focusActiveHelper()
+
+    def _handle_settings_error(self, title, message):
+        self.log_controller.append(f"[ERROR] {title}: {message}\n")
+        self.dialogRequested.emit(title, message, "error")
+
     def _poll_program_stop(self):
         if self.process is None:
             return
@@ -465,6 +490,7 @@ class LauncherController(QObject):
 
     def _finalize_program_stop(self):
         was_stopping = self.program_stopping
+        self.stop_log_tail()
         self._close_output_reader(self.process)
         self.process = None
         self.program_stopping = False
@@ -479,9 +505,10 @@ class LauncherController(QObject):
         for line in process.stdout:
             if self.output_reader_stop.is_set():
                 break
-            self.log_controller.append(line)
+            self._emit_log_line(line)
         if not self.output_reader_stop.is_set():
-            self.log_controller.append("[WARN] Program output stream closed.\n")
+            self.stop_log_tail()
+            self._emit_log_line("[WARN] Program output stream closed.\n")
 
     def _close_output_reader(self, process):
         self.output_reader_stop.set()
@@ -498,6 +525,63 @@ class LauncherController(QObject):
         ):
             thread.join(timeout=1)
         self.output_reader_thread = None
+
+    def start_log_tail(self):
+        self.stop_log_tail()
+        self.log_tail_stop = threading.Event()
+        self.log_file_position = self._log_file_size()
+        self.log_tail_thread = threading.Thread(target=self.tail_log_file, daemon=True)
+        self.log_tail_thread.start()
+
+    def stop_log_tail(self):
+        thread = self.log_tail_thread
+        if thread and thread.is_alive():
+            self.log_tail_stop.set()
+            thread.join(timeout=1)
+        self.log_tail_thread = None
+
+    def tail_log_file(self):
+        missing_logged = False
+        while not self.log_tail_stop.is_set():
+            try:
+                if not os.path.exists(GACHA_LOG_FILE):
+                    if not missing_logged:
+                        self._emit_log_line(
+                            f"[WARN] Log file not found yet: {GACHA_LOG_FILE}\n"
+                        )
+                        missing_logged = True
+                    self.log_tail_stop.wait(1)
+                    continue
+
+                missing_logged = False
+                file_size = os.path.getsize(GACHA_LOG_FILE)
+                if file_size < self.log_file_position:
+                    self.log_file_position = 0
+
+                with open(GACHA_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+                    f.seek(self.log_file_position)
+                    lines = f.readlines()
+                    self.log_file_position = f.tell()
+
+                for line in lines:
+                    self._emit_log_line(
+                        self.log_controller.normalize_file_log_line(line)
+                    )
+            except Exception as exc:
+                self._emit_log_line(f"[ERROR] Unable to read live log file: {exc}\n")
+                self.log_tail_stop.wait(2)
+                continue
+            self.log_tail_stop.wait(1)
+
+    def _log_file_size(self):
+        try:
+            return os.path.getsize(GACHA_LOG_FILE)
+        except OSError:
+            return 0
+
+    def _emit_log_line(self, line):
+        if not self.shutdown_started:
+            self.log_controller.append(line)
 
     def _sync_system_stats(self):
         if psutil:

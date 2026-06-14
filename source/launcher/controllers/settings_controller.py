@@ -1,4 +1,5 @@
 from PySide6.QtCore import Property, QObject, Signal, Slot
+from PySide6.QtGui import QGuiApplication
 
 from source.gacha_bot.deposit_config import (
     default_crystal_route,
@@ -16,14 +17,18 @@ from source.launcher.constants import (
 from source.launcher.settings_store import load_settings, save_settings
 from source.launcher.station_config import (
     DEFAULT_PEGO_DELAY,
+    auto_fill_gacha_group,
     default_gacha_entry,
     default_gacha_pair,
     default_pego_entry,
+    gacha_name_from_teleporter,
     grouped_gacha_entries,
     load_gacha_config,
     load_pego_config,
+    missing_gacha_side,
     next_gacha_teleporter,
     next_pego_index,
+    risky_teleporter_names,
     save_gacha_config,
     save_pego_config,
     set_all_pego_delays,
@@ -34,6 +39,7 @@ class SettingsController(QObject):
     changed = Signal()
     saved = Signal(str)
     error = Signal(str, str)
+    fieldActionConfirmationRequested = Signal(str, str, str, "QVariant")
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -105,8 +111,21 @@ class SettingsController(QObject):
                 },
                 {"key": "reset_pego", "label": "RESET PEGO", "variant": "danger"},
             ]
+        if self._current_group == "POSITION / RENDER":
+            return [
+                {
+                    "key": "open_helper:position",
+                    "label": "OPEN POSITION HELPER",
+                    "variant": "primary",
+                },
+            ]
         if self._current_group == "STORAGE":
             return [
+                {
+                    "key": "open_helper:deposit",
+                    "label": "OPEN ROUTE HELPER",
+                    "variant": "primary",
+                },
                 {
                     "key": "add_crystal_route",
                     "label": "ADD CRYSTAL ROUTE",
@@ -163,6 +182,9 @@ class SettingsController(QObject):
         if key.startswith("gacha:"):
             self._set_gacha_value(key, value)
             return
+        if key.startswith("gacha_group:"):
+            self._set_gacha_group_value(key, value)
+            return
         if key.startswith("pego:"):
             self._set_pego_value(key, value)
             return
@@ -182,6 +204,16 @@ class SettingsController(QObject):
 
     @Slot()
     def resetVisible(self):
+        special_reset_actions = {
+            "GACHA": "reset_gacha",
+            "PEGO": "reset_pego",
+            "STORAGE": "reset_storage",
+        }
+        action = special_reset_actions.get(self._current_group)
+        if action:
+            self.runGroupAction(action, "")
+            return
+
         for key in SETTINGS_GROUPS.get(self._current_group, []):
             if key in DEFAULT_SETTINGS:
                 self._settings[key] = DEFAULT_SETTINGS[key]
@@ -247,6 +279,48 @@ class SettingsController(QObject):
             return
         self.changed.emit()
 
+    @Slot(str, "QVariant")
+    def runFieldAction(self, action, value=""):
+        action = str(action)
+        try:
+            if action == "copy":
+                self.copyValue(value)
+                return
+            if action == "add_gacha_to_group":
+                self._add_gacha_to_group(value)
+            elif action == "auto_fill_gacha_group":
+                self.fieldActionConfirmationRequested.emit(
+                    "Auto Fill Gacha Group",
+                    "Auto fill will assign the first available GACHAPAIR name, then overwrite this group's gacha names and sides.",
+                    "AUTO FILL",
+                    value,
+                )
+            elif action == "remove_gacha":
+                self._remove_gacha(value)
+            elif action == "remove_gacha_group":
+                self._remove_gacha_group(value)
+            elif action == "remove_pego":
+                self._remove_pego(value)
+            else:
+                return
+        except Exception as exc:
+            self.error.emit("Settings Action Failed", str(exc))
+            return
+        self.changed.emit()
+
+    @Slot(str, "QVariant")
+    def confirmFieldAction(self, action, value=""):
+        action = str(action)
+        try:
+            if action == "auto_fill_gacha_group":
+                self._auto_fill_gacha_group(value)
+            else:
+                return
+        except Exception as exc:
+            self.error.emit("Settings Action Failed", str(exc))
+            return
+        self.changed.emit()
+
     def settings(self):
         return self._settings.copy()
 
@@ -279,6 +353,71 @@ class SettingsController(QObject):
         save_gacha_config(entries)
         self.saved.emit(f"[SUCCESS] Removed gacha pair {last_teleporter}.\n")
 
+    def _add_gacha_to_group(self, teleporter):
+        teleporter = str(teleporter)
+        entries = load_gacha_config()
+        group = [
+            entry
+            for entry in entries
+            if str(entry.get("teleporter", "")) == teleporter
+        ]
+        if len(group) >= 2:
+            self.saved.emit("[INFO] A gacha pair can only contain two gachas.\n")
+            return
+        side = missing_gacha_side(group)
+        if side is None:
+            self.saved.emit("[INFO] This gacha pair already has left and right sides.\n")
+            return
+        entries.append(
+            default_gacha_entry(
+                gacha_name_from_teleporter(teleporter, side),
+                teleporter,
+                side,
+            )
+        )
+        save_gacha_config(entries)
+        self.saved.emit(f"[SUCCESS] Added {side} gacha to {teleporter}.\n")
+
+    def _remove_gacha(self, index):
+        entries = load_gacha_config()
+        index = self._coerce_config_index(index, len(entries), "gacha")
+        removed = entries.pop(index)
+        save_gacha_config(entries)
+        self.saved.emit(f"[SUCCESS] Removed gacha {removed.get('name', index + 1)}.\n")
+
+    def _remove_gacha_group(self, teleporter):
+        teleporter = str(teleporter)
+        entries = load_gacha_config()
+        kept_entries = [
+            entry
+            for entry in entries
+            if str(entry.get("teleporter", "")) != teleporter
+        ]
+        if len(kept_entries) == len(entries):
+            self.saved.emit("[INFO] No gacha group found to remove.\n")
+            return
+        save_gacha_config(kept_entries)
+        self.saved.emit(f"[SUCCESS] Removed gacha group {teleporter}.\n")
+
+    def _auto_fill_gacha_group(self, teleporter):
+        teleporter = str(teleporter)
+        entries = load_gacha_config()
+        group = [
+            entry
+            for entry in entries
+            if str(entry.get("teleporter", "")) == teleporter
+        ]
+        if not group:
+            self.saved.emit("[INFO] No gacha group found to auto fill.\n")
+            return
+        new_teleporter = next_gacha_teleporter(
+            entries,
+            exclude_teleporter=teleporter,
+        )
+        auto_fill_gacha_group(group, new_teleporter)
+        save_gacha_config(entries)
+        self.saved.emit(f"[SUCCESS] Auto filled gacha group {new_teleporter}.\n")
+
     def _add_pego(self):
         entries = load_pego_config()
         delay = entries[-1]["delay"] if entries else DEFAULT_PEGO_DELAY
@@ -294,6 +433,13 @@ class SettingsController(QObject):
         entries.pop()
         save_pego_config(entries)
         self.saved.emit("[SUCCESS] Last pego removed.\n")
+
+    def _remove_pego(self, index):
+        entries = load_pego_config()
+        index = self._coerce_config_index(index, len(entries), "pego")
+        removed = entries.pop(index)
+        save_pego_config(entries)
+        self.saved.emit(f"[SUCCESS] Removed pego {removed.get('name', index + 1)}.\n")
 
     def _apply_pego_delay(self, value):
         entries = load_pego_config()
@@ -338,14 +484,47 @@ class SettingsController(QObject):
         return count
 
     @staticmethod
-    def _field(key, label, value, field_type="text", options=None):
+    def _field(
+        key,
+        label,
+        value,
+        field_type="text",
+        options=None,
+        action_label="",
+        action_key="",
+        action_value="",
+        actions=None,
+        warning="",
+    ):
+        action_items = list(actions or [])
+        if action_label:
+            action_items.insert(
+                0,
+                {
+                    "key": action_key or "copy",
+                    "label": action_label,
+                    "value": action_value,
+                    "variant": "secondary",
+                },
+            )
         return {
             "key": key,
             "label": label,
             "value": value,
             "type": field_type,
             "options": list(options or []),
+            "actions": action_items,
+            "actionLabel": action_items[0]["label"] if action_items else "",
+            "actionValue": action_items[0]["value"] if action_items else "",
+            "warning": warning,
         }
+
+    @Slot(str)
+    def copyValue(self, value):
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(str(value))
+        self.saved.emit("[SUCCESS] Teleport name copied to clipboard.\n")
 
     def _gacha_fields(self):
         try:
@@ -355,30 +534,119 @@ class SettingsController(QObject):
                 "GACHA CONFIG", lambda: f"Unable to load: {exc}"
             )
         rows = []
-        for index, entry in enumerate(entries):
-            prefix = f"Gacha {index + 1}"
+        risky = risky_teleporter_names(entries)
+        for group_index, (teleporter, group) in enumerate(grouped_gacha_entries(entries)):
+            group_entries = [entry for _index, entry in group]
+            group_actions = [
+                {
+                    "key": "copy",
+                    "label": "COPY",
+                    "value": teleporter,
+                    "variant": "secondary",
+                },
+                {
+                    "key": "auto_fill_gacha_group",
+                    "label": "AUTO FILL",
+                    "value": teleporter,
+                    "variant": "secondary",
+                },
+                {
+                    "key": "remove_gacha_group",
+                    "label": "REMOVE GROUP",
+                    "value": teleporter,
+                    "variant": "danger",
+                },
+            ]
+            if missing_gacha_side(group_entries) is not None:
+                group_actions.append(
+                    {
+                        "key": "add_gacha_to_group",
+                        "label": "ADD GACHA",
+                        "value": teleporter,
+                        "variant": "secondary",
+                    }
+                )
             rows.append(
                 self._field(
-                    f"gacha:{index}:name", f"{prefix} name", entry.get("name", "")
+                    "",
+                    f"{teleporter or 'NO TELEPORT'} ({len(group)}/2)"
+                    + (" WARNING" if teleporter in risky else ""),
+                    "Gacha group",
+                    "summary",
+                    actions=group_actions,
+                    warning=(
+                        "Teleport name may match longer teleport names in Ark search. "
+                        "Rename it to a unique form like GACHAPAIR_2."
+                        if teleporter in risky
+                        else ""
+                    ),
                 )
             )
             rows.append(
                 self._field(
-                    f"gacha:{index}:teleporter",
-                    f"{prefix} teleporter",
-                    entry.get("teleporter", ""),
+                    f"gacha_group:{group_index}:teleporter",
+                    "Group teleporter",
+                    teleporter,
                 )
             )
-            side = str(entry.get("side", "left")).lower()
-            rows.append(
-                self._field(
-                    f"gacha:{index}:side",
-                    f"{prefix} side",
-                    side if side in {"left", "right"} else "left",
-                    "options",
-                    ["left", "right"],
-                )
+            for index, entry in group:
+                rows.extend(self._gacha_entry_fields(index, entry))
+        return rows
+
+    def _gacha_entry_fields(self, index, entry):
+        rows = []
+        prefix = f"Gacha {index + 1}"
+        rows.append(
+            self._field(
+                f"gacha:{index}:name",
+                f"{prefix} name",
+                entry.get("name", ""),
+                actions=[
+                    {
+                        "key": "remove_gacha",
+                        "label": "REMOVE",
+                        "value": index,
+                        "variant": "danger",
+                    }
+                ],
             )
+        )
+        rows.append(
+            self._field(
+                f"gacha:{index}:teleporter",
+                f"{prefix} teleporter",
+                entry.get("teleporter", ""),
+                action_label="COPY",
+                action_key="copy",
+                action_value=entry.get("teleporter", ""),
+            )
+        )
+        side = str(entry.get("side", "left")).lower()
+        rows.append(
+            self._field(
+                f"gacha:{index}:side",
+                f"{prefix} side",
+                side if side in {"left", "right"} else "left",
+                "options",
+                ["left", "right"],
+            )
+        )
+        rows.append(
+            self._field(
+                f"gacha:{index}:depo_tp",
+                f"{prefix} depo tp",
+                entry.get("depo_tp", ""),
+            )
+        )
+        rows.append(
+            self._field(
+                f"gacha:{index}:resource_type",
+                f"{prefix} resource type",
+                entry.get("resource_type", ""),
+                "options",
+                ["", "collect"],
+            )
+        )
         return rows
 
     def _pego_fields(self):
@@ -391,7 +659,17 @@ class SettingsController(QObject):
             prefix = f"Pego {index + 1}"
             rows.append(
                 self._field(
-                    f"pego:{index}:name", f"{prefix} name", entry.get("name", "")
+                    f"pego:{index}:name",
+                    f"{prefix} name",
+                    entry.get("name", ""),
+                    actions=[
+                        {
+                            "key": "remove_pego",
+                            "label": "REMOVE",
+                            "value": index,
+                            "variant": "danger",
+                        }
+                    ],
                 )
             )
             rows.append(
@@ -399,6 +677,8 @@ class SettingsController(QObject):
                     f"pego:{index}:teleporter",
                     f"{prefix} teleporter",
                     entry.get("teleporter", ""),
+                    action_label="COPY",
+                    action_value=entry.get("teleporter", ""),
                 )
             )
             rows.append(
@@ -418,6 +698,7 @@ class SettingsController(QObject):
         rows = []
         for index, route in enumerate(config.get("depositCrystalData", [])):
             prefix = f"Crystal route {index + 1}"
+            rows.append(self._storage_route_summary("crystal", index, route, prefix))
             rows.append(
                 self._field(
                     f"storage:crystal:{index}:teleport",
@@ -448,6 +729,7 @@ class SettingsController(QObject):
             prefix = f"Grindable route {index + 1}"
             grinder = route.get("grinder", {})
             location = grinder.get("location", {})
+            rows.append(self._storage_route_summary("grindable", index, route, prefix))
             rows.append(
                 self._field(
                     f"storage:grindable:{index}:teleport",
@@ -495,6 +777,23 @@ class SettingsController(QObject):
                 )
             )
         return rows
+
+    def _storage_route_summary(self, route_kind, route_index, route, label):
+        teleport = route.get("teleport") or "NO TELEPORT"
+        return self._field(
+            "",
+            label,
+            teleport,
+            "summary",
+            actions=[
+                {
+                    "key": "open_helper:deposit",
+                    "label": "OPEN HELPER",
+                    "value": {"routeKind": route_kind, "routeIndex": route_index},
+                    "variant": "primary",
+                }
+            ],
+        )
 
     def _object_fields(
         self, route_kind, route_index, object_kind, items, label, vault=False
@@ -548,7 +847,7 @@ class SettingsController(QObject):
             _prefix, index, field = key.split(":", 2)
             entries = load_gacha_config()
             index = self._coerce_config_index(index, len(entries), "gacha")
-            if field not in {"name", "teleporter", "side"}:
+            if field not in {"name", "teleporter", "side", "depo_tp", "resource_type"}:
                 raise ValueError("Unknown gacha field.")
             if field == "side":
                 value = str(value).lower()
@@ -558,7 +857,36 @@ class SettingsController(QObject):
                         "side must be left or right.",
                     )
                     return
+            elif field == "resource_type":
+                value = str(value).lower()
+                if value not in {"", "collect"}:
+                    self.error.emit(
+                        "Invalid Gacha Config",
+                        "resource_type must be blank or collect.",
+                    )
+                    return
             entries[index][field] = str(value)
+            save_gacha_config(entries)
+        except Exception as exc:
+            self.error.emit("Invalid Gacha Config", str(exc))
+            return
+        self.saved.emit("[SUCCESS] Gacha config saved automatically.\n")
+        self.changed.emit()
+
+    def _set_gacha_group_value(self, key, value):
+        try:
+            _prefix, group_index, field = key.split(":", 2)
+            if field != "teleporter":
+                raise ValueError("Unknown gacha group field.")
+            entries = load_gacha_config()
+            groups = grouped_gacha_entries(entries)
+            group_index = self._coerce_config_index(
+                group_index, len(groups), "gacha group"
+            )
+            old_teleporter, _group = groups[group_index]
+            for entry in entries:
+                if str(entry.get("teleporter", "")) == old_teleporter:
+                    entry["teleporter"] = str(value)
             save_gacha_config(entries)
         except Exception as exc:
             self.error.emit("Invalid Gacha Config", str(exc))

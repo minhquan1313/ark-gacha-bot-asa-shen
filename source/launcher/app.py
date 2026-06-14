@@ -60,15 +60,6 @@ def run():
     deposit_route_helper_controller = DepositRouteHelperController(launcher_controller)
     transfer_helper_controller = TransferHelperController(launcher_controller)
 
-    for helper_controller in (
-        auto_join_helper_controller,
-        fertilizer_helper_controller,
-        position_render_helper_controller,
-        deposit_route_helper_controller,
-        transfer_helper_controller,
-    ):
-        helper_controller.dialogRequested.connect(launcher_controller.dialogRequested)
-
     engine = QQmlApplicationEngine()
     engine._controller_refs = [
         settings_controller,

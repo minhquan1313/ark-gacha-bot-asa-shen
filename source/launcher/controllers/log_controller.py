@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from collections import deque
 
 from PySide6.QtCore import Property, QObject, Signal, Slot
@@ -8,6 +9,23 @@ from PySide6.QtGui import QGuiApplication
 from source.launcher.constants import (
     GACHA_LOG_FILE,
     MAX_LAUNCHER_LOG_LINES,
+)
+
+OVERLAY_LOG_LINE_LIMIT = 64
+OVERLAY_LOG_ROW_LIMIT = 3
+_OVERLAY_LEVEL_PREFIX = re.compile(
+    r"^\s*\[(?:DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|SUCCESS|QUEUE|RUNNING|TEMPLATE)\]\s*"
+)
+_OVERLAY_LOGGER_PREFIX = re.compile(
+    r"^(?:(?:\d{2}:\d{2}:\d{2})|(?:\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?))\s*"
+    r"-\s*(?:DEBUG|INFO|WARNING|WARN|ERROR|CRITICAL|TEMPLATE)\s*-\s*[^-]+?\s*-\s*"
+)
+_OVERLAY_MODULE_PREFIX = re.compile(
+    r"^(?:[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+)\s*[:|-]\s*"
+)
+_TIMESTAMP_WITH_LEVEL = re.compile(
+    r"^\s*(?:\[(?:DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|SUCCESS|QUEUE|RUNNING|TEMPLATE)\]\s*)?"
+    r"(?P<ts>(?:\d{2}:\d{2}:\d{2})|(?:\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?))"
 )
 
 
@@ -36,6 +54,15 @@ class LogController(QObject):
     @Property("QVariantList", notify=changed)
     def dashboardLines(self):
         return self._filtered_lines()[-18:]
+
+    @Property("QVariantList", notify=changed)
+    def overlayLines(self):
+        lines = []
+        for line in self._lines:
+            text = self._format_overlay_line(line)
+            if text:
+                lines.append(text)
+        return lines[-OVERLAY_LOG_ROW_LIMIT:]
 
     @Property(str, notify=changed)
     def currentFilter(self):
@@ -89,6 +116,8 @@ class LogController(QObject):
     def clearLogs(self):
         self._lines = []
         self._log_file_position = 0
+        if self._queue_controller is not None:
+            self._queue_controller.clear()
         try:
             with open(GACHA_LOG_FILE, "w", encoding="utf-8") as f:
                 f.truncate(0)
@@ -158,4 +187,23 @@ class LogController(QObject):
         ):
             if marker in text.upper() and f"[{level}]" not in text:
                 return f"[{level}] {text}"
+        return text
+
+    @staticmethod
+    def _format_overlay_line(text):
+        text = str(text).strip()
+
+        # capture timestamp if present (before we remove the logger prefix)
+        m = _TIMESTAMP_WITH_LEVEL.match(text)
+        ts = m.group("ts") if m else None
+
+        text = _OVERLAY_LEVEL_PREFIX.sub("", text)
+        text = _OVERLAY_LOGGER_PREFIX.sub("", text).strip()
+        text = _OVERLAY_MODULE_PREFIX.sub("", text).strip()
+
+        if ts:
+            text = f"{ts} {text}"
+
+        if len(text) > OVERLAY_LOG_LINE_LIMIT:
+            text = f"{text[: OVERLAY_LOG_LINE_LIMIT - 3].rstrip()}..."
         return text

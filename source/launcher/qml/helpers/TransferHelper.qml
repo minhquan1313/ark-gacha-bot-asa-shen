@@ -24,7 +24,25 @@ BaseHelperWindow {
         expandGeneration += 1;
     }
 
+    function commitEditableFields(item) {
+        if (!item) {
+            return;
+        }
+        if (item.commitField) {
+            item.commitField();
+        }
+        var childList = item.children || [];
+        for (var i = 0; i < childList.length; ++i) {
+            commitEditableFields(childList[i]);
+        }
+    }
+
+    function commitFormEdits() {
+        commitEditableFields(formColumn);
+    }
+
     Flickable {
+        objectName: "TransferFormScroll"
         visible: controller && !controller.running
         clip: true
         contentHeight: formColumn.implicitHeight
@@ -69,15 +87,24 @@ BaseHelperWindow {
                             Layout.preferredWidth: ThemeModule.Theme.size.settingsLabelWidth
                         }
                         CyberTextField {
+                            objectName: "TransferSettingField"
+                            property string settingKey: modelData.key
                             text: modelData.value
                             Layout.fillWidth: true
-                            onEditingFinished: controller.updateSetting(modelData.key, text)
+                            function commitField() {
+                                controller.updateSetting(settingKey, text);
+                            }
+                            onEditingFinished: commitField()
                         }
                         CyberButton {
                             visible: Boolean(modelData.capture)
+                            property string settingKey: modelData.key
                             text: "C"
                             variant: "secondary"
-                            onClicked: controller.captureSettingYaw(modelData.key)
+                            onClicked: {
+                                helper.commitFormEdits();
+                                controller.captureSettingYaw(settingKey);
+                            }
                         }
                     }
                 }
@@ -106,13 +133,34 @@ BaseHelperWindow {
                             Layout.fillWidth: true
                             Text { text: modelData.label; color: ThemeModule.Theme.colors.muted; Layout.preferredWidth: ThemeModule.Theme.size.playerLabelWidth }
                             CyberTextField {
+                                objectName: "TransferPlayerField"
+                                property int playerIndex: modelData.index
                                 text: modelData.bedName
                                 color: modelData.warning ? ThemeModule.Theme.colors.yellow : ThemeModule.Theme.colors.text
                                 Layout.fillWidth: true
-                                onEditingFinished: controller.updatePlayer("bed_name", modelData.index, text)
+                                function commitField() {
+                                    controller.updatePlayer("bed_name", playerIndex, text);
+                                }
+                                onEditingFinished: commitField()
                             }
-                            CyberButton { text: "C"; variant: "secondary"; onClicked: controller.copyPlayerName(modelData.index) }
-                            CyberButton { text: "X"; variant: "danger"; onClicked: controller.removePlayer(modelData.index) }
+                            CyberButton {
+                                property int playerIndex: modelData.index
+                                text: "C"
+                                variant: "secondary"
+                                onClicked: {
+                                    helper.commitFormEdits();
+                                    controller.copyPlayerName(playerIndex);
+                                }
+                            }
+                            CyberButton {
+                                property int playerIndex: modelData.index
+                                text: "X"
+                                variant: "danger"
+                                onClicked: {
+                                    helper.commitFormEdits();
+                                    controller.removePlayer(playerIndex);
+                                }
+                            }
                         }
                         Text {
                             objectName: "TransferPlayerWarning"
@@ -125,7 +173,15 @@ BaseHelperWindow {
                         }
                     }
                 }
-                CyberButton { text: "ADD PLAYER"; variant: "secondary"; onClicked: controller.addPlayer() }
+                CyberButton {
+                    objectName: "TransferAddPlayerButton"
+                    text: "ADD PLAYER"
+                    variant: "secondary"
+                    onClicked: {
+                        helper.commitFormEdits();
+                        controller.addPlayer();
+                    }
+                }
             }
 
             DediSection {
@@ -151,10 +207,16 @@ BaseHelperWindow {
     }
 
     CyberButton {
+        objectName: "TransferStartButton"
         text: controller ? controller.startStopText : "START"
         variant: controller ? controller.startStopVariant : "primary"
         Layout.fillWidth: true
-        onClicked: controller.toggle()
+        onClicked: {
+            if (controller && !controller.running) {
+                helper.commitFormEdits();
+            }
+            controller.toggle();
+        }
     }
 
     component DediSection: CollapsiblePanel {
@@ -170,9 +232,13 @@ BaseHelperWindow {
             Layout.fillWidth: true
             Text { text: "TELEPORT"; color: ThemeModule.Theme.colors.muted; Layout.preferredWidth: ThemeModule.Theme.size.settingsLabelWidth }
             CyberTextField {
+                objectName: "TransferTeleportField"
                 text: teleport
                 Layout.fillWidth: true
-                onEditingFinished: helper.controller.setTeleport(side, text)
+                function commitField() {
+                    helper.controller.setTeleport(side, text);
+                }
+                onEditingFinished: commitField()
             }
         }
 
@@ -189,20 +255,70 @@ BaseHelperWindow {
                     columns: 2
                     Layout.fillWidth: true
                     Text { text: "Yaw"; color: ThemeModule.Theme.colors.muted }
-                    CyberTextField { text: modelData.yaw; Layout.fillWidth: true; onEditingFinished: helper.controller.updateDedi(side, modelData.index, "yaw", text) }
+                    CyberTextField {
+                        objectName: "TransferDediValueField"
+                        property int dediIndex: modelData.index
+                        property string dediKey: "yaw"
+                        text: modelData.yaw
+                        Layout.fillWidth: true
+                        function commitField() {
+                            helper.controller.updateDedi(side, dediIndex, dediKey, text);
+                        }
+                        onEditingFinished: commitField()
+                    }
                     Text { text: "Pitch"; color: ThemeModule.Theme.colors.muted }
-                    CyberTextField { text: modelData.pitch; Layout.fillWidth: true; onEditingFinished: helper.controller.updateDedi(side, modelData.index, "pitch", text) }
+                    CyberTextField {
+                        objectName: "TransferDediValueField"
+                        property int dediIndex: modelData.index
+                        property string dediKey: "pitch"
+                        text: modelData.pitch
+                        Layout.fillWidth: true
+                        function commitField() {
+                            helper.controller.updateDedi(side, dediIndex, dediKey, text);
+                        }
+                        onEditingFinished: commitField()
+                    }
                 }
                 CyberSwitch { text: "CROUCHED"; checked: modelData.crouched; onToggled: helper.controller.updateDedi(side, modelData.index, "crouched", checked) }
                 RowLayout {
                     Layout.fillWidth: true
-                    CyberButton { text: "CAPTURE"; onClicked: helper.controller.captureDedi(side, modelData.index) }
-                    CyberButton { text: "VIEW"; onClicked: helper.controller.viewDedi(side, modelData.index) }
+                    CyberButton {
+                        property int dediIndex: modelData.index
+                        text: "CAPTURE"
+                        onClicked: {
+                            helper.commitFormEdits();
+                            helper.controller.captureDedi(side, dediIndex);
+                        }
+                    }
+                    CyberButton {
+                        objectName: "TransferDediViewButton"
+                        property int dediIndex: modelData.index
+                        text: "VIEW"
+                        onClicked: {
+                            helper.commitFormEdits();
+                            helper.controller.viewDedi(side, dediIndex);
+                        }
+                    }
                     Item { Layout.fillWidth: true }
-                    CyberButton { text: "REMOVE"; variant: "danger"; onClicked: helper.controller.removeDedi(side, modelData.index) }
+                    CyberButton {
+                        property int dediIndex: modelData.index
+                        text: "REMOVE"
+                        variant: "danger"
+                        onClicked: {
+                            helper.commitFormEdits();
+                            helper.controller.removeDedi(side, dediIndex);
+                        }
+                    }
                 }
             }
         }
-        CyberButton { text: "ADD DEDI"; variant: "secondary"; onClicked: helper.controller.addDedi(side) }
+        CyberButton {
+            text: "ADD DEDI"
+            variant: "secondary"
+            onClicked: {
+                helper.commitFormEdits();
+                helper.controller.addDedi(side);
+            }
+        }
     }
 }

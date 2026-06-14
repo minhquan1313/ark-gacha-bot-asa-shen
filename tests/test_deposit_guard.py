@@ -61,6 +61,8 @@ def load_deposit_module():
     captures = {}
     debug_screenshots = types.ModuleType("source.utility.debug_screenshots")
     debug_screenshots.CAPTURE_DEDI_DEPOSIT = False
+    debug_screenshots.CAPTURE_DEDI_DEPOSIT_CRYSTAL = False
+    debug_screenshots.CAPTURE_DEDI_DEPOSIT_GRIND = False
     debug_screenshots.CAPTURE_GRINDER_WITHDRAW = False
     debug_screenshots.CAPTURE_ROUTE_READY = False
     debug_screenshots.CAPTURE_VAULT_TRANSFER = False
@@ -123,9 +125,8 @@ class DediDepositGuardTests(unittest.TestCase):
             ["AccessInventory"],
         )
         self.inventory.close.assert_called_once_with()
-        self.deposit.debug_captures[
-            "dedi_deposit_after_click"
-        ].assert_called_once_with("dedi")
+        self.deposit.debug_captures["dedi_deposit_crystal"].assert_not_called()
+        self.deposit.debug_captures["dedi_deposit_grind"].assert_not_called()
 
     def test_crystal_route_ready_capture_happens_before_processing_dedis(self):
         self.deposit._process_crystal_dedi = Mock(return_value=True)
