@@ -65,10 +65,21 @@ Window {
 
     Rectangle {
         anchors.fill: parent
-        color: ThemeModule.Theme.colors.panel
+        color: ThemeModule.Theme.colors.panelStrong
         border.color: ThemeModule.Theme.colors.borderActive
         border.width: ThemeModule.Theme.border.thin
         radius: ThemeModule.Theme.radius.md
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: ThemeModule.Theme.border.thin
+            height: ThemeModule.Theme.border.active
+            color: ThemeModule.Theme.colors.cyan
+            opacity: 0.85
+            radius: ThemeModule.Theme.radius.sm
+        }
 
         MouseArea {
             objectName: "HelperTopDragArea"
@@ -105,7 +116,7 @@ Window {
                     id: headerTitle
                     objectName: "HelperHeaderTitle"
                     text: helper.helperTitle
-                    color: ThemeModule.Theme.colors.text
+                    color: ThemeModule.Theme.colors.cyan
                     font.pixelSize: ThemeModule.Theme.fonts.sectionHeading
                     font.bold: true
                     anchors.left: parent.left
@@ -151,8 +162,9 @@ Window {
             Text {
                 visible: helper.showStatus
                 text: helper.statusText
-                color: ThemeModule.Theme.colors.muted
+                color: helper.statusText.indexOf("Failed") === 0 ? ThemeModule.Theme.colors.red : ThemeModule.Theme.colors.muted
                 font.family: ThemeModule.Theme.fonts.mono
+                font.pixelSize: ThemeModule.Theme.fonts.consoleText
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }

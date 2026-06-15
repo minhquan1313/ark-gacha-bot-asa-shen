@@ -21,7 +21,7 @@ from source.launcher.station_config import (
 
 
 class StationConfigTests(unittest.TestCase):
-    def test_gacha_load_save_preserves_legacy_resource_type(self):
+    def test_gacha_load_save_drops_obsolete_mode_fields(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "gacha.json"
             path.write_text(
@@ -42,8 +42,8 @@ class StationConfigTests(unittest.TestCase):
             data = load_gacha_config(path)
             saved = save_gacha_config(data, path)
 
-            self.assertEqual(saved[0]["resource_type"], "collect")
-            self.assertEqual(saved[0]["depo_tp"], "DEPO")
+            self.assertNotIn("resource_type", saved[0])
+            self.assertNotIn("depo_tp", saved[0])
 
     def test_gacha_save_drops_normal_resource_type(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -66,6 +66,7 @@ class StationConfigTests(unittest.TestCase):
             saved = save_gacha_config(data, path)
 
             self.assertNotIn("resource_type", saved[0])
+            self.assertNotIn("depo_tp", saved[0])
 
     def test_pego_load_save_normalizes_delay_to_int(self):
         with tempfile.TemporaryDirectory() as temp_dir:

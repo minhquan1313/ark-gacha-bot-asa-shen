@@ -80,6 +80,28 @@ class SettingsController(QObject):
         return rows
 
     @Property("QVariantList", notify=changed)
+    def sections(self):
+        if self._current_group == "GACHA":
+            return self._gacha_sections()
+        if self._current_group == "PEGO":
+            return self._pego_sections()
+        if self._current_group == "STORAGE":
+            return self._storage_sections()
+        return [
+            {
+                "title": f"{self._current_group} SETTINGS",
+                "subtitle": "Project settings",
+                "kind": self._current_group.lower().replace(" / ", "_").replace(" ", "_"),
+                "index": 0,
+                "summary": f"{len(self.fields)} fields",
+                "expandedDefault": True,
+                "actions": [],
+                "fields": self.fields,
+                "children": [],
+            }
+        ]
+
+    @Property("QVariantList", notify=changed)
     def groupActions(self):
         if self._current_group == "GACHA":
             return [
@@ -93,7 +115,7 @@ class SettingsController(QObject):
                     "label": "REMOVE LAST PAIR",
                     "variant": "danger",
                 },
-                {"key": "reset_gacha", "label": "RESET GACHA", "variant": "danger"},
+                {"key": "reset_gacha", "label": "RESTORE DEFAULT", "variant": "danger"},
             ]
         if self._current_group == "PEGO":
             return [
@@ -104,12 +126,7 @@ class SettingsController(QObject):
                     "variant": "secondary",
                     "input": "Delay",
                 },
-                {
-                    "key": "remove_last_pego",
-                    "label": "REMOVE LAST PEGO",
-                    "variant": "danger",
-                },
-                {"key": "reset_pego", "label": "RESET PEGO", "variant": "danger"},
+                {"key": "reset_pego", "label": "RESTORE DEFAULT", "variant": "danger"},
             ]
         if self._current_group == "POSITION / RENDER":
             return [
@@ -122,11 +139,6 @@ class SettingsController(QObject):
         if self._current_group == "STORAGE":
             return [
                 {
-                    "key": "open_helper:deposit",
-                    "label": "OPEN ROUTE HELPER",
-                    "variant": "primary",
-                },
-                {
                     "key": "add_crystal_route",
                     "label": "ADD CRYSTAL ROUTE",
                     "variant": "secondary",
@@ -136,17 +148,7 @@ class SettingsController(QObject):
                     "label": "ADD GRINDABLE ROUTE",
                     "variant": "secondary",
                 },
-                {
-                    "key": "remove_last_crystal_route",
-                    "label": "REMOVE LAST CRYSTAL",
-                    "variant": "danger",
-                },
-                {
-                    "key": "remove_last_grindable_route",
-                    "label": "REMOVE LAST GRINDABLE",
-                    "variant": "danger",
-                },
-                {"key": "reset_storage", "label": "RESET STORAGE", "variant": "danger"},
+                {"key": "reset_storage", "label": "RESTORE DEFAULT", "variant": "danger"},
             ]
         return []
 
@@ -301,6 +303,8 @@ class SettingsController(QObject):
                 self._remove_gacha_group(value)
             elif action == "remove_pego":
                 self._remove_pego(value)
+            elif action == "remove_storage_route":
+                self._remove_storage_route(value)
             else:
                 return
         except Exception as exc:
@@ -457,6 +461,28 @@ class SettingsController(QObject):
         save_deposit_config(config)
         self.saved.emit(f"[SUCCESS] Last {label} route removed.\n")
 
+    def _remove_storage_route(self, value):
+        route_kind = str(value.get("routeKind", "")) if isinstance(value, dict) else ""
+        route_index = value.get("routeIndex", 0) if isinstance(value, dict) else 0
+        key = {
+            "crystal": "depositCrystalData",
+            "grindable": "depositGrindableData",
+        }.get(route_kind)
+        if key is None:
+            self.saved.emit("[INFO] Unknown storage route type.\n")
+            return
+        config = load_deposit_config()
+        routes = config.get(key, [])
+        index = self._coerce_config_index(route_index, len(routes), "storage route")
+        if len(routes) <= 1:
+            self.saved.emit(f"[INFO] At least one {route_kind} route must remain.\n")
+            return
+        removed = routes.pop(index)
+        save_deposit_config(config)
+        self.saved.emit(
+            f"[SUCCESS] Removed {route_kind} route {removed.get('teleport', index + 1)}.\n"
+        )
+
     def _coerce_value(self, key, value):
         default = DEFAULT_SETTINGS[key]
         if isinstance(default, bool):
@@ -593,6 +619,87 @@ class SettingsController(QObject):
                 rows.extend(self._gacha_entry_fields(index, entry))
         return rows
 
+    def _gacha_sections(self):
+        try:
+            entries = load_gacha_config()
+        except Exception as exc:
+            return [
+                {
+                    "title": "GACHA CONFIG",
+                    "subtitle": "Unable to load",
+                    "actions": [],
+                    "fields": self._summary_fields(
+                        "GACHA CONFIG", lambda: f"Unable to load: {exc}"
+                    ),
+                }
+            ]
+
+        sections = []
+        risky = risky_teleporter_names(entries)
+        for group_index, (teleporter, group) in enumerate(grouped_gacha_entries(entries)):
+            group_entries = [entry for _index, entry in group]
+            title = f"{teleporter or 'NO TELEPORT'} ({len(group)}/2)"
+            warning = ""
+            if teleporter in risky:
+                title += " WARNING"
+                warning = (
+                    "Teleport name may match longer teleport names in Ark search. "
+                    "Rename it to a unique form like GACHAPAIR_2."
+                )
+            actions = [
+                {
+                    "key": "copy",
+                    "label": "COPY",
+                    "value": teleporter,
+                    "variant": "secondary",
+                },
+                {
+                    "key": "auto_fill_gacha_group",
+                    "label": "AUTO FILL",
+                    "value": teleporter,
+                    "variant": "secondary",
+                },
+                {
+                    "key": "remove_gacha_group",
+                    "label": "REMOVE GROUP",
+                    "value": teleporter,
+                    "variant": "danger",
+                },
+            ]
+            if missing_gacha_side(group_entries) is not None:
+                actions.append(
+                    {
+                        "key": "add_gacha_to_group",
+                        "label": "ADD GACHA",
+                        "value": teleporter,
+                        "variant": "secondary",
+                    }
+                )
+            fields = [
+                self._field(
+                    f"gacha_group:{group_index}:teleporter",
+                    "Group teleporter",
+                    teleporter,
+                    warning=warning,
+                )
+            ]
+            for index, entry in group:
+                fields.extend(self._gacha_entry_fields(index, entry))
+            sections.append(
+                {
+                    "title": title,
+                    "subtitle": "Gacha group",
+                    "kind": "gacha",
+                    "index": group_index,
+                    "summary": f"{len(group)} / 2 entries",
+                    "expandedDefault": False,
+                    "actions": actions,
+                    "fields": fields,
+                    "children": [],
+                }
+            )
+        return sections
+
     def _gacha_entry_fields(self, index, entry):
         rows = []
         prefix = f"Gacha {index + 1}"
@@ -631,22 +738,6 @@ class SettingsController(QObject):
                 ["left", "right"],
             )
         )
-        rows.append(
-            self._field(
-                f"gacha:{index}:depo_tp",
-                f"{prefix} depo tp",
-                entry.get("depo_tp", ""),
-            )
-        )
-        rows.append(
-            self._field(
-                f"gacha:{index}:resource_type",
-                f"{prefix} resource type",
-                entry.get("resource_type", ""),
-                "options",
-                ["", "collect"],
-            )
-        )
         return rows
 
     def _pego_fields(self):
@@ -656,37 +747,62 @@ class SettingsController(QObject):
             return self._summary_fields("PEGO CONFIG", lambda: f"Unable to load: {exc}")
         rows = []
         for index, entry in enumerate(entries):
-            prefix = f"Pego {index + 1}"
-            rows.append(
-                self._field(
-                    f"pego:{index}:name",
-                    f"{prefix} name",
-                    entry.get("name", ""),
-                    actions=[
-                        {
-                            "key": "remove_pego",
-                            "label": "REMOVE",
-                            "value": index,
-                            "variant": "danger",
-                        }
-                    ],
-                )
-            )
-            rows.append(
-                self._field(
-                    f"pego:{index}:teleporter",
-                    f"{prefix} teleporter",
-                    entry.get("teleporter", ""),
-                    action_label="COPY",
-                    action_value=entry.get("teleporter", ""),
-                )
-            )
-            rows.append(
-                self._field(
-                    f"pego:{index}:delay", f"{prefix} delay", entry.get("delay", "")
-                )
-            )
+            rows.extend(self._pego_entry_fields(index, entry))
         return rows
+
+    def _pego_sections(self):
+        try:
+            entries = load_pego_config()
+        except Exception as exc:
+            return [
+                {
+                    "title": "PEGO CONFIG",
+                    "subtitle": "Unable to load",
+                    "actions": [],
+                    "fields": self._summary_fields(
+                        "PEGO CONFIG", lambda: f"Unable to load: {exc}"
+                    ),
+                }
+            ]
+        return [
+            {
+                "title": f"PEGO {index + 1}",
+                "subtitle": str(entry.get("name", "")),
+                "kind": "pego",
+                "index": index,
+                "summary": str(entry.get("teleporter", "")),
+                "expandedDefault": False,
+                "actions": [
+                    {
+                        "key": "remove_pego",
+                        "label": "REMOVE",
+                        "value": index,
+                        "variant": "danger",
+                    }
+                ],
+                "fields": self._pego_entry_fields(index, entry),
+                "children": [],
+            }
+            for index, entry in enumerate(entries)
+        ]
+
+    def _pego_entry_fields(self, index, entry):
+        prefix = f"Pego {index + 1}"
+        return [
+            self._field(
+                f"pego:{index}:name",
+                f"{prefix} name",
+                entry.get("name", ""),
+            ),
+            self._field(
+                f"pego:{index}:teleporter",
+                f"{prefix} teleporter",
+                entry.get("teleporter", ""),
+                action_label="COPY",
+                action_value=entry.get("teleporter", ""),
+            ),
+            self._field(f"pego:{index}:delay", f"{prefix} delay", entry.get("delay", "")),
+        ]
 
     def _storage_fields(self):
         try:
@@ -778,6 +894,153 @@ class SettingsController(QObject):
             )
         return rows
 
+    def _storage_sections(self):
+        try:
+            config = load_deposit_config()
+        except Exception as exc:
+            return [
+                {
+                    "title": "STORAGE ROUTES",
+                    "subtitle": "Unable to load",
+                    "actions": [],
+                    "fields": self._summary_fields(
+                        "STORAGE ROUTES", lambda: f"Unable to load: {exc}"
+                    ),
+                }
+            ]
+        sections = []
+        for index, route in enumerate(config.get("depositCrystalData", [])):
+            prefix = f"Crystal route {index + 1}"
+            sections.append(
+                {
+                    "title": prefix,
+                    "subtitle": route.get("teleport") or "NO TELEPORT",
+                    "kind": "crystal",
+                    "index": index,
+                    "band": "CRYSTAL ROUTES",
+                    "summary": self._storage_route_summary_text("crystal", route),
+                    "expandedDefault": False,
+                    "actions": self._storage_route_actions("crystal", index),
+                    "fields": self._storage_route_fields("crystal", index, route, prefix),
+                    "children": [],
+                }
+            )
+        for index, route in enumerate(config.get("depositGrindableData", [])):
+            prefix = f"Grindable route {index + 1}"
+            sections.append(
+                {
+                    "title": prefix,
+                    "subtitle": route.get("teleport") or "NO TELEPORT",
+                    "kind": "grindable",
+                    "index": index,
+                    "band": "GRINDABLE ROUTES",
+                    "summary": self._storage_route_summary_text("grindable", route),
+                    "expandedDefault": False,
+                    "actions": self._storage_route_actions("grindable", index),
+                    "fields": self._storage_route_fields(
+                        "grindable", index, route, prefix
+                    ),
+                    "children": [],
+                }
+            )
+        return sections
+
+    def _storage_route_actions(self, route_kind, route_index):
+        helper_name = "depositCrystal" if route_kind == "crystal" else "depositGrindable"
+        return [
+            {
+                "key": f"open_helper:{helper_name}",
+                "label": "OPEN HELPER",
+                "value": {"routeKind": route_kind, "routeIndex": route_index},
+                "variant": "primary",
+            },
+            {
+                "key": "remove_storage_route",
+                "label": "REMOVE ROUTE",
+                "value": {"routeKind": route_kind, "routeIndex": route_index},
+                "variant": "danger",
+            }
+        ]
+
+    @staticmethod
+    def _storage_route_summary_text(route_kind, route):
+        dedi_count = len(route.get("dedi", {}).get("items", []))
+        if route_kind == "crystal":
+            vault_count = len(route.get("vault", {}).get("items", []))
+            return f"{dedi_count} dedi / {vault_count} vault"
+        grinder = route.get("grinder", {})
+        state = "active" if grinder.get("active", False) else "inactive"
+        return f"{state} grinder / {dedi_count} dedi"
+
+    def _storage_route_fields(self, route_kind, route_index, route, prefix):
+        rows = [
+            self._field(
+                f"storage:{route_kind}:{route_index}:teleport",
+                f"{prefix} teleport",
+                route.get("teleport", ""),
+            )
+        ]
+        if route_kind == "crystal":
+            rows.extend(
+                self._object_fields(
+                    "crystal",
+                    route_index,
+                    "dedi",
+                    route.get("dedi", {}).get("items", []),
+                    f"{prefix} dedi",
+                )
+            )
+            rows.extend(
+                self._object_fields(
+                    "crystal",
+                    route_index,
+                    "vault",
+                    route.get("vault", {}).get("items", []),
+                    f"{prefix} vault",
+                    vault=True,
+                )
+            )
+            return rows
+
+        grinder = route.get("grinder", {})
+        location = grinder.get("location", {})
+        rows.extend(
+            [
+                self._field(
+                    f"storage:grindable:{route_index}:grinder:active",
+                    f"{prefix} grinder active",
+                    grinder.get("active", False),
+                    "bool",
+                ),
+                self._field(
+                    f"storage:grindable:{route_index}:grinder:yaw",
+                    f"{prefix} grinder yaw",
+                    location.get("yaw", ""),
+                ),
+                self._field(
+                    f"storage:grindable:{route_index}:grinder:pitch",
+                    f"{prefix} grinder pitch",
+                    location.get("pitch", ""),
+                ),
+                self._field(
+                    f"storage:grindable:{route_index}:grinder:crouched",
+                    f"{prefix} grinder crouched",
+                    grinder.get("crouched", False),
+                    "bool",
+                ),
+            ]
+        )
+        rows.extend(
+            self._object_fields(
+                "grindable",
+                route_index,
+                "dedi",
+                route.get("dedi", {}).get("items", []),
+                f"{prefix} dedi",
+            )
+        )
+        return rows
+
     def _storage_route_summary(self, route_kind, route_index, route, label):
         teleport = route.get("teleport") or "NO TELEPORT"
         return self._field(
@@ -785,14 +1048,7 @@ class SettingsController(QObject):
             label,
             teleport,
             "summary",
-            actions=[
-                {
-                    "key": "open_helper:deposit",
-                    "label": "OPEN HELPER",
-                    "value": {"routeKind": route_kind, "routeIndex": route_index},
-                    "variant": "primary",
-                }
-            ],
+            actions=self._storage_route_actions(route_kind, route_index),
         )
 
     def _object_fields(
@@ -847,7 +1103,7 @@ class SettingsController(QObject):
             _prefix, index, field = key.split(":", 2)
             entries = load_gacha_config()
             index = self._coerce_config_index(index, len(entries), "gacha")
-            if field not in {"name", "teleporter", "side", "depo_tp", "resource_type"}:
+            if field not in {"name", "teleporter", "side"}:
                 raise ValueError("Unknown gacha field.")
             if field == "side":
                 value = str(value).lower()
@@ -855,14 +1111,6 @@ class SettingsController(QObject):
                     self.error.emit(
                         "Invalid Gacha Config",
                         "side must be left or right.",
-                    )
-                    return
-            elif field == "resource_type":
-                value = str(value).lower()
-                if value not in {"", "collect"}:
-                    self.error.emit(
-                        "Invalid Gacha Config",
-                        "resource_type must be blank or collect.",
                     )
                     return
             entries[index][field] = str(value)

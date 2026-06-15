@@ -669,6 +669,25 @@ class QmlHelperControllerTests(unittest.TestCase):
         self.assertEqual(requested, [("autoJoin", {})])
         self.assertEqual(closed, [])
 
+    def test_helper_controller_accepts_route_specific_deposit_helpers(self):
+        controller = HelperWindowController()
+        requested = []
+        controller.helperRequested.connect(
+            lambda name, payload: requested.append((name, payload))
+        )
+
+        controller.openHelper("depositCrystal", {"routeIndex": 0})
+        controller.openHelper("depositGrindable", {"routeIndex": 1})
+
+        self.assertEqual(controller.activeHelperName, "depositGrindable")
+        self.assertEqual(
+            requested,
+            [
+                ("depositCrystal", {"routeIndex": 0}),
+                ("depositGrindable", {"routeIndex": 1}),
+            ],
+        )
+
     def test_helper_close_clears_hotkey_dispatch_state(self):
         controller = HelperWindowController()
         toggles = []

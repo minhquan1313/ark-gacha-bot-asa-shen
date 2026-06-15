@@ -23,11 +23,6 @@ _OVERLAY_LOGGER_PREFIX = re.compile(
 _OVERLAY_MODULE_PREFIX = re.compile(
     r"^(?:[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+)\s*[:|-]\s*"
 )
-_TIMESTAMP_WITH_LEVEL = re.compile(
-    r"^\s*(?:\[(?:DEBUG|INFO|WARN|WARNING|ERROR|CRITICAL|SUCCESS|QUEUE|RUNNING|TEMPLATE)\]\s*)?"
-    r"(?P<ts>(?:\d{2}:\d{2}:\d{2})|(?:\d{4}[-/]\d{2}[-/]\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?))"
-)
-
 
 class LogController(QObject):
     FILTERS = ["ALL", "INFO", "DEBUG", "WARN", "ERROR", "CRITICAL", "RUNNING", "QUEUE"]
@@ -193,16 +188,9 @@ class LogController(QObject):
     def _format_overlay_line(text):
         text = str(text).strip()
 
-        # capture timestamp if present (before we remove the logger prefix)
-        m = _TIMESTAMP_WITH_LEVEL.match(text)
-        ts = m.group("ts") if m else None
-
         text = _OVERLAY_LEVEL_PREFIX.sub("", text)
         text = _OVERLAY_LOGGER_PREFIX.sub("", text).strip()
         text = _OVERLAY_MODULE_PREFIX.sub("", text).strip()
-
-        if ts:
-            text = f"{ts} {text}"
 
         if len(text) > OVERLAY_LOG_LINE_LIMIT:
             text = f"{text[: OVERLAY_LOG_LINE_LIMIT - 3].rstrip()}..."

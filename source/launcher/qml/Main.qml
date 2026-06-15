@@ -201,14 +201,19 @@ ApplicationWindow {
     Component { id: transferComponent; TransferHelper {} }
     Component { id: fertilizerComponent; FertilizerRefreshHelper {} }
     Component { id: depositComponent; DepositRouteHelper {} }
+    Component { id: depositCrystalComponent; DepositRouteHelper { routeKindFilter: "crystal" } }
+    Component { id: depositGrindableComponent; DepositRouteHelper { routeKindFilter: "grindable" } }
     Component { id: positionComponent; PositionRenderHelper {} }
 
     function applyHelperPayload(helperName, controller, payload) {
         if (!payload) {
             return;
         }
-        if (helperName === "deposit" && payload.routeKind !== undefined && payload.routeIndex !== undefined) {
-            controller.selectRoute(String(payload.routeKind), Number(payload.routeIndex));
+        if ((helperName === "deposit" || helperName === "depositCrystal" || helperName === "depositGrindable") && payload.routeIndex !== undefined) {
+            var kind = payload.routeKind !== undefined
+                ? String(payload.routeKind)
+                : helperName === "depositGrindable" ? "grindable" : "crystal";
+            controller.selectRoute(kind, Number(payload.routeIndex));
         }
     }
 
@@ -225,8 +230,20 @@ ApplicationWindow {
     }
 
     function openHelper(helperName, payload) {
-        var component = helperName === "autoJoin" ? autoJoinComponent : helperName === "transfer" ? transferComponent : helperName === "fertilizer" ? fertilizerComponent : helperName === "position" ? positionComponent : helperName === "deposit" ? depositComponent : null;
-        var controller = helperName === "autoJoin" ? autoJoinHelperController : helperName === "transfer" ? transferHelperController : helperName === "fertilizer" ? fertilizerHelperController : helperName === "position" ? positionRenderHelperController : helperName === "deposit" ? depositRouteHelperController : null;
+        var component = helperName === "autoJoin" ? autoJoinComponent
+            : helperName === "transfer" ? transferComponent
+            : helperName === "fertilizer" ? fertilizerComponent
+            : helperName === "position" ? positionComponent
+            : helperName === "depositCrystal" ? depositCrystalComponent
+            : helperName === "depositGrindable" ? depositGrindableComponent
+            : helperName === "deposit" ? depositComponent
+            : null;
+        var controller = helperName === "autoJoin" ? autoJoinHelperController
+            : helperName === "transfer" ? transferHelperController
+            : helperName === "fertilizer" ? fertilizerHelperController
+            : helperName === "position" ? positionRenderHelperController
+            : (helperName === "deposit" || helperName === "depositCrystal" || helperName === "depositGrindable") ? depositRouteHelperController
+            : null;
         if (!component || !controller) {
             return;
         }

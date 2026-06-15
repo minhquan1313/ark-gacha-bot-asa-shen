@@ -71,6 +71,26 @@ Window {
             }
 
             Text {
+                objectName: "RunnerOverlayStats"
+                Layout.fillWidth: true
+                text: launcherController.uptime
+                color: ThemeModule.Theme.colors.muted
+                font.family: ThemeModule.Theme.fonts.mono
+                font.pixelSize: ThemeModule.Theme.fonts.consoleText
+                elide: Text.ElideRight
+            }
+
+            Text {
+                objectName: "RunnerOverlayHelperStatus"
+                Layout.fillWidth: true
+                text: queueController.runnerUpcomingTasks.length > 0 ? "Queue ready" : "No queued tasks"
+                color: ThemeModule.Theme.colors.muted
+                font.family: ThemeModule.Theme.fonts.mono
+                font.pixelSize: ThemeModule.Theme.fonts.consoleText
+                elide: Text.ElideRight
+            }
+
+            Text {
                 objectName: "RunnerOverlayNextTask"
                 visible: queueController.runnerUpcomingTasks.length > 0
                 text: "Next: " + queueController.runnerUpcomingTasks[0]
@@ -128,6 +148,14 @@ Window {
                     wrapMode: Text.NoWrap
                     clip: true
                 }
+            }
+
+            Text {
+                objectName: "RunnerOverlayLatestLogs"
+                visible: false
+                text: logController.overlayLines.length > 0
+                    ? logController.overlayLines.slice(0, 3).join("\n")
+                    : "No recent logs."
             }
         }
     }

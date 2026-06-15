@@ -208,9 +208,6 @@ Item {
                     elide: Text.ElideRight
                 }
             }
-            StatCard { label: "RUNNER"; value: launcherController.runnerState; sublabel: ""; Layout.fillWidth: true }
-            StatCard { label: "LAST ACTIVITY"; value: launcherController.lastActivity; sublabel: ""; Layout.fillWidth: true }
-            StatCard { label: "SYSTEM TIME"; value: launcherController.clock; sublabel: ""; Layout.fillWidth: true }
         }
     }
 }

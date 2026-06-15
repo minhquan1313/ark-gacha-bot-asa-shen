@@ -271,8 +271,8 @@ class QmlLauncherSmokeTests(unittest.TestCase):
             QTest.qWait(50)
             action = self.find_quick_item_text(
                 root.contentItem(),
-                "SettingsGroupActionButton",
-                "OPEN ROUTE HELPER",
+                "SettingsFieldActionButton",
+                "OPEN HELPER",
             )
             self.assertIsNotNone(action)
         finally:
@@ -1101,7 +1101,7 @@ class QmlLauncherSmokeTests(unittest.TestCase):
             )
             add_dedi_button = self.find_quick_item(
                 helper.property("contentItem"),
-                "DepositAddDediButton",
+                "DepositAddDediInlineButton",
             )
             self.assertIsNotNone(teleport_field)
             self.assertIsNotNone(add_dedi_button)
@@ -1162,6 +1162,18 @@ class QmlLauncherSmokeTests(unittest.TestCase):
             helper = root.property("activeHelperWindow")
 
             self.assertEqual(helpers.activeHelperName, "deposit")
+            self.assertEqual(deposit.routeKind, "grindable")
+            self.assertEqual(deposit.routeIndex, 0)
+            self.assertIn("GRINDABLE", helper.property("helperTitle"))
+
+            tools.openHelperPayload(
+                "depositGrindable", {"routeKind": "grindable", "routeIndex": 0}
+            )
+            self.app.processEvents()
+            QTest.qWait(50)
+            helper = root.property("activeHelperWindow")
+
+            self.assertEqual(helpers.activeHelperName, "depositGrindable")
             self.assertEqual(deposit.routeKind, "grindable")
             self.assertEqual(deposit.routeIndex, 0)
             self.assertIn("GRINDABLE", helper.property("helperTitle"))

@@ -1,8 +1,7 @@
 import time
 
-import source.ASA.config
 from source.utility import template, utils, windows
-from source.utility.utils import time_now, timed_out_counter
+from source.utility.utils import time_now
 
 buttons = {
     "server_search_x": 1500,
@@ -102,15 +101,15 @@ def do_join_server(server: str) -> bool:
     if not is_open():
         return False
 
-    timeout = timed_out_counter(source.ASA.config.timeout_deadline)
-    while not is_server_list_loaded() and not timeout():
+    timeout = time_now() + 60
+    while not is_server_list_loaded() and time_now() < timeout:
         if not wait_server_list_loaded(1):
             refresh()
     if not is_server_list_loaded():
         return False
 
-    timeout = timed_out_counter(10)
-    while is_clear_search() and not timeout():
+    timeout = time_now() + 10
+    while is_clear_search() and time_now() < timeout:
         search_bar_search(server)
     if not is_clear_search():
         return False

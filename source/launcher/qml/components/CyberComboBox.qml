@@ -24,6 +24,17 @@ ComboBox {
         popup.open()
     }
 
+    function toggleFromIndicator() {
+        if (!enabled) {
+            return
+        }
+        if (popup.visible) {
+            popup.close()
+            return
+        }
+        openFromField()
+    }
+
     contentItem: TextInput {
         id: inputField
         objectName: "CyberComboBoxInput"
@@ -48,27 +59,30 @@ ComboBox {
         }
     }
 
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.LeftButton
-        onPressed: {
-            Qt.callLater(control.openFromField)
-            mouse.accepted = false
-        }
-    }
+    indicator: Item {
+        x: control.width - width
+        y: 0
+        width: ThemeModule.Theme.size.iconButton
+        height: control.height
 
-    indicator: Text {
-        x: control.width - width - ThemeModule.Theme.spacing.sm
-        y: (control.height - height) / 2
-        text: "v"
-        color: ThemeModule.Theme.colors.cyan
-        font.pixelSize: ThemeModule.Theme.fonts.buttonText
-        font.bold: true
+        Text {
+            anchors.centerIn: parent
+            text: control.popupOpen ? "^" : "v"
+            color: ThemeModule.Theme.colors.cyan
+            font.pixelSize: ThemeModule.Theme.fonts.buttonText
+            font.bold: true
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton
+            onClicked: control.toggleFromIndicator()
+        }
     }
 
     background: Rectangle {
         color: ThemeModule.Theme.colors.panelStrong
-        border.color: control.activeFocus ? ThemeModule.Theme.colors.cyan : ThemeModule.Theme.colors.border
+        border.color: control.activeFocus || control.popupOpen ? ThemeModule.Theme.colors.cyan : ThemeModule.Theme.colors.border
         border.width: ThemeModule.Theme.border.thin
         radius: ThemeModule.Theme.radius.sm
     }
@@ -78,6 +92,7 @@ ComboBox {
         width: control.width
         implicitHeight: contentItem.implicitHeight
         padding: ThemeModule.Theme.spacing.xs
+        z: 1000
 
         contentItem: ListView {
             clip: true
@@ -88,7 +103,7 @@ ComboBox {
 
         background: Rectangle {
             color: ThemeModule.Theme.colors.panelStrong
-            border.color: ThemeModule.Theme.colors.border
+            border.color: ThemeModule.Theme.colors.borderActive
             border.width: ThemeModule.Theme.border.thin
             radius: ThemeModule.Theme.radius.sm
         }
@@ -101,14 +116,16 @@ ComboBox {
 
         contentItem: Text {
             text: parent.text
-            color: parent.highlighted ? ThemeModule.Theme.colors.cyan : ThemeModule.Theme.colors.text
+            color: parent.highlighted ? ThemeModule.Theme.colors.text : ThemeModule.Theme.colors.text
             font: control.font
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
         }
 
         background: Rectangle {
-            color: parent.highlighted ? ThemeModule.Theme.colors.glass : "transparent"
+            color: parent.highlighted ? ThemeModule.Theme.colors.buttonPrimaryFill : "transparent"
+            border.color: parent.highlighted ? ThemeModule.Theme.colors.borderActive : "transparent"
+            border.width: ThemeModule.Theme.border.thin
             radius: ThemeModule.Theme.radius.sm
         }
     }

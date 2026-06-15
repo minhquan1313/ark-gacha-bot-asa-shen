@@ -14,9 +14,10 @@ BaseHelperWindow {
     helperTitle: "POSITION / RENDER HELPER"
     helperBody: "Capture stores the current yaw only. View applies the saved yaw with pitch zero."
     statusText: controller ? controller.status : "Ready."
-    property bool guideOpen: guideDialog.opened
+    property bool guideOpen: guideDialog.visible
 
-    Component.onCompleted: Qt.callLater(guideDialog.open)
+    Component.onCompleted: Qt.callLater(guideDialog.showNearOwner)
+    onClosing: guideDialog.close()
 
     RowLayout {
         Layout.fillWidth: true
@@ -25,7 +26,7 @@ BaseHelperWindow {
             objectName: "PositionGuideButton"
             text: "GUIDE"
             variant: "secondary"
-            onClicked: guideDialog.open()
+            onClicked: guideDialog.showNearOwner()
         }
     }
 
@@ -53,48 +54,23 @@ BaseHelperWindow {
         }
     }
 
-    Popup {
+    HelperGuideWindow {
         id: guideDialog
-        modal: true
-        focus: true
-        width: helper.width - ThemeModule.Theme.spacing.xxl
-        height: guideContent.implicitHeight + ThemeModule.Theme.spacing.xl * 2
-        x: (helper.width - width) / 2
-        y: (helper.height - height) / 2
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        objectName: "PositionGuideDialog"
+        ownerWindow: helper
+        guideTitle: "POSITION / RENDER HELPER"
 
-        background: Rectangle {
-            color: ThemeModule.Theme.colors.panelStrong
-            border.color: ThemeModule.Theme.colors.cyan
-            border.width: ThemeModule.Theme.border.thin
-            radius: ThemeModule.Theme.radius.md
+        Text {
+            text: "Capture stores the current horizontal view for station_yaw. View applies the saved yaw with pitch zero. Press ALT + N to return to this helper."
+            color: ThemeModule.Theme.colors.text
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
         }
-
-        ColumnLayout {
-            id: guideContent
-            anchors.fill: parent
-            anchors.margins: ThemeModule.Theme.spacing.xl
-            spacing: ThemeModule.Theme.spacing.md
-
-            Text {
-                text: "POSITION / RENDER HELPER"
-                color: ThemeModule.Theme.colors.cyan
-                font.pixelSize: ThemeModule.Theme.fonts.sectionHeading
-                font.bold: true
-                Layout.fillWidth: true
-            }
-            Text {
-                text: "Capture stores the current horizontal view for station_yaw. View applies the saved yaw with pitch zero. Press ALT + N to return to this helper."
-                color: ThemeModule.Theme.colors.text
-                wrapMode: Text.WordWrap
-                Layout.fillWidth: true
-            }
-            CyberButton {
-                text: "OK"
-                variant: "primary"
-                Layout.alignment: Qt.AlignRight
-                onClicked: guideDialog.close()
-            }
+        CyberButton {
+            text: "OK"
+            variant: "primary"
+            Layout.alignment: Qt.AlignRight
+            onClicked: guideDialog.close()
         }
     }
 }

@@ -3,7 +3,7 @@ import time
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.utility import recon_utils
 from source.utility import utils, windows
-from source.utility.utils import timed_out_counter
+from source.utility.utils import time_now
 
 buttons = {
     "search_x": 1672,
@@ -93,22 +93,23 @@ def join_server(server: str):
 
     logs.logger.debug("joining server")
 
-    is_timeout = timed_out_counter(10)
-    while not is_server_list_loaded() and not is_timeout():
+    timeout = time_now() + 60
+    while not is_server_list_loaded() and time_now() < timeout:
         if not wait_server_list_loaded(1):
             refresh()
     if not is_server_list_loaded():
         return False
 
-    is_timeout = timed_out_counter(10)
-    while clear_search() and not is_timeout():
+    timeout = time_now() + 10
+    while clear_search() and time_now() < timeout:
         search_bar_search(server)
         wait_clear_search(1)
     if clear_search():
         return False
 
-    windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
     time.sleep(0.5)
+    windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
+    time.sleep(0.3)
     if is_open() and join_button():
         windows.click(get_pixel_loc("join_x"), get_pixel_loc("join_y"))
     return True

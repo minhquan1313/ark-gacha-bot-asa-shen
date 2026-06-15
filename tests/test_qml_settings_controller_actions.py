@@ -122,7 +122,7 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
                 [123, 123],
             )
 
-    def test_pego_group_actions_include_remove_last(self):
+    def test_pego_group_actions_hide_remove_last(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             controller, _gacha_path, _pego_path, _deposit_path = self.make_controller(
                 Path(temp_dir)
@@ -131,7 +131,9 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
 
             keys = [action["key"] for action in controller.groupActions]
 
-            self.assertIn("remove_last_pego", keys)
+            self.assertIn("add_pego", keys)
+            self.assertIn("reset_pego", keys)
+            self.assertNotIn("remove_last_pego", keys)
 
     def test_pego_remove_last_updates_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -159,7 +161,7 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
             self.assertEqual(len(config["depositCrystalData"]), 2)
             self.assertEqual(len(config["depositGrindableData"]), 2)
 
-    def test_storage_group_actions_include_remove_last(self):
+    def test_storage_group_actions_hide_remove_last(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             controller, _gacha_path, _pego_path, _deposit_path = self.make_controller(
                 Path(temp_dir)
@@ -168,8 +170,11 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
 
             keys = [action["key"] for action in controller.groupActions]
 
-            self.assertIn("remove_last_crystal_route", keys)
-            self.assertIn("remove_last_grindable_route", keys)
+            self.assertIn("add_crystal_route", keys)
+            self.assertIn("add_grindable_route", keys)
+            self.assertIn("reset_storage", keys)
+            self.assertNotIn("remove_last_crystal_route", keys)
+            self.assertNotIn("remove_last_grindable_route", keys)
 
     def test_storage_route_fields_expose_payload_helper_actions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -191,12 +196,22 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
                 crystal_row["actions"],
                 [
                     {
-                        "key": "open_helper:deposit",
+                        "key": "open_helper:depositCrystal",
                         "label": "OPEN HELPER",
                         "value": {"routeKind": "crystal", "routeIndex": 0},
                         "variant": "primary",
-                    }
+                    },
+                    {
+                        "key": "remove_storage_route",
+                        "label": "REMOVE ROUTE",
+                        "value": {"routeKind": "crystal", "routeIndex": 0},
+                        "variant": "danger",
+                    },
                 ],
+            )
+            self.assertEqual(
+                grindable_row["actions"][0]["key"],
+                "open_helper:depositGrindable",
             )
             self.assertEqual(
                 grindable_row["actions"][0]["value"],
@@ -216,7 +231,7 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
             storage_keys = [action["key"] for action in controller.groupActions]
 
             self.assertIn("open_helper:position", position_keys)
-            self.assertIn("open_helper:deposit", storage_keys)
+            self.assertNotIn("open_helper:deposit", storage_keys)
 
     def test_storage_remove_last_routes_update_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -295,6 +310,93 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
 
             self.assertEqual(labels["server_number"], "Server number")
             self.assertEqual(labels["auto_start_program"], "Auto start program")
+
+    def test_static_settings_sections_wrap_visible_fields(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller, _gacha_path, _pego_path, _deposit_path = self.make_controller(
+                Path(temp_dir)
+            )
+
+            sections = controller.sections
+
+            self.assertEqual(len(sections), 1)
+            self.assertEqual(sections[0]["title"], "GENERAL SETTINGS")
+            self.assertEqual(sections[0]["actions"], [])
+            self.assertEqual(
+                [field["key"] for field in sections[0]["fields"]],
+                [field["key"] for field in controller.fields],
+            )
+
+    def test_gacha_sections_split_by_group_with_header_actions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller, gacha_path, _pego_path, _deposit_path = self.make_controller(
+                Path(temp_dir)
+            )
+            controller.runGroupAction("add_gacha_pair", "")
+            controller.setGroup("GACHA")
+
+            sections = controller.sections
+
+            self.assertEqual(len(sections), 2)
+            self.assertEqual(sections[0]["title"], "GACHAPAIR_1 (2/2)")
+            self.assertIn("auto_fill_gacha_group", [a["key"] for a in sections[0]["actions"]])
+            self.assertIn(
+                "gacha_group:0:teleporter",
+                [field["key"] for field in sections[0]["fields"]],
+            )
+            field_keys = [
+                field["key"] for section in sections for field in section["fields"]
+            ]
+            self.assertNotIn("gacha:0:depo_tp", field_keys)
+            self.assertNotIn("gacha:0:resource_type", field_keys)
+            self.assertEqual(len(load_gacha_config(gacha_path)), 4)
+
+    def test_pego_sections_split_by_entry(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller, _gacha_path, _pego_path, _deposit_path = self.make_controller(
+                Path(temp_dir)
+            )
+            controller.runGroupAction("add_pego", "")
+            controller.setGroup("PEGO")
+
+            sections = controller.sections
+
+            self.assertEqual([section["title"] for section in sections], ["PEGO 1", "PEGO 2"])
+            self.assertEqual(sections[0]["kind"], "pego")
+            self.assertFalse(sections[0]["expandedDefault"])
+            self.assertIn("remove_pego", [action["key"] for action in sections[0]["actions"]])
+            self.assertEqual(
+                [field["key"] for field in sections[0]["fields"]],
+                ["pego:0:name", "pego:0:teleporter", "pego:0:delay"],
+            )
+
+    def test_storage_sections_expose_route_helper_payload_actions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            controller, _gacha_path, _pego_path, _deposit_path = self.make_controller(
+                Path(temp_dir)
+            )
+            controller.setGroup("STORAGE")
+
+            sections = controller.sections
+
+            self.assertEqual(sections[0]["title"], "Crystal route 1")
+            self.assertEqual(sections[0]["kind"], "crystal")
+            self.assertEqual(sections[0]["band"], "CRYSTAL ROUTES")
+            self.assertFalse(sections[0]["expandedDefault"])
+            self.assertEqual(sections[0]["actions"][0]["key"], "open_helper:depositCrystal")
+            self.assertEqual(
+                sections[0]["actions"][0]["value"],
+                {"routeKind": "crystal", "routeIndex": 0},
+            )
+            self.assertEqual(sections[0]["actions"][1]["key"], "remove_storage_route")
+            self.assertEqual(sections[1]["title"], "Grindable route 1")
+            self.assertEqual(sections[1]["kind"], "grindable")
+            self.assertEqual(sections[1]["band"], "GRINDABLE ROUTES")
+            self.assertEqual(sections[1]["actions"][0]["key"], "open_helper:depositGrindable")
+            self.assertEqual(
+                sections[1]["actions"][0]["value"],
+                {"routeKind": "grindable", "routeIndex": 0},
+            )
 
     def test_gacha_side_is_constrained_options_field(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -402,7 +504,7 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
                 ["GACHAPAIR_MAIN", "GACHAPAIR_MAIN"],
             )
 
-    def test_gacha_fields_expose_legacy_optional_fields(self):
+    def test_gacha_fields_drop_obsolete_mode_fields(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             controller, gacha_path, _pego_path, _deposit_path = self.make_controller(
                 Path(temp_dir)
@@ -417,39 +519,36 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
 
             controller.setGroup("GACHA")
 
-            depo_tp = next(
-                field for field in controller.fields if field["key"] == "gacha:0:depo_tp"
-            )
-            resource_type = next(
-                field
-                for field in controller.fields
-                if field["key"] == "gacha:0:resource_type"
-            )
+            keys = [field["key"] for field in controller.fields]
+            saved = load_gacha_config(gacha_path)
 
-            self.assertEqual(depo_tp["value"], "DEPO")
-            self.assertEqual(resource_type["type"], "options")
-            self.assertEqual(resource_type["value"], "collect")
-            self.assertEqual(resource_type["options"], ["", "collect"])
+            self.assertNotIn("gacha:0:depo_tp", keys)
+            self.assertNotIn("gacha:0:resource_type", keys)
+            self.assertNotIn("depo_tp", saved[0])
+            self.assertNotIn("resource_type", saved[0])
 
-    def test_gacha_legacy_optional_fields_update_and_clear(self):
+    def test_gacha_obsolete_mode_fields_are_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             controller, gacha_path, _pego_path, _deposit_path = self.make_controller(
                 Path(temp_dir)
             )
 
+            errors = []
+            controller.error.connect(lambda title, message: errors.append((title, message)))
+
             controller.setValue("gacha:0:depo_tp", "DEPO")
             controller.setValue("gacha:0:resource_type", "collect")
 
             entry = load_gacha_config(gacha_path)[0]
-            self.assertEqual(entry["depo_tp"], "DEPO")
-            self.assertEqual(entry["resource_type"], "collect")
-
-            controller.setValue("gacha:0:depo_tp", "")
-            controller.setValue("gacha:0:resource_type", "")
-
-            entry = load_gacha_config(gacha_path)[0]
             self.assertNotIn("depo_tp", entry)
             self.assertNotIn("resource_type", entry)
+            self.assertEqual(
+                errors,
+                [
+                    ("Invalid Gacha Config", "Unknown gacha field."),
+                    ("Invalid Gacha Config", "Unknown gacha field."),
+                ],
+            )
 
     def test_gacha_fields_warn_about_risky_teleporter_names(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -540,20 +639,18 @@ class QmlSettingsControllerActionTests(unittest.TestCase):
             self.assertEqual({entry["teleporter"] for entry in entries}, {"GACHAPAIR_1"})
             self.assertEqual({entry["side"] for entry in entries}, {"left", "right"})
 
-    def test_pego_fields_expose_row_remove_action(self):
+    def test_pego_sections_expose_row_remove_action(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             controller, _gacha_path, _pego_path, _deposit_path = self.make_controller(
                 Path(temp_dir)
             )
             controller.setGroup("PEGO")
 
-            name_row = next(
-                field for field in controller.fields if field["key"] == "pego:0:name"
-            )
+            section = controller.sections[0]
 
             self.assertIn(
                 "REMOVE",
-                [action["label"] for action in name_row["actions"]],
+                [action["label"] for action in section["actions"]],
             )
 
     def test_pego_row_remove_action_mutates_config(self):

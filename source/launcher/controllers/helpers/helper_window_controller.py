@@ -26,7 +26,15 @@ class HelperHotkeyFilter(QAbstractNativeEventFilter):
 
 
 class HelperWindowController(QObject):
-    VALID_HELPERS = {"autoJoin", "fertilizer", "transfer", "deposit", "position"}
+    VALID_HELPERS = {
+        "autoJoin",
+        "fertilizer",
+        "transfer",
+        "deposit",
+        "depositCrystal",
+        "depositGrindable",
+        "position",
+    }
     TOGGLE_HELPERS = {"autoJoin", "fertilizer", "transfer"}
 
     changed = Signal()

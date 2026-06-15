@@ -81,6 +81,14 @@ class DepositRouteHelperController(QObject):
         return rows
 
     @Property("QVariantList", notify=changed)
+    def crystalRoutes(self):
+        return self._route_cards("crystal")
+
+    @Property("QVariantList", notify=changed)
+    def grindableRoutes(self):
+        return self._route_cards("grindable")
+
+    @Property("QVariantList", notify=changed)
     def rows(self):
         route = self._route()
         if route is None:
@@ -125,6 +133,16 @@ class DepositRouteHelperController(QObject):
         self._route_index = index
         self.changed.emit()
 
+    @Slot(str, int, str)
+    def setRouteTeleport(self, kind, index, value):
+        route = self._route_for(str(kind), index)
+        if route is None:
+            return
+        route["teleport"] = str(value)
+        self._route_kind = str(kind)
+        self._route_index = int(index)
+        self._save("Teleport saved.")
+
     @Slot(str)
     def setTeleport(self, value):
         route = self._route()
@@ -150,6 +168,22 @@ class DepositRouteHelperController(QObject):
         self._route_kind = kind
         self._route_index = len(routes) - 1
         self._save("Route added.")
+
+    @Slot(str, int)
+    def removeRoute(self, kind, index):
+        kind = str(kind)
+        key = self._route_key_for(kind)
+        routes = self._config.get(key, [])
+        index = self._coerce_route_index(index, routes)
+        if index is None:
+            return
+        if len(routes) <= 1:
+            self._set_status("At least one route of each type is required.")
+            return
+        del routes[index]
+        self._route_kind = kind
+        self._route_index = max(0, min(index, len(routes) - 1))
+        self._save("Route removed.")
 
     @Slot()
     def removeCurrentRoute(self):
@@ -185,6 +219,18 @@ class DepositRouteHelperController(QObject):
             self._set_status("Unknown deposit row type.")
             return
         self._save("Row added.")
+
+    @Slot(str, int, str)
+    def addRowToRoute(self, route_kind, route_index, row_kind):
+        if not self._select_route_for_action(route_kind, route_index):
+            return
+        self.addRow(row_kind)
+
+    @Slot(str, int, str)
+    def captureNewRowForRoute(self, route_kind, route_index, row_kind):
+        if not self._select_route_for_action(route_kind, route_index):
+            return
+        self.captureNewRow(row_kind)
 
     @Slot(str)
     def captureNewRow(self, kind):
@@ -230,6 +276,12 @@ class DepositRouteHelperController(QObject):
             del container[index]
             self._save("Row removed.")
 
+    @Slot(str, int, str, int)
+    def removeRouteRow(self, route_kind, route_index, row_kind, row_index):
+        if not self._select_route_for_action(route_kind, route_index):
+            return
+        self.removeRow(row_kind, row_index)
+
     @Slot(str, int, str, "QVariant")
     def updateRow(self, kind, index, key, value):
         index = self._coerce_index(index, "Unknown deposit row index.")
@@ -254,6 +306,12 @@ class DepositRouteHelperController(QObject):
             return
         self._save("Row saved.")
 
+    @Slot(str, int, str, int, str, "QVariant")
+    def updateRouteRow(self, route_kind, route_index, row_kind, row_index, key, value):
+        if not self._select_route_for_action(route_kind, route_index):
+            return
+        self.updateRow(row_kind, row_index, key, value)
+
     @Slot(int, str)
     def addVaultItem(self, index, value):
         index = self._coerce_index(index, "Unknown vault row index.")
@@ -274,6 +332,12 @@ class DepositRouteHelperController(QObject):
             pass
         self._save("Vault item saved.")
 
+    @Slot(str, int, int, str)
+    def addVaultItemToRoute(self, route_kind, route_index, row_index, value):
+        if not self._select_route_for_action(route_kind, route_index):
+            return
+        self.addVaultItem(row_index, value)
+
     @Slot(int, int)
     def removeVaultItem(self, index, item_index):
         index = self._coerce_index(index, "Unknown vault row index.")
@@ -289,6 +353,12 @@ class DepositRouteHelperController(QObject):
         if 0 <= item_index < len(values):
             del values[item_index]
             self._save("Vault item removed.")
+
+    @Slot(str, int, int, int)
+    def removeVaultItemFromRoute(self, route_kind, route_index, row_index, item_index):
+        if not self._select_route_for_action(route_kind, route_index):
+            return
+        self.removeVaultItem(row_index, item_index)
 
     @Slot(str, int)
     def captureRow(self, kind, index):
@@ -312,6 +382,12 @@ class DepositRouteHelperController(QObject):
         finally:
             self._set_busy(False)
             self._refocus_helper()
+
+    @Slot(str, int, str, int)
+    def captureRouteRow(self, route_kind, route_index, row_kind, row_index):
+        if not self._select_route_for_action(route_kind, route_index):
+            return
+        self.captureRow(row_kind, row_index)
 
     @Slot(str, int)
     def viewRow(self, kind, index):
@@ -339,6 +415,12 @@ class DepositRouteHelperController(QObject):
             self._set_busy(False)
             self._refocus_helper()
 
+    @Slot(str, int, str, int)
+    def viewRouteRow(self, route_kind, route_index, row_kind, row_index):
+        if not self._select_route_for_action(route_kind, route_index):
+            return
+        self.viewRow(row_kind, row_index)
+
     def _route_key(self):
         return self._route_key_for(self._route_kind)
 
@@ -357,6 +439,38 @@ class DepositRouteHelperController(QObject):
             return None
         self._route_index = max(0, min(self._route_index, len(routes) - 1))
         return routes[self._route_index]
+
+    def _route_for(self, kind, index):
+        try:
+            key = self._route_key_for(kind)
+        except ValueError:
+            self._set_status("Unknown deposit route type.")
+            return None
+        routes = self._config.get(key, [])
+        index = self._coerce_route_index(index, routes)
+        if index is None:
+            return None
+        return routes[index]
+
+    def _select_route_for_action(self, kind, index):
+        kind = str(kind)
+        route = self._route_for(kind, index)
+        if route is None:
+            return False
+        self._route_kind = kind
+        self._route_index = int(index)
+        return True
+
+    def _coerce_route_index(self, value, routes):
+        try:
+            index = int(value)
+        except (TypeError, ValueError):
+            self._set_status("Unknown deposit route index.")
+            return None
+        if not (0 <= index < len(routes)):
+            self._set_status("Unknown deposit route index.")
+            return None
+        return index
 
     def _route_title(self):
         if self._route() is None:
@@ -402,6 +516,39 @@ class DepositRouteHelperController(QObject):
             "crouched": bool(item.get("crouched", False)),
             "active": bool(item.get("active", True)),
         }
+
+    def _route_cards(self, kind):
+        key = self._route_key_for(kind)
+        cards = []
+        for index, route in enumerate(self._config.get(key, [])):
+            card = {
+                "kind": kind,
+                "index": index,
+                "title": f"{kind.upper()} ROUTE {index + 1}",
+                "teleport": str(route.get("teleport", "")),
+                "canRemove": len(self._config.get(key, [])) > 1,
+                "rows": self._rows_for_route(kind, route),
+                "dediCount": len(route.get("dedi", {}).get("items", [])),
+                "vaultCount": len(route.get("vault", {}).get("items", [])),
+            }
+            if kind == "grindable":
+                card["grinderActive"] = bool(route.get("grinder", {}).get("active", False))
+            cards.append(card)
+        return cards
+
+    def _rows_for_route(self, kind, route):
+        rows = []
+        if kind == "grindable":
+            rows.append(self._row("grinder", 0, route.get("grinder", {})))
+        for index, item in enumerate(route.get("dedi", {}).get("items", [])):
+            rows.append(self._row("dedi", index, item))
+        if kind == "crystal":
+            for index, item in enumerate(route.get("vault", {}).get("items", [])):
+                row = self._row("vault", index, item)
+                row["items"] = ", ".join(item.get("items", []))
+                row["itemValues"] = list(item.get("items", []))
+                rows.append(row)
+        return rows
 
     def _save(self, status):
         try:
