@@ -93,6 +93,7 @@ def teleport_not_default(arg, fallback_bed_name=None):
     time.sleep(0.3 * settings.lag_offset)
     utils.turn_down(80)
     time.sleep(0.3 * settings.lag_offset)
+
     open()
     time.sleep(
         0.2 * settings.lag_offset

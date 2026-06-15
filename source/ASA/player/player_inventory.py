@@ -97,6 +97,7 @@ def implant_eat():
     attempts = 0
 
     player_state.capture_state("implant eat")
+    logs.logger.critical("Eating implant", exc_info=True)
 
     while not template.check_template("death_regions", 0.7):
         attempts += 1
