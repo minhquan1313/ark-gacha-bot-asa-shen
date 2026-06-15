@@ -106,8 +106,10 @@ def join_server(server: str):
         wait_clear_search(1)
     if clear_search():
         return False
-    windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
+
     time.sleep(0.5)
+    windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
+    time.sleep(0.3)
     if is_open() and join_button():
         windows.click(get_pixel_loc("join_x"), get_pixel_loc("join_y"))
     return True

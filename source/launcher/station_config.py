@@ -162,12 +162,6 @@ def _normalize_gacha_entry(entry, index):
         "teleporter": str(entry.get("teleporter", "")),
         "side": str(entry.get("side", "left")).lower(),
     }
-    depo_tp = str(entry.get("depo_tp", "")).strip()
-    if depo_tp:
-        normalized["depo_tp"] = depo_tp
-    resource_type = str(entry.get("resource_type", "")).strip()
-    if resource_type.lower() == "collect":
-        normalized["resource_type"] = resource_type
     return normalized
 
 

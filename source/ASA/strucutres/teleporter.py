@@ -117,7 +117,7 @@ def teleport_not_default(arg, fallback_bed_name=None):
             )  # im lazy this is the same position as the teleporter search bar
             utils.ctrl_a()
             utils.write(teleporter_name)
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.5 * settings.lag_offset)
             if counter >= 3:
                 logs.logger.error(f"search still detected likely did type anything")
                 break

@@ -15,3 +15,5 @@ console_ccc_attempts = 3
 buff_open_attempts = 10
 
 up_arrow = False  # TRUE OR FALSE
+
+timeout_deadline = 60

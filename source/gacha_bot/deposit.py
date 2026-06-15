@@ -174,12 +174,10 @@ def _deposit_to_dedi(route_metadata, item, label):
                         variables.get_pixel_loc("dedi_deposit_x"),
                         variables.get_pixel_loc("dedi_deposit_y"),
                     )
-                    # DEBUG START
                     if label.startswith("crystal"):
                         capture_dedi_deposit_crystal(label)
                     elif label.startswith("grind"):
                         capture_dedi_deposit_grind(label)
-                    # DEBUG END
                     inventory.close()
                     template.template_await_false(
                         template.check_template, 1, "inventory", 0.7
