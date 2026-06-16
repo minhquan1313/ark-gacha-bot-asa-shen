@@ -5,10 +5,9 @@ import pyautogui
 import settings
 import source.gacha_bot.config
 from source.ASA.player import buffs, player_inventory, player_state
-from source.ASA.stations import custom_stations
-from source.ASA.strucutres import inventory, teleporter
+from source.ASA.strucutres import teleporter
 from source.logs import gachalogs as logs
-from source.utility import local_player, screen, template, utils, variables, windows
+from source.utility import local_player, template, utils, variables, windows
 
 global render_flag
 render_flag = False  # starts as false as obviously we are not rendering anything
@@ -105,8 +104,8 @@ def leave_tekpod():
         logs.logger.warning("bot didnt leave the tekpod first try we are retrying now")
         utils.press_key(local_player.get_input_settings("Use"))
         time.sleep(1 * settings.lag_offset)
-    utils.set_yaw(settings.station_yaw)
-    time.sleep(0.5 * settings.lag_offset)
+    # utils.set_yaw(settings.station_yaw)
+    # time.sleep(0.5 * settings.lag_offset)
     render_flag = False
 
 

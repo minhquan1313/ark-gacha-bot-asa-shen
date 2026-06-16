@@ -156,12 +156,14 @@ class render_station(base_task):
             player_inventory.drop_all_inv()
             player_inventory.close()
             tribelog.open()
+        else:
+            player_state.check_disconnected()
 
     def get_priority_level(self):
         return 8
 
     def get_requeue_delay(self):
-        return 90  # after triggered we will wait for 60 seconds reduces the amount of cpu usage
+        return 30  # after triggered we will wait for 30 seconds reduces the amount of cpu usage
 
 
 class snail_pheonix(base_task):

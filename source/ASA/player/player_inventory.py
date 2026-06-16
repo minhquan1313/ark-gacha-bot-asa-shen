@@ -96,9 +96,6 @@ def implant_eat():
     resets += 1
     attempts = 0
 
-    player_state.capture_state("implant eat")
-    logs.logger.critical("Eating implant", exc_info=True)
-
     while not template.check_template("death_regions", 0.7):
         attempts += 1
         logs.logger.debug(
@@ -120,6 +117,10 @@ def implant_eat():
             variables.get_pixel_loc("implant_eat_x"),
             variables.get_pixel_loc("implant_eat_y"),
         )
+
+        player_state.capture_state("implant eat")
+        logs.logger.critical("Eating implant", stack_info=True)
+
         time.sleep(10)  # accounting for high ping lag
         utils.press_key("Use")
 
@@ -128,7 +129,6 @@ def implant_eat():
         ):
             # check state of the char before redoing
             player_state.check_state()
-            ...
 
         if attempts >= config.suicide_attempts:
             logs.logger.error(f"unable to eat player implant")

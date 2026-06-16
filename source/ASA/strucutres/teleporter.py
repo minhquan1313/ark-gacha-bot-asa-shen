@@ -3,7 +3,7 @@ import time
 import settings
 import source.ASA.config
 import source.ASA.stations.custom_stations
-from source.ASA.player import player_state, tribelog
+from source.ASA.player import player_state
 from source.ASA.strucutres import bed
 from source.logs import gachalogs as logs
 from source.utility import template, utils, variables, windows
@@ -134,7 +134,6 @@ def teleport_not_default(arg, fallback_bed_name=None):
                 f"orange pixel for teleporter ready not found likely already on the tp we are just exiting the tp treating it as the tp we should be on"
             )
             close()  # closing out as either the TP couldnt be found however we still want to change to the station yaw so we still continue
-
         else:
             time.sleep(0.2 * settings.lag_offset)
             windows.click(
@@ -150,8 +149,11 @@ def teleport_not_default(arg, fallback_bed_name=None):
             if template.template_await_true(template.white_flash, 2):
                 logs.logger.debug(f"white flash detected waiting for up too 5 seconds")
                 template.template_await_false(template.white_flash, 5)
-            tribelog.open()
-            tribelog.close()
+        # Extra step to ensure we are teleported(not sitting at the old teleport due to server lag/save)
+        time.sleep(0.3 * settings.lag_offset)
+        open()
+        time.sleep(0.3 * settings.lag_offset)
+        close()
         time.sleep(0.5 * settings.lag_offset)
         if (
             settings.singleplayer

@@ -1,10 +1,13 @@
-from source.gacha_bot import render
-from source.utility import utils, template, windows, variables, screen, local_player
-from source.logs import gachalogs as logs
-from source.ASA.player import player_inventory, tribelog, player_state
 import time
+
+import pyautogui
+
 import settings
 import source.ASA.config
+from source.ASA.player import player_inventory, player_state, tribelog
+from source.gacha_bot import render
+from source.logs import gachalogs as logs
+from source.utility import local_player, template, utils, variables, windows
 
 
 def is_open():
@@ -73,6 +76,18 @@ def spawn_in(bed_name: str):
             variables.get_pixel_loc("spawn_button_x"),
             variables.get_pixel_loc("spawn_button_y"),
         )
+        time.sleep(0.3 * settings.lag_offset)
+
+        # Click random on the screen to make sure it will spawn player or skip trailers.
+        pyautogui.moveTo(1000, 300, duration=0.3)
+        pyautogui.click(1000, 300)
+        pyautogui.press("space")
+        time.sleep(0.2 * settings.lag_offset)
+
+        pyautogui.moveTo(1600, 800, duration=0.3)
+        pyautogui.click(1600, 800)
+        pyautogui.press("space")
+        time.sleep(0.2 * settings.lag_offset)
 
         if template.template_await_true(template.white_flash, 2):
             logs.logger.debug(f"white flash detected waiting for up too 5 seconds")
@@ -144,4 +159,3 @@ def fast_travel(bed_name: str):
 
         tribelog.open()
         tribelog.close()
-
