@@ -22,7 +22,7 @@ def enter_tekpod():
     attempts = 0
     while not render_flag:
         attempts += 1
-        if attempts == source.gacha_bot.config.render_attempts:
+        if attempts >= source.gacha_bot.config.render_attempts:
             logs.logger.warning(
                 f"{attempts} attempts however bot could not get into the render bed we are dieing and respawning to try and fix this"
             )
@@ -32,8 +32,7 @@ def enter_tekpod():
         utils.press_key(
             local_player.get_input_settings("Run")
         )  # uncrouching char just in case
-        utils.zero()
-        utils.set_yaw(settings.station_yaw)
+        utils.zero_center()
         utils.turn_down(15)
         time.sleep(0.3 * settings.lag_offset)
         pyautogui.keyDown(

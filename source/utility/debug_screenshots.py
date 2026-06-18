@@ -42,7 +42,7 @@ def capture_for(category, active=False, delay=0.5):
 
     delay_seconds = max(0.0, float(delay))
 
-    def capture(label="capture"):
+    def capture(label="capture", delay_seconds=delay_seconds):
         _request_capture(category, label, delay_seconds)
 
     return capture

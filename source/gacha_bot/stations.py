@@ -9,7 +9,7 @@ from source.ASA.stations import custom_stations
 from source.ASA.strucutres import teleporter
 from source.gacha_bot import deposit, gacha, iguanadon, pego, render
 from source.logs import gachalogs as logs
-from source.utility import template
+from source.utility import template, utils
 
 global berry_station
 global last_berry
@@ -68,6 +68,8 @@ class gacha_station(base_task):
             if settings.external_berry:
                 logs.logger.debug("sleeping for 20 seconds as external")
                 time.sleep(20)  # letting station spawn in if you have to tp away
+            utils.zero_center()
+
             iguanadon.berry_station(berry_metadata)
             last_berry = time.time()
             berry_station = False
@@ -76,6 +78,7 @@ class gacha_station(base_task):
         teleporter.teleport_not_default(
             iguanadon_metadata
         )  # iguanadon is a centeral tp
+        utils.zero_center()
 
         if settings.external_berry and temp:  # quick fix for level 1 bug
             logs.logger.debug(
@@ -86,6 +89,8 @@ class gacha_station(base_task):
 
         iguanadon.iguanadon(iguanadon_metadata)
         teleporter.teleport_not_default(gacha_metadata)
+        utils.zero_center()
+
         if settings.side_crop_plot:
             gacha.drop_off(gacha_metadata)
         else:
@@ -116,8 +121,14 @@ class pego_station(base_task):
     def execute(self):
         player_state.check_state()
 
+        # transmitter.open_and_transfer(5842)
+        # print("waiting 9999")
+        # time.sleep(9999)
+
         pego_metadata = custom_stations.get_station_metadata(self.teleporter_name)
         teleporter.teleport_not_default(pego_metadata)
+        utils.zero_center()
+
         pego.pego_pickup(pego_metadata)
         if template.check_template("crystal_in_hotbar", 0.7):
             deposit.deposit_all(None)

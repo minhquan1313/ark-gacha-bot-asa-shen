@@ -79,6 +79,7 @@ def _teleport_to_route(route):
     metadata = custom_stations.get_station_metadata(teleport_name)
     logs.logger.debug(f"Teleporting to deposit route {teleport_name}")
     teleporter.teleport_not_default(metadata)
+    utils.zero_center()
     return metadata
 
 
@@ -150,24 +151,26 @@ def _deposit_to_dedi(route_metadata, item, label):
         _turn_to_object(route_metadata, item)
         time.sleep(0.3 * settings.lag_offset)
 
-        deadline = time.monotonic() + settings.dedi_handshake_timeout
-        while time.monotonic() < deadline:
+        deadline = utils.timed_out_counter(settings.dedi_handshake_timeout)
+        while not deadline():
             utils.press_key("AccessInventory")
             if template.template_await_true(
                 template.check_template, 2, "inventory", 0.7
             ):
+                # WAIT FOR INVENTORY TO BE LOADED
                 waiting_for_remote = template.template_await_true(
-                    template.check_template, 2, "waiting_inv", 0.8
+                    template.check_template, 0.5, "waiting_inv", 0.8
                 )
                 while (
                     waiting_for_remote
-                    and time.monotonic() < deadline
+                    and not deadline()
                     and template.check_template("inventory", 0.7)
                 ):
                     player_state.check_disconnected()
                     time.sleep(DEDI_REMOTE_POLL_INTERVAL)
                     waiting_for_remote = template.check_template("waiting_inv", 0.8)
 
+                # IF INVENTORY IS READY ->
                 if template.check_template("inventory", 0.7) and not waiting_for_remote:
                     time.sleep(0.3 * settings.lag_offset)
                     windows.click(
@@ -215,7 +218,7 @@ def _withdraw_from_dedi(route_metadata, item, label):
                 template.check_template, 2, "inventory", 0.7
             ):
                 waiting_for_remote = template.template_await_true(
-                    template.check_template, 2, "waiting_inv", 0.8
+                    template.check_template, 1, "waiting_inv", 0.8
                 )
                 while (
                     waiting_for_remote
@@ -320,6 +323,7 @@ def _process_vault(route, route_metadata, vault, index):
             player_inventory.transfer_all_inventory()
             time.sleep(0.3 * settings.lag_offset)
         capture_vault_after_transfer(label)
+
     inventory.close()
     template.template_await_false(template.check_template, 1, "inventory", 0.7)
     time.sleep(0.2 * settings.lag_offset)
@@ -341,15 +345,27 @@ def _process_grinder(route, route_metadata):
     if template.check_template("grinder", 0.7):
         player_inventory.transfer_all_inventory()
         time.sleep(0.3 * settings.lag_offset)
-        windows.click(
-            variables.get_pixel_loc("dedi_withdraw_x"),
-            variables.get_pixel_loc("dedi_withdraw_y"),
-        )
+
+        # ENSURE PROCESS
+        player_inventory.close()
+        template.template_await_false(template.check_template, 1, "inventory", 0.7)
         time.sleep(0.3 * settings.lag_offset)
-        inventory.transfer_all_from()
-        time.sleep(0.2 * settings.lag_offset)
-        capture_grinder_after_withdraw(label)
-        inventory.close()
+        if not _open_inventory_template(
+            "grinder", route, route_metadata, grinder, label
+        ):
+            _restore_route_view(route_metadata, reset_crouch=False)
+            return
+
+        if template.check_template("grinder", 0.7):
+            windows.click(
+                variables.get_pixel_loc("dedi_withdraw_x"),
+                variables.get_pixel_loc("dedi_withdraw_y"),
+            )
+            time.sleep(0.3 * settings.lag_offset)
+            inventory.transfer_all_from()
+            time.sleep(0.2 * settings.lag_offset)
+            capture_grinder_after_withdraw(label)
+            inventory.close()
 
     template.template_await_false(template.check_template, 1, "inventory", 0.7)
     time.sleep(0.2 * settings.lag_offset)

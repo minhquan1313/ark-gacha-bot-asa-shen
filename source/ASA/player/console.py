@@ -20,10 +20,6 @@ def is_open():
 
 def enter_data(data: str):
     global last_command
-    # if source.ASA.config.up_arrow and data == last_command:
-    #     logs.logger.debug(f"using uparrow to put {data} into the console")
-    #     pyautogui.press("up")
-    # else:
     logs.logger.debug(f"using clipboard to put {data} into the console")
     clipboard_opened = False
     try:  # my pc had issues where it would run threw this and not open clipoard then crash trying to close it
@@ -41,9 +37,16 @@ def enter_data(data: str):
 
 
 def console_reset():
+    # Open console
     utils.press_key("ConsoleKeys")
+    time.sleep(0.2)
+    # Append "`" character into the console, in case the console already contain old value
+    # so maybe it contains "ccc" from previous ccc, but somehow failed to submit, here we
+    # add "c" -> "cccc" then we submit, that's a wrong console command so it execute nothing -> SAFE RESET CONSOLE
+    pyautogui.press("c")
     time.sleep(0.1)
     utils.press_key("Enter")
+    time.sleep(0.3)
 
 
 def console_ccc(reset_state_before_capture=True):
@@ -59,13 +62,12 @@ def console_ccc(reset_state_before_capture=True):
         count = 0
         while not is_open():
             count += 1
-            # RESET
-            console_reset()
-            time.sleep(0.1)
-
             # OPEN AGAIN
             utils.press_key("ConsoleKeys")
             template.template_await_true(is_open, 1)
+            if not is_open():
+                console_reset()
+
             if count >= source.ASA.config.console_open_attempts:
                 logs.logger.error(f"console didnt open after {count} attempts")
                 break
@@ -115,9 +117,8 @@ def console_write(text: str):
     global last_command
     attempts = 0
     while not is_open():
-        attempts += 1
         console_reset()
-        time.sleep(0.1)
+        attempts += 1
 
         utils.press_key("ConsoleKeys")
         template.template_await_true(is_open, 1)

@@ -35,7 +35,29 @@ TARGET_GAME_SETTINGS = {
     "bEnableFluidInteraction": "False",
     "GUI3DWidgetQuality": "0.000000",
     "bThirdPersonPlayer": "False",
+    #
     "FrameGenerationMethod": "0",
+    "FrameGenerationMultiplier": "1",
+    "DLSSQualityMode": "0",
+    "SuperResolutionSystem": "1",
+    "ReflexEnabled": "-1",
+    "FSRQualityMode": "4",
+    #
+    "FrameMultiplier": "1",
+    "ScreenPercentage": "1.000000",
+    #
+    "sg.ReflectionQuality": "0",
+    "sg.PostProcessQuality": "0",
+    "sg.GlobalIlluminationQuality": "0",
+    "sg.ResolutionQuality": "0",
+    "sg.LandscapeQuality": "0",
+    "sg.ViewDistanceQuality": "0",
+    "sg.EffectsQuality": "0",
+    "sg.TextureQuality": "0",
+    "sg.FoliageQuality": "0",
+    "sg.ShadowQuality": "0",
+    "sg.AntiAliasingQuality": "0",
+    "sg.ShadingQuality": "1",
 }
 
 ENUM_CURRENT_SETTINGS = -1

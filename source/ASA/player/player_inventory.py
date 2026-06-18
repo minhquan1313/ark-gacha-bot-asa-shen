@@ -58,7 +58,6 @@ def close():
 def search_in_inventory(item: str):
     if is_open():
         logs.logger.debug(f"searching in inventory for {item}")
-        time.sleep(0.2 * settings.lag_offset)
         windows.click(
             variables.get_pixel_loc("search_inventory_x"),
             variables.get_pixel_loc("transfer_all_y"),
@@ -66,7 +65,7 @@ def search_in_inventory(item: str):
         utils.ctrl_a()
         time.sleep(0.2 * settings.lag_offset)
         utils.write(item)
-        time.sleep(0.1 * settings.lag_offset)
+        time.sleep(0.3 * settings.lag_offset)
 
 
 def drop_all_inv():
@@ -83,7 +82,6 @@ def drop_all_inv():
 def transfer_all_inventory():
     if is_open():
         logs.logger.debug(f"transfering all from our inventory into strucutre")
-        time.sleep(0.2 * settings.lag_offset)
         windows.click(
             variables.get_pixel_loc("transfer_all_inventory_x"),
             variables.get_pixel_loc("transfer_all_y"),
@@ -95,6 +93,9 @@ def implant_eat():
     global resets
     resets += 1
     attempts = 0
+
+    player_state.capture_state("implant eat", 5)
+    logs.logger.critical("Eating implant", stack_info=True)
 
     while not template.check_template("death_regions", 0.7):
         attempts += 1
@@ -117,9 +118,6 @@ def implant_eat():
             variables.get_pixel_loc("implant_eat_x"),
             variables.get_pixel_loc("implant_eat_y"),
         )
-
-        player_state.capture_state("implant eat")
-        logs.logger.critical("Eating implant", stack_info=True)
 
         time.sleep(10)  # accounting for high ping lag
         utils.press_key("Use")

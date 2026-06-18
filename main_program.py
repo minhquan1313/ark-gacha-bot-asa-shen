@@ -7,8 +7,9 @@ import pyautogui
 import settings
 from source.launcher.constants import GAME_WINDOW_TITLE
 from source.launcher.system import focus_window_if_needed
-from source.utility.debug_screenshots import stop_debug_screenshot_worker
+from source.logs import gachalogs as logs
 from source.utility import windows
+from source.utility.debug_screenshots import stop_debug_screenshot_worker
 
 pyautogui.FAILSAFE = False
 
@@ -83,5 +84,6 @@ if __name__ == "__main__":
         print("[WARN] Offline runner stopped.")
     except Exception as exc:
         print(f"[ERROR] {exc}")
+        logs.logger.critical(f"Something happened and GBot stopped", exc_info=True)
         time.sleep(1)
         sys.exit(1)

@@ -1,6 +1,7 @@
 import ctypes
 import time
 
+import settings
 from source.ASA.player import console
 from source.logs import gachalogs as logs
 
@@ -150,6 +151,10 @@ def normalize_yaw(yaw):
 
 
 def set_yaw(yaw):
+    """
+    Trigger CCC
+    """
+
     global current_yaw
     global current_pitch
     ccc_data = console.console_ccc()
@@ -178,6 +183,9 @@ def set_yaw(yaw):
 
 
 def set_pitch(pitch):
+    """
+    Won't trigger CCC
+    """
     global current_pitch
     change = current_pitch - pitch
     if change < 0:
@@ -188,6 +196,12 @@ def set_pitch(pitch):
 
 
 def yaw_zero(ccc_data=_CCC_NOT_PROVIDED):
+    """
+    Trigger CCC if ccc not provided
+
+    Will trigger MOSTLY
+    """
+
     global current_yaw
 
     if ccc_data is _CCC_NOT_PROVIDED:
@@ -208,6 +222,12 @@ def yaw_zero(ccc_data=_CCC_NOT_PROVIDED):
 
 
 def pitch_zero(ccc_data=_CCC_NOT_PROVIDED):
+    """
+    Trigger CCC if ccc not provided
+
+    Will trigger MOSTLY
+    """
+
     global current_pitch
 
     if ccc_data is _CCC_NOT_PROVIDED:
@@ -227,7 +247,51 @@ def pitch_zero(ccc_data=_CCC_NOT_PROVIDED):
         return False
 
 
+def zero_center(target_yaw=settings.station_yaw):
+    """
+    Trigger CCC
+
+    Will set yaw to settings.station_yaw by default and pitch to 0.
+    So player should be aiming at the desired center view
+    """
+
+    logs.logger.debug("setting view angles back to station_yaw and pitch 0")
+
+    global current_yaw
+    global current_pitch
+
+    ccc_data = console.console_ccc()
+    if ccc_data is None:
+        logs.logger.warning("CCC unavailable; setting yaw from cached angle")
+    else:
+        try:
+            current_yaw = float(ccc_data[3])
+            current_pitch = float(ccc_data[4])
+            logs.logger.debug(f"setting yaw as {current_yaw}")
+        except (IndexError, TypeError, ValueError) as e:
+            logs.logger.error(f"error processing ccc yaw and pitch: {e}")
+
+    try:  # had an issue where this was a string for some reason
+        pitch_zero(ccc_data)
+
+        target = float(target_yaw)
+        current = float(current_yaw)
+
+        diff = ((target - current) + 180) % 360 - 180
+        if diff < 0:
+            turn_left(-diff)
+        else:
+            turn_right(diff)
+        current_yaw = normalize_yaw(target)
+    except Exception as e:
+        logs.logger.error(f"error processing data into floats: {e}")
+
+
 def zero():
+    """
+    Trigger CCC
+    """
+
     logs.logger.debug("setting view angles back to 0")
     global current_yaw
     global current_pitch
@@ -242,6 +306,10 @@ def zero():
 
 
 def get_yaw_pitch():
+    """
+    Trigger CCC
+    """
+
     global current_pitch
     global current_yaw
     ccc_data = console.console_ccc()
@@ -253,6 +321,13 @@ def get_yaw_pitch():
 
 
 def turn_right(degrees):
+    """
+    Won't trigger CCC
+
+    Args:
+        degrees (float): Must be positive number
+    """
+
     global current_yaw
     windows.turn(degrees, 0)
     current_yaw = float(current_yaw)
@@ -260,6 +335,13 @@ def turn_right(degrees):
 
 
 def turn_left(degrees):
+    """
+    Won't trigger CCC
+
+    Args:
+        degrees (float): Must be positive number
+    """
+
     global current_yaw
     windows.turn(-degrees, 0)
     current_yaw = float(current_yaw)
@@ -267,6 +349,13 @@ def turn_left(degrees):
 
 
 def turn_down(degrees):
+    """
+    Won't trigger CCC
+
+    Args:
+        degrees (float): Must be positive number
+    """
+
     global current_pitch
     current_pitch = float(current_pitch)
     allowed = min(abs(player_pitch_minimum - current_pitch), degrees)
@@ -275,6 +364,13 @@ def turn_down(degrees):
 
 
 def turn_up(degrees):
+    """
+    Won't trigger CCC
+
+    Args:
+        degrees (float): Must be positive number
+    """
+
     global current_pitch
     current_pitch = float(current_pitch)
     allowed = min(abs(player_pitch_max - current_pitch), degrees)
@@ -283,6 +379,14 @@ def turn_up(degrees):
 
 
 def turn_to(yaw, pitch):
+    """
+    Won't trigger CCC
+
+    Args:
+        yaw (float): ccc[3]
+        pitch (float): ccc[4]
+    """
+
     global current_yaw
     global current_pitch
     inital_pitch = current_pitch

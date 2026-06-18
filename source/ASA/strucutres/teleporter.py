@@ -3,7 +3,7 @@ import time
 import settings
 import source.ASA.config
 import source.ASA.stations.custom_stations
-from source.ASA.player import player_state
+from source.ASA.player import player_state, tribelog
 from source.ASA.strucutres import bed
 from source.logs import gachalogs as logs
 from source.utility import template, utils, variables, windows
@@ -95,20 +95,44 @@ def teleport_not_default(arg, fallback_bed_name=None):
     time.sleep(0.3 * settings.lag_offset)
 
     open()
-    time.sleep(
-        0.2 * settings.lag_offset
-    )  # waiting for teleport_icon to populate on the screen before we check
     if is_open():
         player_state.human.is_on_tp()
-        if template.teleport_icon(0.55):
-            start = time.time()
-            logs.logger.debug(
-                f"teleport icons are not on the teleport screen waiting for up to 10 seconds for them to appear"
+
+        # ENSURE TP IS OPEN AND SERVER LOADED PROCESS
+        deadline = utils.timed_out_counter(120)
+        time.sleep(
+            0.3 * settings.lag_offset
+        )  # preventing the orange text from the starting teleport screen messing things up
+        while True:
+            windows.click(
+                variables.get_pixel_loc("first_bed_slot_x"),
+                variables.get_pixel_loc("first_bed_slot_y"),
             )
-            template.template_await_true(template.teleport_icon, 10, 0.55)
-            logs.logger.debug(
-                f"time taken for teleporter icon to appear : {time.time() - start}"
-            )
+            if not template.template_await_true(template.check_teleporter_orange, 3):
+                logs.logger.warning(
+                    f"orange pixel for teleporter ready not found - list not loaded"
+                )
+                player_state.check_disconnected()
+            else:
+                break
+            time.sleep(
+                0.3 * settings.lag_offset
+            )  # preventing the orange text from the starting teleport screen messing things up
+
+            if deadline():
+                player_state.reset_state()
+                time.sleep(0.3 * settings.lag_offset)
+
+                bed.spawn_in(fallback_bed_name)
+
+                utils.turn_down(80)
+                time.sleep(0.3 * settings.lag_offset)
+
+                open()
+
+                deadline = utils.timed_out_counter(120)
+        # ENSURE DONE
+
         counter = 0
         while template.check_template_no_bounds("search", 0.7):
             counter += 1
@@ -146,14 +170,17 @@ def teleport_not_default(arg, fallback_bed_name=None):
                 variables.get_pixel_loc("spawn_button_y"),
             )
 
-            if template.template_await_true(template.white_flash, 2):
+            if template.template_await_true(template.white_flash, 1):
                 logs.logger.debug(f"white flash detected waiting for up too 5 seconds")
                 template.template_await_false(template.white_flash, 5)
-        # Extra step to ensure we are teleported(not sitting at the old teleport due to server lag/save)
-        time.sleep(0.3 * settings.lag_offset)
-        open()
-        time.sleep(0.3 * settings.lag_offset)
-        close()
+
+            # Extra step to ensure we are teleported(not sitting at the old teleport due to server lag/save)
+            time.sleep(0.3 * settings.lag_offset)
+            open()
+            close()
+            tribelog.open()
+            tribelog.close()
+
         time.sleep(0.5 * settings.lag_offset)
         if (
             settings.singleplayer
@@ -161,6 +188,3 @@ def teleport_not_default(arg, fallback_bed_name=None):
             utils.current_pitch = 0
             utils.turn_down(80)
             time.sleep(0.2)
-        utils.turn_up(80)
-        time.sleep(0.2)
-        utils.set_yaw(stationdata.yaw)

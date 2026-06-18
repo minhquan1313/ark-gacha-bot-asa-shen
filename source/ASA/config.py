@@ -16,4 +16,4 @@ buff_open_attempts = 10
 
 up_arrow = False  # TRUE OR FALSE
 
-timeout_deadline = 60
+timeout_deadline = 60 * 3

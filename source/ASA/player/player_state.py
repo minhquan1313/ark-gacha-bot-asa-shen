@@ -12,10 +12,13 @@ from source.utility.debug_screenshots import (
     CAPTURE_PLAYER_STATE,
     capture_for,
 )
+from source.utility.structures.transmitter import transmitter, transmitter_transfer_menu
 
 global crouched
+global uploaded
 global human
 crouched = False
+uploaded = False
 
 capture_state = capture_for("player_state", active=CAPTURE_PLAYER_STATE)
 
@@ -81,6 +84,7 @@ def reset_state():
     player_inventory.close()
     teleporter.close()
     tribelog.close()
+    transmitter.close()
     if bed.is_open():
         bed.spawn_in(
             settings.bed_spawn

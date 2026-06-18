@@ -41,6 +41,10 @@ def close():
 
 
 def spawn_in(bed_name: str):
+    """
+    When it's done, player should be ready to perform next action
+    """
+
     if not is_open():
         player_inventory.implant_eat()
 

@@ -1,5 +1,6 @@
 import json
 import time
+from typing import Literal
 
 import cv2
 import numpy as np
@@ -45,6 +46,7 @@ roi_regions = {
     "show_buff": {"start_x": 900, "start_y": 862, "width": 150, "height": 38},
     "snow_owl_pellet": {"start_x": 150, "start_y": 112, "width": 450, "height": 450},
     "orange": {"start_x": 528, "start_y": 217, "width": 1, "height": 1},
+    "transfer_orange": {"start_x": 220, "start_y": 320, "width": 1, "height": 1},
     "chem_bench": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
     "indi_forge": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
     "access_inv": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
@@ -69,6 +71,18 @@ roi_regions = {
         "start_y": 300,
         "width": 560,
         "height": 200,
+    },
+    "transmitter_server_fail_connection": {
+        "start_x": 674,
+        "start_y": 247,
+        "width": 579,
+        "height": 536,
+    },
+    "transmitter_server_fail_attempting": {
+        "start_x": 674,
+        "start_y": 247,
+        "width": 579,
+        "height": 536,
     },
     "transmitter_inv": {
         "start_x": 970,
@@ -106,6 +120,18 @@ roi_regions = {
         "width": 250,
         "height": 80,
     },
+    "structure_turn_on": {
+        "start_x": 755,
+        "start_y": 658,
+        "width": 420,
+        "height": 264,
+    },
+    "trans_inv_ready": {
+        "start_x": 1455,
+        "start_y": 20,
+        "width": 395,
+        "height": 220,
+    },
     "dedi_deposit_ready": {
         "start_x": 880,
         "start_y": 850,
@@ -113,6 +139,8 @@ roi_regions = {
         "height": 55,
     },
 }
+
+IS_DEBUG = False
 
 
 def get_region_roi(region):
@@ -133,7 +161,7 @@ def template_await_true(func, sleep_amount: float, *args) -> bool:
 
 def template_await_false(func, sleep_amount: float, *args) -> bool:
     count = 0
-    while func(*args) == True:
+    while func(*args) != False:
         if count >= sleep_amount * 20:
             break
         time.sleep(0.05)
@@ -141,7 +169,7 @@ def template_await_false(func, sleep_amount: float, *args) -> bool:
     return func(*args)
 
 
-def check_template(item: str, threshold: float) -> bool:
+def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[False]:
     region = roi_regions[item]
     roi = get_region_roi(region)
 
@@ -162,28 +190,41 @@ def check_template(item: str, threshold: float) -> bool:
     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
-    # if item == "crop_plot_prompt":
-    #     print(f"Max value: {max_val}, Threshold: {threshold}")
-    #     cv2.imshow("template", image)
+    # DEBUG
+    # if IS_DEBUG and item == "server_trans_success":
+    #     score = f"{max_val:.3f}"
+
+    #     debug_roi = roi.copy()
     #     cv2.rectangle(
-    #         roi,
+    #         debug_roi,
     #         (max_loc[0], max_loc[1]),
     #         (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
     #         (0, 0, 255),
     #         2,
     #     )
-    #     cv2.imshow("roi_with_rectangle", gray_roi)
-    #     cv2.waitKey(0)
-    #     cv2.destroyAllWindows()
+
+    #     root_path = Path.cwd()
+
+    #     template_path = root_path / f"{item}_{score}_template.png"
+    #     roi_path = root_path / f"{item}_{score}_roi.png"
+
+    #     cv2.imwrite(str(template_path), image)
+    #     cv2.imwrite(str(roi_path), debug_roi)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
-        return True
+
+        template_h, template_w = image.shape[:2]
+        center_x = region["start_x"] + max_loc[0] + template_w // 2
+        center_y = region["start_y"] + max_loc[1] + template_h // 2
+        return center_x, center_y
     logs.logger.template(f"{item} not found:{max_val} threshold:{threshold}")
     return False
 
 
-def check_template_no_bounds(item: str, threshold: float) -> bool:
+def check_template_no_bounds(
+    item: str, threshold: float
+) -> tuple[int, int] | Literal[False]:
     region = roi_regions[item]
     roi = get_region_roi(region)
 
@@ -203,23 +244,35 @@ def check_template_no_bounds(item: str, threshold: float) -> bool:
 
     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-    # if item == "crop_plot_prompt":
-    #     print(f"Max value: {max_val}, Threshold: {threshold}")
-    #     cv2.imshow("template", image)
+
+    # DEBUG
+    # if IS_DEBUG and item == "server_trans_success":
+    #     score = f"{max_val:.3f}"
+
+    #     debug_roi = roi.copy()
     #     cv2.rectangle(
-    #         roi,
+    #         debug_roi,
     #         (max_loc[0], max_loc[1]),
     #         (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
     #         (0, 0, 255),
     #         2,
     #     )
-    #     cv2.imshow("roi_with_rectangle", gray_roi)
-    #     cv2.waitKey(0)
-    #     cv2.destroyAllWindows()
+
+    #     root_path = Path.cwd()
+
+    #     template_path = root_path / f"{item}_{score}_template.png"
+    #     roi_path = root_path / f"{item}_{score}_roi.png"
+
+    #     cv2.imwrite(str(template_path), image)
+    #     cv2.imwrite(str(roi_path), debug_roi)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
-        return True
+
+        template_h, template_w = image.shape[:2]
+        center_x = region["start_x"] + max_loc[0] + template_w // 2
+        center_y = region["start_y"] + max_loc[1] + template_h // 2
+        return center_x, center_y
     logs.logger.template(f"{item} not found:{max_val} threshold:{threshold}")
     return False
 
@@ -340,6 +393,21 @@ def check_buffs(buff, threshold):
 
 def check_teleporter_orange():
     region = roi_regions["orange"]
+    roi = get_region_roi(region)
+
+    lower_boundary = np.array([10, 211, 50])
+    upper_boundary = np.array([15, 255, 100])
+
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    pixel_hsv = hsv[0, 0]
+    logs.logger.template(
+        f"check orange {np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)}"
+    )
+    return np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)
+
+
+def check_transfer_server_orange():
+    region = roi_regions["transfer_orange"]
     roi = get_region_roi(region)
 
     lower_boundary = np.array([10, 211, 50])

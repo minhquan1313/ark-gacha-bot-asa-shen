@@ -50,9 +50,7 @@ def run_transfer_helper(config, status_callback=None, dependencies=None):
             "Missing transfer helper inputs: " + ", ".join(missing)
         )
 
-    deps = dependencies or default_transfer_dependencies(
-        config, status_callback
-    )
+    deps = dependencies or default_transfer_dependencies(config, status_callback)
     account_count = runtime_account_count(players)
     accounts = range(1, account_count + 1)
     current_account = 1
@@ -334,7 +332,9 @@ def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
                 try:
                     window_size = validate_ark_window()
                     if launched:
-                        return _prepare_ark_window_for_join(status_callback, window_size)
+                        return _prepare_ark_window_for_join(
+                            status_callback, window_size
+                        )
                     return True
                 except RuntimeError as exc:
                     last_error = exc
@@ -487,7 +487,9 @@ def reset_transfer_state(settings, players=None, account=None):
     utils.press_key("Run")
 
 
-def withdraw_from_transfer_dedis(dedis, settings, ui_coords=None, players=None, account=None):
+def withdraw_from_transfer_dedis(
+    dedis, settings, ui_coords=None, players=None, account=None
+):
     import settings as global_settings
     from source.ASA.stations import custom_stations
     from source.ASA.strucutres import teleporter
@@ -516,7 +518,9 @@ def withdraw_from_transfer_dedis(dedis, settings, ui_coords=None, players=None, 
     return True
 
 
-def deposit_to_transfer_dedis(dedis, ui_coords=None, settings=None, players=None, account=None):
+def deposit_to_transfer_dedis(
+    dedis, ui_coords=None, settings=None, players=None, account=None
+):
     from source.ASA.stations import custom_stations
 
     destination_route = transfer_dedi_route(dedis, "destination")
@@ -559,9 +563,7 @@ def _transfer_withdraw_from_dedi(
             f"on attempt {attempt} / {RECOVERABLE_RUNTIME_ATTEMPTS}"
         )
         if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
-            _recover_transfer_dedi_position(
-                route_metadata, item, fallback_bed_name
-            )
+            _recover_transfer_dedi_position(route_metadata, item, fallback_bed_name)
     return False
 
 
@@ -590,9 +592,7 @@ def _transfer_deposit_to_dedi(
                 f"on attempt {attempt} / {attempts}"
             )
             if attempt < attempts:
-                _recover_transfer_dedi_position(
-                    route_metadata, item, fallback_bed_name
-                )
+                _recover_transfer_dedi_position(route_metadata, item, fallback_bed_name)
             continue
         if _wait_for_template_visible(
             template.check_template,
@@ -613,9 +613,7 @@ def _transfer_deposit_to_dedi(
         utils.press_key("T")
         inventory.close()
         if attempt < attempts:
-            _recover_transfer_dedi_position(
-                route_metadata, item, fallback_bed_name
-            )
+            _recover_transfer_dedi_position(route_metadata, item, fallback_bed_name)
     return False
 
 
@@ -635,16 +633,17 @@ def _open_transfer_dedi_inventory(route_metadata, item, label, timeout):
 
     deposit._turn_to_object(route_metadata, item)
     time.sleep(0.3 * float(settings_lag_offset()))
-    deadline = time.monotonic() + float(timeout)
-    while time.monotonic() < deadline:
+
+    deadline = utils.timed_out_counter(float(timeout))
+    while not deadline():
         utils.press_key("AccessInventory")
         if template.template_await_true(template.check_template, 2, "inventory", 0.7):
             waiting_for_remote = template.template_await_true(
-                template.check_template, 2, "waiting_inv", 0.8
+                template.check_template, 1, "waiting_inv", 0.8
             )
             while (
                 waiting_for_remote
-                and time.monotonic() < deadline
+                and not deadline()
                 and template.check_template("inventory", 0.7)
             ):
                 time.sleep(0.05)
@@ -857,8 +856,10 @@ def _reset_open_main_menu_console():
 
 
 def _wait_for_ark_loading_screen(timeout=30):
-    deadline = time.monotonic() + float(timeout)
-    while time.monotonic() < deadline:
+    from source.utility import utils
+
+    deadline = utils.timed_out_counter(float(timeout))
+    while not deadline():
         if _safe_check_join_template_no_bounds("loading_screen", 0.7):
             return True
         time.sleep(0.5)
@@ -866,8 +867,10 @@ def _wait_for_ark_loading_screen(timeout=30):
 
 
 def _wait_for_ark_main_menu(timeout=30):
-    deadline = time.monotonic() + float(timeout)
-    while time.monotonic() < deadline:
+    from source.utility import utils
+
+    deadline = utils.timed_out_counter(float(timeout))
+    while not deadline():
         if _safe_is_ark_main_menu():
             return True
         time.sleep(0.5)

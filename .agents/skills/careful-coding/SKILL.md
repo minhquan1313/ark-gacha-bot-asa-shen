@@ -30,6 +30,8 @@ Before implementing:
 - Add no flexibility or configurability that wasn't requested.
 - Add no error handling for impossible scenarios.
 - If 200 lines could be 50, rewrite them.
+- When creating or modifying a function, always include type annotations for all parameters and the return value.
+- When creating a new function, always add a concise docstring that explains the function’s purpose clearly.
 
 Ask: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 

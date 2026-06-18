@@ -1,5 +1,6 @@
 import time
 
+from source.ASA import config
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.utility import recon_utils
 from source.utility import utils, windows
@@ -93,21 +94,22 @@ def join_server(server: str):
 
     logs.logger.debug("joining server")
 
-    timeout = time_now() + 60
-    while not is_server_list_loaded() and time_now() < timeout:
+    timeout = utils.timed_out_counter(config.timeout_deadline)
+    while not is_server_list_loaded() and not timeout():
         if not wait_server_list_loaded(1):
             refresh()
     if not is_server_list_loaded():
         return False
 
-    timeout = time_now() + 10
-    while clear_search() and time_now() < timeout:
+    timeout = utils.timed_out_counter(10)
+    while clear_search() and not timeout():
         search_bar_search(server)
         wait_clear_search(1)
     if clear_search():
         return False
 
-    time.sleep(0.5)
+    wait_server_list_loaded(1)
+
     windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
     time.sleep(0.3)
     if is_open() and join_button():
