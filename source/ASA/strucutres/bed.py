@@ -113,6 +113,7 @@ def fast_travel(bed_name: str):
             )
             render.fast_travel_to_render()
             time.sleep(0.2 * settings.lag_offset)
+            utils.zero_center()
             utils.turn_down(15)
     else:
         time.sleep(0.2 * settings.lag_offset)

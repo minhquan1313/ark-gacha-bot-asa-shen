@@ -20,6 +20,7 @@ def _recover_berry_station(metadata):
     if settings.external_berry:
         logs.logger.debug("sleeping for 20 seconds as external")
         time.sleep(20)  # letting station spawn in if you have to tp away
+    utils.zero_center()
 
 
 def berry_collection():
