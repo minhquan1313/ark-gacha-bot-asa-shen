@@ -177,30 +177,6 @@ class render_station(base_task):
         return 30  # after triggered we will wait for 30 seconds reduces the amount of cpu usage
 
 
-class snail_pheonix(base_task):
-    def __init__(self, name, teleporter_name, direction, depo):
-        super().__init__()
-        self.name = name
-        self.teleporter_name = teleporter_name
-        self.direction = direction
-        self.depo_tp = depo
-
-    def execute(self):
-        gacha_metadata = custom_stations.get_station_metadata(self.teleporter_name)
-        gacha_metadata.side = self.direction
-
-        player_state.check_state()
-        teleporter.teleport_not_default(gacha_metadata)
-        gacha.collection(gacha_metadata)
-        deposit.deposit_all(None)
-
-    def get_priority_level(self):
-        return 4
-
-    def get_requeue_delay(self):
-        return 13200
-
-
 class pause(base_task):
     def __init__(self, time):
         super().__init__()

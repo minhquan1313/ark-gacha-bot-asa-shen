@@ -337,15 +337,5 @@ class BerryStationTaskGuardTests(unittest.TestCase):
         teleporter.teleport_not_default.assert_called_once_with(metadata["PEGO"])
         stations.deposit.deposit_all.assert_called_once_with(None)
 
-    def test_snail_phoenix_uses_dedi_routes_for_deposit(self):
-        stations, teleporter, _, metadata = load_stations_module()
-
-        stations.snail_pheonix("snail1", "SNAIL", "left", "OLD_DEPOSIT").execute()
-
-        teleporter.teleport_not_default.assert_called_once_with(metadata["SNAIL"])
-        stations.gacha.collection.assert_called_once_with(metadata["SNAIL"])
-        stations.deposit.deposit_all.assert_called_once_with(None)
-
-
 if __name__ == "__main__":
     unittest.main()
