@@ -8,6 +8,7 @@ from unittest.mock import Mock
 from source.launcher.pages import LauncherPagesMixin
 from source.launcher.station_config import (
     auto_fill_gacha_group,
+    calculate_pego_delay,
     default_gacha_entry,
     default_gacha_pair,
     default_pego_entry,
@@ -24,7 +25,7 @@ from source.launcher.station_config import (
 
 
 class StationConfigTests(unittest.TestCase):
-    def test_gacha_load_save_preserves_legacy_resource_type(self):
+    def test_gacha_load_save_drops_legacy_resource_type_and_depo_tp(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "gacha.json"
             path.write_text(
@@ -45,8 +46,9 @@ class StationConfigTests(unittest.TestCase):
             data = load_gacha_config(path)
             saved = save_gacha_config(data, path)
 
-            self.assertEqual(saved[0]["resource_type"], "collect")
-            self.assertEqual(saved[0]["depo_tp"], "DEPO")
+            self.assertEqual(
+                saved[0], {"name": "snail1", "teleporter": "SNAIL", "side": "left"}
+            )
 
     def test_gacha_save_drops_normal_resource_type(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -171,6 +173,33 @@ class StationConfigTests(unittest.TestCase):
         set_all_pego_delays(entries, "1800")
 
         self.assertEqual([entry["delay"] for entry in entries], [1800, 1800])
+
+    def test_pego_delay_calculator_uses_counts_owls_and_station_time(self):
+        self.assertEqual(calculate_pego_delay(290, 3, 40, 5, 90), 1767)
+
+    def test_pego_delay_calculator_scales_with_gacha_and_owl_counts(self):
+        baseline = calculate_pego_delay(290, 3, 40, 5, 90)
+
+        self.assertLess(calculate_pego_delay(290, 3, 80, 5, 90), baseline)
+        self.assertLess(calculate_pego_delay(290, 3, 40, 10, 90), baseline)
+
+    def test_pego_delay_calculator_scales_with_pego_count(self):
+        baseline = calculate_pego_delay(290, 3, 40, 5, 90)
+
+        self.assertGreater(calculate_pego_delay(290, 6, 40, 5, 90), baseline)
+
+    def test_pego_delay_calculator_subtracts_station_time_from_delay(self):
+        self.assertEqual(calculate_pego_delay(290, 3, 40, 5, 120), 1737)
+
+    def test_pego_delay_calculator_rejects_invalid_inputs(self):
+        with self.assertRaisesRegex(ValueError, "pego amount"):
+            calculate_pego_delay(290, 0, 40, 5, 90)
+        with self.assertRaisesRegex(ValueError, "gacha amount"):
+            calculate_pego_delay(290, 3, 0, 5, 90)
+        with self.assertRaisesRegex(ValueError, "snow owl amount"):
+            calculate_pego_delay(290, 3, 40, 0, 90)
+        with self.assertRaisesRegex(ValueError, "pego station seconds"):
+            calculate_pego_delay(290, 3, 40, 5, -1)
 
     def test_gacha_auto_fill_requires_confirmation(self):
         launcher = SimpleNamespace(

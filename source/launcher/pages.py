@@ -45,7 +45,11 @@ from source.launcher.server_transfer_helper import ServerTransferHelper
 from source.launcher.settings_store import load_settings
 from source.launcher.station_config import (
     DEFAULT_PEGO_DELAY,
+    DEFAULT_PEGO_SNOW_OWLS_PER_GACHA,
+    DEFAULT_PEGO_STATION_SECONDS,
+    DEFAULT_PEGO_TARGET_CRYSTALS,
     auto_fill_gacha_group,
+    calculate_pego_delay,
     default_gacha_entry,
     default_gacha_pair,
     default_pego_entry,
@@ -706,6 +710,7 @@ class LauncherPagesMixin:
 
     def _render_pego_group(self):
         self._ensure_pego_config()
+        self._ensure_gacha_config()
 
         heading = QLabel("PEGO SETTINGS")
         heading.setObjectName("SectionHeading")
@@ -729,7 +734,20 @@ class LauncherPagesMixin:
         delay_row.addWidget(delay_label)
         delay_row.addWidget(self.pego_bulk_delay_field, 1)
         delay_row.addWidget(set_delay)
+        expanded = getattr(self, "pego_calculator_expanded", False)
+        calc_toggle = self._button(
+            "v CALCULATOR" if expanded else "> CALCULATOR", "secondary"
+        )
+        delay_row.addWidget(calc_toggle)
         controls_layout.addLayout(delay_row)
+        calculator = self._pego_calculator_panel()
+        calculator.setVisible(getattr(self, "pego_calculator_expanded", False))
+        calc_toggle.clicked.connect(
+            lambda checked=False, target=calculator, button=calc_toggle: self._toggle_pego_calculator(
+                target, button
+            )
+        )
+        controls_layout.addWidget(calculator)
         content_layout.addWidget(controls)
 
         for index, entry in enumerate(self.pego_config):
@@ -781,6 +799,73 @@ class LauncherPagesMixin:
         )
         layout.addLayout(row)
         return card
+
+    def _pego_calculator_panel(self) -> QFrame:
+        panel = QFrame()
+        panel.setObjectName("HelperRow")
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(8)
+
+        fields = QHBoxLayout()
+        fields.setSpacing(8)
+        self.pego_calc_target_field = self._pego_calculator_field(
+            fields, "target crystals", DEFAULT_PEGO_TARGET_CRYSTALS
+        )
+        self.pego_calc_pego_count_field = self._pego_calculator_field(
+            fields, "pego amount", len(self.pego_config)
+        )
+        self.pego_calc_gacha_count_field = self._pego_calculator_field(
+            fields, "gacha amount", len(self.gacha_config)
+        )
+        self.pego_calc_snow_owl_field = self._pego_calculator_field(
+            fields, "snow owl / gacha", DEFAULT_PEGO_SNOW_OWLS_PER_GACHA
+        )
+        self.pego_calc_station_seconds_field = self._pego_calculator_field(
+            fields, "pego station seconds", DEFAULT_PEGO_STATION_SECONDS
+        )
+        layout.addLayout(fields)
+
+        result_row = QHBoxLayout()
+        result_row.setSpacing(8)
+        self.pego_calc_result_label = QLabel("recommended delay: 1767s")
+        self.pego_calc_result_label.setObjectName("HelperRowSummary")
+        reset = self._button("RESET", "secondary")
+        apply = self._button("APPLY", "secondary")
+        reset.clicked.connect(self.reset_pego_delay_calculator)
+        apply.clicked.connect(self.apply_pego_delay_recommendation)
+        result_row.addWidget(self.pego_calc_result_label, 1)
+        result_row.addWidget(reset)
+        result_row.addWidget(apply)
+        layout.addLayout(result_row)
+
+        for field in self._pego_calculator_fields():
+            field.editingFinished.connect(
+                lambda: self.update_pego_delay_recommendation(show_error=False)
+            )
+        self.update_pego_delay_recommendation(show_error=False)
+        return panel
+
+    def _pego_calculator_field(
+        self, layout: QHBoxLayout, label_text: str, value: object
+    ) -> QLineEdit:
+        group = QVBoxLayout()
+        label = QLabel(label_text)
+        label.setObjectName("FormLabel")
+        field = self._deposit_line_edit(value)
+        group.addWidget(label)
+        group.addWidget(field)
+        layout.addLayout(group)
+        return field
+
+    def _pego_calculator_fields(self) -> list[QLineEdit]:
+        return [
+            self.pego_calc_target_field,
+            self.pego_calc_pego_count_field,
+            self.pego_calc_gacha_count_field,
+            self.pego_calc_snow_owl_field,
+            self.pego_calc_station_seconds_field,
+        ]
 
     def _crystal_route_card(self, route, route_index):
         card, layout = self._deposit_route_card(
@@ -1419,10 +1504,7 @@ class LauncherPagesMixin:
             self._ensure_gacha_config()
             entry = self.gacha_config[entry_index]
             value = field.text()
-            if key == "depo_tp" and not value.strip():
-                entry.pop("depo_tp", None)
-            else:
-                entry[key] = value
+            entry[key] = value
             self.save_gacha_config()
             if key == "teleporter":
                 self._render_settings_group("GACHA")
@@ -1594,6 +1676,57 @@ class LauncherPagesMixin:
             return
         self.save_pego_config()
         self._render_settings_group("PEGO")
+
+    def update_pego_delay_recommendation(self, show_error: bool = True) -> int | None:
+        try:
+            delay = self._pego_delay_recommendation()
+        except ValueError as exc:
+            self.pego_calc_result_label.setText("recommended delay: invalid input")
+            if show_error:
+                self.append_log(f"[ERROR] Invalid pego calculator input: {exc}\n")
+                self.dialog("Invalid Pego Calculator", str(exc), "error")
+            return None
+        self.pego_calc_result_label.setText(f"recommended delay: {delay}s")
+        return delay
+
+    def apply_pego_delay_recommendation(self) -> None:
+        delay = self.update_pego_delay_recommendation()
+        if delay is None:
+            return
+        self.pego_bulk_delay_field.setText(str(delay))
+        self._ensure_pego_config()
+        set_all_pego_delays(self.pego_config, delay)
+        self.save_pego_config()
+        self._render_settings_group("PEGO")
+
+    def reset_pego_delay_calculator(self) -> None:
+        self._ensure_pego_config()
+        self._ensure_gacha_config()
+        defaults = [
+            DEFAULT_PEGO_TARGET_CRYSTALS,
+            len(self.pego_config),
+            len(self.gacha_config),
+            DEFAULT_PEGO_SNOW_OWLS_PER_GACHA,
+            DEFAULT_PEGO_STATION_SECONDS,
+        ]
+        for field, value in zip(self._pego_calculator_fields(), defaults):
+            field.setText(str(value))
+        self.update_pego_delay_recommendation(show_error=False)
+
+    def _pego_delay_recommendation(self) -> int:
+        return calculate_pego_delay(
+            self.pego_calc_target_field.text(),
+            self.pego_calc_pego_count_field.text(),
+            self.pego_calc_gacha_count_field.text(),
+            self.pego_calc_snow_owl_field.text(),
+            self.pego_calc_station_seconds_field.text(),
+        )
+
+    def _toggle_pego_calculator(self, body: QWidget, button: QWidget) -> None:
+        visible = body.isHidden()
+        body.setVisible(visible)
+        button.setText("v CALCULATOR" if visible else "> CALCULATOR")
+        self.pego_calculator_expanded = visible
 
     def reset_pego_config(self):
         self.pego_config = [default_pego_entry()]

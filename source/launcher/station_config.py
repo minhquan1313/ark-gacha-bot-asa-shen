@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 GACHA_CONFIG_PATH = Path("json_files/gacha.json")
@@ -6,6 +7,16 @@ PEGO_CONFIG_PATH = Path("json_files/pego.json")
 GACHA_PAIR_PREFIX = "GACHAPAIR"
 DEFAULT_PEGO_DELAY = 1600
 VALID_GACHA_SIDES = {"left", "right"}
+
+DEFAULT_PEGO_TARGET_CRYSTALS = 290
+DEFAULT_PEGO_SNOW_OWLS_PER_GACHA = 5
+DEFAULT_PEGO_STATION_SECONDS = 90
+PEGO_CALIBRATION_CRYSTALS = 264
+PEGO_CALIBRATION_GACHAS = 40
+PEGO_CALIBRATION_PEGOS = 3
+PEGO_CALIBRATION_DELAY = 1600
+PEGO_CALIBRATION_SNOW_OWLS_PER_GACHA = 5
+PEGO_CALIBRATION_STATION_SECONDS = 90
 
 
 def default_gacha_entry(name="", teleporter="", side="left"):
@@ -154,6 +165,31 @@ def set_all_pego_delays(entries, delay):
         entry["delay"] = delay
 
 
+def calculate_pego_delay(
+    target_crystals: int | float,
+    pego_amount: int | float,
+    gacha_amount: int | float,
+    snow_owls_per_gacha: int | float,
+    station_seconds: int | float,
+) -> int:
+    """Calculate configured PEGO delay needed for the target crystal average."""
+    target = _positive_float(target_crystals, "target crystals")
+    pegos = _positive_float(pego_amount, "pego amount")
+    gachas = _positive_float(gacha_amount, "gacha amount")
+    snow_owls = _positive_float(snow_owls_per_gacha, "snow owl amount")
+    station = _non_negative_float(station_seconds, "pego station seconds")
+    baseline_rate = PEGO_CALIBRATION_CRYSTALS / (
+        (PEGO_CALIBRATION_DELAY + PEGO_CALIBRATION_STATION_SECONDS)
+        * (PEGO_CALIBRATION_GACHAS / PEGO_CALIBRATION_PEGOS)
+        * PEGO_CALIBRATION_SNOW_OWLS_PER_GACHA
+    )
+    projected_rate = baseline_rate * (gachas / pegos) * snow_owls
+    recommended = math.ceil((target / projected_rate) - station)
+    if recommended < 0:
+        raise ValueError("recommended delay must be zero or greater.")
+    return int(recommended)
+
+
 def _normalize_gacha_entry(entry, index):
     if not isinstance(entry, dict):
         entry = {}
@@ -195,6 +231,26 @@ def _int_value(value, name):
         return int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be an integer.") from exc
+
+
+def _positive_float(value: object, name: str) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a positive number.") from exc
+    if result <= 0:
+        raise ValueError(f"{name} must be a positive number.")
+    return result
+
+
+def _non_negative_float(value: object, name: str) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be zero or greater.") from exc
+    if result < 0:
+        raise ValueError(f"{name} must be zero or greater.")
+    return result
 
 
 def _read_json_array(path, label):
