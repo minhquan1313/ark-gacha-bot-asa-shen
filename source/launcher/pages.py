@@ -74,6 +74,21 @@ from source.launcher.widgets import (
 )
 
 
+def _counted_title(title: str, count: int | str) -> str:
+    """Format a settings title with its collection count."""
+    return f"{title} - {count}"
+
+
+def _deposit_route_child_count(route: dict) -> int:
+    """Count configured child objects for a deposit route."""
+    count = len(route["dedi"]["items"])
+    if "vault" in route:
+        count += len(route["vault"]["items"])
+    if "grinder" in route:
+        count += 1
+    return count
+
+
 class LauncherPagesMixin:
     def _icon_button(
         self, icon_key, tooltip="", variant="secondary", width=36, icon_size=32
@@ -484,11 +499,17 @@ class LauncherPagesMixin:
             4,
         )
 
-    def _render_deposit_routes_group(self):
+    def _render_deposit_routes_group(self) -> None:
         self._ensure_deposit_config()
         if not hasattr(self, "deposit_route_card_expanded"):
             self.deposit_route_card_expanded = {}
-        heading = QLabel("STORAGE SETTINGS")
+        crystal_routes = self.deposit_config["depositCrystalData"]
+        grindable_routes = self.deposit_config["depositGrindableData"]
+        heading = QLabel(
+            _counted_title(
+                "STORAGE SETTINGS", len(crystal_routes) + len(grindable_routes)
+            )
+        )
         heading.setObjectName("SectionHeading")
         self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
 
@@ -527,22 +548,24 @@ class LauncherPagesMixin:
         storage_layout.addLayout(timeout_row)
         content_layout.addWidget(storage_settings)
 
-        crystal_heading = QLabel("CRYSTAL DEPOSIT ROUTES")
+        crystal_heading = QLabel(
+            _counted_title("CRYSTAL DEPOSIT ROUTES", len(crystal_routes))
+        )
         crystal_heading.setObjectName("PanelTitle")
         content_layout.addWidget(crystal_heading)
-        for route_index, route in enumerate(self.deposit_config["depositCrystalData"]):
+        for route_index, route in enumerate(crystal_routes):
             content_layout.addWidget(self._crystal_route_card(route, route_index))
         add_crystal = self._button("ADD CRYSTAL ROUTE", "secondary")
         add_crystal.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         add_crystal.clicked.connect(self.add_crystal_route)
         content_layout.addWidget(add_crystal)
 
-        grindable_heading = QLabel("GRINDABLE ROUTES")
+        grindable_heading = QLabel(
+            _counted_title("GRINDABLE ROUTES", len(grindable_routes))
+        )
         grindable_heading.setObjectName("PanelTitle")
         content_layout.addWidget(grindable_heading)
-        for route_index, route in enumerate(
-            self.deposit_config["depositGrindableData"]
-        ):
+        for route_index, route in enumerate(grindable_routes):
             content_layout.addWidget(self._grindable_route_card(route, route_index))
         add_grindable = self._button("ADD GRINDABLE ROUTE", "secondary")
         add_grindable.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -550,12 +573,17 @@ class LauncherPagesMixin:
         content_layout.addWidget(add_grindable)
         content_layout.addStretch()
 
-    def _render_gacha_group(self):
+    def _render_gacha_group(self) -> None:
         self._ensure_gacha_config()
         if not hasattr(self, "gacha_group_expanded"):
             self.gacha_group_expanded = {}
 
-        heading = QLabel("GACHA SETTINGS")
+        groups = grouped_gacha_entries(self.gacha_config)
+        heading = QLabel(
+            _counted_title(
+                "GACHA SETTINGS", f"{len(groups)}({len(self.gacha_config)})"
+            )
+        )
         heading.setObjectName("SectionHeading")
         self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
 
@@ -586,7 +614,7 @@ class LauncherPagesMixin:
         content_layout.addWidget(controls)
 
         risky = risky_teleporter_names(self.gacha_config)
-        for teleporter, group in grouped_gacha_entries(self.gacha_config):
+        for teleporter, group in groups:
             content_layout.addWidget(self._gacha_group_card(teleporter, group, risky))
         add_group = self._button("ADD GACHA GROUP", "secondary")
         add_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -655,11 +683,6 @@ class LauncherPagesMixin:
                 old, field
             )
         )
-        teleporter_field.returnPressed.connect(
-            lambda field=teleporter_field, old=teleporter: self.update_gacha_group_teleporter(
-                old, field
-            )
-        )
         teleporter_row.addWidget(teleporter_label)
         teleporter_row.addWidget(teleporter_field, 1)
         body_layout.addLayout(teleporter_row)
@@ -708,11 +731,11 @@ class LauncherPagesMixin:
         layout.addWidget(remove)
         return row
 
-    def _render_pego_group(self):
+    def _render_pego_group(self) -> None:
         self._ensure_pego_config()
         self._ensure_gacha_config()
 
-        heading = QLabel("PEGO SETTINGS")
+        heading = QLabel(_counted_title("PEGO SETTINGS", len(self.pego_config)))
         heading.setObjectName("SectionHeading")
         self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
 
@@ -867,9 +890,14 @@ class LauncherPagesMixin:
             self.pego_calc_station_seconds_field,
         ]
 
-    def _crystal_route_card(self, route, route_index):
+    def _crystal_route_card(self, route: dict, route_index: int) -> QFrame:
+        dedi_count = len(route["dedi"]["items"])
+        vault_count = len(route["vault"]["items"])
         card, layout = self._deposit_route_card(
-            f"CRYSTAL ROUTE {route_index + 1}",
+            _counted_title(
+                f"CRYSTAL ROUTE {route_index + 1}",
+                _deposit_route_child_count(route),
+            ),
             lambda checked=False, index=route_index: self.remove_crystal_route(index),
             lambda checked=False, index=route_index: self.open_deposit_helper(
                 "crystal", index
@@ -877,7 +905,7 @@ class LauncherPagesMixin:
         )
         self._add_route_teleport_field(layout, route)
 
-        self._add_deposit_subheading(layout, "DEDIS")
+        self._add_deposit_subheading(layout, "DEDIS", dedi_count)
         for item_index, item in enumerate(route["dedi"]["items"]):
             layout.addLayout(
                 self._dedi_row(
@@ -894,7 +922,7 @@ class LauncherPagesMixin:
         )
         layout.addWidget(add_dedi)
 
-        self._add_deposit_subheading(layout, "VAULTS")
+        self._add_deposit_subheading(layout, "VAULTS", vault_count)
         for vault_index, vault in enumerate(route["vault"]["items"]):
             layout.addLayout(
                 self._vault_row(
@@ -912,9 +940,13 @@ class LauncherPagesMixin:
         layout.addWidget(add_vault)
         return card
 
-    def _grindable_route_card(self, route, route_index):
+    def _grindable_route_card(self, route: dict, route_index: int) -> QFrame:
+        dedi_count = len(route["dedi"]["items"])
         card, layout = self._deposit_route_card(
-            f"GRINDABLE ROUTE {route_index + 1}",
+            _counted_title(
+                f"GRINDABLE ROUTE {route_index + 1}",
+                _deposit_route_child_count(route),
+            ),
             lambda checked=False, index=route_index: self.remove_grindable_route(index),
             lambda checked=False, index=route_index: self.open_deposit_helper(
                 "grindable", index
@@ -922,7 +954,7 @@ class LauncherPagesMixin:
         )
         self._add_route_teleport_field(layout, route)
 
-        self._add_deposit_subheading(layout, "GRINDER")
+        self._add_deposit_subheading(layout, "GRINDER", 1)
         grinder = route["grinder"]
         grinder_row = QHBoxLayout()
         grinder_row.setSpacing(8)
@@ -942,7 +974,7 @@ class LauncherPagesMixin:
         grinder_row.addStretch()
         layout.addLayout(grinder_row)
 
-        self._add_deposit_subheading(layout, "DEDIS")
+        self._add_deposit_subheading(layout, "DEDIS", dedi_count)
         for item_index, item in enumerate(route["dedi"]["items"]):
             layout.addLayout(
                 self._dedi_row(
@@ -1191,8 +1223,10 @@ class LauncherPagesMixin:
         row.addWidget(field, 1)
         layout.addLayout(row)
 
-    def _add_deposit_subheading(self, layout, text):
-        label = QLabel(text)
+    def _add_deposit_subheading(
+        self, layout: QVBoxLayout, text: str, count: int
+    ) -> None:
+        label = QLabel(_counted_title(text, count))
         label.setObjectName("FormLabel")
         layout.addWidget(label)
 
