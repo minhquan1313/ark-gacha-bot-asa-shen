@@ -845,7 +845,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self._update_start_stop_button()
         self._hide_runner_overlay()
 
-    def _show_runner_overlay(self):
+    def _show_runner_overlay(self) -> None:
         if not self.is_program_running() or self.program_stopping:
             self._hide_runner_overlay()
             return
@@ -854,7 +854,7 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
             if overlay is None:
                 overlay = RunnerOverlay(self)
                 self.runner_overlay = overlay
-            overlay.refresh(self.queue_snapshot)
+            overlay.refresh(self.queue_snapshot, self.log_lines)
             overlay.show()
             overlay.raise_()
         except RuntimeError:

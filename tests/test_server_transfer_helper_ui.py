@@ -832,7 +832,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         finally:
             helper.close()
 
-    def test_runner_overlay_uses_fixed_width_and_content_driven_height_floor(self):
+    def test_runner_overlay_uses_fixed_width_and_dynamic_content_height(self) -> None:
         owner = SimpleNamespace(
             screen=Mock(return_value=None),
             stop_program=Mock(),
@@ -842,16 +842,115 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         try:
             overlay.show()
             self.app.processEvents()
-            initial_height = overlay.height()
+            overlay.refresh({"running": [], "active": [], "waiting": []})
+            self.app.processEvents()
+            idle_height = overlay.height()
+
+            overlay.refresh(
+                {
+                    "running": [{"name": "pego 1"}],
+                    "active": [
+                        {"name": "task 2", "execution_time": 0, "state": "READY"},
+                        {"name": "task 3", "execution_time": 0, "state": "READY"},
+                        {"name": "task 4", "execution_time": 0, "state": "READY"},
+                    ],
+                    "waiting": [],
+                },
+                [
+                    "09:03:41 - DEBUG - open - open inventory 1/3",
+                    "09:03:43 - DEBUG - open - open inventory 2/3",
+                    "09:03:45 - DEBUG - open - open inventory 3/3",
+                ],
+            )
+            self.app.processEvents()
+            content_height = overlay.height()
+
+            self.assertEqual(overlay.width(), 200)
+            self.assertEqual(overlay.minimumWidth(), 200)
+            self.assertEqual(overlay.maximumWidth(), 200)
+            self.assertGreater(content_height, idle_height)
+            self.assertGreaterEqual(idle_height, HELPER_HEIGHT)
+            self.assertEqual(
+                [label.text() for label in overlay.upcoming_labels],
+                ["ready task 2", "ready task 3", "ready task 4"],
+            )
+            self.assertEqual(
+                [label._full_text for label in overlay.log_labels],
+                [
+                    "45 open inventory 3/3",
+                    "43 open inventory 2/3",
+                    "41 open inventory 1/3",
+                ],
+            )
+            self.assertFalse(overlay.log_divider.isHidden())
 
             overlay.refresh({"running": [], "active": [], "waiting": []})
             self.app.processEvents()
 
             self.assertEqual(overlay.width(), 200)
-            self.assertEqual(overlay.minimumWidth(), 200)
-            self.assertEqual(overlay.maximumWidth(), 200)
-            self.assertGreaterEqual(overlay.height(), HELPER_HEIGHT)
-            self.assertLess(overlay.height(), initial_height)
+            self.assertEqual(overlay.height(), idle_height)
+            self.assertTrue(overlay.log_divider.isHidden())
+            self.assertTrue(all(label.isHidden() for label in overlay.log_labels))
+        finally:
+            overlay.close()
+
+    def test_runner_overlay_elides_logs_updates_clock_and_stabilizes_geometry(
+        self,
+    ) -> None:
+        owner = SimpleNamespace(
+            screen=Mock(return_value=None),
+            stop_program=Mock(),
+        )
+        overlay = RunnerOverlay(owner)
+        snapshot = {
+            "running": [{"name": "pego 1"}],
+            "active": [],
+            "waiting": [],
+        }
+        long_log = (
+            "16:07:33 - DEBUG - join_server - joining a server with a very long "
+            "description that cannot fit inside the runner overlay"
+        )
+
+        try:
+            overlay.show()
+            with patch(
+                "source.launcher.runner_overlay.time.strftime", return_value="14:21:04"
+            ):
+                overlay.refresh(snapshot, [long_log])
+            self.app.processEvents()
+
+            label = overlay.log_labels[0]
+            self.assertEqual(overlay.clock_label.text(), "14:21:04")
+            self.assertIs(overlay.clock_label.parent(), overlay.header_frame)
+            self.assertGreater(
+                overlay.clock_label.geometry().top(),
+                overlay.header_title.geometry().top(),
+            )
+            self.assertFalse(label.wordWrap())
+            self.assertTrue(label.text().startswith("33 joining"))
+            self.assertTrue(label.text().endswith("..."))
+            self.assertLessEqual(
+                label.fontMetrics().horizontalAdvance(label.text()),
+                label.contentsRect().width(),
+            )
+
+            stable_geometry = overlay.geometry()
+            for _ in range(3):
+                with patch(
+                    "source.launcher.runner_overlay.time.strftime",
+                    return_value="14:21:04",
+                ):
+                    overlay.refresh(snapshot, [long_log])
+                self.app.processEvents()
+                self.assertEqual(overlay.geometry(), stable_geometry)
+
+            overlay.refresh(
+                snapshot,
+                ["16:07:33 - DEBUG - join_server - short message"],
+            )
+            self.app.processEvents()
+            self.assertEqual(label.text(), "33 short message")
         finally:
             overlay.close()
 

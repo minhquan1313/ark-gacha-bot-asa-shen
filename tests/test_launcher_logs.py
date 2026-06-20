@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QApplication
 from source.launcher.constants import APP_NAME, MAX_LAUNCHER_LOG_LINES
 from source.launcher.gui import SettingsGUI
 from source.launcher.native_window import WM_HOTKEY, WindowsMSG
-from source.launcher.runner_overlay import format_runner_overlay
+from source.launcher.runner_overlay import format_runner_logs, format_runner_overlay
 from source.launcher.widgets import AnimatedButton
 
 
@@ -549,12 +549,13 @@ class LauncherStartProgramTests(unittest.TestCase):
         launcher.process.terminate.assert_called_once_with()
         launcher._hide_runner_overlay.assert_called_once_with()
 
-    def test_show_runner_overlay_creates_and_refreshes_overlay(self):
+    def test_show_runner_overlay_creates_and_refreshes_overlay(self) -> None:
         launcher = SimpleNamespace(
             process=Mock(),
             program_stopping=False,
             runner_overlay=None,
             queue_snapshot={"running": [{"name": "gacha"}]},
+            log_lines=["[DEBUG] 09:03:45 - DEBUG - open - inventory opened"],
             is_program_running=Mock(return_value=True),
         )
         overlay = Mock()
@@ -563,7 +564,9 @@ class LauncherStartProgramTests(unittest.TestCase):
             SettingsGUI._show_runner_overlay(launcher)
 
         self.assertIs(launcher.runner_overlay, overlay)
-        overlay.refresh.assert_called_once_with(launcher.queue_snapshot)
+        overlay.refresh.assert_called_once_with(
+            launcher.queue_snapshot, launcher.log_lines
+        )
         overlay.show.assert_called_once_with()
         overlay.raise_.assert_called_once_with()
 
@@ -599,7 +602,7 @@ class LauncherStartProgramTests(unittest.TestCase):
 
 
 class RunnerOverlayFormattingTests(unittest.TestCase):
-    def test_overlay_formats_running_and_next_five_tasks_soonest_first(self):
+    def test_overlay_formats_running_and_next_three_tasks_soonest_first(self) -> None:
         snapshot = {
             "running": [{"name": "pego deposit"}],
             "active": [
@@ -621,11 +624,9 @@ class RunnerOverlayFormattingTests(unittest.TestCase):
         self.assertEqual(
             upcoming,
             [
-                "READY    ready task",
+                "ready ready task",
                 "00:00:12 feed gacha",
                 "00:00:20 task 2",
-                "00:00:30 task 3",
-                "00:00:40 task 4",
             ],
         )
 
@@ -636,6 +637,47 @@ class RunnerOverlayFormattingTests(unittest.TestCase):
 
         self.assertEqual(current, "Waiting for running task...")
         self.assertEqual(upcoming, ["No upcoming tasks."])
+
+    def test_overlay_logs_include_every_level_without_metadata(self) -> None:
+        lines = [
+            "09:03:40 - DEBUG - open - debug message",
+            "09:03:41 - INFO - open - info message",
+            "09:03:42 - WARNING - open - warning message",
+            "[ERROR] 09:03:43 - ERROR - open - error message",
+            "[CRITICAL] 09:03:44 - CRITICAL - open - critical message",
+            "[TEMPLATE] 09:03:45 - TEMPLATE - open - template message",
+        ]
+
+        self.assertEqual(
+            format_runner_logs(lines, limit=10),
+            [
+                "45 template message",
+                "44 critical message",
+                "43 error message",
+                "42 warning message",
+                "41 info message",
+                "40 debug message",
+            ],
+        )
+
+    def test_overlay_logs_keep_latest_three_timestamped_messages(self) -> None:
+        lines = [
+            "09:03:39 - DEBUG - open - older message",
+            "[INFO] launcher message without a timestamp",
+            "09:03:41 - DEBUG - open - open inventory 1/3",
+            "09:03:43 - DEBUG - open - open inventory 2/3",
+            "09:03:45 - DEBUG - open - open inventory - 3/3",
+        ]
+
+        self.assertEqual(
+            format_runner_logs(lines),
+            [
+                "45 open inventory - 3/3",
+                "43 open inventory 2/3",
+                "41 open inventory 1/3",
+            ],
+        )
+        self.assertEqual(format_runner_logs(lines, limit=0), [])
 
 
 class LauncherHotkeyTests(unittest.TestCase):
