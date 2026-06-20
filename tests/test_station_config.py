@@ -5,7 +5,17 @@ from pathlib import Path
 from types import MethodType, SimpleNamespace
 from unittest.mock import Mock
 
-from source.launcher.pages import LauncherPagesMixin
+from source.gacha_bot.deposit_config import (
+    default_crystal_route,
+    default_dedi_item,
+    default_grindable_route,
+    default_vault_item,
+)
+from source.launcher.pages import (
+    LauncherPagesMixin,
+    _counted_title,
+    _deposit_route_child_count,
+)
 from source.launcher.station_config import (
     auto_fill_gacha_group,
     calculate_pego_delay,
@@ -302,6 +312,7 @@ class StationConfigTests(unittest.TestCase):
     def test_gacha_teleporter_update_still_rerenders(self):
         launcher = SimpleNamespace(
             gacha_config=[default_gacha_entry("gacha", "OLD", "left")],
+            gacha_group_expanded={"OLD": True},
             save_gacha_config=Mock(),
             _render_settings_group=Mock(),
             _ensure_gacha_config=lambda: None,
@@ -316,6 +327,130 @@ class StationConfigTests(unittest.TestCase):
         self.assertEqual(launcher.gacha_config[0]["teleporter"], "NEW")
         launcher.save_gacha_config.assert_called_once_with()
         launcher._render_settings_group.assert_called_once_with("GACHA")
+
+    def test_gacha_teleporter_update_rejects_case_insensitive_duplicate(self):
+        launcher = SimpleNamespace(
+            gacha_config=[
+                default_gacha_entry("old_left", "OLD", "left"),
+                default_gacha_entry("old_right", "OLD", "right"),
+                default_gacha_entry("taken", "Taken", "left"),
+            ],
+            gacha_group_expanded={"OLD": True, "Taken": False},
+            dialog=Mock(),
+            save_gacha_config=Mock(),
+            _render_settings_group=Mock(),
+            _ensure_gacha_config=lambda: None,
+        )
+        launcher.update_gacha_group_teleporter = MethodType(
+            LauncherPagesMixin.update_gacha_group_teleporter, launcher
+        )
+        field = SimpleNamespace(
+            text=Mock(return_value="TAKEN"),
+            setText=Mock(),
+        )
+
+        launcher.update_gacha_group_teleporter("OLD", field)
+
+        self.assertEqual(
+            [entry["teleporter"] for entry in launcher.gacha_config],
+            ["OLD", "OLD", "Taken"],
+        )
+        field.setText.assert_called_once_with("OLD")
+        launcher.dialog.assert_called_once()
+        self.assertEqual(launcher.dialog.call_args.args[2], "error")
+        launcher.save_gacha_config.assert_not_called()
+        launcher._render_settings_group.assert_not_called()
+
+    def test_gacha_teleporter_update_rejects_exact_duplicate(self):
+        launcher = SimpleNamespace(
+            gacha_config=[
+                default_gacha_entry("old", "OLD", "left"),
+                default_gacha_entry("taken", "TAKEN", "left"),
+            ],
+            gacha_group_expanded={"OLD": True, "TAKEN": False},
+            dialog=Mock(),
+            save_gacha_config=Mock(),
+            _render_settings_group=Mock(),
+            _ensure_gacha_config=lambda: None,
+        )
+        launcher.update_gacha_group_teleporter = MethodType(
+            LauncherPagesMixin.update_gacha_group_teleporter, launcher
+        )
+        field = SimpleNamespace(text=Mock(return_value="TAKEN"), setText=Mock())
+
+        launcher.update_gacha_group_teleporter("OLD", field)
+
+        field.setText.assert_called_once_with("OLD")
+        launcher.save_gacha_config.assert_not_called()
+        launcher._render_settings_group.assert_not_called()
+
+    def test_gacha_teleporter_update_allows_case_only_change_for_same_group(self):
+        launcher = SimpleNamespace(
+            gacha_config=[
+                default_gacha_entry("old_left", "Old", "left"),
+                default_gacha_entry("old_right", "Old", "right"),
+            ],
+            gacha_group_expanded={"Old": True},
+            dialog=Mock(),
+            save_gacha_config=Mock(),
+            _render_settings_group=Mock(),
+            _ensure_gacha_config=lambda: None,
+        )
+        launcher.update_gacha_group_teleporter = MethodType(
+            LauncherPagesMixin.update_gacha_group_teleporter, launcher
+        )
+        field = SimpleNamespace(text=Mock(return_value="OLD"))
+
+        launcher.update_gacha_group_teleporter("Old", field)
+
+        self.assertEqual(
+            [entry["teleporter"] for entry in launcher.gacha_config],
+            ["OLD", "OLD"],
+        )
+        self.assertEqual(launcher.gacha_group_expanded, {"OLD": True})
+        launcher.dialog.assert_not_called()
+        launcher.save_gacha_config.assert_called_once_with()
+        launcher._render_settings_group.assert_called_once_with("GACHA")
+
+    def test_gacha_teleporter_unchanged_value_is_noop(self):
+        launcher = SimpleNamespace(
+            gacha_config=[default_gacha_entry("gacha", "SAME", "left")],
+            gacha_group_expanded={"SAME": True},
+            save_gacha_config=Mock(),
+            _render_settings_group=Mock(),
+            _ensure_gacha_config=lambda: None,
+        )
+        launcher.update_gacha_group_teleporter = MethodType(
+            LauncherPagesMixin.update_gacha_group_teleporter, launcher
+        )
+        field = SimpleNamespace(text=Mock(return_value="SAME"))
+
+        launcher.update_gacha_group_teleporter("SAME", field)
+
+        launcher.save_gacha_config.assert_not_called()
+        launcher._render_settings_group.assert_not_called()
+
+    def test_settings_counter_title_formats_single_and_group_entry_counts(self):
+        self.assertEqual(_counted_title("PEGO SETTINGS", 5), "PEGO SETTINGS - 5")
+        self.assertEqual(
+            _counted_title("GACHA SETTINGS", "44(88)"),
+            "GACHA SETTINGS - 44(88)",
+        )
+        self.assertEqual(_counted_title("DEDIS", 0), "DEDIS - 0")
+
+    def test_crystal_route_counter_includes_dedis_and_vaults(self):
+        route = default_crystal_route()
+        route["dedi"]["items"] = [default_dedi_item(), default_dedi_item()]
+        route["vault"]["items"] = [default_vault_item()]
+
+        self.assertEqual(_deposit_route_child_count(route), 3)
+
+    def test_grindable_route_counter_always_includes_grinder(self):
+        route = default_grindable_route()
+
+        self.assertEqual(_deposit_route_child_count(route), 1)
+        route["dedi"]["items"] = [default_dedi_item(), default_dedi_item()]
+        self.assertEqual(_deposit_route_child_count(route), 3)
 
 
 if __name__ == "__main__":

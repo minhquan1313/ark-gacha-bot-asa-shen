@@ -1563,11 +1563,29 @@ class LauncherPagesMixin:
         self.gacha_config[entry_index]["side"] = field.currentText()
         self.save_gacha_config()
 
-    def update_gacha_group_teleporter(self, old_teleporter, field):
+    def update_gacha_group_teleporter(
+        self, old_teleporter: str, field: QLineEdit
+    ) -> None:
         self._ensure_gacha_config()
         if not hasattr(self, "gacha_group_expanded"):
             self.gacha_group_expanded = {}
         new_teleporter = field.text()
+        if new_teleporter == old_teleporter:
+            return
+        existing_teleporters = {
+            str(entry.get("teleporter", "")).lower()
+            for entry in self.gacha_config
+            if str(entry.get("teleporter", "")) != old_teleporter
+        }
+        if new_teleporter.lower() in existing_teleporters:
+            field.setText(old_teleporter)
+            self.dialog(
+                "Duplicate Gacha Teleporter",
+                f'A gacha group with teleport name "{new_teleporter}" already exists. '
+                "Teleport names are compared case-insensitively.",
+                "error",
+            )
+            return
         for entry in self.gacha_config:
             if entry.get("teleporter", "") == old_teleporter:
                 entry["teleporter"] = new_teleporter
