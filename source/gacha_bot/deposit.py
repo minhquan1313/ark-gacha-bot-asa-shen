@@ -151,42 +151,25 @@ def _deposit_to_dedi(route_metadata, item, label):
         _turn_to_object(route_metadata, item)
         time.sleep(0.3 * settings.lag_offset)
 
-        deadline = utils.timed_out_counter(settings.dedi_handshake_timeout)
+        deadline = utils.get_default_clock()
         while not deadline():
-            utils.press_key("AccessInventory")
-            if template.template_await_true(
-                template.check_template, 2, "inventory", 0.7
-            ):
+            inventory.open()
+            if inventory.is_open():
                 # WAIT FOR INVENTORY TO BE LOADED
-                waiting_for_remote = template.template_await_true(
-                    template.check_template, 0.5, "waiting_inv", 0.8
+                time.sleep(0.3 * settings.lag_offset)
+                windows.click(
+                    variables.get_pixel_loc("dedi_deposit_x"),
+                    variables.get_pixel_loc("dedi_deposit_y"),
                 )
-                while (
-                    waiting_for_remote
-                    and not deadline()
-                    and template.check_template("inventory", 0.7)
-                ):
-                    player_state.check_disconnected()
-                    time.sleep(DEDI_REMOTE_POLL_INTERVAL)
-                    waiting_for_remote = template.check_template("waiting_inv", 0.8)
+                if label.startswith("crystal"):
+                    capture_dedi_deposit_crystal(label)
+                elif label.startswith("grind"):
+                    capture_dedi_deposit_grind(label)
 
-                # IF INVENTORY IS READY ->
-                if template.check_template("inventory", 0.7) and not waiting_for_remote:
-                    time.sleep(0.3 * settings.lag_offset)
-                    windows.click(
-                        variables.get_pixel_loc("dedi_deposit_x"),
-                        variables.get_pixel_loc("dedi_deposit_y"),
-                    )
-                    if label.startswith("crystal"):
-                        capture_dedi_deposit_crystal(label)
-                    elif label.startswith("grind"):
-                        capture_dedi_deposit_grind(label)
-                    inventory.close()
-                    template.template_await_false(
-                        template.check_template, 1, "inventory", 0.7
-                    )
-                    logs.logger.debug(f"{label} deposit handshake completed")
-                    return True
+                inventory.close()
+
+                logs.logger.debug(f"{label} deposit handshake completed")
+                return True
 
             player_state.check_disconnected()
             time.sleep(0.5 * settings.lag_offset)
@@ -194,57 +177,6 @@ def _deposit_to_dedi(route_metadata, item, label):
         inventory.close()
         logs.logger.error(
             f"{label} deposit handshake timed out after "
-            f"{settings.dedi_handshake_timeout} seconds "
-            f"on attempt {attempt} / "
-            f"{attempts}"
-        )
-        if attempt < attempts:
-            _recover_dedi_position(route_metadata, item, label)
-
-    _recover_after_dedi_failure(label)
-    return False
-
-
-def _withdraw_from_dedi(route_metadata, item, label):
-    attempts = source.gacha_bot.config.dedi_handshake_recovery_attempts
-    for attempt in range(1, attempts + 1):
-        _turn_to_object(route_metadata, item)
-        time.sleep(0.3 * settings.lag_offset)
-
-        deadline = time.monotonic() + settings.dedi_handshake_timeout
-        while time.monotonic() < deadline:
-            utils.press_key("AccessInventory")
-            if template.template_await_true(
-                template.check_template, 2, "inventory", 0.7
-            ):
-                waiting_for_remote = template.template_await_true(
-                    template.check_template, 1, "waiting_inv", 0.8
-                )
-                while (
-                    waiting_for_remote
-                    and time.monotonic() < deadline
-                    and template.check_template("inventory", 0.7)
-                ):
-                    player_state.check_disconnected()
-                    time.sleep(DEDI_REMOTE_POLL_INTERVAL)
-                    waiting_for_remote = template.check_template("waiting_inv", 0.8)
-
-                if template.check_template("inventory", 0.7) and not waiting_for_remote:
-                    time.sleep(0.3 * settings.lag_offset)
-                    inventory.transfer_all_from()
-                    inventory.close()
-                    template.template_await_false(
-                        template.check_template, 1, "inventory", 0.7
-                    )
-                    logs.logger.debug(f"{label} withdraw handshake completed")
-                    return True
-
-            player_state.check_disconnected()
-            time.sleep(0.5 * settings.lag_offset)
-
-        inventory.close()
-        logs.logger.error(
-            f"{label} withdraw handshake timed out after "
             f"{settings.dedi_handshake_timeout} seconds "
             f"on attempt {attempt} / "
             f"{attempts}"
@@ -278,7 +210,7 @@ def _open_inventory_template(
 
 def open_crystals():
     count = 0
-    while template.check_template("crystal_in_hotbar", 0.7) and count < 450:
+    while template.check_template("crystal_in_hotbar", 0.7):
         for x in range(10):
             utils.press_key(f"UseItem{x + 1}")
             count += 1
@@ -321,6 +253,7 @@ def _process_vault(route, route_metadata, vault, index):
         for item_name in vault_items:
             player_inventory.search_in_inventory(item_name)
             player_inventory.transfer_all_inventory()
+            player_inventory.wait_clear_search()
             time.sleep(0.3 * settings.lag_offset)
         capture_vault_after_transfer(label)
 
@@ -356,16 +289,25 @@ def _process_grinder(route, route_metadata):
             _restore_route_view(route_metadata, reset_crouch=False)
             return
 
-        if template.check_template("grinder", 0.7):
-            windows.click(
-                variables.get_pixel_loc("dedi_withdraw_x"),
-                variables.get_pixel_loc("dedi_withdraw_y"),
-            )
-            time.sleep(0.3 * settings.lag_offset)
-            inventory.transfer_all_from()
-            time.sleep(0.2 * settings.lag_offset)
-            capture_grinder_after_withdraw(label)
-            inventory.close()
+    if template.check_template("grinder", 0.7):
+        windows.click(
+            variables.get_pixel_loc("dedi_withdraw_x"),
+            variables.get_pixel_loc("dedi_withdraw_y"),
+        )
+        # ENSURE PROCESS
+        player_inventory.close()
+        template.template_await_false(template.check_template, 1, "inventory", 0.7)
+        if not _open_inventory_template(
+            "grinder", route, route_metadata, grinder, label
+        ):
+            _restore_route_view(route_metadata, reset_crouch=False)
+            return
+
+    if template.check_template("grinder", 0.7):
+        inventory.transfer_all_from()
+        time.sleep(0.2 * settings.lag_offset)
+        capture_grinder_after_withdraw(label)
+        inventory.close()
 
     template.template_await_false(template.check_template, 1, "inventory", 0.7)
     time.sleep(0.2 * settings.lag_offset)

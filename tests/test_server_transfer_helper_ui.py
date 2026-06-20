@@ -130,6 +130,8 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertFalse(
                 any(row["name"].isReadOnly() for row in helper.player_rows)
             )
+            self.assertEqual(helper.player_rows[0]["steam"].currentText(), "steam1")
+            self.assertEqual(helper.player_rows[1]["steam"].currentText(), "steam2")
             self.assertIn("ignored", helper.player_rows[4]["frame"].toolTip())
             self.assertIn("#ff4d6d", helper.player_rows[4]["frame"].styleSheet())
 
@@ -251,8 +253,8 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 save_players.assert_called_with(
                     {
                         "players": [
-                            {"bed_name": "ManualBed"},
-                            {"bed_name": "Player2"},
+                            {"bed_name": "ManualBed", "steam_account": "steam1"},
+                            {"bed_name": "Player2", "steam_account": "steam2"},
                         ]
                     },
                     account_count=2,
@@ -275,9 +277,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 save_players.assert_called_with(
                     {
                         "players": [
-                            {"bed_name": "Player1"},
-                            {"bed_name": "BBedPlayer2"},
-                            {"bed_name": "BBedPlayer3"},
+                            {"bed_name": "Player1", "steam_account": "steam1"},
+                            {"bed_name": "BBedPlayer2", "steam_account": ""},
+                            {"bed_name": "BBedPlayer3", "steam_account": ""},
                         ]
                     },
                     account_count=3,
@@ -424,6 +426,63 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             finally:
                 helper.close()
 
+    def test_player_steam_duplicate_gets_red_outline_and_blocks_start(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_players",
+            side_effect=lambda data, account_count=1: data,
+        ):
+            helper = self._transfer_helper(account_count=2)
+
+            try:
+                helper.player_rows[1]["steam"].setCurrentText("steam1")
+                helper._sync_player_search_warnings()
+
+                self.assertIn("#ff4d6d", helper.player_rows[1]["frame"].styleSheet())
+                self.assertIn(
+                    "duplicates player 1", helper.player_rows[1]["frame"].toolTip()
+                )
+
+                helper.start()
+
+                self.assertEqual(
+                    helper.status.text(), "Player Steam accounts are not ready."
+                )
+                helper.owner.dialog.assert_called_once()
+            finally:
+                helper.close()
+
+    def test_player_one_non_recent_steam_account_gets_red_outline(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_players",
+            side_effect=lambda data, account_count=1: data,
+        ):
+            helper = self._transfer_helper(account_count=2)
+
+            try:
+                helper.player_rows[0]["steam"].setCurrentText("steam2")
+                helper._sync_player_search_warnings()
+
+                self.assertIn("#ff4d6d", helper.player_rows[0]["frame"].styleSheet())
+                self.assertIn("Relog Steam", helper.player_rows[0]["frame"].toolTip())
+            finally:
+                helper.close()
+
+    def test_transfer_helper_expand_and_collapse_all_affects_panels_and_dedis(self):
+        helper = self._transfer_helper(account_count=1)
+
+        try:
+            helper.set_all_collapsible_expanded(False)
+
+            self.assertTrue(all(panel.body_widget.isHidden() for panel in helper.collapsible_panels))
+            self.assertTrue(all(row["details"].isHidden() for row in helper.resource_dedi_rows + helper.destination_dedi_rows))
+
+            helper.set_all_collapsible_expanded(True)
+
+            self.assertTrue(all(not panel.body_widget.isHidden() for panel in helper.collapsible_panels))
+            self.assertTrue(all(not row["details"].isHidden() for row in helper.resource_dedi_rows + helper.destination_dedi_rows))
+        finally:
+            helper.close()
+
     def test_ignored_player_row_keeps_red_outline_when_name_conflicts(self):
         helper = self._transfer_helper(
             account_count=5,
@@ -549,18 +608,22 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 helper.close()
 
     def test_dedi_summary_updates_after_edit_and_crouch_toggle(self):
-        helper = self._transfer_helper(account_count=1)
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_dedis",
+            side_effect=lambda data: data,
+        ):
+            helper = self._transfer_helper(account_count=1)
 
-        try:
-            row = helper.dedi_rows[0]
-            row["yaw"].setText("44")
-            row["pitch"].setText("-5")
-            row["crouched"].setChecked(True)
-            helper._sync_dedi_summary(row)
+            try:
+                row = helper.dedi_rows[0]
+                row["yaw"].setText("44")
+                row["pitch"].setText("-5")
+                row["crouched"].setChecked(True)
+                helper._sync_dedi_summary(row)
 
-            self.assertEqual(row["summary"].text(), "Yaw 44 | Pitch -5 | Crouch on")
-        finally:
-            helper.close()
+                self.assertEqual(row["summary"].text(), "Yaw 44 | Pitch -5 | Crouch on")
+            finally:
+                helper.close()
 
     def test_dedi_delete_reindexes_remaining_rows(self):
         with patch(
@@ -652,31 +715,42 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                     "crouched": False,
                 }
             ]
-        with patch(
-            "source.launcher.server_transfer_helper.load_transfer_runtime_config",
-            return_value={
-                "settings": {
-                    "lag_offset": 1,
-                    "resource_station_yaw": 0,
-                    "destination_station_yaw": 0,
-                    "transmitter_teleport": "",
-                    "resource_server": "0",
-                    "destination_server": "0",
-                    "loop_count": 1,
-                    "structure_load_delay": 10,
-                    "transfer_retry_delay": 5,
+        steam_accounts = [
+            {"account_name": f"steam{i}", "most_recent": i == 1, "timestamp": 20 - i}
+            for i in range(1, 13)
+        ]
+        with (
+            patch(
+                "source.launcher.server_transfer_helper.load_transfer_runtime_config",
+                return_value={
+                    "settings": {
+                        "lag_offset": 1,
+                        "resource_station_yaw": 0,
+                        "destination_station_yaw": 0,
+                        "transmitter_teleport": "",
+                        "resource_server": "0",
+                        "destination_server": "0",
+                        "loop_count": 1,
+                        "structure_load_delay": 10,
+                        "transfer_retry_delay": 5,
+                    },
+                    "players": {
+                        "players": [
+                            {"bed_name": name, "steam_account": f"steam{index + 1}"}
+                            for index, name in enumerate(player_names[:account_count])
+                        ]
+                    },
+                    "dedis": {
+                        "teleport": "",
+                        "items": dedi_items,
+                    },
+                    "ui_coords": {},
                 },
-                "players": {
-                    "players": [
-                        {"bed_name": name} for name in player_names[:account_count]
-                    ]
-                },
-                "dedis": {
-                    "teleport": "",
-                    "items": dedi_items,
-                },
-                "ui_coords": {},
-            },
+            ),
+            patch(
+                "source.launcher.server_transfer_helper.load_steam_accounts",
+                return_value=steam_accounts,
+            ),
         ):
             return ServerTransferHelper(owner)
 

@@ -23,48 +23,44 @@ def _recover_berry_station(metadata):
     utils.zero_center()
 
 
-def berry_collection():
-    time.sleep(0.5)
-    inventory.open()
-    if inventory.is_open():
-        inventory.transfer_all_from()
-        inventory.close()
-    time.sleep(0.5)
-
-
-def _collect_first_trough(metadata):
+def berry_collection(metadata, turn_down=0):
     attempt = 0
+    dl = utils.get_default_clock()
+
     while True:
-        time.sleep(0.5)
+        utils.turn_down(turn_down)
+
         inventory.open()
         if inventory.is_open() and template.template_await_true(
             template.check_template, 1, "tek_trough", 0.7
         ):
             inventory.transfer_all_from()
             inventory.close()
-            time.sleep(0.5)
             return
 
-        attempt += 1
         logs.logger.error(
             f"tek trough was not opened; retrying {attempt} / "
             f"{source.gacha_bot.config.tek_trough_attempts}"
         )
-        inventory.close()
-        if attempt >= source.gacha_bot.config.tek_trough_attempts:
+        # if failed to open inventory
+        if dl():
             logs.logger.critical(
                 "tek trough failed to open; suiciding and restarting berry station"
             )
+
+            dl = utils.get_default_clock()
+
             player_inventory.implant_eat()
             player_state.check_state()
-            attempt = 0
+
         _recover_berry_station(metadata)
+        time.sleep(1)
 
 
 def berry_station(metadata):
-    _collect_first_trough(metadata)
-    utils.turn_down(50)
-    berry_collection()
+    time.sleep(0.5)
+    berry_collection(metadata, 0)
+    berry_collection(metadata, 50)
     utils.turn_up(50)
 
 
@@ -82,7 +78,7 @@ def _reopen_iguanodon_inventory_and_measure_wait():
     inventory.close()
     start = time.time()
 
-    timeout = utils.timed_out_counter(120)
+    timeout = utils.get_default_clock()
     while not inventory.is_open() and not timeout():
         inventory.open()
         if not inventory.is_open():
@@ -123,15 +119,6 @@ def seed(type):
         time.sleep(0.1 * settings.lag_offset)
         player_inventory.close()
 
-    # if not template.template_await_true(template.check_template, 2, "seed_inv", 0.65):
-    #     logs.logger.debug("iguanadon seeding hasnt been spotted re adding berries")
-    #     inventory.open()
-    #     inventory.search_in_object(settings.berry_type)
-    #     inventory.transfer_all_from()
-    #     player_inventory.search_in_inventory(settings.berry_type)
-    #     player_inventory.transfer_all_inventory()
-    #     inventory.close()
-    #     template.template_await_true(template.check_template, 1, "seed_inv", 0.65)
     utils.press_key("Use")
     time.sleep(2 * settings.lag_offset)
     inventory.open()

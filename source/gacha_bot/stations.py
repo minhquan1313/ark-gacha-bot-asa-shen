@@ -121,8 +121,13 @@ class pego_station(base_task):
     def execute(self):
         player_state.check_state()
 
+        # print("Start debugging")
+        # while True:
+        #     template.check_template_no_bounds("search_player_inv", 0.7)
+        #     time.sleep(0.3)
+
         # transmitter.open_and_transfer(5842)
-        # print("waiting 9999")
+        # print("Done debugging - Waiting 9999")
         # time.sleep(9999)
 
         pego_metadata = custom_stations.get_station_metadata(self.teleporter_name)

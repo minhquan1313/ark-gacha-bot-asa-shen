@@ -1,6 +1,5 @@
 import time
 
-from source.ASA import config
 from source.ASA.player import console, player_state
 from source.join_sim.source.menus import success
 from source.logs import gachalogs as logs
@@ -22,8 +21,8 @@ buttons = {
     "transfer_not_ready_cancel_y": 730,
     "failure_connection_accept_x": 849,
     "failure_connection_accept_y": 731,
-    "failure_attempting_x": 815,
-    "failure_attempting_y": 732,
+    "failure_attempting_accept_x": 815,
+    "failure_attempting_accept_y": 732,
 }
 
 
@@ -143,8 +142,8 @@ def has_failure():
     if failure_is_attempting():
         logs.logger.warning("Pressing back when player is uploading")
         windows.click(
-            get_pixel_loc("failure_attempting_x"),
-            get_pixel_loc("failure_attempting_y"),
+            get_pixel_loc("failure_attempting_accept_x"),
+            get_pixel_loc("failure_attempting_accept_y"),
         )
         time.sleep(1)
 
@@ -160,7 +159,7 @@ def do_join_server(server: str):
         print("calling joined_server")
         return success.joined_server()
 
-    timeout = utils.timed_out_counter(config.timeout_deadline)
+    timeout = utils.get_default_clock()
     while is_open() and not is_server_list_loaded() and not timeout():
         if not wait_server_list_loaded(1):
             refresh()

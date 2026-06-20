@@ -99,7 +99,7 @@ def teleport_not_default(arg, fallback_bed_name=None):
         player_state.human.is_on_tp()
 
         # ENSURE TP IS OPEN AND SERVER LOADED PROCESS
-        deadline = utils.timed_out_counter(120)
+        deadline = utils.get_default_clock()
         time.sleep(
             0.3 * settings.lag_offset
         )  # preventing the orange text from the starting teleport screen messing things up
@@ -130,7 +130,7 @@ def teleport_not_default(arg, fallback_bed_name=None):
 
                 open()
 
-                deadline = utils.timed_out_counter(120)
+                deadline = utils.get_default_clock()
         # ENSURE DONE
 
         counter = 0

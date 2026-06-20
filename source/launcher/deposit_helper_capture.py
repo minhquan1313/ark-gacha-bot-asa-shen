@@ -1,8 +1,8 @@
 import ctypes
 import time
 
+from source.launcher import system
 from source.launcher.constants import GAME_WINDOW_TITLE
-from source.launcher.system import focus_window_if_needed, validate_ark_window
 
 MOD_ALT = 0x0001
 MOD_SHIFT = 0x0004
@@ -15,8 +15,8 @@ def focus_game_window(
     if not hasattr(ctypes, "windll"):
         raise RuntimeError("Window focusing is only available on Windows.")
     if window_title == GAME_WINDOW_TITLE:
-        validate_ark_window()
-    if not focus_window_if_needed(window_title, center_cursor_when_switching):
+        system.validate_ark_window()
+    if not system.focus_window_if_needed(window_title, center_cursor_when_switching):
         raise RuntimeError(f"{window_title} window was not found.")
     time.sleep(0.15)
 
@@ -64,7 +64,7 @@ def view_route_entry(yaw, pitch, crouched):
 
 def preload_capture_view_dependencies():
     try:
-        validate_ark_window()
+        system.validate_ark_window()
     except RuntimeError:
         return None
 
@@ -93,9 +93,7 @@ def register_alt_n_hotkey(hwnd, hotkey_id):
 
 def register_shift_alt_n_hotkey(hwnd, hotkey_id):
     return bool(
-        ctypes.windll.user32.RegisterHotKey(
-            hwnd, hotkey_id, MOD_ALT | MOD_SHIFT, KEY_N
-        )
+        ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, MOD_ALT | MOD_SHIFT, KEY_N)
     )
 
 

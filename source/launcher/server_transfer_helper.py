@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from source.launcher.components.custom_pyside_component import NoWheelComboBox
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
     focus_game_window,
@@ -26,6 +27,7 @@ from source.launcher.deposit_helper_capture import (
     view_route_entry,
 )
 from source.launcher.helper_window import WorkerHelperWindow
+from source.launcher.steam_accounts import load_steam_accounts, most_recent_account_name
 from source.launcher.transfer_helper_config import (
     MAX_TRANSFER_RUNTIME_ACCOUNTS,
     load_transfer_runtime_config,
@@ -62,8 +64,16 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.resource_dedi_rows = self.dedi_rows
         self.destination_dedi_rows = []
         self.player_rows = []
+        self.collapsible_panels = []
         self.config = load_transfer_runtime_config(create_missing=True)
         self.config["dedis"] = normalize_transfer_dedis(self.config.get("dedis", {}))
+        try:
+            self.steam_accounts = load_steam_accounts()
+            self.steam_accounts_error = ""
+        except Exception as exc:
+            self.steam_accounts = []
+            self.steam_accounts_error = str(exc)
+        self.config["steam_accounts"] = self.steam_accounts
 
         super().__init__(
             owner,
@@ -111,6 +121,16 @@ class ServerTransferHelper(WorkerHelperWindow):
         content_layout.setSpacing(8)
         scroll.setWidget(content)
         layout.addWidget(scroll, 1)
+
+        controls = QHBoxLayout()
+        controls.setSpacing(8)
+        expand_all = AnimatedButton("EXPAND ALL", "secondary")
+        collapse_all = AnimatedButton("COLLAPSE ALL", "secondary")
+        expand_all.clicked.connect(lambda: self.set_all_collapsible_expanded(True))
+        collapse_all.clicked.connect(lambda: self.set_all_collapsible_expanded(False))
+        controls.addWidget(expand_all)
+        controls.addWidget(collapse_all)
+        content_layout.addLayout(controls)
 
         settings_card, settings_layout = self._panel("TRANSFER SETTINGS")
         grid = QGridLayout()
@@ -390,6 +410,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.config["dedis"] = save_transfer_dedis(self._dedis_from_rows())
         self.config["players"] = self._save_players_from_rows()
         self.config["ui_coords"] = save_transfer_ui_coords(self.config["ui_coords"])
+        self.config["steam_accounts"] = self.steam_accounts
         return self.config
 
     def _sync_loop_hint(self):
@@ -451,6 +472,19 @@ class ServerTransferHelper(WorkerHelperWindow):
                 "Transfer Helper Not Ready", message, "warning", parent=self
             )
             return
+        steam_issues = self._player_steam_issue_map(self._players_from_rows())
+        if steam_issues:
+            lines = []
+            for index in sorted(steam_issues):
+                lines.append(f"Player {index + 1}: {' '.join(steam_issues[index])}")
+            message = "Player Steam accounts are not ready:\n" + "\n".join(
+                f"- {line}" for line in lines
+            )
+            self.status.setText("Player Steam accounts are not ready.")
+            self.owner.dialog(
+                "Transfer Helper Not Ready", message, "warning", parent=self
+            )
+            return
         try:
             config = self._current_config()
         except ValueError as exc:
@@ -460,7 +494,11 @@ class ServerTransferHelper(WorkerHelperWindow):
             )
             return
         missing = missing_runtime_inputs(
-            config["settings"], config["dedis"], config["ui_coords"], config["players"]
+            config["settings"],
+            config["dedis"],
+            config["ui_coords"],
+            config["players"],
+            steam_accounts=config.get("steam_accounts"),
         )
         if missing:
             message = "Missing required transfer helper inputs:\n" + "\n".join(
@@ -601,8 +639,32 @@ class ServerTransferHelper(WorkerHelperWindow):
         info.addWidget(copy)
 
         layout.addLayout(info)
+        steam_row = QHBoxLayout()
+        steam_row.setSpacing(6)
+        steam_label = QLabel("Steam")
+        steam_label.setObjectName("FormLabel")
+        steam = NoWheelComboBox()
+        steam.setObjectName("HelperCombo")
+        steam.addItem("")
+        for steam_account in self.steam_accounts:
+            account_name = str(steam_account.get("account_name", "")).strip()
+            if account_name:
+                steam.addItem(account_name)
+        current_steam = str(
+            self.config["players"]["players"][account - 1].get("steam_account", "")
+        ).strip()
+        if current_steam and steam.findText(current_steam) == -1:
+            steam.addItem(current_steam)
+        steam.setCurrentText(current_steam)
+        steam.currentTextChanged.connect(self._save_players_from_rows)
+        steam.currentTextChanged.connect(self._sync_player_search_warnings)
+        steam_row.addWidget(steam_label)
+        steam_row.addWidget(steam, 1)
+        layout.addLayout(steam_row)
         self.players_layout.addWidget(row)
-        self.player_rows.append({"frame": row, "name": name, "account": account})
+        self.player_rows.append(
+            {"frame": row, "name": name, "steam": steam, "account": account}
+        )
 
     def _account_count_from_field(self):
         try:
@@ -619,7 +681,11 @@ class ServerTransferHelper(WorkerHelperWindow):
         if self.player_rows:
             return {
                 "players": [
-                    {"bed_name": row["name"].text()} for row in self.player_rows
+                    {
+                        "bed_name": row["name"].text(),
+                        "steam_account": row["steam"].currentText().strip(),
+                    }
+                    for row in self.player_rows
                 ]
             }
         return self.config.get("players", {})
@@ -640,6 +706,7 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _sync_player_search_warnings(self):
         conflicts = player_bed_name_search_conflicts(self._players_from_rows())
+        steam_issues = self._player_steam_issue_map(self._players_from_rows())
         for index, row in enumerate(self.player_rows):
             account = row["account"]
             messages = []
@@ -650,6 +717,10 @@ class ServerTransferHelper(WorkerHelperWindow):
                 messages.append(
                     f"Account {account} is ignored. Runtime support is currently "
                     f"limited to {MAX_TRANSFER_RUNTIME_ACCOUNTS} accounts."
+                )
+            elif index in steam_issues:
+                row["frame"].setStyleSheet(
+                    f"QFrame#HelperRow {{ border-color: {IGNORED_PLAYER_COLOR}; }}"
                 )
             elif index in conflicts:
                 row["frame"].setStyleSheet(
@@ -667,7 +738,46 @@ class ServerTransferHelper(WorkerHelperWindow):
                     messages.append(f'Searching "{name}" may also match: {matches}.')
                 else:
                     messages.append("Bed/teleport name cannot be empty.")
+            messages.extend(steam_issues.get(index, []))
             row["frame"].setToolTip(" ".join(messages))
+
+    def _player_steam_issue_map(self, players):
+        rows = players.get("players", []) if isinstance(players, dict) else []
+        issues = {index: [] for index in range(len(rows))}
+        account_names = {
+            str(account.get("account_name", "")).strip()
+            for account in self.steam_accounts
+            if isinstance(account, dict)
+        }
+        most_recent = most_recent_account_name(self.steam_accounts)
+        seen = {}
+        for index, player in enumerate(rows):
+            if not isinstance(player, dict):
+                player = {}
+            account_name = str(player.get("steam_account", "")).strip()
+            if not account_name:
+                issues[index].append("Steam account is required.")
+                continue
+            if account_names and account_name not in account_names:
+                issues[index].append(
+                    "Steam account is not available in loginusers.vdf."
+                )
+            if account_name in seen:
+                issues[index].append(
+                    f"Steam account duplicates player {seen[account_name] + 1}."
+                )
+            else:
+                seen[account_name] = index
+            if index == 0 and most_recent and account_name != most_recent:
+                issues[index].append(
+                    "Relog Steam with this account before starting; ARK is currently controlled by another Steam user."
+                )
+        if self.steam_accounts_error:
+            for index in issues:
+                issues[index].append(
+                    f"Steam accounts unavailable: {self.steam_accounts_error}"
+                )
+        return {index: values for index, values in issues.items() if values}
 
     def _runtime_player_search_conflicts(self, players):
         conflicts = player_bed_name_search_conflicts(players)
@@ -822,7 +932,16 @@ class ServerTransferHelper(WorkerHelperWindow):
         layout.addWidget(body)
         panel.body_widget = body
         panel.toggle_button = toggle
+        self.collapsible_panels.append(panel)
         return panel, body_layout
+
+    def set_all_collapsible_expanded(self, expanded):
+        for panel in self.collapsible_panels:
+            panel.body_widget.setVisible(bool(expanded))
+            panel.toggle_button.setText("v" if expanded else ">")
+        for row in self.resource_dedi_rows + self.destination_dedi_rows:
+            row["details"].setVisible(bool(expanded))
+            row["toggle"].setText("v" if expanded else ">")
 
     @staticmethod
     def _toggle_panel(body, button):

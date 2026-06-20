@@ -53,6 +53,7 @@ roi_regions = {
     "turn_off": {"start_x": 900, "start_y": 870, "width": 150, "height": 30},
     "vault_full": {"start_x": 1065, "start_y": 525, "width": 113, "height": 30},
     "search": {"start_x": 337, "start_y": 952, "width": 90, "height": 30},
+    "search_player_inv": {"start_x": 62, "start_y": 62, "width": 430, "height": 246},
     "server_list_trans_loaded": {
         "start_x": 140,
         "start_y": 280,
@@ -102,23 +103,17 @@ roi_regions = {
         "width": 220,
         "height": 50,
     },
-    "steam_switch_account": {
-        "start_x": 600,
+    "steam_launch_option": {
+        "start_x": 702,
         "start_y": 300,
-        "width": 750,
-        "height": 450,
+        "width": 500,
+        "height": 500,
     },
-    "steam_change_acc_ready": {
-        "start_x": 630,
-        "start_y": 400,
-        "width": 660,
-        "height": 260,
-    },
-    "steam_unable_to_sync": {
-        "start_x": 630,
-        "start_y": 390,
-        "width": 250,
-        "height": 80,
+    "steam_cloud_sync_conflic": {
+        "start_x": 620,
+        "start_y": 350,
+        "width": 680,
+        "height": 360,
     },
     "structure_turn_on": {
         "start_x": 755,
@@ -141,6 +136,7 @@ roi_regions = {
 }
 
 IS_DEBUG = False
+DEBUG_ITEM = "search_player_inv"
 
 
 def get_region_roi(region):
@@ -151,22 +147,22 @@ def get_region_roi(region):
 
 def template_await_true(func, sleep_amount: float, *args) -> bool:
     count = 0
-    while func(*args) == False:
+    while bool(func(*args)) == False:
         if count >= sleep_amount * 20:
             break
         time.sleep(0.05)
         count += 1
-    return func(*args)
+    return bool(func(*args))
 
 
 def template_await_false(func, sleep_amount: float, *args) -> bool:
     count = 0
-    while func(*args) != False:
+    while bool(func(*args)) != False:
         if count >= sleep_amount * 20:
             break
         time.sleep(0.05)
         count += 1
-    return func(*args)
+    return bool(func(*args))
 
 
 def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[False]:
@@ -191,25 +187,35 @@ def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[Fal
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    # if IS_DEBUG and item == "server_trans_success":
-    #     score = f"{max_val:.3f}"
+    if IS_DEBUG and item == DEBUG_ITEM:
+        import winsound
+        from pathlib import Path
 
-    #     debug_roi = roi.copy()
-    #     cv2.rectangle(
-    #         debug_roi,
-    #         (max_loc[0], max_loc[1]),
-    #         (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
-    #         (0, 0, 255),
-    #         2,
-    #     )
+        score = f"{max_val:.3f}"
 
-    #     root_path = Path.cwd()
+        debug_roi = roi.copy()
+        cv2.rectangle(
+            debug_roi,
+            (max_loc[0], max_loc[1]),
+            (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
+            (0, 0, 255),
+            2,
+        )
 
-    #     template_path = root_path / f"{item}_{score}_template.png"
-    #     roi_path = root_path / f"{item}_{score}_roi.png"
+        root_path = Path.cwd()
+        dir_folder = root_path / "debug_template"
+        dir_folder.mkdir(parents=True, exist_ok=True)
 
-    #     cv2.imwrite(str(template_path), image)
-    #     cv2.imwrite(str(roi_path), debug_roi)
+        template_path = dir_folder / f"{item}_template.png"
+        roi_path = dir_folder / f"{item}_{score}_roi.png"
+
+        cv2.imwrite(str(template_path), image)
+        cv2.imwrite(str(roi_path), debug_roi)
+
+        if max_val > threshold:
+            winsound.Beep(1000, 100)
+        else:
+            winsound.Beep(100, 200)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
@@ -246,25 +252,35 @@ def check_template_no_bounds(
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    # if IS_DEBUG and item == "server_trans_success":
-    #     score = f"{max_val:.3f}"
+    if IS_DEBUG and item == DEBUG_ITEM:
+        import winsound
+        from pathlib import Path
 
-    #     debug_roi = roi.copy()
-    #     cv2.rectangle(
-    #         debug_roi,
-    #         (max_loc[0], max_loc[1]),
-    #         (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
-    #         (0, 0, 255),
-    #         2,
-    #     )
+        score = f"{max_val:.3f}"
 
-    #     root_path = Path.cwd()
+        debug_roi = roi.copy()
+        cv2.rectangle(
+            debug_roi,
+            (max_loc[0], max_loc[1]),
+            (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
+            (0, 0, 255),
+            2,
+        )
 
-    #     template_path = root_path / f"{item}_{score}_template.png"
-    #     roi_path = root_path / f"{item}_{score}_roi.png"
+        root_path = Path.cwd()
+        dir_folder = root_path / "debug_template"
+        dir_folder.mkdir(parents=True, exist_ok=True)
 
-    #     cv2.imwrite(str(template_path), image)
-    #     cv2.imwrite(str(roi_path), debug_roi)
+        template_path = dir_folder / f"{item}_template.png"
+        roi_path = dir_folder / f"{item}_{score}_roi.png"
+
+        cv2.imwrite(str(template_path), image)
+        cv2.imwrite(str(roi_path), debug_roi)
+
+        if max_val > threshold:
+            winsound.Beep(1000, 50)
+        else:
+            winsound.Beep(100, 200)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")

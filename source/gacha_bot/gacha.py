@@ -152,6 +152,32 @@ def drop_off_nocrop(metadata):  # change reberry time or you will run out of cro
 
     utils.turn_right(40 * turn_constant)
     time.sleep(0.2 * settings.lag_offset)
+
+    open_gacha_inv(metadata, direction, turn_constant)
+
+    if inventory.is_open():
+        inventory.transfer_all_from()
+        capture_gacha_overcap_before_drop(f"{metadata.name}_{direction}")
+
+        inventory.close()
+        open_gacha_inv(metadata, direction, turn_constant)
+
+    if inventory.is_open():
+        inventory.drop_all_obj()
+
+        inventory.close()
+        open_gacha_inv(metadata, direction, turn_constant)
+
+    if inventory.is_open():
+        player_inventory.transfer_all_inventory()
+        capture_gacha_seed_deposit(f"{metadata.name}_{direction}")
+
+    inventory.close()
+    time.sleep(0.2 * settings.lag_offset)
+    utils.turn_left(40 * turn_constant)
+
+
+def open_gacha_inv(metadata, direction, turn_constant):
     inventory.open()
 
     attempt = 0
@@ -170,16 +196,6 @@ def drop_off_nocrop(metadata):  # change reberry time or you will run out of cro
                 f"the {direction} gacha at {metadata.name} could not be accesssed after {attempt} attempts"
             )
             break
-
-    if inventory.is_open():
-        inventory.transfer_all_from()
-        capture_gacha_overcap_before_drop(f"{metadata.name}_{direction}")
-        inventory.drop_all_obj()
-        player_inventory.transfer_all_inventory()
-        capture_gacha_seed_deposit(f"{metadata.name}_{direction}")
-    inventory.close()
-    time.sleep(0.2 * settings.lag_offset)
-    utils.turn_left(40 * turn_constant)
 
 
 def iguanadon_gacha(metadata):

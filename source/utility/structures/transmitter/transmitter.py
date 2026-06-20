@@ -64,7 +64,7 @@ def open_transfer_server_list():
     if not is_open():
         return
 
-    dl = utils.timed_out_counter(config.timeout_deadline)
+    dl = utils.get_default_clock()
 
     while not dl() and not transmitter_transfer_menu.is_open():
         windows.click(
@@ -79,7 +79,7 @@ def open_transfer_server_list():
 
 def open():
     # Open inventory
-    deadline = utils.timed_out_counter(config.timeout_deadline)
+    deadline = utils.get_default_clock()
     while not deadline():
         inventory.open()
         time.sleep(0.3 * settings.lag_offset)
@@ -98,7 +98,7 @@ def open():
         )
 
     # Wait for loading
-    deadline = utils.timed_out_counter(config.timeout_deadline)
+    deadline = utils.get_default_clock()
     while is_open() and not deadline():
         if template.template_await_true(
             template.check_template, 1, "trans_inv_ready", 0.7
@@ -126,6 +126,7 @@ def open_and_transfer(server_number=0):
     while True:
         attempt += 1
         attempt_inv = 0
+        # OPEN TRANS INV
         while not is_open() and not player_state.uploaded:
             attempt_inv += 1
 
@@ -150,8 +151,10 @@ def open_and_transfer(server_number=0):
             if not is_open():
                 return False
 
+        # OPEN TRANS SERVER LIST
         open_transfer_server_list()
 
+        # PERFORM TRANSFER, SUCCESS ONLY WHEN IT SHOW BEDS
         success = transmitter_transfer_menu.do_join_server(str(server_number))
         if success:
             logs.logger.debug(f"Successfully joined destination server!")
@@ -163,5 +166,6 @@ def open_and_transfer(server_number=0):
             transmitter_transfer_menu.has_failure()
             if not player_state.uploaded:
                 player_state.check_state()
+                utils.zero_center()
 
         time.sleep(1 * settings.lag_offset)

@@ -84,12 +84,12 @@ def spawn_in(bed_name: str):
 
         # Click random on the screen to make sure it will spawn player or skip trailers.
         pyautogui.moveTo(1000, 300, duration=0.3)
-        pyautogui.click(1000, 300)
+        pyautogui.rightClick(1000, 300)
         pyautogui.press("space")
         time.sleep(0.2 * settings.lag_offset)
 
         pyautogui.moveTo(1600, 800, duration=0.3)
-        pyautogui.click(1600, 800)
+        pyautogui.rightClick(1600, 800)
         pyautogui.press("space")
         time.sleep(0.2 * settings.lag_offset)
 

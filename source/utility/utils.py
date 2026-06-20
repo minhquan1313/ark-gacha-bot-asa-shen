@@ -2,6 +2,7 @@ import ctypes
 import time
 
 import settings
+from source.ASA import config
 from source.ASA.player import console
 from source.logs import gachalogs as logs
 
@@ -130,6 +131,10 @@ def timed_out_counter(limit_seconds=3):
         return time_now() >= timeout
 
     return is_excess
+
+
+def get_default_clock(deadline=config.timeout_deadline, lag_offset=1):
+    return timed_out_counter(deadline * lag_offset)
 
 
 """

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from source.gacha_bot.deposit_config import default_dedi_item, default_vault_item
+from source.launcher.components.custom_pyside_component import NoWheelComboBox
 from source.launcher.constants import ASSETS
 from source.launcher.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
@@ -25,11 +26,6 @@ from source.launcher.deposit_helper_capture import (
 from source.launcher.helper_window import BaseHelperWindow
 from source.launcher.vault_items_store import add_vault_item, load_vault_items
 from source.launcher.widgets import AnimatedButton, CyberSwitch, WrappedStatusLabel
-
-
-class NoWheelComboBox(QComboBox):
-    def wheelEvent(self, event):
-        event.ignore()
 
 
 class DepositHelperGuide(QDialog):

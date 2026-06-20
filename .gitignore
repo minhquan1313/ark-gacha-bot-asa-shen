@@ -5,8 +5,11 @@ settings.py
 /json_files/backup2
 .vscode
 
-debug_screenshots/*
+debug_screenshots
+debug_template
 .codegraph/daemon.pid
 json_files/GameUserSettings.ini.backup
 json_files/ark_start_game_restore.json
+json_files/transfer_helper
 log.txt
+logs.txt

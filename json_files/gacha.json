@@ -21,12 +21,12 @@
   },
   {
     "name": "gacha5",
-    "teleporter": "GACHAPAIR3",
+    "teleporter": "GACHAPAIR_3",
     "side": "left"
   },
   {
     "name": "gacha6",
-    "teleporter": "GACHAPAIR3",
+    "teleporter": "GACHAPAIR_3",
     "side": "right"
   },
   {
@@ -197,6 +197,106 @@
   {
     "name": "gacha40",
     "teleporter": "GACHAPAIR20",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR21_left",
+    "teleporter": "GACHAPAIR21",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR21_right",
+    "teleporter": "GACHAPAIR21",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR22_left",
+    "teleporter": "GACHAPAIR22",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR22_right",
+    "teleporter": "GACHAPAIR22",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR23_left",
+    "teleporter": "GACHAPAIR23",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR23_right",
+    "teleporter": "GACHAPAIR23",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR24_left",
+    "teleporter": "GACHAPAIR24",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR24_right",
+    "teleporter": "GACHAPAIR24",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR25_left",
+    "teleporter": "GACHAPAIR25",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR25_right",
+    "teleporter": "GACHAPAIR25",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR26_left",
+    "teleporter": "GACHAPAIR26",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR26_right",
+    "teleporter": "GACHAPAIR26",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR27_left",
+    "teleporter": "GACHAPAIR27",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR27_right",
+    "teleporter": "GACHAPAIR27",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR28_left",
+    "teleporter": "GACHAPAIR28",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR28_right",
+    "teleporter": "GACHAPAIR28",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR29_left",
+    "teleporter": "GACHAPAIR29",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR29_right",
+    "teleporter": "GACHAPAIR29",
+    "side": "right"
+  },
+  {
+    "name": "GACHAPAIR30_left",
+    "teleporter": "GACHAPAIR30",
+    "side": "left"
+  },
+  {
+    "name": "GACHAPAIR30_right",
+    "teleporter": "GACHAPAIR30",
     "side": "right"
   }
 ]

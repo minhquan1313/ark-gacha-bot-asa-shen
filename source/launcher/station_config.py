@@ -10,7 +10,8 @@ VALID_GACHA_SIDES = {"left", "right"}
 
 DEFAULT_PEGO_TARGET_CRYSTALS = 290
 DEFAULT_PEGO_SNOW_OWLS_PER_GACHA = 5
-DEFAULT_PEGO_STATION_SECONDS = 90
+DEFAULT_PEGO_STATION_SECONDS = 80
+
 PEGO_CALIBRATION_CRYSTALS = 264
 PEGO_CALIBRATION_GACHAS = 40
 PEGO_CALIBRATION_PEGOS = 3
@@ -103,7 +104,7 @@ def next_gacha_teleporter(entries, prefix=GACHA_PAIR_PREFIX, exclude_teleporter=
         if str(entry.get("teleporter", "")) != str(exclude_teleporter)
     }
     for index in range(1, 1000):
-        candidate = f"{prefix}_{index}"
+        candidate = f"{prefix}{index}"
         if candidate not in existing:
             return candidate
     raise ValueError("No available gacha teleporter name from 1 to 999.")

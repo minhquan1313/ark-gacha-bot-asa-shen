@@ -4,8 +4,9 @@ import time
 def _open_crop_plot_inventory():
     import settings
     import source.ASA.config
+    from source.ASA.strucutres import inventory
     from source.logs import gachalogs as logs
-    from source.utility import template, utils
+    from source.utility import template
 
     attempts = 0
     while not template.check_template("inventory", 0.7):
@@ -14,27 +15,9 @@ def _open_crop_plot_inventory():
             f"trying to open crop plot inventory {attempts} / "
             f"{source.ASA.config.inventory_open_attempts}"
         )
-        utils.press_key("AccessInventory")
-        if template.template_await_true(
-            template.check_template, 2, "inventory", 0.7
-        ):
-            logs.logger.debug("crop plot inventory opened")
-            if template.template_await_true(
-                template.check_template, 1, "waiting_inv", 0.8
-            ):
-                start = time.time()
-                logs.logger.debug(
-                    "waiting for up too 10 seconds due to the reciving remote "
-                    "inventory is present"
-                )
-                template.template_await_false(
-                    template.check_template, 10, "waiting_inv", 0.8
-                )
-                logs.logger.debug(
-                    f"{time.time() - start} seconds taken for the reciving remote "
-                    "inventory to go away"
-                )
-                break
+        inventory.open()
+        if inventory.is_open():
+            break
         if attempts >= source.ASA.config.inventory_open_attempts:
             logs.logger.error("unable to open up the crop plot inventory")
             break

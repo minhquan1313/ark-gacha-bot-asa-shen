@@ -13,6 +13,10 @@ def is_open():
     return template.check_template("inventory", 0.7)
 
 
+def is_ready():
+    return not template.check_template("waiting_inv", 0.8)
+
+
 def open():
     attempts = 0
     while not is_open():
@@ -21,22 +25,18 @@ def open():
             f"trying to open strucuture inventory {attempts} / {source.ASA.config.inventory_open_attempts}"
         )
         utils.press_key("AccessInventory")
-        if template.template_await_true(template.check_template, 3, "inventory", 0.7):
+        if template.template_await_true(is_open, 3):
             logs.logger.debug(f"inventory opened")
-            if template.template_await_true(
+            is_still_loading = template.template_await_false(
                 template.check_template, 3, "waiting_inv", 0.8
-            ):
-                start = time.time()
-                logs.logger.debug(
-                    f"waiting for up too 10 seconds due to the reciving remote inventory is present"
-                )
-                template.template_await_false(
-                    template.check_template, 10, "waiting_inv", 0.8
-                )
-                logs.logger.debug(
-                    f"{time.time() - start} seconds taken for the reciving remote inventory to go away"
-                )
-                break
+            )
+            if is_still_loading:
+                dl = utils.get_default_clock()
+                while is_open() and not is_ready() and not dl():
+                    time.sleep(1)
+                    player_state.check_disconnected()
+                close()
+            break
 
         # check state of the char before redoing
         else:

@@ -1,19 +1,12 @@
 {
   "players": [
     {
-      "bed_name": "BBedPlayer1"
+      "bed_name": "BBedPlayer1",
+      "steam_account": "minhquan1313"
     },
     {
-      "bed_name": "BBedPlayer2"
-    },
-    {
-      "bed_name": "BBedPlayer3"
-    },
-    {
-      "bed_name": "BBedPlayer4"
-    },
-    {
-      "bed_name": "BBedPlayer5"
+      "bed_name": "BBedPlayer2",
+      "steam_account": "cadab3"
     }
   ]
 }

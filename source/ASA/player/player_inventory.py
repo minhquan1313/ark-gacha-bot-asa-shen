@@ -13,6 +13,14 @@ def is_open():
     return template.check_template("inventory", 0.7)
 
 
+def is_clear_search():
+    return template.check_template_no_bounds("search_player_inv", 0.8)
+
+
+def wait_clear_search(timeout=3):
+    return template.template_await_true(is_clear_search, timeout)
+
+
 def open():
     attempts = 0
     while not is_open():
@@ -96,6 +104,7 @@ def implant_eat():
 
     player_state.capture_state("implant eat", 5)
     logs.logger.critical("Eating implant", stack_info=True)
+    player_state.reset_state()
 
     while not template.check_template("death_regions", 0.7):
         attempts += 1
@@ -105,10 +114,10 @@ def implant_eat():
         utils.press_key("ShowMyInventory")
         open()
         close()
+
+        # moving backwards so we dont die on tps and create bags
         for x in range(30):
-            utils.press_key(
-                "s"
-            )  # moving backwards so we dont die on tps and create bags
+            utils.press_key("s")
         open()
         windows.move_mouse(
             variables.get_pixel_loc("implant_eat_x"),

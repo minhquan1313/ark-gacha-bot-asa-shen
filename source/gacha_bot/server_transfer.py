@@ -3,15 +3,22 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from source.launcher.transfer_helper_config import (
-    account_slot_for_target,
     active_transfer_dedis,
     missing_runtime_inputs,
     player_bed_name,
+    player_steam_account,
     runtime_account_count,
     transfer_dedi_route,
 )
 
 RECOVERABLE_RUNTIME_ATTEMPTS = 3
+STEAM_DIALOG_BUTTONS = {
+    "launch_option_select": {"x": 800, "y": 450},
+    "launch_option_checkbox": {"x": 756, "y": 628},
+    "launch_option_play": {"x": 1000, "y": 525},
+    #
+    "cloud_sync_conflict_play": {"x": 1066, "y": 644},
+}
 
 
 class TransferConfigError(RuntimeError):
@@ -44,7 +51,13 @@ def run_transfer_helper(config, status_callback=None, dependencies=None):
     dedis = config["dedis"]
     ui_coords = config["ui_coords"]
     players = config.get("players", {})
-    missing = missing_runtime_inputs(settings, dedis, ui_coords, players)
+    missing = missing_runtime_inputs(
+        settings,
+        dedis,
+        ui_coords,
+        players,
+        steam_accounts=config.get("steam_accounts"),
+    )
     if missing:
         raise TransferConfigError(
             "Missing transfer helper inputs: " + ", ".join(missing)
@@ -53,7 +66,7 @@ def run_transfer_helper(config, status_callback=None, dependencies=None):
     deps = dependencies or default_transfer_dependencies(config, status_callback)
     account_count = runtime_account_count(players)
     accounts = range(1, account_count + 1)
-    current_account = 1
+    current_steam_account = _steam_account(players, 1)
 
     def emit(message):
         if status_callback is not None:
@@ -67,7 +80,7 @@ def run_transfer_helper(config, status_callback=None, dependencies=None):
         if stopped():
             return False
         if account_count > 1:
-            current_account = deps.switch_account(account, current_account)
+            current_steam_account = deps.switch_account(account, current_steam_account)
         if stopped():
             return False
         if deps.ensure_ark_running() is False or stopped():
@@ -118,15 +131,14 @@ def run_transfer_helper(config, status_callback=None, dependencies=None):
         deps.enter_tekpod()
 
     for loop_number in range(1, int(settings["loop_count"]) + 1):
-        emit(f"Starting transfer loop {loop_number}/{settings['loop_count']}.")
+        emit(f"Starting destination loop {loop_number}/{settings['loop_count']}.")
         for account in accounts:
             if stopped():
                 return False
-            final_account = (
-                loop_number == int(settings["loop_count"]) and account == account_count
-            )
             if account_count > 1:
-                current_account = deps.switch_account(account, current_account)
+                current_steam_account = deps.switch_account(
+                    account, current_steam_account
+                )
             if stopped():
                 return False
             if deps.ensure_ark_running() is False or stopped():
@@ -172,10 +184,8 @@ def run_transfer_helper(config, status_callback=None, dependencies=None):
             deps.wait_structure()
             if stopped():
                 return False
-            if deps.withdraw_resource(account) is False or stopped():
-                return False
-            if not final_account:
-                if stopped():
+            if loop_number < int(settings["loop_count"]):
+                if deps.withdraw_resource(account) is False or stopped():
                     return False
                 deps.enter_tekpod()
 
@@ -193,7 +203,7 @@ def default_transfer_dependencies(config, status_callback=None):
         switch_account=lambda target, current: switch_steam_account(
             target,
             current,
-            runtime_account_count(players),
+            players,
             ui_coords,
             status_callback,
         ),
@@ -228,87 +238,38 @@ def default_transfer_dependencies(config, status_callback=None):
 
 def switch_steam_account(
     target_account,
-    current_account,
-    account_count,
+    current_steam_account,
+    players,
     ui_coords,
     status_callback=None,
 ):
-    if int(target_account) == int(current_account):
-        return int(current_account)
-    slot = account_slot_for_target(
-        ui_coords, account_count, current_account, target_account
-    )
-    steam = ui_coords["steam"]
+    target_steam_account = _steam_account(players, target_account)
+    if not target_steam_account:
+        raise RuntimeError(f"Player {target_account} has no Steam account assigned.")
+    if target_steam_account == current_steam_account:
+        return current_steam_account
     emit = status_callback or (lambda _message: None)
-    import pyautogui
+    from source.launcher import steam_accounts
 
-    if not kill_ark(ui_coords, emit):
-        return int(current_account)
-    time.sleep(5)
-    from source.utility import template
-
-    change_ready_template = _template_item(steam["change_account_ready_template"])
-    switch_account_template = _template_item(steam["switch_account_template"])
-    for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
-        if not _ensure_steam_window_ready(steam, emit, launch_if_missing=True):
-            return int(current_account)
-        for key in ("menu", "change_account"):
-            time.sleep(0.2)
-            coord = steam[key]
-            pyautogui.click(int(coord["x"]), int(coord["y"]))
-        emit(
-            "Waiting for Steam change-account continue button "
-            f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
-        )
-        ready = _wait_for_template_visible(
-            template.check_template_no_bounds,
-            float(steam.get("change_account_ready_timeout", 60)),
-            change_ready_template,
-            0.75,
-        )
-        if not ready:
-            emit("Steam change-account continue button was not ready; retrying.")
-            continue
-        time.sleep(0.2)
-        coord = steam["continue"]
-        time.sleep(0.3 * settings_lag_offset())
-        pyautogui.click(int(coord["x"]), int(coord["y"]))
-        emit(
-            f"Waiting for Steam account picker for account {target_account} "
-            f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
-        )
-        picker_ready = _wait_for_template_visible(
-            template.check_template_no_bounds,
-            float(steam.get("switch_account_timeout", 60)),
-            switch_account_template,
-            0.75,
-        )
-        if picker_ready:
-            break
-        emit("Steam account picker was not detected; retrying.")
-    else:
-        raise RuntimeError(
-            "Steam account switch UI was not ready after "
-            f"{RECOVERABLE_RUNTIME_ATTEMPTS} attempts."
-        )
-    pyautogui.click(int(slot["x"]), int(slot["y"]))
-    if not _ensure_steam_window_ready(steam, emit, launch_if_missing=False):
-        return int(current_account)
-    return int(target_account)
+    emit(f"Switching Steam account to {target_steam_account}.")
+    kill_ark(ui_coords, emit)
+    steam_accounts.select_auto_login_account(target_steam_account)
+    steam_accounts.close_steam()
+    time.sleep(float(ui_coords.get("steam", {}).get("restart_delay", 8)))
+    # steam_accounts.launch_ark_with_steam()
+    return target_steam_account
 
 
 def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
-    import pyautogui
-
     from source.launcher.ark_game_setup import (
         ARK_PROCESS_NAME,
         launch_ark_through_steam,
     )
     from source.launcher.system import validate_ark_window
-    from source.utility import template
+    from source.utility import utils
 
     emit = status_callback or (lambda _message: None)
-    timeout = _settings_int(settings, "ark_window_ready_timeout", 180)
+    timeout = _settings_int(settings, "ark_window_ready_timeout", 120)
     attempts = _settings_int(settings, "ark_launch_attempts", 3)
     last_error = None
     launched = False
@@ -317,17 +278,13 @@ def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
         return False
     steam = ui_coords["steam"]
 
-    steam_unable_to_sync_template = _template_item(
-        steam["steam_unable_to_sync_template"]
-    )
-
     for attempt in range(1, attempts + 1):
         if not _process_running(ARK_PROCESS_NAME):
             emit("Launching ARK through Steam.")
             launch_ark_through_steam()
             launched = True
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
+        deadline = utils.timed_out_counter(timeout)
+        while not deadline():
             if _process_running(ARK_PROCESS_NAME):
                 try:
                     window_size = validate_ark_window()
@@ -338,14 +295,7 @@ def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
                     return True
                 except RuntimeError as exc:
                     last_error = exc
-            # Sometime started same ARK through Steam when switch account will cause sync issues
-            wont_sync = template.check_template_no_bounds(
-                steam_unable_to_sync_template, 0.8
-            )
-            if wont_sync:
-                time.sleep(0.2)
-                coord = steam["steam_unable_to_sync_continue"]
-                pyautogui.click(int(coord["x"]), int(coord["y"]))
+            steam_has_failure(steam, emit)
             time.sleep(1)
         if attempt >= attempts:
             break
@@ -636,20 +586,11 @@ def _open_transfer_dedi_inventory(route_metadata, item, label, timeout):
 
     deadline = utils.timed_out_counter(float(timeout))
     while not deadline():
-        utils.press_key("AccessInventory")
-        if template.template_await_true(template.check_template, 2, "inventory", 0.7):
-            waiting_for_remote = template.template_await_true(
-                template.check_template, 1, "waiting_inv", 0.8
-            )
-            while (
-                waiting_for_remote
-                and not deadline()
-                and template.check_template("inventory", 0.7)
-            ):
-                time.sleep(0.05)
-                waiting_for_remote = template.check_template("waiting_inv", 0.8)
-            if template.check_template("inventory", 0.7) and not waiting_for_remote:
-                return True
+        inventory.open()
+        if inventory.is_open():
+            return True
+
+        inventory.close()
         time.sleep(0.5 * float(settings_lag_offset()))
     return False
 
@@ -682,6 +623,85 @@ def _settings_int(settings, key, default):
     return max(1, value)
 
 
+def steam_launch_option_is_open():
+    from source.utility import template
+
+    try:
+        return bool(template.check_template_no_bounds("steam_launch_option", 0.8))
+    except Exception:
+        return False
+
+
+def steam_cloud_sync_conflict_is_open():
+    from source.utility import template
+
+    try:
+        return bool(template.check_template_no_bounds("steam_cloud_sync_conflic", 0.8))
+    except Exception:
+        return False
+
+
+def steam_has_failure(steam, status_callback=None):
+    """Handle known Steam launch dialogs before ARK becomes usable."""
+    emit = status_callback or (lambda _message: None)
+    if not _focus_visible_steam_window(steam, emit):
+        return False
+
+    import pyautogui
+
+    if steam_launch_option_is_open():
+        emit("Detected Steam launch option dialog.")
+        _click_steam_button(pyautogui, "launch_option_select")
+        time.sleep(0.2)
+        _click_steam_button(pyautogui, "launch_option_checkbox")
+        time.sleep(0.2)
+        _click_steam_button(pyautogui, "launch_option_play")
+        time.sleep(0.2)
+        return True
+
+    if steam_cloud_sync_conflict_is_open():
+        emit("Detected Steam cloud sync conflict dialog.")
+        _click_steam_button(pyautogui, "cloud_sync_conflict_play")
+        time.sleep(0.2)
+        return True
+
+    return False
+
+
+def _focus_visible_steam_window(steam: dict | None, status_callback=None) -> bool:
+    """Focus and maximize Steam only when its window exists and is visible."""
+    import ctypes
+
+    emit = status_callback or (lambda _message: None)
+    title = "Steam"
+    if isinstance(steam, dict):
+        title = steam.get("window_title") or title
+
+    user32 = ctypes.windll.user32
+    hwnd = user32.FindWindowW(None, title)
+    if not hwnd:
+        return False
+    if not user32.IsWindowVisible(hwnd):
+        return False
+
+    try:
+        return bool(_focus_steam_window_maximized(title))
+    except RuntimeError as exc:
+        emit(f"Steam window focus failed: {exc}")
+        return False
+
+
+def _click_steam_button(pyautogui, button_name):
+    coord = STEAM_DIALOG_BUTTONS[button_name]
+    pyautogui.click(int(coord["x"]), int(coord["y"]))
+
+
+def _coord_complete(value):
+    if not isinstance(value, dict):
+        return False
+    return value.get("x") is not None and value.get("y") is not None
+
+
 def transfer_to_server(
     server,
     settings,
@@ -690,20 +710,16 @@ def transfer_to_server(
     players=None,
     account=None,
 ):
-    import pyautogui
-
-    from source.ASA.strucutres import inventory, teleporter
-    from source.utility import template, utils
+    from source.ASA.strucutres import teleporter
+    from source.utility import utils
+    from source.utility.structures.transmitter import transmitter
 
     emit = status_callback or (lambda _message: None)
-    transfer = ui_coords["transfer"]
     yaw_key = (
         "resource_station_yaw"
         if str(server) == str(settings["destination_server"])
         else "destination_station_yaw"
     )
-    transmitter_template = _template_item(transfer["transmitter_inv_template"])
-    transmitter_open = False
     fallback_bed_name = _fallback_bed_name(players, account)
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
         teleporter.teleport_not_default(
@@ -711,45 +727,18 @@ def transfer_to_server(
             fallback_bed_name=fallback_bed_name,
         )
         utils.set_yaw(float(settings[yaw_key]))
-        inventory.open()
         emit(
-            "Checking transmitter inventory "
+            f"Transferring to server {server} "
             f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
         )
-        transmitter_open = _wait_for_template_visible(
-            template.check_template,
-            2,
-            transmitter_template,
-            0.7,
-        )
-        if transmitter_open:
-            break
-        if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
-            emit("Transmitter inventory was not detected; recovering player state.")
-            check_transfer_player_state(settings, players, account, server)
-            time.sleep(0.5)
-    if not transmitter_open:
-        raise RuntimeError("Transmitter inventory was not detected.")
-    _click_coord(transfer["transfer_button"])
-    not_ready_template = _template_item(transfer["not_ready_template"])
-    while True:
-        _click_coord(transfer["server_search"])
-        pyautogui.hotkey("ctrl", "a")
-        pyautogui.write(str(server))
-        _click_coord(transfer["first_server"])
-        _click_coord(transfer["join_button"])
-        time.sleep(1)
-        if not _wait_for_template_visible(
-            template.check_template_no_bounds,
-            0,
-            not_ready_template,
-            0.75,
-        ):
+        if transmitter.open_and_transfer(server):
             emit(f"Transfer to server {server} requested.")
             return True
-        _click_coord(transfer["transfer_not_ready_cancel"])
-        emit(f"Server {server} transfer timer not ready; retrying.")
-        time.sleep(int(settings["transfer_retry_delay"]))
+        if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
+            emit("Transmitter transfer did not complete; recovering player state.")
+            check_transfer_player_state(settings, players, account, server)
+            time.sleep(0.5)
+    raise RuntimeError(f"Transfer to server {server} did not complete.")
 
 
 def wait_for_bed_screen():
@@ -792,58 +781,46 @@ def leave_tekpod():
 
 
 def kill_ark(ui_coords=None, status_callback=None):
-    from source.launcher.ark_game_setup import kill_running_ark
-
-    if not _logout_before_kill_ark(ui_coords, status_callback):
-        return False
-    kill_running_ark()
+    close_ark_with_console_exit(status_callback)
     return True
 
 
-def _logout_before_kill_ark(ui_coords=None, status_callback=None):
+def close_ark_with_console_exit(status_callback=None):
     from source.launcher.deposit_helper_capture import focus_game_window
+    from source.utility import utils
 
-    emit = status_callback or (lambda _message: None)
-    try:
-        focus_game_window(center_cursor_when_switching=True)
-    except RuntimeError:
-        return False
-    try:
-        _refresh_join_sim_ark_handle()
-    except RuntimeError:
-        return False
-    emit("Returning ARK to main menu before closing.")
-    return _open_main_menu_until_safe_to_kill(emit)
-
-
-def _open_main_menu_until_safe_to_kill(status_callback=None):
     emit = status_callback or (lambda _message: None)
     attempt = 0
     while True:
         attempt += 1
-        if not _send_open_main_menu(emit, attempt):
-            continue
-        if _wait_for_ark_main_menu(timeout=30):
+        if not _ark_window_exists():
             return True
-        else:
-            emit("ARK main menu did not appear after loading; resetting console.")
-        if not _reset_open_main_menu_console():
-            return False
+        try:
+            focus_game_window(center_cursor_when_switching=True)
+            _send_ark_exit_command(emit, attempt)
+        except Exception as exc:
+            emit(f"ARK exit command failed: {exc}; retrying.")
+        deadline = utils.timed_out_counter(10)
+        while not deadline():
+            if not _ark_window_exists():
+                return True
+            time.sleep(0.5)
+        emit("ARK window is still visible after exit command; retrying.")
 
 
-def _send_open_main_menu(status_callback=None, attempt=1):
+def _send_ark_exit_command(status_callback=None, attempt=1):
     from source.ASA.player import console, player_state
 
     emit = status_callback or (lambda _message: None)
-    try:
-        emit(f"Opening ARK main menu (attempt {attempt}).")
-        player_state.reset_state()
-        console.console_write("open MainMenu")
-        return True
-    except Exception as exc:
-        emit(f"open MainMenu failed: {exc}; resetting console.")
-        _reset_open_main_menu_console()
-        return False
+    emit(f"Closing ARK with console exit (attempt {attempt}).")
+    player_state.reset_state()
+    console.console_write("exit")
+
+
+def _ark_window_exists():
+    from source.launcher.constants import GAME_WINDOW_TITLE
+
+    return bool(_ark_window_handle(GAME_WINDOW_TITLE))
 
 
 def _reset_open_main_menu_console():
@@ -899,6 +876,10 @@ def _bed_name(players, account):
     return player_bed_name(players, account)
 
 
+def _steam_account(players, account):
+    return player_steam_account(players, account)
+
+
 def _fallback_bed_name(players, account):
     if account is None:
         return None
@@ -912,8 +893,10 @@ def _click_coord(coord):
 
 
 def _wait_for_template_visible(check_func, timeout, *args):
-    deadline = time.monotonic() + float(timeout)
-    while time.monotonic() < deadline:
+    from source.utility import utils
+
+    deadline = utils.timed_out_counter(float(timeout))
+    while not deadline():
         if check_func(*args):
             return True
         time.sleep(0.05)
@@ -927,6 +910,8 @@ def _template_item(template_path):
 def _ensure_steam_window_ready(steam, status_callback=None, launch_if_missing=True):
     import subprocess
 
+    from source.utility import utils
+
     emit = status_callback or (lambda _message: None)
     title = steam.get("window_title", "Steam")
     timeout = float(steam.get("window_ready_timeout", 5))
@@ -936,8 +921,8 @@ def _ensure_steam_window_ready(steam, status_callback=None, launch_if_missing=Tr
         emit("Opening Steam window.")
         subprocess.Popen([str(steam_exe)])
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
+        deadline = utils.timed_out_counter(timeout)
+        while not deadline():
             try:
                 if _focus_steam_window_maximized(title):
                     return True

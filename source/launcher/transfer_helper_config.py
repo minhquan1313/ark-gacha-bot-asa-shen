@@ -22,8 +22,8 @@ DEFAULT_TRANSFER_SETTINGS = {
     "loop_count": 1,
     "structure_load_delay": 10,
     "transfer_retry_delay": 5,
-    "ark_window_ready_timeout": 180,
-    "ark_launch_attempts": 3,
+    "ark_window_ready_timeout": 120,
+    "ark_launch_attempts": 10,
 }
 
 DEFAULT_TRANSFER_DEDIS = {
@@ -40,78 +40,10 @@ DEFAULT_TRANSFER_DEDIS = {
 DEFAULT_TRANSFER_UI_COORDS = {
     "steam": {
         "window_title": "Steam",
-        "switch_account_template": "assets/icons1080/steam_switch_account.png",
-        "switch_account_region": {
-            "start_x": 600,
-            "start_y": 300,
-            "width": 750,
-            "height": 450,
-        },
-        "switch_account_timeout": 60,
-        "change_account_ready_template": "assets/icons1080/steam_change_acc_ready.png",
-        "change_account_ready_region": {
-            "start_x": 630,
-            "start_y": 400,
-            "width": 660,
-            "height": 260,
-        },
-        "change_account_ready_timeout": 60,
-        "steam_unable_to_sync_template": "assets/icons1080/steam_unable_to_sync.png",
-        "steam_unable_to_sync_region": {
-            "start_x": 630,
-            "start_y": 390,
-            "width": 250,
-            "height": 80,
-        },
-        "steam_unable_to_sync_continue": {"x": 1060, "y": 640},
         "window_ready_timeout": 30,
-        "menu": {"x": 45, "y": 20},
-        "change_account": {"x": 45, "y": 50},
-        "continue": {"x": 1050, "y": 630},
         "restart_delay": 8,
-        "account_slots": {
-            "1": [
-                #
-                {"x": 930, "y": 550}
-            ],
-            "2": [
-                #
-                {"x": 880, "y": 550},
-                {"x": 990, "y": 550},
-            ],
-            "3": [
-                {"x": 810, "y": 550},
-                {"x": 930, "y": 550},
-                {"x": 1050, "y": 550},
-            ],
-            "4": [
-                {"x": 750, "y": 550},
-                {"x": 880, "y": 550},
-                {"x": 1010, "y": 550},
-                {"x": 1110, "y": 550},
-            ],
-        },
     },
     "transfer": {
-        "transmitter_inv_template": "assets/icons1080/transmitter_inv.png",
-        "transmitter_inv_region": {
-            "start_x": 970,
-            "start_y": 110,
-            "width": 200,
-            "height": 70,
-        },
-        "not_ready_template": "assets/icons1080/transfer_not_ready_popup.png",
-        "not_ready_region": {
-            "start_x": 730,
-            "start_y": 300,
-            "width": 560,
-            "height": 200,
-        },
-        "transfer_button": {"x": 960, "y": 790},
-        "server_search": {"x": 1500, "y": 180},
-        "first_server": {"x": 400, "y": 320},
-        "join_button": {"x": 1640, "y": 890},
-        "transfer_not_ready_cancel": {"x": 1070, "y": 730},
         "dedi_deposit_ready_template": "assets/icons1080/dedi_deposit_ready.png",
         "dedi_deposit_ready_region": {
             "start_x": 880,
@@ -141,7 +73,7 @@ def default_transfer_ui_coords():
 def default_transfer_players(account_count=1):
     return {
         "players": [
-            {"bed_name": name}
+            {"bed_name": name, "steam_account": ""}
             for name in generated_player_bed_names(int(account_count))
         ]
     }
@@ -166,6 +98,14 @@ def player_bed_name(players, account_index):
     if name:
         return name
     return generated_player_bed_names(int(account_index))[-1]
+
+
+def player_steam_account(players, account_index):
+    try:
+        player = players["players"][int(account_index) - 1]
+    except (KeyError, IndexError, TypeError):
+        return ""
+    return str(player.get("steam_account", "")).strip()
 
 
 def player_bed_name_search_conflicts(players, limit=None):
@@ -353,7 +293,8 @@ def normalize_transfer_players(data, account_count=1):
         bed_name = str(raw.get("bed_name", "")).strip()
         if not bed_name:
             bed_name = generated[index]
-        players.append({"bed_name": bed_name})
+        steam_account = str(raw.get("steam_account", "")).strip()
+        players.append({"bed_name": bed_name, "steam_account": steam_account})
     return {"players": players}
 
 
@@ -410,38 +351,14 @@ def active_transfer_dedis(dedis, side=None):
     return list(dedis.get("items", []))
 
 
-def displayed_account_order(account_count, current_account):
-    accounts = list(range(1, int(account_count) + 1))
-    current_account = int(current_account)
-    if current_account not in accounts:
-        return accounts
-    return [current_account] + [
-        account for account in accounts if account != current_account
-    ]
-
-
-def account_slot_for_target(ui_coords, account_count, current_account, target_account):
-    if int(target_account) == int(current_account):
-        return None
-    order = displayed_account_order(account_count, current_account)
-    try:
-        slot_index = order.index(int(target_account))
-    except ValueError as exc:
-        raise ValueError("target_account is outside account_count.") from exc
-    slots = (
-        ui_coords.get("steam", {}).get("account_slots", {}).get(str(account_count), [])
-    )
-    if slot_index >= len(slots):
-        raise ValueError(
-            f"Steam account slot map for {account_count} accounts is incomplete."
-        )
-    slot = slots[slot_index]
-    if not _coord_complete(slot):
-        raise ValueError(f"Steam account slot {slot_index + 1} is missing x/y.")
-    return slot
-
-
-def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_root=None):
+def missing_runtime_inputs(
+    settings,
+    dedis,
+    ui_coords,
+    players=None,
+    project_root=None,
+    steam_accounts=None,
+):
     project_root = Path(project_root or ".")
     missing = []
     if not settings.get("transmitter_teleport"):
@@ -454,6 +371,7 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         missing.append("settings.destination_server must differ from resource_server")
     if player_account_count(players) < 1:
         missing.append("players must include at least one player")
+    missing.extend(steam_account_assignment_issues(players, steam_accounts))
     resource_dedis = transfer_dedi_route(dedis, "resource")
     destination_dedis = transfer_dedi_route(dedis, "destination")
     if not resource_dedis.get("teleport"):
@@ -465,56 +383,7 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
     if not active_transfer_dedis(dedis, "destination"):
         missing.append("dedis.destination.items must include at least one dedi")
 
-    steam = ui_coords.get("steam", {})
-    configured_accounts = player_account_count(players)
-    if configured_accounts > 1:
-        for key in ("menu", "change_account", "continue"):
-            if not _coord_complete(steam.get(key, {})):
-                missing.append(f"ui_coords.steam.{key}.x/y")
-        _append_template_missing(
-            missing,
-            steam,
-            "switch_account_template",
-            project_root,
-            "ui_coords.steam",
-        )
-        _append_template_missing(
-            missing,
-            steam,
-            "change_account_ready_template",
-            project_root,
-            "ui_coords.steam",
-        )
-        if not _region_complete(steam.get("switch_account_region", {})):
-            missing.append("ui_coords.steam.switch_account_region")
-        if not _region_complete(steam.get("change_account_ready_region", {})):
-            missing.append("ui_coords.steam.change_account_ready_region")
-        account_count = runtime_account_count(players)
-        slots = steam.get("account_slots", {}).get(str(account_count), [])
-        if len(slots) < account_count:
-            missing.append(f"ui_coords.steam.account_slots.{account_count}")
-        else:
-            for index, slot in enumerate(slots[:account_count], 1):
-                if not _coord_complete(slot):
-                    missing.append(
-                        f"ui_coords.steam.account_slots.{account_count}[{index}].x/y"
-                    )
-
     transfer = ui_coords.get("transfer", {})
-    for key in (
-        "transfer_button",
-        "server_search",
-        "first_server",
-        "join_button",
-        "transfer_not_ready_cancel",
-    ):
-        if not _coord_complete(transfer.get(key, {})):
-            missing.append(f"ui_coords.transfer.{key}.x/y")
-
-    for key in ("transmitter_inv_template", "not_ready_template"):
-        _append_template_missing(
-            missing, transfer, key, project_root, "ui_coords.transfer"
-        )
     _append_template_missing(
         missing,
         transfer,
@@ -522,16 +391,44 @@ def missing_runtime_inputs(settings, dedis, ui_coords, players=None, project_roo
         project_root,
         "ui_coords.transfer",
     )
-    if not _region_complete(transfer.get("transmitter_inv_region", {})):
-        missing.append("ui_coords.transfer.transmitter_inv_region")
-    if not _region_complete(transfer.get("not_ready_region", {})):
-        missing.append("ui_coords.transfer.not_ready_region")
     if not _region_complete(transfer.get("dedi_deposit_ready_region", {})):
         missing.append("ui_coords.transfer.dedi_deposit_ready_region")
     if not _coord_complete(transfer.get("dedi_init_click", {})):
         missing.append("ui_coords.transfer.dedi_init_click.x/y")
 
     return missing
+
+
+def steam_account_assignment_issues(players=None, steam_accounts=None):
+    if not isinstance(players, dict):
+        players = {}
+    raw_players = players.get("players", [])
+    if not isinstance(raw_players, list):
+        raw_players = []
+    account_names = _steam_account_names(steam_accounts)
+    most_recent = _most_recent_steam_account(steam_accounts)
+    issues = []
+    seen = {}
+    for index, player in enumerate(raw_players[:MAX_TRANSFER_RUNTIME_ACCOUNTS], 1):
+        if not isinstance(player, dict):
+            player = {}
+        account_name = str(player.get("steam_account", "")).strip()
+        if not account_name:
+            issues.append(f"players[{index}].steam_account is required")
+            continue
+        if account_names and account_name not in account_names:
+            issues.append(f"players[{index}].steam_account is not available in Steam")
+        if account_name in seen:
+            issues.append(
+                f"players[{index}].steam_account duplicates player {seen[account_name]}"
+            )
+        else:
+            seen[account_name] = index
+        if index == 1 and most_recent and account_name != most_recent:
+            issues.append(
+                "players[1].steam_account must match Steam MostRecent account"
+            )
+    return issues
 
 
 def _normalize_dedi_item(item):
@@ -547,6 +444,30 @@ def _normalize_dedi_item(item):
         },
         "crouched": bool(item.get("crouched", False)),
     }
+
+
+def _steam_account_names(steam_accounts):
+    if not isinstance(steam_accounts, list):
+        return set()
+    names = set()
+    for account in steam_accounts:
+        if not isinstance(account, dict):
+            continue
+        name = str(account.get("account_name", "")).strip()
+        if name:
+            names.add(name)
+    return names
+
+
+def _most_recent_steam_account(steam_accounts):
+    if not isinstance(steam_accounts, list):
+        return ""
+    for account in steam_accounts:
+        if not isinstance(account, dict):
+            continue
+        if account.get("most_recent"):
+            return str(account.get("account_name", "")).strip()
+    return ""
 
 
 def _write_json(data, path):
