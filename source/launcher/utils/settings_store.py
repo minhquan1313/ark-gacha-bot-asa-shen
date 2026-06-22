@@ -1,7 +1,7 @@
 import json
 import os
 
-from source.launcher.constants import (
+from source.launcher.config.constants import (
     DEFAULT_SETTINGS,
     PHONE_MINIMUM_SIZE,
     SETTINGS_FILE,

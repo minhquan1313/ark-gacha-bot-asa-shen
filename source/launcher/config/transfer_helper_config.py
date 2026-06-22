@@ -22,6 +22,7 @@ DEFAULT_TRANSFER_SETTINGS = {
     "loop_count": 1,
     "structure_load_delay": 10,
     "transfer_retry_delay": 5,
+    "steam_restart_interval": 30,
     "ark_window_ready_timeout": 120,
     "ark_launch_attempts": 10,
 }
@@ -40,20 +41,7 @@ DEFAULT_TRANSFER_DEDIS = {
 DEFAULT_TRANSFER_UI_COORDS = {
     "steam": {
         "window_title": "Steam",
-        "window_ready_timeout": 30,
         "restart_delay": 8,
-    },
-    "transfer": {
-        "dedi_deposit_ready_template": "assets/icons1080/dedi_deposit_ready.png",
-        "dedi_deposit_ready_region": {
-            "start_x": 880,
-            "start_y": 850,
-            "width": 120,
-            "height": 55,
-        },
-        "dedi_init_click": {"x": 312, "y": 280},
-        "dedi_open_timeout": 60,
-        "dedi_init_attempts": 3,
     },
 }
 
@@ -167,7 +155,11 @@ def load_transfer_settings(path=TRANSFER_SETTINGS_PATH, create_missing=True):
             save_transfer_settings(settings, path)
         return settings
     with path.open("r", encoding="utf-8") as file:
-        return normalize_transfer_settings(json.load(file))
+        data = json.load(file)
+    settings = normalize_transfer_settings(data)
+    if create_missing and "steam_restart_interval" not in data:
+        _write_json(settings, path)
+    return settings
 
 
 def save_transfer_settings(data, path=TRANSFER_SETTINGS_PATH):
@@ -266,6 +258,9 @@ def normalize_transfer_settings(data):
     normalized["transfer_retry_delay"] = _int_min(
         normalized["transfer_retry_delay"], "transfer_retry_delay", 1
     )
+    normalized["steam_restart_interval"] = _int_min(
+        normalized["steam_restart_interval"], "steam_restart_interval", 1
+    )
     normalized["ark_window_ready_timeout"] = _int_min(
         normalized["ark_window_ready_timeout"], "ark_window_ready_timeout", 1
     )
@@ -328,7 +323,9 @@ def normalize_transfer_ui_coords(data):
     if not isinstance(data, dict):
         data = {}
     normalized = default_transfer_ui_coords()
-    _deep_update(normalized, data)
+    steam = data.get("steam", {})
+    if isinstance(steam, dict):
+        _deep_update(normalized["steam"], steam)
     return normalized
 
 
@@ -354,12 +351,9 @@ def active_transfer_dedis(dedis, side=None):
 def missing_runtime_inputs(
     settings,
     dedis,
-    ui_coords,
     players=None,
-    project_root=None,
     steam_accounts=None,
 ):
-    project_root = Path(project_root or ".")
     missing = []
     if not settings.get("transmitter_teleport"):
         missing.append("settings.transmitter_teleport")
@@ -382,19 +376,6 @@ def missing_runtime_inputs(
         missing.append("dedis.destination.teleport")
     if not active_transfer_dedis(dedis, "destination"):
         missing.append("dedis.destination.items must include at least one dedi")
-
-    transfer = ui_coords.get("transfer", {})
-    _append_template_missing(
-        missing,
-        transfer,
-        "dedi_deposit_ready_template",
-        project_root,
-        "ui_coords.transfer",
-    )
-    if not _region_complete(transfer.get("dedi_deposit_ready_region", {})):
-        missing.append("ui_coords.transfer.dedi_deposit_ready_region")
-    if not _coord_complete(transfer.get("dedi_init_click", {})):
-        missing.append("ui_coords.transfer.dedi_init_click.x/y")
 
     return missing
 
@@ -483,30 +464,6 @@ def _deep_update(target, source):
             _deep_update(target[key], value)
         else:
             target[key] = value
-
-
-def _coord_complete(value):
-    if not isinstance(value, dict):
-        return False
-    return value.get("x") is not None and value.get("y") is not None
-
-
-def _region_complete(value):
-    if not isinstance(value, dict):
-        return False
-    for key in ("start_x", "start_y", "width", "height"):
-        if value.get(key) is None:
-            return False
-    return True
-
-
-def _append_template_missing(missing, data, key, project_root, label_prefix):
-    template_path = str(data.get(key, "")).strip()
-    if not template_path:
-        missing.append(f"{label_prefix}.{key}")
-        return
-    if not (project_root / template_path).exists():
-        missing.append(f"{template_path} file")
 
 
 def _old_account_count_hint(path):

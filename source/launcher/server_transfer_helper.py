@@ -1,8 +1,10 @@
+import contextlib
 import json
 import os
 import tempfile
+import time
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -18,17 +20,15 @@ from PySide6.QtWidgets import (
 )
 
 from source.launcher.components.custom_pyside_component import NoWheelComboBox
-from source.launcher.deposit_helper_capture import (
-    capture_ccc_yaw_pitch,
-    focus_game_window,
-    preload_capture_view_dependencies,
-    register_alt_n_hotkey,
-    unregister_hotkey,
-    view_route_entry,
+from source.launcher.components.helper_runner import TASK_STATE_PREFIX
+from source.launcher.components.helper_window import WorkerHelperWindow
+from source.launcher.components.widgets import (
+    AnimatedButton,
+    ClickableTextEdit,
+    CyberSwitch,
+    WrappedStatusLabel,
 )
-from source.launcher.helper_window import WorkerHelperWindow
-from source.launcher.steam_accounts import load_steam_accounts, most_recent_account_name
-from source.launcher.transfer_helper_config import (
+from source.launcher.config.transfer_helper_config import (
     MAX_TRANSFER_RUNTIME_ACCOUNTS,
     load_transfer_runtime_config,
     missing_runtime_inputs,
@@ -42,11 +42,21 @@ from source.launcher.transfer_helper_config import (
     save_transfer_ui_coords,
     suggested_loop_count,
 )
-from source.launcher.widgets import (
-    AnimatedButton,
-    ClickableTextEdit,
-    CyberSwitch,
-    WrappedStatusLabel,
+from source.launcher.runner_overlay import (
+    RUNNER_OVERLAY_LOG_LIMIT,
+    TransferRunnerOverlay,
+)
+from source.launcher.utils.deposit_helper_capture import (
+    capture_ccc_yaw_pitch,
+    focus_game_window,
+    preload_capture_view_dependencies,
+    register_alt_n_hotkey,
+    unregister_hotkey,
+    view_route_entry,
+)
+from source.launcher.utils.steam_accounts import (
+    load_steam_accounts,
+    most_recent_account_name,
 )
 
 DEFAULT_PANELS_EXPANDED = True
@@ -56,15 +66,25 @@ IGNORED_PLAYER_COLOR = "#ff4d6d"
 
 class ServerTransferHelper(WorkerHelperWindow):
     status_changed = Signal(str)
+    task_state_changed = Signal(dict)
+    worker_ready = Signal()
     worker_finished = Signal(str)
 
-    def __init__(self, owner):
+    def __init__(self, owner: object) -> None:
         self.setting_fields = {}
         self.dedi_rows = []
         self.resource_dedi_rows = self.dedi_rows
         self.destination_dedi_rows = []
         self.player_rows = []
         self.collapsible_panels = []
+        self.transfer_overlay = None
+        self.starting = False
+        self.transfer_log_lines = []
+        self.transfer_task_snapshot = {
+            "running": [{"name": "Preparing transfer"}],
+            "active": [],
+            "waiting": [],
+        }
         self.config = load_transfer_runtime_config(create_missing=True)
         self.config["dedis"] = normalize_transfer_dedis(self.config.get("dedis", {}))
         try:
@@ -91,10 +111,14 @@ class ServerTransferHelper(WorkerHelperWindow):
         self._register_hotkey()
         self._preload_capture_view()
         self.status_changed.connect(self._append_status)
+        self.task_state_changed.connect(self._update_transfer_task_snapshot)
+        self.worker_ready.connect(self._on_worker_ready)
         self.worker_finished.connect(self._on_worker_finished)
+        self.transfer_refresh_timer = QTimer(self)
+        self.transfer_refresh_timer.timeout.connect(self._refresh_transfer_overlay)
         self.runtime_config_path = None
 
-    def _build_ui(self):
+    def _build_ui(self) -> None:
         self.idle_widget = self._idle_widget()
         self.running_widget = self._running_widget()
         self.running_widget.setVisible(False)
@@ -192,6 +216,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             ("account_count", "Accounts"),
             ("structure_load_delay", "Delay on logged in"),
             ("transfer_retry_delay", "Retry transfer delay"),
+            ("steam_restart_interval", "Steam restart interval"),
         ]
         for index, (key, label_text) in enumerate(rows):
             row = index
@@ -436,7 +461,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         except Exception as exc:
             self.loop_hint.setText(f"Loop hint unavailable: {exc}")
 
-    def start(self):
+    def start(self) -> None:
         if self.is_running() or self.closing:
             return
         if self.owner.is_program_running() or self.owner.program_stopping:
@@ -496,7 +521,6 @@ class ServerTransferHelper(WorkerHelperWindow):
         missing = missing_runtime_inputs(
             config["settings"],
             config["dedis"],
-            config["ui_coords"],
             config["players"],
             steam_accounts=config.get("steam_accounts"),
         )
@@ -519,43 +543,135 @@ class ServerTransferHelper(WorkerHelperWindow):
             return
 
         self.running_log.clear()
-        self.status.setText("Starting server transfer helper...")
-        self.runtime_config_path = self._write_runtime_config(config)
-        self._start_worker("server_transfer", "--config", self.runtime_config_path)
+        self.transfer_log_lines.clear()
+        self.transfer_task_snapshot = {
+            "running": [{"name": "Loading server transfer modules"}],
+            "active": [],
+            "waiting": [],
+        }
+        self.starting = True
+        self.status.setText("Loading server transfer modules...")
+        try:
+            self.runtime_config_path = self._write_runtime_config(config)
+            self._start_worker("server_transfer", "--config", self.runtime_config_path)
+        except Exception as exc:
+            self.starting = False
+            self._set_running_ui(False)
+            self._cleanup_runtime_config()
+            self.status.setText(f"Cannot start transfer helper: {exc}")
+            self.owner.dialog(
+                "Transfer Helper Start Failed", str(exc), "error", parent=self
+            )
 
-    def stop(self):
+    def stop(self) -> None:
         if not self.is_running():
             return
+        self.starting = False
+        if self.transfer_overlay is not None:
+            self.transfer_overlay.stop_button.set_loading(False)
         super().stop()
         self.running_stop_button.setEnabled(False)
         self.running_summary.setText("Stopping...")
         self.status.setText("Stopping...")
 
-    def _append_status(self, message):
+    def handle_hotkey(self) -> None:
+        if self.starting:
+            return
+        super().handle_hotkey()
+
+    def _on_worker_ready(self) -> None:
+        if not self.starting or not self.is_running():
+            return
+        self.starting = False
+        self.transfer_task_snapshot = {
+            "running": [{"name": "Preparing transfer"}],
+            "active": [],
+            "waiting": [],
+        }
+        if self.transfer_overlay is not None:
+            self.transfer_overlay.stop_button.set_loading(False)
+            self.transfer_overlay.stop_button.setText("STOP")
+            self.transfer_overlay.stop_button.set_variant("danger")
+            self.transfer_overlay.stop_button.setEnabled(True)
+        self._refresh_transfer_overlay()
+
+    def _append_status(self, message: str) -> None:
         self.running_summary.setText(message)
         self.status.setText(message)
         self.running_log.append(message)
+        self.transfer_log_lines.append(
+            f"{time.strftime('%H:%M:%S')} - INFO - transfer - {message}"
+        )
+        self.transfer_log_lines = self.transfer_log_lines[-RUNNER_OVERLAY_LOG_LIMIT:]
+        self._refresh_transfer_overlay()
 
-    def _on_worker_finished(self, message):
+    def _on_worker_finished(self, message: str) -> None:
+        self.starting = False
+        if self.transfer_overlay is not None:
+            self.transfer_overlay.stop_button.set_loading(False)
         if self._finish_worker():
+            self._close_transfer_overlay()
+            self._cleanup_runtime_config()
             return
         self._cleanup_runtime_config()
         self.running_stop_button.setEnabled(True)
         self.status.setText(message)
 
-    def _set_running_ui(self, running):
+    def _handle_worker_output(self, line: str) -> None:
+        if line.startswith(TASK_STATE_PREFIX):
+            try:
+                snapshot = json.loads(line[len(TASK_STATE_PREFIX) :])
+            except json.JSONDecodeError:
+                return
+            if isinstance(snapshot, dict):
+                self.task_state_changed.emit(snapshot)
+            return
+        super()._handle_worker_output(line)
+
+    def _update_transfer_task_snapshot(self, snapshot: dict) -> None:
+        """Store a worker task snapshot and refresh the compact transfer UI."""
+        self.transfer_task_snapshot = snapshot
+        self._refresh_transfer_overlay()
+
+    def _refresh_transfer_overlay(self) -> None:
+        """Refresh transfer tasks, status logs, and the overlay clock."""
+        overlay = self.transfer_overlay
+        if overlay is None:
+            return
+        try:
+            overlay.refresh(self.transfer_task_snapshot, self.transfer_log_lines)
+        except RuntimeError:
+            self.transfer_overlay = None
+            self.transfer_refresh_timer.stop()
+
+    def _close_transfer_overlay(self) -> None:
+        """Stop transfer UI refreshes and close the compact overlay safely."""
+        self.transfer_refresh_timer.stop()
+        overlay = self.transfer_overlay
+        self.transfer_overlay = None
+        if overlay is None:
+            return
+        with contextlib.suppress(RuntimeError):
+            overlay.close()
+
+    def _set_running_ui(self, running: bool) -> None:
         if running:
             self.running_ui_active = True
             self.idle_widget.setVisible(False)
             self.running_widget.setVisible(True)
             self.hotkey_label.setText(self.running_hotkey_hint)
-            self.setMinimumHeight(0)
-            self.setMaximumHeight(16777215)
-            self.setFixedWidth(self.idle_width)
-            running_height = self._height_for_width(self.idle_width)
-            self.setFixedHeight(running_height)
-            self.resize(self.idle_width, running_height)
+            if self.transfer_overlay is None:
+                self.transfer_overlay = TransferRunnerOverlay(self)
+            if self.starting:
+                self.transfer_overlay.stop_button.set_variant("primary")
+                self.transfer_overlay.stop_button.set_loading(True)
+            self.hide()
+            self._refresh_transfer_overlay()
+            self.transfer_overlay.show()
+            self.transfer_overlay.raise_()
+            self.transfer_refresh_timer.start(1000)
         else:
+            self._close_transfer_overlay()
             self.setMaximumHeight(16777215)
             self.setFixedWidth(self.idle_width)
             self.setMinimumHeight(self.idle_min_height)
@@ -564,9 +680,17 @@ class ServerTransferHelper(WorkerHelperWindow):
             self.hotkey_label.setText(self.hotkey_hint)
             self.resize(self.idle_width, self._idle_content_height())
             self.running_ui_active = False
-        self._position_middle_right()
+            self.show()
+            self.raise_()
+            self.activateWindow()
+            self._position_middle_right()
         self.start_stop_button.setText("STOP" if running else "START")
         self.start_stop_button.set_variant("danger" if running else "primary")
+
+    def _before_close(self) -> None:
+        self._close_transfer_overlay()
+        self._cleanup_runtime_config()
+        super()._before_close()
 
     def _preload_capture_view(self):
         try:
@@ -796,7 +920,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             except (IndexError, AttributeError):
                 name = ""
             label = name or f"Player {index + 1}"
-            lines.append(f'{label}: {", ".join(conflicts[index])}')
+            lines.append(f"{label}: {', '.join(conflicts[index])}")
         return lines
 
     def _settings_from_fields(self):
@@ -956,14 +1080,13 @@ class ServerTransferHelper(WorkerHelperWindow):
         return field
 
     def _write_runtime_config(self, config):
-        handle = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             "w",
             encoding="utf-8",
             delete=False,
             prefix="ark_gacha_transfer_",
             suffix=".json",
-        )
-        with handle:
+        ) as handle:
             json.dump(config, handle)
         return handle.name
 
@@ -972,10 +1095,8 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.runtime_config_path = None
         if not path:
             return
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(path)
-        except OSError:
-            pass
 
     @staticmethod
     def _labeled_row(label_text, widget):

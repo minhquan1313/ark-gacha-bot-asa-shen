@@ -78,9 +78,7 @@ class ArkGameSetupTests(unittest.TestCase):
         )
 
         with patch.object(ark_game_setup, "psutil", fake_psutil):
-            self.assertEqual(
-                ark_game_setup.find_running_steam_dir(), Path("C:\\Steam")
-            )
+            self.assertEqual(ark_game_setup.find_running_steam_dir(), Path("C:\\Steam"))
 
     def test_restore_state_is_saved_once_and_not_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -97,7 +95,9 @@ class ArkGameSetupTests(unittest.TestCase):
                     settings_path, state_path=state_path, backup_path=backup_path
                 )
                 second = save_restore_state_once(
-                    root / "other.ini", state_path=state_path, backup_path=root / "x.ini"
+                    root / "other.ini",
+                    state_path=state_path,
+                    backup_path=root / "x.ini",
                 )
 
             self.assertEqual(first, second)

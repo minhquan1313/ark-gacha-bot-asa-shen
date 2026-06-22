@@ -5,20 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import source.gacha_bot.config as config
-
 ROOT = Path(__file__).resolve().parents[1]
-
-
-class FakeClock:
-    def __init__(self):
-        self.value = 0
-
-    def monotonic(self):
-        return self.value
-
-    def sleep(self, seconds):
-        self.value += seconds
 
 
 def load_deposit_module():
@@ -41,13 +28,18 @@ def load_deposit_module():
 
     player = types.ModuleType("source.ASA.player")
     player.player_inventory = types.SimpleNamespace(
+        close=Mock(),
         implant_eat=Mock(),
         search_in_inventory=Mock(),
         transfer_all_inventory=Mock(),
+        wait_clear_search=Mock(),
     )
     player.player_state = player_state
+    station_metadata = type("station_metadata", (), {})
+    custom_stations = types.ModuleType("source.ASA.stations.custom_stations")
+    custom_stations.station_metadata = station_metadata
     stations = types.ModuleType("source.ASA.stations")
-    stations.custom_stations = types.SimpleNamespace()
+    stations.custom_stations = custom_stations
     structures = types.ModuleType("source.ASA.strucutres")
     structures.inventory = inventory
     structures.teleporter = teleporter
@@ -60,7 +52,8 @@ def load_deposit_module():
     utility.windows = types.SimpleNamespace(click=Mock())
     captures = {}
     debug_screenshots = types.ModuleType("source.utility.debug_screenshots")
-    debug_screenshots.CAPTURE_DEDI_DEPOSIT = False
+    debug_screenshots.CAPTURE_DEDI_DEPOSIT_CRYSTAL = False
+    debug_screenshots.CAPTURE_DEDI_DEPOSIT_GRIND = False
     debug_screenshots.CAPTURE_GRINDER_WITHDRAW = False
     debug_screenshots.CAPTURE_ROUTE_READY = False
     debug_screenshots.CAPTURE_VAULT_TRANSFER = False
@@ -71,15 +64,28 @@ def load_deposit_module():
 
     debug_screenshots.capture_for = capture_for
     utility.debug_screenshots = debug_screenshots
+    utility_structures = types.ModuleType("source.utility.structures")
+    dedi_package = types.ModuleType("source.utility.structures.dedi")
+    dedi = types.ModuleType("source.utility.structures.dedi.dedi")
+    dedi.capture_name = None
+    dedi.open_deposit_all = Mock(return_value=True)
+    dedi_package.dedi = dedi
+    utility_types = types.ModuleType("source.utility.types")
+    utility_types.DediStorageState = dict
 
     modules = {
-        "settings": types.SimpleNamespace(lag_offset=1, dedi_handshake_timeout=30),
+        "settings": types.SimpleNamespace(lag_offset=1),
         "source.ASA.player": player,
         "source.ASA.stations": stations,
+        "source.ASA.stations.custom_stations": custom_stations,
         "source.ASA.strucutres": structures,
         "source.logs.gachalogs": logs,
         "source.utility": utility,
         "source.utility.debug_screenshots": debug_screenshots,
+        "source.utility.structures": utility_structures,
+        "source.utility.structures.dedi": dedi_package,
+        "source.utility.structures.dedi.dedi": dedi,
+        "source.utility.types": utility_types,
     }
     spec = importlib.util.spec_from_file_location(
         "deposit_under_test", ROOT / "source" / "gacha_bot" / "deposit.py"
@@ -93,7 +99,6 @@ def load_deposit_module():
 
 class DediDepositGuardTests(unittest.TestCase):
     def setUp(self):
-        self.original_attempts = config.dedi_handshake_recovery_attempts
         (
             self.deposit,
             self.logger,
@@ -106,26 +111,48 @@ class DediDepositGuardTests(unittest.TestCase):
         self.route = types.SimpleNamespace(yaw=12)
         self.item = {"location": {"yaw": 34, "pitch": 56}, "crouched": False}
 
-    def tearDown(self):
-        config.dedi_handshake_recovery_attempts = self.original_attempts
+    def test_crystal_dedi_sets_capture_name_and_delegates_to_dedi(self):
+        route = {"teleport": "CRYSTAL"}
 
-    def test_successful_handshake_opens_and_closes_same_dedi_before_returning(self):
-        self.deposit.time.sleep = Mock()
-        self.template.template_await_true.side_effect = (
-            lambda _, __, name, ___: name == "inventory"
+        self.assertTrue(
+            self.deposit._process_crystal_dedi(route, self.route, self.item, 1)
         )
-        self.template.check_template.side_effect = lambda name, _: name == "inventory"
-
-        self.assertTrue(self.deposit._deposit_to_dedi(self.route, self.item, "dedi"))
 
         self.assertEqual(
-            [call.args[0] for call in self.utils.press_key.call_args_list],
-            ["AccessInventory"],
+            self.deposit.dedi.capture_name,
+            "Crystal dedi 1 on teleport CRYSTAL",
         )
-        self.inventory.close.assert_called_once_with()
-        self.deposit.debug_captures[
-            "dedi_deposit_after_click"
-        ].assert_called_once_with("dedi")
+        self.deposit.dedi.open_deposit_all.assert_called_once_with(
+            self.route, self.item
+        )
+
+    def test_grindable_dedi_sets_capture_name_and_delegates_to_dedi(self):
+        route = {"teleport": "GRIND"}
+
+        self.assertTrue(
+            self.deposit._process_grindable_dedi(route, self.route, self.item, 2)
+        )
+
+        self.assertEqual(
+            self.deposit.dedi.capture_name,
+            "Grindable dedi 2 on teleport GRIND",
+        )
+        self.deposit.dedi.open_deposit_all.assert_called_once_with(
+            self.route, self.item
+        )
+
+    def test_failed_dedi_delegation_runs_terminal_recovery_once(self):
+        self.deposit.dedi.open_deposit_all.return_value = False
+        self.deposit._recover_after_dedi_failure = Mock()
+        route = {"teleport": "CRYSTAL"}
+
+        self.assertFalse(
+            self.deposit._process_crystal_dedi(route, self.route, self.item, 1)
+        )
+
+        self.deposit._recover_after_dedi_failure.assert_called_once_with(
+            "Crystal dedi 1 on teleport CRYSTAL"
+        )
 
     def test_crystal_route_ready_capture_happens_before_processing_dedis(self):
         self.deposit._process_crystal_dedi = Mock(return_value=True)
@@ -144,76 +171,6 @@ class DediDepositGuardTests(unittest.TestCase):
         self.deposit.debug_captures["deposit_route_ready"].assert_called_once_with(
             "Crystal route CRYSTAL"
         )
-
-    def test_handshake_waits_for_remote_loading_to_clear(self):
-        self.deposit.time.sleep = Mock()
-        waiting = iter([True, False, False])
-        self.template.template_await_true.return_value = True
-        self.template.check_template.side_effect = lambda name, _: (
-            True if name == "inventory" else next(waiting)
-        )
-
-        self.assertTrue(self.deposit._deposit_to_dedi(self.route, self.item, "dedi"))
-
-        self.assertEqual(self.player_state.check_disconnected.call_count, 2)
-        self.deposit.time.sleep.assert_any_call(0.05)
-        self.inventory.close.assert_called_once_with()
-
-    def test_frozen_remote_loading_does_not_rotate_before_timeout(self):
-        self.deposit.settings.dedi_handshake_timeout = 1
-        config.dedi_handshake_recovery_attempts = 1
-        clock = FakeClock()
-        self.deposit.time.monotonic = clock.monotonic
-        self.deposit.time.sleep = clock.sleep
-        self.template.template_await_true.return_value = True
-        self.template.check_template.return_value = True
-        self.deposit._turn_to_object = Mock()
-        self.deposit._recover_dedi_position = Mock()
-        self.deposit._recover_after_dedi_failure = Mock()
-
-        self.assertFalse(self.deposit._deposit_to_dedi(self.route, self.item, "dedi"))
-
-        self.deposit._turn_to_object.assert_called_once_with(self.route, self.item)
-        self.deposit._recover_dedi_position.assert_not_called()
-        self.deposit._recover_after_dedi_failure.assert_called_once_with("dedi")
-
-    def test_attempt_waits_full_30_seconds_without_in_attempt_reteleport(self):
-        self.deposit.settings.dedi_handshake_timeout = 30
-        config.dedi_handshake_recovery_attempts = 1
-        clock = FakeClock()
-        self.deposit.time.monotonic = clock.monotonic
-        self.deposit.time.sleep = clock.sleep
-        self.template.template_await_true.return_value = False
-        self.deposit._recover_dedi_position = Mock()
-        self.deposit._recover_after_dedi_failure = Mock()
-
-        self.assertFalse(self.deposit._deposit_to_dedi(self.route, self.item, "dedi"))
-
-        self.assertGreaterEqual(clock.value, 30)
-        self.assertLess(clock.value, 31)
-        self.deposit._recover_dedi_position.assert_not_called()
-        self.deposit._recover_after_dedi_failure.assert_called_once_with("dedi")
-
-    def test_three_timeout_cycles_recover_between_attempts_then_abort(self):
-        self.deposit.settings.dedi_handshake_timeout = 1
-        config.dedi_handshake_recovery_attempts = 3
-        clock = FakeClock()
-        self.deposit.time.monotonic = clock.monotonic
-        self.deposit.time.sleep = clock.sleep
-        self.template.template_await_true.return_value = False
-        self.deposit._recover_dedi_position = Mock()
-        self.deposit._recover_after_dedi_failure = Mock()
-
-        self.assertFalse(self.deposit._deposit_to_dedi(self.route, self.item, "dedi"))
-
-        self.assertGreater(
-            [call.args[0] for call in self.utils.press_key.call_args_list].count(
-                "AccessInventory"
-            ),
-            0,
-        )
-        self.assertEqual(self.deposit._recover_dedi_position.call_count, 2)
-        self.deposit._recover_after_dedi_failure.assert_called_once_with("dedi")
 
     def test_stance_changes_before_final_dedi_aim(self):
         order = []
@@ -260,50 +217,12 @@ class DediDepositGuardTests(unittest.TestCase):
 
     def test_grindable_sweep_restores_route_only_after_all_dedis(self):
         route = {"teleport": "GRIND", "dedi": {"items": [self.item, self.item]}}
-        self.deposit._deposit_to_dedi = Mock(return_value=True)
         self.deposit._restore_route_view = Mock()
 
         self.assertTrue(self.deposit._process_grindable_route(route, self.route))
 
-        self.assertEqual(self.deposit._deposit_to_dedi.call_count, 2)
+        self.assertEqual(self.deposit.dedi.open_deposit_all.call_count, 2)
         self.deposit._restore_route_view.assert_called_once_with(self.route)
-
-    def test_unavailable_inventory_checks_disconnect_and_recovers_same_dedi(self):
-        self.deposit.settings.dedi_handshake_timeout = 11
-        config.dedi_handshake_recovery_attempts = 1
-        clock = FakeClock()
-        self.deposit.time.monotonic = clock.monotonic
-        self.deposit.time.sleep = clock.sleep
-        self.template.template_await_true.return_value = False
-        self.deposit._recover_dedi_position = Mock()
-        self.deposit._recover_after_dedi_failure = Mock()
-
-        self.assertFalse(self.deposit._deposit_to_dedi(self.route, self.item, "dedi"))
-
-        self.assertGreater(self.player_state.check_disconnected.call_count, 0)
-        self.deposit._recover_dedi_position.assert_not_called()
-        self.deposit._recover_after_dedi_failure.assert_called_once_with("dedi")
-
-    def test_recovery_checks_state_reteleports_and_reaims_same_dedi(self):
-        self.deposit._restore_route_view = Mock()
-        self.deposit._turn_to_object = Mock()
-
-        self.deposit._recover_dedi_position(self.route, self.item, "dedi")
-
-        self.player_state.check_state.assert_called_once_with()
-        self.teleporter.teleport_not_default.assert_called_once_with(self.route)
-        self.deposit._restore_route_view.assert_called_once_with(self.route)
-        self.deposit._turn_to_object.assert_called_once_with(self.route, self.item)
-
-    def test_crystal_and_grindable_sweeps_use_guard(self):
-        self.deposit._deposit_to_dedi = Mock(return_value=True)
-        self.deposit._restore_route_view = Mock()
-        route = {"teleport": "TEST"}
-
-        self.deposit._process_crystal_dedi(route, self.route, self.item, 1)
-        self.deposit._process_grindable_dedi(route, self.route, self.item, 2)
-
-        self.assertEqual(self.deposit._deposit_to_dedi.call_count, 2)
 
     def test_final_failure_reconnects_suicides_and_checks_state(self):
         self.deposit._recover_after_dedi_failure("dedi")
@@ -326,7 +245,8 @@ class DediDepositGuardTests(unittest.TestCase):
 
         self.assertFalse(
             self.deposit._process_crystal_route(
-                route, current_metadata=types.SimpleNamespace(name="CRYSTAL", yaw=12),
+                route,
+                current_metadata=types.SimpleNamespace(name="CRYSTAL", yaw=12),
                 skip_if_current=True,
             )
         )

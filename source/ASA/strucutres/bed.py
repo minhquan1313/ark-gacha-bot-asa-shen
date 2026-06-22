@@ -43,6 +43,7 @@ def close():
 def spawn_in(bed_name: str):
     """
     When it's done, player should be ready to perform next action
+    Careful, this one also auto trigger IMPLANT EAT/SUICIDE
     """
 
     if not is_open():
@@ -71,7 +72,7 @@ def spawn_in(bed_name: str):
             template.check_teleporter_orange, 3
         ):  # waiting for the bed to appear as ready to spawn in
             logs.logger.error(
-                f"the bed char tried spawning on is not in the ready state or cant be found exiting out of bed screen now"
+                "the bed char tried spawning on is not in the ready state or cant be found exiting out of bed screen now"
             )
             close()
             return  # no need to continue with this therefore we should just leave func
@@ -94,7 +95,7 @@ def spawn_in(bed_name: str):
         time.sleep(0.2 * settings.lag_offset)
 
         if template.template_await_true(template.white_flash, 2):
-            logs.logger.debug(f"white flash detected waiting for up too 5 seconds")
+            logs.logger.debug("white flash detected waiting for up too 5 seconds")
             template.template_await_false(template.white_flash, 5)
 
         time.sleep(10)  # animation spawn in is about 7 seconds
@@ -105,11 +106,11 @@ def spawn_in(bed_name: str):
 
 def fast_travel(bed_name: str):
 
-    if player_state.human.on_bed == False:
+    if not player_state.human.on_bed:
         # need to go to render bed if on tp
         if player_state.human.on_tp:
             logs.logger.debug(
-                f"char is on a teleporter going to render bed to fast travel"
+                "char is on a teleporter going to render bed to fast travel"
             )
             render.fast_travel_to_render()
             time.sleep(0.2 * settings.lag_offset)
@@ -145,7 +146,7 @@ def fast_travel(bed_name: str):
             template.check_teleporter_orange, 3
         ):  # waiting for the bed to appear as ready to spawn in
             logs.logger.error(
-                f"the bed char tried spawning on is not in the ready state or cant be found exiting out of bed screen now"
+                "the bed char tried spawning on is not in the ready state or cant be found exiting out of bed screen now"
             )
             close()
             return  # no need to continue with this therefore we should just leave func
@@ -156,7 +157,7 @@ def fast_travel(bed_name: str):
         )
 
         if template.template_await_true(template.white_flash, 2):
-            logs.logger.debug(f"white flash detected waiting for up too 5 seconds")
+            logs.logger.debug("white flash detected waiting for up too 5 seconds")
             template.template_await_false(template.white_flash, 5)
 
         player_state.human.is_on_bed()

@@ -4,27 +4,21 @@ import settings
 import source.gacha_bot.config
 from source.ASA.player import player_inventory, player_state
 from source.ASA.stations import custom_stations
+from source.ASA.stations.custom_stations import station_metadata
 from source.ASA.strucutres import inventory, teleporter
 from source.gacha_bot.deposit_config import DEDI_CONFIG_PATH
 from source.gacha_bot.deposit_config import load_deposit_config as load_route_config
 from source.logs import gachalogs as logs
 from source.utility import template, utils, variables, windows
 from source.utility.debug_screenshots import (
-    CAPTURE_DEDI_DEPOSIT_CRYSTAL,
-    CAPTURE_DEDI_DEPOSIT_GRIND,
     CAPTURE_GRINDER_WITHDRAW,
     CAPTURE_ROUTE_READY,
     CAPTURE_VAULT_TRANSFER,
     capture_for,
 )
+from source.utility.structures.dedi import dedi
+from source.utility.types import DediStorageState
 
-DEDI_REMOTE_POLL_INTERVAL = 0.05
-capture_dedi_deposit_crystal = capture_for(
-    "dedi_deposit_crystal", active=CAPTURE_DEDI_DEPOSIT_CRYSTAL, delay=0.1
-)
-capture_dedi_deposit_grind = capture_for(
-    "dedi_deposit_grind", active=CAPTURE_DEDI_DEPOSIT_GRIND, delay=0.1
-)
 capture_route_ready = capture_for("deposit_route_ready", active=CAPTURE_ROUTE_READY)
 capture_grinder_after_withdraw = capture_for(
     "grinder_after_withdraw", active=CAPTURE_GRINDER_WITHDRAW, delay=0
@@ -44,11 +38,11 @@ def load_deposit_config():
     except FileNotFoundError as exc:
         message = str(exc)
         logs.logger.error(message)
-        raise RuntimeError(message)
+        raise RuntimeError(message) from exc
     except ValueError as exc:
         message = f"{DEDI_CONFIG_PATH} is invalid: {exc}"
         logs.logger.error(message)
-        raise RuntimeError(message)
+        raise RuntimeError(message) from exc
 
 
 def _items(container):
@@ -67,14 +61,14 @@ def _float_setting(container, key, default=0.0):
         return float(default)
 
 
-def _route_teleport_name(route):
+def _route_teleport_name(route: dict) -> str:
     teleport_name = route.get("teleport") if isinstance(route, dict) else None
     if not teleport_name:
         raise RuntimeError("Deposit route is missing a teleport name.")
     return teleport_name
 
 
-def _teleport_to_route(route):
+def _teleport_to_route(route: dict) -> station_metadata:
     teleport_name = _route_teleport_name(route)
     metadata = custom_stations.get_station_metadata(teleport_name)
     logs.logger.debug(f"Teleporting to deposit route {teleport_name}")
@@ -83,19 +77,19 @@ def _teleport_to_route(route):
     return metadata
 
 
-def _route_matches_metadata(route, metadata):
+def _route_matches_metadata(route: dict, metadata: station_metadata | None) -> bool:
     return metadata is not None and getattr(
         metadata, "name", None
     ) == _route_teleport_name(route)
 
 
-def _restore_route_view(metadata, reset_crouch=True):
+def _restore_route_view(metadata: station_metadata, reset_crouch: bool = True) -> None:
     if reset_crouch:
         player_state.human.reset_crouch()
     utils.turn_to(metadata.yaw, 0)
 
 
-def _sync_post_grinder_route_view(metadata):
+def _sync_post_grinder_route_view(metadata: station_metadata) -> bool:
     logs.logger.debug("Synchronizing grindable route view after grinder processing")
     if not utils.zero():
         logs.logger.error(
@@ -107,7 +101,7 @@ def _sync_post_grinder_route_view(metadata):
     return True
 
 
-def _set_object_crouch(item):
+def _set_object_crouch(item: DediStorageState) -> None:
     crouched = item.get("crouched", False) if isinstance(item, dict) else False
     if crouched:
         if not player_state.human.crouched:
@@ -118,7 +112,7 @@ def _set_object_crouch(item):
         # time.sleep(0.2 * settings.lag_offset)
 
 
-def _turn_to_object(route_metadata, item):
+def _turn_to_object(item: DediStorageState) -> None:
     location = item.get("location", {}) if isinstance(item, dict) else {}
     yaw = _float_setting(location, "yaw", 0.0)
     pitch = _float_setting(location, "pitch", 0.0)
@@ -126,15 +120,7 @@ def _turn_to_object(route_metadata, item):
     utils.turn_to(yaw, pitch)
 
 
-def _recover_dedi_position(route_metadata, item, label):
-    logs.logger.warning(f"{label} handshake stalled; recovering player state")
-    player_state.check_state()
-    teleporter.teleport_not_default(route_metadata)
-    _restore_route_view(route_metadata)
-    _turn_to_object(route_metadata, item)
-
-
-def _recover_after_dedi_failure(label):
+def _recover_after_dedi_failure(label: str) -> None:
     logs.logger.critical(
         f"{label} deposit handshake exhausted retries; "
         "aborting remaining deposit routes and respawning player"
@@ -145,52 +131,7 @@ def _recover_after_dedi_failure(label):
     player_state.check_state()
 
 
-def _deposit_to_dedi(route_metadata, item, label):
-    attempts = source.gacha_bot.config.dedi_handshake_recovery_attempts
-    for attempt in range(1, attempts + 1):
-        _turn_to_object(route_metadata, item)
-        time.sleep(0.3 * settings.lag_offset)
-
-        deadline = utils.get_default_clock()
-        while not deadline():
-            inventory.open()
-            if inventory.is_open():
-                # WAIT FOR INVENTORY TO BE LOADED
-                time.sleep(0.3 * settings.lag_offset)
-                windows.click(
-                    variables.get_pixel_loc("dedi_deposit_x"),
-                    variables.get_pixel_loc("dedi_deposit_y"),
-                )
-                if label.startswith("crystal"):
-                    capture_dedi_deposit_crystal(label)
-                elif label.startswith("grind"):
-                    capture_dedi_deposit_grind(label)
-
-                inventory.close()
-
-                logs.logger.debug(f"{label} deposit handshake completed")
-                return True
-
-            player_state.check_disconnected()
-            time.sleep(0.5 * settings.lag_offset)
-
-        inventory.close()
-        logs.logger.error(
-            f"{label} deposit handshake timed out after "
-            f"{settings.dedi_handshake_timeout} seconds "
-            f"on attempt {attempt} / "
-            f"{attempts}"
-        )
-        if attempt < attempts:
-            _recover_dedi_position(route_metadata, item, label)
-
-    _recover_after_dedi_failure(label)
-    return False
-
-
-def _open_inventory_template(
-    template_name, route, route_metadata, route_object, object_name
-):
+def _open_inventory_template(template_name, route_metadata, route_object, object_name):
     inventory.open()
     attempt = 0
     while not template.template_await_true(
@@ -200,7 +141,7 @@ def _open_inventory_template(
         logs.logger.error(f"{object_name} was not opened; retrying")
         inventory.close()
         _restore_route_view(route_metadata)
-        _turn_to_object(route_metadata, route_object)
+        _turn_to_object(route_object)
         inventory.open()
         if attempt >= source.gacha_bot.config.grinder_attempts:
             logs.logger.error(f"{object_name} failed to open")
@@ -224,11 +165,18 @@ def drop_useless():
     player_inventory.close()
 
 
-def _process_crystal_dedi(route, route_metadata, item, index):
+def _process_crystal_dedi(
+    route: dict,
+    route_metadata: station_metadata,
+    item: DediStorageState,
+    index: int,
+) -> bool:
     teleport_name = _route_teleport_name(route)
     label = f"Crystal dedi {index} on teleport {teleport_name}"
     logs.logger.debug(label)
-    if not _deposit_to_dedi(route_metadata, item, label):
+    dedi.capture_name = label
+    if not dedi.open_deposit_all(route_metadata, item):
+        _recover_after_dedi_failure(label)
         return False
     return True
 
@@ -241,10 +189,10 @@ def _process_vault(route, route_metadata, vault, index):
     teleport_name = _route_teleport_name(route)
     label = f"Vault {index} on teleport {teleport_name}"
     logs.logger.debug(label)
-    _turn_to_object(route_metadata, vault)
+    _turn_to_object(vault)
     time.sleep(0.2 * settings.lag_offset)
 
-    if not _open_inventory_template("vault", route, route_metadata, vault, label):
+    if not _open_inventory_template("vault", route_metadata, vault, label):
         _restore_route_view(route_metadata, reset_crouch=False)
         return
 
@@ -268,10 +216,10 @@ def _process_grinder(route, route_metadata):
     label = f"Grinder on teleport {teleport_name}"
     logs.logger.debug(label)
     grinder = route.get("grinder", {})
-    _turn_to_object(route_metadata, grinder)
+    _turn_to_object(grinder)
     time.sleep(0.5 * settings.lag_offset)
 
-    if not _open_inventory_template("grinder", route, route_metadata, grinder, label):
+    if not _open_inventory_template("grinder", route_metadata, grinder, label):
         _restore_route_view(route_metadata, reset_crouch=False)
         return
 
@@ -283,9 +231,7 @@ def _process_grinder(route, route_metadata):
         player_inventory.close()
         template.template_await_false(template.check_template, 1, "inventory", 0.7)
         time.sleep(0.3 * settings.lag_offset)
-        if not _open_inventory_template(
-            "grinder", route, route_metadata, grinder, label
-        ):
+        if not _open_inventory_template("grinder", route_metadata, grinder, label):
             _restore_route_view(route_metadata, reset_crouch=False)
             return
 
@@ -297,9 +243,7 @@ def _process_grinder(route, route_metadata):
         # ENSURE PROCESS
         player_inventory.close()
         template.template_await_false(template.check_template, 1, "inventory", 0.7)
-        if not _open_inventory_template(
-            "grinder", route, route_metadata, grinder, label
-        ):
+        if not _open_inventory_template("grinder", route_metadata, grinder, label):
             _restore_route_view(route_metadata, reset_crouch=False)
             return
 
@@ -314,18 +258,28 @@ def _process_grinder(route, route_metadata):
     _restore_route_view(route_metadata, reset_crouch=False)
 
 
-def _process_grindable_dedi(route, route_metadata, item, index):
+def _process_grindable_dedi(
+    route: dict,
+    route_metadata: station_metadata,
+    item: DediStorageState,
+    index: int,
+) -> bool:
     teleport_name = _route_teleport_name(route)
     label = f"Grindable dedi {index} on teleport {teleport_name}"
     logs.logger.debug(label)
-    if not _deposit_to_dedi(route_metadata, item, label):
+    dedi.capture_name = label
+    if not dedi.open_deposit_all(route_metadata, item):
+        _recover_after_dedi_failure(label)
         return False
     return True
 
 
 def _process_crystal_route(
-    route, open_first_route_crystals=False, current_metadata=None, skip_if_current=False
-):
+    route: dict,
+    open_first_route_crystals: bool = False,
+    current_metadata: station_metadata | None = None,
+    skip_if_current: bool = False,
+) -> bool:
     if skip_if_current and _route_matches_metadata(route, current_metadata):
         route_metadata = current_metadata
         logs.logger.debug(
@@ -359,7 +313,7 @@ def _first_active_grinder_index(routes):
     return None
 
 
-def _process_grindable_route(route, route_metadata):
+def _process_grindable_route(route: dict, route_metadata: station_metadata) -> bool:
     for index, item in enumerate(_items(route.get("dedi", {})), start=1):
         if not _process_grindable_dedi(route, route_metadata, item, index):
             return False
@@ -367,7 +321,7 @@ def _process_grindable_route(route, route_metadata):
     return True
 
 
-def _process_grindable_routes(routes):
+def _process_grindable_routes(routes: list[dict]) -> bool:
     active_index = _first_active_grinder_index(routes)
     if active_index is None:
         logs.logger.error(
@@ -404,7 +358,7 @@ def _process_grindable_routes(routes):
     return True
 
 
-def deposit_all(metadata):
+def deposit_all(metadata: station_metadata | None) -> bool:
     deposit_config = load_deposit_config()
     crystal_routes = deposit_config["depositCrystalData"]
     grindable_routes = deposit_config["depositGrindableData"]

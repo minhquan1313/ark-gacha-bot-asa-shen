@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from source.launcher.deposit_helper_capture import capture_ccc_yaw_pitch
+from source.launcher.utils.deposit_helper_capture import capture_ccc_yaw_pitch
 
 
 class DepositHelperCaptureTests(unittest.TestCase):

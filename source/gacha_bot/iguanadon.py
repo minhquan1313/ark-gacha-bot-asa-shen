@@ -29,6 +29,7 @@ def berry_collection(metadata, turn_down=0):
 
     while True:
         utils.turn_down(turn_down)
+        time.sleep(0.5)
 
         inventory.open()
         if inventory.is_open() and template.template_await_true(
@@ -58,7 +59,6 @@ def berry_collection(metadata, turn_down=0):
 
 
 def berry_station(metadata):
-    time.sleep(0.5)
     berry_collection(metadata, 0)
     berry_collection(metadata, 50)
     utils.turn_up(50)
@@ -159,7 +159,7 @@ def drop_seeds():
         time.sleep(0.2 * settings.lag_offset)
         player_inventory.drop_all_inv()
         player_inventory.close()
-    for x in range(3):
+    for _x in range(3):
         utils.press_key("Run")
 
 
@@ -173,7 +173,7 @@ def pickup_seeds():
         inventory.transfer_all_from()  # this should also cause us to get out of bag
         if template.template_await_false(template.check_template, 1, "inventory", 0.7):
             logs.logger.warning(
-                f"the bag we dropped on the floor for 230 seeds couldnt be fully picked up popcorning now"
+                "the bag we dropped on the floor for 230 seeds couldnt be fully picked up popcorning now"
             )
             attempts = 0
             while template.check_template("inventory", 0.7):
@@ -188,7 +188,7 @@ def pickup_seeds():
                     break
 
             # popcorn the bag lateron ( will be due to inv being capped )
-    for x in range(3):
+    for _x in range(3):
         utils.press_key("Run")
 
 

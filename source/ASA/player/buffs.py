@@ -28,7 +28,7 @@ class check_buffs:
             time.sleep(0.2 * settings.lag_offset)
 
             if attempts >= source.ASA.config.buff_open_attempts:
-                logs.logger.error(f"bot is unable to open up the buffs menu ")
+                logs.logger.error("bot is unable to open up the buffs menu ")
 
     def is_starving(self):
         return template.check_buffs("starving", 0.7)
@@ -42,9 +42,8 @@ class check_buffs:
     def check_buffs(self):
         self.open()
         type = 0
-        if (
-            self.in_tekpod()
-        ):  # if the char is in the tekpod we cannot be starving therefore we know what state we are in
+        # if the char is in the tekpod we cannot be starving therefore we know what state we are in
+        if self.in_tekpod():
             type = 1
         elif self.is_dehydrated():
             type = 2

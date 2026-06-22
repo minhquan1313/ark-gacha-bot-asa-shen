@@ -3,15 +3,15 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from source.launcher.steam_accounts import (
+from source.launcher.utils.steam_accounts import (
+    launch_steam,
     load_steam_accounts,
     parse_loginusers,
     select_auto_login_account,
     update_allow_auto_login,
 )
 
-
-SAMPLE_LOGINUSERS = '''"users"
+SAMPLE_LOGINUSERS = """"users"
 {
     "111"
     {
@@ -28,14 +28,16 @@ SAMPLE_LOGINUSERS = '''"users"
         "AllowAutoLogin"    "0"
     }
 }
-'''
+"""
 
 
 class SteamAccountsTests(unittest.TestCase):
     def test_parse_loginusers_extracts_accounts(self):
         accounts = parse_loginusers(SAMPLE_LOGINUSERS)
 
-        self.assertEqual([account.account_name for account in accounts], ["alpha", "beta"])
+        self.assertEqual(
+            [account.account_name for account in accounts], ["alpha", "beta"]
+        )
         self.assertFalse(accounts[0].most_recent)
         self.assertTrue(accounts[1].most_recent)
         self.assertEqual(accounts[1].timestamp, 20)
@@ -47,7 +49,9 @@ class SteamAccountsTests(unittest.TestCase):
 
             accounts = load_steam_accounts(path)
 
-        self.assertEqual([account["account_name"] for account in accounts], ["beta", "alpha"])
+        self.assertEqual(
+            [account["account_name"] for account in accounts], ["beta", "alpha"]
+        )
 
     def test_update_allow_auto_login_only_touches_target_block(self):
         updated = update_allow_auto_login(SAMPLE_LOGINUSERS, "beta")
@@ -62,7 +66,7 @@ class SteamAccountsTests(unittest.TestCase):
             path = Path(temp_dir) / "loginusers.vdf"
             path.write_text(SAMPLE_LOGINUSERS, encoding="utf-8")
 
-            with patch("source.launcher.steam_accounts.subprocess.run") as run:
+            with patch("source.launcher.utils.steam_accounts.subprocess.run") as run:
                 select_auto_login_account("beta", path)
 
             updated = path.read_text(encoding="utf-8")
@@ -71,6 +75,12 @@ class SteamAccountsTests(unittest.TestCase):
         self.assertEqual(run.call_count, 2)
         self.assertIn("AutoLoginUser", run.call_args_list[0].args[0])
         self.assertIn("RememberPassword", run.call_args_list[1].args[0])
+
+    def test_launch_steam_uses_registered_main_uri(self):
+        with patch("source.launcher.utils.steam_accounts.subprocess.Popen") as popen:
+            launch_steam()
+
+        popen.assert_called_once_with(["cmd", "/c", "start", "", "steam://open/main"])
 
 
 if __name__ == "__main__":

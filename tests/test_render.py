@@ -13,7 +13,9 @@ def load_render_module():
     settings = types.SimpleNamespace(lag_offset=1, station_yaw=-78.57)
     pyautogui = types.SimpleNamespace(keyDown=Mock(), keyUp=Mock())
     buffs = types.SimpleNamespace(
-        check_buffs=Mock(return_value=types.SimpleNamespace(check_buffs=Mock(return_value=0)))
+        check_buffs=Mock(
+            return_value=types.SimpleNamespace(check_buffs=Mock(return_value=0))
+        )
     )
     player_inventory = types.SimpleNamespace(implant_eat=Mock())
     player_state = types.SimpleNamespace(

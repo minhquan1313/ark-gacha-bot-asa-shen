@@ -2,7 +2,7 @@ import ctypes
 import time
 from ctypes import wintypes
 
-from source.launcher.constants import (
+from source.launcher.config.constants import (
     GAME_WINDOW_TITLE,
     SUPPORTED_GAME_RESOLUTIONS,
 )

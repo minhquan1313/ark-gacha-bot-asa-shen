@@ -1,3 +1,4 @@
+import contextlib
 import ctypes
 import os
 import subprocess
@@ -8,17 +9,19 @@ import time
 from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from source.launcher.constants import MINIMAL_HELPER_RUNNING_WIDTH
-from source.launcher.deposit_helper_capture import (
+from source.launcher.components.widgets import AnimatedButton
+from source.launcher.config.constants import MINIMAL_HELPER_RUNNING_WIDTH
+from source.launcher.utils.deposit_helper_capture import (
     register_alt_n_hotkey,
     unregister_hotkey,
 )
-from source.launcher.native_window import WM_HOTKEY, WindowsMSG
-from source.launcher.process_control import terminate_process_tree
-from source.launcher.widgets import AnimatedButton
+from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
+from source.launcher.utils.process_control import terminate_process_tree
+from source.logs import gachalogs as logs
 
 HELPER_STATUS_PREFIX = "__HELPER_STATUS__ "
 HELPER_RESULT_PREFIX = "__HELPER_RESULT__ "
+HELPER_READY_MESSAGE = "__HELPER_READY__"
 
 
 class BaseHelperWindow(QWidget):
@@ -127,10 +130,8 @@ class BaseHelperWindow(QWidget):
         if not self.hotkey_registered or not hasattr(ctypes, "windll"):
             self.hotkey_registered = False
             return
-        try:
+        with contextlib.suppress(Exception):
             self.unregister_hotkey_func(int(self.winId()), self.hotkey_id)
-        except Exception:
-            pass
         self.hotkey_registered = False
 
     def nativeEvent(self, event_type, message):
@@ -300,6 +301,7 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.output_reader_stop = threading.Event()
         self.output_reader_thread = None
         self.worker_result_message = None
+        self.worker_debug_lines = []
         self.running_widgets = []
         self.running_ui_active = False
         self.running_hotkey_hint = "ALT + N stops this helper"
@@ -324,9 +326,16 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.worker_stopping = False
         self.worker_stop_deadline = None
         self.worker_result_message = None
+        self.worker_debug_lines = []
         self.output_reader_stop = threading.Event()
         self.worker_process = subprocess.Popen(
-            [sys.executable, "-u", "-m", "source.launcher.helper_runner", *runner_args],
+            [
+                sys.executable,
+                "-u",
+                "-m",
+                "source.launcher.components.helper_runner",
+                *runner_args,
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -349,15 +358,24 @@ class WorkerHelperWindow(BaseHelperWindow):
             message = self.worker_result_message
             if not message:
                 return_code = process.poll()
+                if return_code is None:
+                    try:
+                        return_code = process.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        return_code = "unknown"
                 if self.worker_stopping:
                     message = "Stopped."
                 elif return_code == 0:
                     message = "Finished."
                 else:
                     message = f"Failed: helper exited with code {return_code}."
+            self._log_worker_debug_output(message)
             self._emit_worker_finished(message)
 
-    def _handle_worker_output(self, line):
+    def _handle_worker_output(self, line: str) -> None:
+        if line == HELPER_READY_MESSAGE:
+            self._emit_worker_ready()
+            return
         if line.startswith(HELPER_STATUS_PREFIX):
             self._emit_status(line[len(HELPER_STATUS_PREFIX) :])
             return
@@ -365,7 +383,18 @@ class WorkerHelperWindow(BaseHelperWindow):
             self.worker_result_message = line[len(HELPER_RESULT_PREFIX) :]
             return
         if line:
+            self.worker_debug_lines.append(line)
             self._emit_status(line)
+
+    def _log_worker_debug_output(self, result_message: str) -> None:
+        """Write unstructured worker output as one traceback-style log entry."""
+        if not result_message.startswith("Failed:") or not self.worker_debug_lines:
+            return
+        logs.logger.error(
+            "Helper worker failed: %s\n%s",
+            result_message,
+            "\n".join(self.worker_debug_lines),
+        )
 
     def _emit_status(self, message):
         signal = getattr(self, "status_changed", None)
@@ -373,6 +402,12 @@ class WorkerHelperWindow(BaseHelperWindow):
             signal.emit(message)
         elif hasattr(self, "status"):
             self.status.setText(message)
+
+    def _emit_worker_ready(self) -> None:
+        """Forward worker readiness through a Qt signal when supported."""
+        signal = getattr(self, "worker_ready", None)
+        if signal is not None:
+            signal.emit()
 
     def _emit_worker_finished(self, message):
         signal = getattr(self, "worker_finished", None)
@@ -426,10 +461,8 @@ class WorkerHelperWindow(BaseHelperWindow):
     def _close_output_reader(self, process):
         self.output_reader_stop.set()
         if process is not None and process.stdout is not None:
-            try:
+            with contextlib.suppress(OSError, ValueError):
                 process.stdout.close()
-            except (OSError, ValueError):
-                pass
         thread = self.output_reader_thread
         if (
             thread is not None

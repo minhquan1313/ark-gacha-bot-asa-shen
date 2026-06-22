@@ -12,8 +12,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from source.launcher.constants import APP_TITLE, COLORS, HELPER_HEIGHT
-from source.launcher.widgets import AnimatedButton
+from source.launcher.components.widgets import AnimatedButton
+from source.launcher.config.constants import (
+    APP_TITLE,
+    COLORS,
+    HELPER_HEIGHT,
+    RUNNER_WIDTH,
+)
 
 RUNNER_OVERLAY_UPCOMING_LIMIT = 3
 RUNNER_OVERLAY_LOG_LIMIT = 3
@@ -30,7 +35,8 @@ def format_runner_overlay(
     now = time.time() if now is None else now
     running = snapshot.get("running", [])
     if running:
-        current = f"Running {running[0].get('name', 'unknown')}"
+        # current = f"Running {running[0].get('name', 'unknown')}"
+        current = f"{running[0].get('name', 'unknown')}"
     else:
         current = "Waiting for running task..."
 
@@ -45,7 +51,8 @@ def format_runner_overlay(
 def _format_upcoming_task(task: dict, now: float) -> str:
     remaining = max(0, int(float(task.get("execution_time", now)) - now))
     if task.get("state") == "READY" or remaining == 0:
-        return f"ready {task.get('name', 'unknown')}"
+        # return f"READY {task.get('name', 'unknown')}"
+        return f"{task.get('name', 'unknown')}"
     hours, remainder = divmod(remaining, 3600)
     minutes, seconds = divmod(remainder, 60)
     timer = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
@@ -144,7 +151,7 @@ class RunnerOverlay(QWidget):
         self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_DeleteOnClose)
         self.setWindowOpacity(1.0)
-        self.setFixedWidth(200)
+        self.setFixedWidth(RUNNER_WIDTH)
         self.setMinimumHeight(HELPER_HEIGHT)
         self._build_ui()
         self._resize_to_content_height()
@@ -230,20 +237,19 @@ class RunnerOverlay(QWidget):
         # stop.setFixedHeight(28)
         stop.setMinimumWidth(72)
         stop.clicked.connect(self.stop_program)
+        self.stop_button = stop
         header.addLayout(title_stack)
         header.addStretch()
         header.addWidget(stop)
         layout.addWidget(self.header_frame)
 
-        self.current_label = QLabel("Waiting for running task...")
+        self.current_label = _ElidedLabel("Waiting for running task...")
         self.current_label.setObjectName("RunnerOverlayCurrent")
-        self.current_label.setWordWrap(True)
         layout.addWidget(self.current_label)
 
         for _ in range(RUNNER_OVERLAY_UPCOMING_LIMIT):
-            label = QLabel("")
+            label = _ElidedLabel()
             label.setObjectName("RunnerOverlayTask")
-            label.setWordWrap(True)
             self.upcoming_labels.append(label)
             layout.addWidget(label)
 
@@ -341,3 +347,27 @@ class RunnerOverlay(QWidget):
             event.accept()
             return True
         return super().eventFilter(watched, event)
+
+
+class TransferRunnerOverlay(RunnerOverlay):
+    """Run the server-transfer worker inside the standard compact overlay UI."""
+
+    def __init__(self, owner: object) -> None:
+        super().__init__(owner)
+        self.setWindowTitle("TRANSFER GBOT")
+        self.header_title.setText("TRANSFER GBOT")
+        # self.header_title.setStyleSheet("font-size: 9px; letter-spacing: 0px;")
+        # self.clock_label.setStyleSheet("font-size: 9px;")
+        header_layout = self.header_frame.layout()
+        if header_layout is not None:
+            header_layout.setSpacing(4)
+        # self.stop_button.setFixedWidth(96)
+        # self.stop_button.setFont(QFont("Segoe UI", 8, QFont.Bold))
+        self._resize_to_content_height()
+        self._position_set()
+
+    def stop_program(self) -> None:
+        """Delegate STOP to the transfer helper that owns the worker process."""
+        stop = getattr(self.owner, "stop", None)
+        if callable(stop):
+            stop()

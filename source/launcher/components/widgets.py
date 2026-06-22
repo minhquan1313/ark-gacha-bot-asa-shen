@@ -8,6 +8,7 @@ from PySide6.QtCore import (
     QRect,
     QSize,
     Qt,
+    QTimer,
     QVariantAnimation,
     Signal,
 )
@@ -17,6 +18,7 @@ from PySide6.QtGui import (
     QFont,
     QLinearGradient,
     QPainter,
+    QPaintEvent,
     QPen,
     QPixmap,
     QPolygon,
@@ -34,7 +36,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from source.launcher.constants import (
+from source.launcher.config.constants import (
     APP_TITLE,
     APP_VERSION,
     ASSETS,
@@ -176,10 +178,39 @@ class AnimatedButton(QPushButton):
         self._state = "normal"
         self._animation = None
         self._colors = BUTTON_STYLES[variant]["normal"].copy()
+        self._loading = False
+        self._loading_angle = 0
+        self._loading_text = ""
+        self._loading_was_enabled = True
+        self._loading_timer = QTimer(self)
+        self._loading_timer.setInterval(80)
+        self._loading_timer.timeout.connect(self._advance_loading_spinner)
         self.setCursor(Qt.PointingHandCursor)
         self.setFont(QFont("Segoe UI", FONT_SIZES["button"], QFont.Bold))
         self._apply_style()
         self.toggled.connect(self._handle_toggled)
+
+    def set_loading(self, active: bool, text: str = "LOADING") -> None:
+        """Show or hide a disabled rotating loading indicator on the button."""
+        if active == self._loading:
+            return
+        self._loading = active
+        if active:
+            self._loading_text = self.text()
+            self._loading_was_enabled = self.isEnabled()
+            self.setText(text)
+            self.setEnabled(False)
+            self._loading_timer.start()
+        else:
+            self._loading_timer.stop()
+            self.setText(self._loading_text)
+            self.setEnabled(self._loading_was_enabled)
+        self.update()
+
+    def _advance_loading_spinner(self) -> None:
+        """Advance the loading arc by one animation frame."""
+        self._loading_angle = (self._loading_angle - 30) % 360
+        self.update()
 
     def set_state(self, state):
         if not self.isEnabled():
@@ -232,6 +263,24 @@ class AnimatedButton(QPushButton):
                 self.set_state("normal")
         except RuntimeError:
             return
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        """Paint the normal button and its optional loading arc."""
+        super().paintEvent(event)
+        if not self._loading:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(QColor(COLORS["cyan"]), 2.2))
+        text_width = self.fontMetrics().horizontalAdvance(self.text())
+        spinner_size = 14
+        spinner_x = max(8, (self.width() - text_width) // 2 - spinner_size - 8)
+        spinner_y = (self.height() - spinner_size) // 2
+        painter.drawArc(
+            QRect(spinner_x, spinner_y, spinner_size, spinner_size),
+            self._loading_angle * 16,
+            250 * 16,
+        )
 
     def _handle_toggled(self, checked):
         if self.isEnabled():

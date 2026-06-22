@@ -12,7 +12,6 @@ started = False
 
 
 class SingletonMeta(type):
-
     _instances = {}
 
     _lock: Lock = Lock()
@@ -157,7 +156,6 @@ class task_scheduler(metaclass=SingletonMeta):
                 print("pause task skipping adding back ")
                 self.emit_queue_snapshot()
         else:
-
             self.active_queue.add(task, priority, exec_time)
 
     def move_to_waiting_queue(self, task):

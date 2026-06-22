@@ -46,7 +46,7 @@ location = {
 
 def template_await_true(func, sleep_amount: float, *args) -> bool:
     count = 0
-    while func(*args) == False:
+    while not func(*args):
         if count >= sleep_amount * 20:
             break
         time.sleep(0.05)
@@ -57,7 +57,7 @@ def template_await_true(func, sleep_amount: float, *args) -> bool:
 def template_await_false(func, sleep_amount: float, *args) -> bool:
     count = 0
     v = func(*args)
-    while v == True:
+    while v:
         v = func(*args)
         if count >= sleep_amount * 20:
             break
@@ -142,7 +142,7 @@ def check_template_no_bounds(item: str, threshold: float) -> bool:
 
 def template_sleep(template: str, threshold: float, sleep_amount: float) -> bool:
     count = 0
-    while check_template(template, threshold) == False:
+    while not check_template(template, threshold):
         if count >= sleep_amount * 10:  #  seconds of sleep
             break
         time.sleep(0.1)
@@ -154,7 +154,7 @@ def template_sleep_no_bounds(
     template: str, threshold: float, sleep_amount: float
 ) -> bool:
     count = 0
-    while check_template_no_bounds(template, threshold) == False:
+    while not check_template_no_bounds(template, threshold):
         if count >= sleep_amount * 10:  #  seconds of sleep
             break
         time.sleep(0.1)
@@ -166,7 +166,7 @@ def window_still_open(
     template: str, threshold: float, sleep_amount: float
 ) -> bool:  # oposite of the function above mainly to check if inventory is still open
     count = 0
-    while check_template(template, threshold) == True:
+    while check_template(template, threshold):
         if count >= sleep_amount * 10:  #  seconds of sleep
             break
         time.sleep(0.1)
@@ -178,7 +178,7 @@ def window_still_open_no_bounds(
     template: str, threshold: float, sleep_amount: float
 ) -> bool:  # oposite of the function above mainly to check if inventory is still open
     count = 0
-    while check_template_no_bounds(template, threshold) == True:
+    while check_template_no_bounds(template, threshold):
         if count >= sleep_amount * 10:  #  seconds of sleep
             break
         time.sleep(0.1)

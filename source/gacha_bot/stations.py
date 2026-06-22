@@ -105,9 +105,8 @@ class gacha_station(base_task):
                 settings.gacha_230_feed_delay
             )  # should take about this amount of time to do 230 slots of seeds
         else:
-            delay = (
-                settings.gacha_feed_delay
-            )  # delay can be constant as it will be the same for all gachas 142 stacks took 110 mins
+            # delay can be constant as it will be the same for all gachas 142 stacks took 110 mins
+            delay = settings.gacha_feed_delay
         return delay
 
 
@@ -139,16 +138,15 @@ class pego_station(base_task):
             deposit.deposit_all(None)
         else:
             logs.logger.info(
-                f"bot has no crystals in hotbar we are skipping the deposit step"
+                "Bot has no crystals in hotbar we are skipping the deposit step"
             )
 
     def get_priority_level(self):
         return 2  # highest prio level as we cant have these get capped
 
     def get_requeue_delay(self):
-        return (
-            self.delay
-        )  # delay cannot be constant as stations can cover different amounts of space each |||| 2 stacks of berries to 1 crystal 4 gachas to 1 pego
+        # delay cannot be constant as stations can cover different amounts of space each |||| 2 stacks of berries to 1 crystal 4 gachas to 1 pego
+        return self.delay
 
 
 class render_station(base_task):
@@ -161,7 +159,7 @@ class render_station(base_task):
         berry_station = (
             True  # setting to true as we will be away for mostlikly for a few hours
         )
-        if source.gacha_bot.render.render_flag == False:
+        if not source.gacha_bot.render.render_flag:
             logs.logger.debug(
                 f"render flag{render.render_flag} we are trying to get into the pod now"
             )
@@ -213,7 +211,6 @@ class crafting(base_task):
 
 
 class transfer(base_task):
-
     def __init__(self): ...
     def execute(self): ...
     def get_priority_level(self):

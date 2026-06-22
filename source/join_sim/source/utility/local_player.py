@@ -9,7 +9,6 @@ import psutil
 def path(process_name):
     print("finding path now sim " + process_name)
     for proc in psutil.process_iter(attrs=["name", "exe"]):
-
         if proc.info["name"] == process_name:
             exe_path = proc.info["exe"]
             return Path(exe_path)
@@ -60,7 +59,6 @@ def get_input_settings(input_name):
         raise FileNotFoundError(f"Input settings file not found: {input_path}")
 
     with open(input_path, "r") as file:
-
         if input_name == "ConsoleKeys":
             for line in file:
                 if input_name in line:

@@ -1,8 +1,8 @@
 import ctypes
 import time
 
-from source.launcher import system
-from source.launcher.constants import GAME_WINDOW_TITLE
+from source.launcher.config.constants import GAME_WINDOW_TITLE
+from source.launcher.utils import system
 
 MOD_ALT = 0x0001
 MOD_SHIFT = 0x0004

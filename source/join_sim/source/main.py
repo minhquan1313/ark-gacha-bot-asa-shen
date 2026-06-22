@@ -57,10 +57,10 @@ def join_round(server: str) -> bool:
 
 def sim_loop():
     if is_menu():
-        flag = False
+        is_success = False
         logs.logger.debug("starting sim")
-        while flag != True:
-            flag = join_round(server)
+        while not is_success:
+            is_success = join_round(server)
             time.sleep(0.2)
         logs.logger.debug("stop sim")
 
@@ -72,18 +72,17 @@ def main_loop(server=server):
     # check if in main menu
     if is_menu():
         # start sim close game every 15 20 mins incase server crashed
-        flag = False
+        is_success = False
         time1 = time.time()
         logs.logger.debug("starting sim")
-        while flag != True:
-
+        while not is_success:
             if time.time() - time1 >= 15 * 60 or crash.detect_crash():
                 crash.re_open_game()
                 time1 = time.time()
                 time.sleep(5)
 
             time.sleep(0.2)
-            flag = join_round(server)
+            is_success = join_round(server)
             time.sleep(2)
 
         logs.logger.debug("stop sim")

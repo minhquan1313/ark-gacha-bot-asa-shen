@@ -1,7 +1,7 @@
 import ctypes
 from ctypes import wintypes
 
-from source.launcher.constants import GAME_WINDOW_TITLE
+from source.launcher.config.constants import GAME_WINDOW_TITLE
 from source.utility import local_player, screen
 
 
@@ -13,10 +13,7 @@ INPUT_MOUSE = 0
 MOUSEEVENTF_MOVE = 0x0001
 MOUSEEVENTF_MOVE_NOCOALESCE = 0x2000
 
-if ctypes.sizeof(ctypes.c_void_p) == 8:
-    ULONG_PTR = ctypes.c_uint64
-else:
-    ULONG_PTR = ctypes.c_uint32
+ULONG_PTR = ctypes.c_uint64 if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_uint32
 
 
 class MOUSEINPUT(ctypes.Structure):

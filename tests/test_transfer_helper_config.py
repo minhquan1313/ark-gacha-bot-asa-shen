@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from source.launcher.transfer_helper_config import (
+from source.launcher.config.transfer_helper_config import (
     default_transfer_ui_coords,
     generated_player_bed_names,
     load_transfer_dedis,
@@ -13,6 +13,7 @@ from source.launcher.transfer_helper_config import (
     normalize_transfer_dedis,
     normalize_transfer_players,
     normalize_transfer_settings,
+    normalize_transfer_ui_coords,
     player_account_count,
     player_bed_name,
     player_bed_name_search_conflicts,
@@ -23,9 +24,7 @@ from source.launcher.transfer_helper_config import (
     save_transfer_ui_coords,
     steam_account_assignment_issues,
     suggested_loop_count,
-    transfer_dedi_route,
 )
-
 
 STEAM_ACCOUNTS = [
     {"account_name": "alpha", "most_recent": True, "timestamp": 20},
@@ -54,6 +53,7 @@ class TransferHelperConfigTests(unittest.TestCase):
             self.assertEqual(settings["destination_server"], "0")
             self.assertEqual(settings["ark_window_ready_timeout"], 180)
             self.assertEqual(settings["ark_launch_attempts"], 3)
+            self.assertEqual(settings["steam_restart_interval"], 30)
             self.assertNotIn("account_count", settings)
 
     def test_normalize_settings_ignores_old_account_and_rejects_invalid_loop_values(
@@ -66,6 +66,19 @@ class TransferHelperConfigTests(unittest.TestCase):
             normalize_transfer_settings({"loop_count": 0})
         with self.assertRaisesRegex(ValueError, "ark_window_ready_timeout"):
             normalize_transfer_settings({"ark_window_ready_timeout": 0})
+        with self.assertRaisesRegex(ValueError, "steam_restart_interval"):
+            normalize_transfer_settings({"steam_restart_interval": 0})
+
+    def test_load_settings_migrates_missing_steam_restart_interval(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "settings.json"
+            path.write_text('{"resource_server": "1234"}', encoding="utf-8")
+
+            settings = load_transfer_settings(path)
+            saved = path.read_text(encoding="utf-8")
+
+        self.assertEqual(settings["steam_restart_interval"], 30)
+        self.assertIn('"steam_restart_interval": 30', saved)
 
     def test_player_bed_names_add_underscore_only_for_search_collision(self):
         self.assertEqual(
@@ -299,11 +312,15 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertIn("players[3].steam_account is required", issues)
 
     def test_steam_account_assignment_blocks_first_player_not_most_recent(self):
-        players = assign_steam_accounts(normalize_transfer_players({}, 2), ["beta", "alpha"])
+        players = assign_steam_accounts(
+            normalize_transfer_players({}, 2), ["beta", "alpha"]
+        )
 
         issues = steam_account_assignment_issues(players, STEAM_ACCOUNTS)
 
-        self.assertIn("players[1].steam_account must match Steam MostRecent account", issues)
+        self.assertIn(
+            "players[1].steam_account must match Steam MostRecent account", issues
+        )
 
     def test_optional_steam_launch_dialog_inputs_do_not_block_validation(self):
         settings = normalize_transfer_settings(
@@ -335,33 +352,10 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertNotIn("cloud_sync_conflict_region", steam)
         self.assertNotIn("has_failure_template", steam)
 
-    def test_validation_ignores_removed_transmitter_direct_click_inputs(self):
-        settings = normalize_transfer_settings(
-            {
-                "resource_server": "1111",
-                "destination_server": "2222",
-                "transmitter_teleport": "TX",
-            }
-        )
-        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+    def test_ui_coords_defaults_exclude_retired_transfer_overrides(self):
         coords = default_transfer_ui_coords()
-        coords["transfer"].pop("transmitter_inv_region", None)
-        coords["transfer"].pop("transmitter_inv_template", None)
-        coords["transfer"].pop("not_ready_region", None)
-        coords["transfer"].pop("not_ready_template", None)
-        coords["transfer"].pop("transfer_button", None)
-        coords["transfer"].pop("server_search", None)
-        coords["transfer"].pop("first_server", None)
-        coords["transfer"].pop("join_button", None)
-        coords["transfer"].pop("transfer_not_ready_cancel", None)
-        players = normalize_transfer_players({}, 1)
 
-        missing = missing_runtime_inputs(settings, dedis, coords, players)
-
-        self.assertNotIn("ui_coords.transfer.transmitter_inv_region", missing)
-        self.assertFalse(
-            any(item.startswith("ui_coords.transfer.transfer_button") for item in missing)
-        )
+        self.assertNotIn("transfer", coords)
 
     def test_validation_blocks_missing_destination_dedi_route(self):
         settings = normalize_transfer_settings(
@@ -388,7 +382,7 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertIn("dedis.destination.teleport", missing)
         self.assertIn("dedis.destination.items must include at least one dedi", missing)
 
-    def test_validation_blocks_missing_destination_dedi_init_inputs(self):
+    def test_legacy_transfer_dedi_overrides_are_discarded_and_not_validated(self):
         settings = normalize_transfer_settings(
             {
                 "resource_server": "1111",
@@ -408,17 +402,23 @@ class TransferHelperConfigTests(unittest.TestCase):
                 },
             }
         )
-        coords = default_transfer_ui_coords()
-        coords["transfer"]["dedi_deposit_ready_template"] = ""
-        coords["transfer"]["dedi_deposit_ready_region"] = {}
-        coords["transfer"]["dedi_init_click"] = {}
+        coords = normalize_transfer_ui_coords(
+            {
+                "transfer": {
+                    "dedi_deposit_ready_template": "legacy.png",
+                    "dedi_deposit_ready_region": {},
+                    "dedi_init_click": {},
+                    "dedi_open_timeout": 1,
+                    "dedi_init_attempts": 1,
+                }
+            }
+        )
         players = normalize_transfer_players({}, 1)
 
         missing = missing_runtime_inputs(settings, dedis, coords, players)
 
-        self.assertIn("ui_coords.transfer.dedi_deposit_ready_template", missing)
-        self.assertIn("ui_coords.transfer.dedi_deposit_ready_region", missing)
-        self.assertIn("ui_coords.transfer.dedi_init_click.x/y", missing)
+        self.assertNotIn("transfer", coords)
+        self.assertFalse(any(item.startswith("ui_coords.transfer") for item in missing))
 
     def test_validation_blocks_zero_players(self):
         settings = normalize_transfer_settings(

@@ -1,14 +1,14 @@
 import unittest
 from pathlib import Path
 
-from source.launcher.constants import (
+from source.launcher.config.constants import (
     DEFAULT_SETTINGS,
     HIDDEN_SETTINGS,
     PHONE_MINIMUM_SIZE,
     SETTINGS_GROUPS,
     setting_label,
 )
-from source.launcher.settings_store import _normalize_settings
+from source.launcher.utils.settings_store import _normalize_settings
 
 
 class SettingsStoreTests(unittest.TestCase):
@@ -63,9 +63,7 @@ class SettingsStoreTests(unittest.TestCase):
 
         self.assertTrue(settings["seeds_230"])
         self.assertEqual(settings["gacha_230_feed_delay"], 12345)
-        self.assertTrue(
-            {"seeds_230", "gacha_230_feed_delay"} <= HIDDEN_SETTINGS
-        )
+        self.assertTrue({"seeds_230", "gacha_230_feed_delay"} <= HIDDEN_SETTINGS)
 
     def test_launcher_size_defaults_are_preserved(self):
         settings = _normalize_settings({})
@@ -74,9 +72,7 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertEqual(settings["launcher_height"], 800)
 
     def test_launcher_size_is_clamped_to_phone_minimum(self):
-        settings = _normalize_settings(
-            {"launcher_width": 100, "launcher_height": 200}
-        )
+        settings = _normalize_settings({"launcher_width": 100, "launcher_height": 200})
 
         self.assertEqual(settings["launcher_width"], PHONE_MINIMUM_SIZE[0])
         self.assertEqual(settings["launcher_height"], PHONE_MINIMUM_SIZE[1])
@@ -115,18 +111,13 @@ class SettingsStoreTests(unittest.TestCase):
             if group_name not in {"GACHA", "STORAGE", "PEGO"}
             for key in keys
         ]
-        visible_keys = set(DEFAULT_SETTINGS) - HIDDEN_SETTINGS - {
-            "dedi_handshake_timeout"
-        }
+        visible_keys = set(DEFAULT_SETTINGS) - HIDDEN_SETTINGS
 
         self.assertEqual(set(grouped_keys), visible_keys)
         self.assertEqual(len(grouped_keys), len(set(grouped_keys)))
 
     def test_setting_labels_are_sentence_case_with_safe_fallback(self):
         self.assertEqual(setting_label("server_number"), "Server number")
-        self.assertEqual(
-            setting_label("dedi_handshake_timeout"), "Dedi handshake timeout"
-        )
         self.assertEqual(setting_label("launcher_width"), "Launcher startup width")
         self.assertEqual(setting_label("unmapped_example"), "Unmapped example")
 

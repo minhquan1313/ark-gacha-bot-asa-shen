@@ -1,5 +1,4 @@
 import os
-import threading
 import types
 import unittest
 from unittest.mock import Mock, call, patch
@@ -10,11 +9,11 @@ from PySide6.QtCore import QCoreApplication, QEvent
 from PySide6.QtWidgets import QApplication
 
 from source.launcher.auto_join_server_helper import AutoJoinServerHelper
-from source.launcher.deposit_helper_capture import focus_game_window
+from source.launcher.utils.deposit_helper_capture import focus_game_window
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.gui import SettingsGUI
-from source.launcher import system
-from source.launcher.system import focus_window_if_needed, validate_ark_window
+from source.launcher.utils import system
+from source.launcher.utils.system import focus_window_if_needed, validate_ark_window
 
 
 class ArkWindowValidationTests(unittest.TestCase):
@@ -330,12 +329,17 @@ class AutoJoinStopTests(unittest.TestCase):
         helper.worker_process = self._running_process()
         return helper
 
-    @patch("source.launcher.auto_join_server_helper.register_alt_n_hotkey", return_value=False)
+    @patch(
+        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
     def test_auto_join_stop_terminates_helper_process(self, _register_hotkey):
         helper = self._make_running_helper(AutoJoinServerHelper)
         process = helper.worker_process
         try:
-            with patch("source.launcher.helper_window.terminate_process_tree") as terminate:
+            with patch(
+                "source.launcher.helper_window.terminate_process_tree"
+            ) as terminate:
                 helper.stop()
             terminate.assert_called_once_with(process)
             self.assertEqual(helper.status.text(), "Stopping...")
@@ -345,7 +349,26 @@ class AutoJoinStopTests(unittest.TestCase):
                 helper.worker_process.poll.return_value = 1
             helper.close()
 
-    @patch("source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey", return_value=False)
+    @patch(
+        "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_closing_auto_join_during_loading_terminates_worker(self, _register_hotkey):
+        helper = self._make_running_helper(AutoJoinServerHelper)
+        process = helper.worker_process
+        helper.starting = True
+        helper.start_stop_button.set_loading(True)
+
+        with patch("source.launcher.helper_window.terminate_process_tree") as terminate:
+            helper.close()
+            self.app.processEvents()
+
+        terminate.assert_called_once_with(process)
+
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
     def test_invalid_ark_window_does_not_start_worker(self, _register_hotkey):
         owner = _RejectedOwner()
         helper = FertilizerRefreshHelper(owner)
@@ -358,7 +381,10 @@ class AutoJoinStopTests(unittest.TestCase):
         finally:
             helper.close()
 
-    @patch("source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey", return_value=False)
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
     def test_start_focuses_ark_before_launching_subprocess(self, _register_hotkey):
         helper = Mock()
         helper.is_running.return_value = False
@@ -366,18 +392,25 @@ class AutoJoinStopTests(unittest.TestCase):
         helper.owner.is_program_running.return_value = False
         helper.owner.program_stopping = False
         helper._require_ark_window.return_value = True
-        with patch("source.launcher.fertilizer_refresh_helper.focus_game_window") as focus:
+        with patch(
+            "source.launcher.fertilizer_refresh_helper.focus_game_window"
+        ) as focus:
             FertilizerRefreshHelper.start(helper)
 
         focus.assert_called_once_with(center_cursor_when_switching=True)
         helper._start_worker.assert_called_once_with("fertilizer_refresh")
 
-    @patch("source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey", return_value=False)
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
     def test_fertilizer_stop_terminates_helper_process(self, _register_hotkey):
         helper = self._make_running_helper(FertilizerRefreshHelper)
         process = helper.worker_process
         try:
-            with patch("source.launcher.helper_window.terminate_process_tree") as terminate:
+            with patch(
+                "source.launcher.helper_window.terminate_process_tree"
+            ) as terminate:
                 helper.stop()
             terminate.assert_called_once_with(process)
             self.assertEqual(helper.status.text(), "Stopped.")
@@ -385,6 +418,24 @@ class AutoJoinStopTests(unittest.TestCase):
             if helper.worker_process is not None:
                 helper.worker_process.poll.return_value = 1
             helper.close()
+
+    @patch(
+        "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+        return_value=False,
+    )
+    def test_closing_fertilizer_during_loading_terminates_worker(
+        self, _register_hotkey
+    ):
+        helper = self._make_running_helper(FertilizerRefreshHelper)
+        process = helper.worker_process
+        helper.starting = True
+        helper.start_stop_button.set_loading(True)
+
+        with patch("source.launcher.helper_window.terminate_process_tree") as terminate:
+            helper.close()
+            self.app.processEvents()
+
+        terminate.assert_called_once_with(process)
 
 
 class DialogOwnershipTests(unittest.TestCase):

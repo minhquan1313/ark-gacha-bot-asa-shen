@@ -5,13 +5,14 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QFrame, QLabel, QSizePolicy, QWidget
+from PySide6.QtWidgets import QApplication, QFrame, QLabel, QWidget
 
 from source.launcher.auto_join_server_helper import AutoJoinServerHelper
-from source.launcher.constants import (
+from source.launcher.config.constants import (
     HELPER_HEIGHT,
     HELPER_WIDTH,
     MINIMAL_HELPER_RUNNING_WIDTH,
+    RUNNER_WIDTH,
 )
 from source.launcher.deposit_route_helper import DepositRouteHelper
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
@@ -20,7 +21,7 @@ from source.launcher.position_render_helper import PositionRenderHelper
 from source.launcher import server_transfer_helper as server_transfer_helper_module
 from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.server_transfer_helper import ServerTransferHelper
-from source.launcher.widgets import WrappedStatusLabel
+from source.launcher.components.widgets import WrappedStatusLabel
 
 
 class NegativeHeightStatusLabel(WrappedStatusLabel):
@@ -51,11 +52,12 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         helper.raise_.assert_called_once_with()
         helper.activateWindow.assert_called_once_with()
 
-    def test_running_ui_collapses_idle_form(self):
+    def test_running_ui_hides_config_and_shows_transfer_overlay(self) -> None:
         owner = SimpleNamespace(
             styleSheet=Mock(return_value=""),
             screen=Mock(return_value=None),
             settings={"helper_inactive_opacity": 0.3},
+            isActiveWindow=Mock(return_value=False),
         )
 
         with patch(
@@ -87,23 +89,147 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         ):
             helper = ServerTransferHelper(owner)
 
-        with patch.object(
-            helper, "setFixedWidth", wraps=helper.setFixedWidth
-        ) as set_fixed_width:
+        try:
             helper._set_running_ui(True)
+            self.app.processEvents()
 
-        self.assertTrue(helper.idle_widget.isHidden())
-        self.assertFalse(helper.running_widget.isHidden())
-        self.assertEqual(helper.width(), helper.idle_width)
-        set_fixed_width.assert_called_once_with(helper.idle_width)
-        self.assertEqual(helper.hotkey_label.text(), "ALT + N stops this helper")
+            overlay = helper.transfer_overlay
+            self.assertTrue(helper.isHidden())
+            self.assertTrue(helper.idle_widget.isHidden())
+            self.assertFalse(helper.running_widget.isHidden())
+            self.assertIsNotNone(overlay)
+            self.assertEqual(overlay.width(), RUNNER_WIDTH)
+            self.assertEqual(overlay.header_title.text(), "TRANSFER GBOT")
+            self.assertLessEqual(
+                overlay.header_title.fontMetrics().horizontalAdvance("TRANSFER GBOT"),
+                overlay.header_title.width(),
+            )
+            self.assertFalse(overlay.isHidden())
+            self.assertTrue(helper.transfer_refresh_timer.isActive())
+            self.assertEqual(helper.hotkey_label.text(), "ALT + N stops this helper")
 
-        helper._set_running_ui(False)
+            helper._set_running_ui(False)
+            self.app.processEvents()
 
-        self.assertFalse(helper.idle_widget.isHidden())
-        self.assertTrue(helper.running_widget.isHidden())
-        self.assertEqual(helper.width(), helper.idle_width)
-        self.assertEqual(helper.hotkey_label.text(), "ALT + N toggles START / STOP")
+            self.assertFalse(helper.isHidden())
+            self.assertFalse(helper.idle_widget.isHidden())
+            self.assertTrue(helper.running_widget.isHidden())
+            self.assertIsNone(helper.transfer_overlay)
+            self.assertFalse(helper.transfer_refresh_timer.isActive())
+            self.assertEqual(helper.width(), helper.idle_width)
+            self.assertEqual(helper.hotkey_label.text(), "ALT + N toggles START / STOP")
+        finally:
+            helper.close()
+
+    def test_transfer_overlay_loading_state_becomes_ready_stop_state(self) -> None:
+        helper = self._transfer_helper(account_count=1)
+        process = Mock()
+        process.poll.return_value = None
+        process.stdout = None
+        helper.starting = True
+        helper.worker_process = process
+
+        try:
+            helper._set_running_ui(True)
+            self.app.processEvents()
+
+            overlay = helper.transfer_overlay
+            self.assertEqual(overlay.stop_button.text(), "LOADING")
+            self.assertFalse(overlay.stop_button.isEnabled())
+            self.assertTrue(overlay.stop_button._loading_timer.isActive())
+            self.assertEqual(overlay.stop_button.width(), 96)
+
+            with patch.object(helper, "stop") as stop:
+                helper.handle_hotkey()
+            stop.assert_not_called()
+
+            helper._handle_worker_output("__HELPER_READY__")
+            self.app.processEvents()
+
+            self.assertFalse(helper.starting)
+            self.assertEqual(overlay.stop_button.text(), "STOP")
+            self.assertEqual(overlay.stop_button.variant, "danger")
+            self.assertTrue(overlay.stop_button.isEnabled())
+            self.assertFalse(overlay.stop_button._loading_timer.isActive())
+        finally:
+            helper.worker_process = None
+            helper._set_running_ui(False)
+            helper.close()
+
+    def test_closing_transfer_helper_during_loading_terminates_worker(self) -> None:
+        helper = self._transfer_helper(account_count=1)
+        process = Mock()
+        process.poll.return_value = None
+        process.stdout = None
+        helper.starting = True
+        helper.worker_process = process
+        helper._set_running_ui(True)
+
+        with patch("source.launcher.helper_window.terminate_process_tree") as terminate:
+            helper.close()
+            self.app.processEvents()
+
+        terminate.assert_called_once_with(process)
+
+    def test_transfer_worker_tasks_and_statuses_refresh_overlay(self) -> None:
+        helper = self._transfer_helper(account_count=1)
+
+        try:
+            helper._set_running_ui(True)
+            with patch(
+                "source.launcher.server_transfer_helper.time.strftime",
+                return_value="14:21:33",
+            ):
+                helper._append_status("Account 1: joining resource server.")
+            helper._handle_worker_output(
+                '__HELPER_TASK_STATE__ {"running":[{"name":"Acc 1 - Join Resource - 1111"}],'
+                '"active":[{"name":"Acc 1 - Verify Tribe Log","state":"READY"}],'
+                '"waiting":[]}'
+            )
+            self.app.processEvents()
+
+            overlay = helper.transfer_overlay
+            self.assertEqual(
+                overlay.current_label.text(),
+                "Running Acc 1 - Join Resource - 1111",
+            )
+            self.assertEqual(
+                overlay.upcoming_labels[0].text(),
+                "ready Acc 1 - Verify Tribe Log",
+            )
+            self.assertEqual(
+                overlay.log_labels[0]._full_text,
+                "33 Account 1: joining resource server.",
+            )
+            self.assertNotIn("HELPER_TASK_STATE", helper.running_log.toPlainText())
+
+            with patch.object(helper, "stop") as stop:
+                overlay.stop_program()
+            stop.assert_called_once_with()
+        finally:
+            helper._set_running_ui(False)
+            helper.close()
+
+    def test_transfer_worker_finish_restores_configuration_window(self) -> None:
+        helper = self._transfer_helper(account_count=1)
+        worker = Mock()
+        worker.poll.return_value = 1
+        worker.stdout = None
+
+        try:
+            helper._set_running_ui(True)
+            helper.worker_process = worker
+            helper._on_worker_finished("Failed: test failure")
+            self.app.processEvents()
+
+            self.assertIsNone(helper.worker_process)
+            self.assertIsNone(helper.transfer_overlay)
+            self.assertFalse(helper.transfer_refresh_timer.isActive())
+            self.assertFalse(helper.isHidden())
+            self.assertFalse(helper.idle_widget.isHidden())
+            self.assertEqual(helper.status.text(), "Failed: test failure")
+        finally:
+            helper.close()
 
     def test_player_rows_follow_account_count_with_editable_names(self):
         helper = self._transfer_helper(account_count=12)
@@ -214,7 +340,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         helper = self._transfer_helper(account_count=1)
 
         try:
-            titles = [label.text() for label in helper.findChildren(QLabel, "PanelTitle")]
+            titles = [
+                label.text() for label in helper.findChildren(QLabel, "PanelTitle")
+            ]
 
             self.assertIn("RESOURCE DEDIS", titles)
             self.assertIn("DESTINATION DEDIS", titles)
@@ -314,7 +442,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper.start()
 
             helper.owner.dialog.assert_called_once()
-            self.assertEqual(helper.status.text(), "Add at least one player before starting.")
+            self.assertEqual(
+                helper.status.text(), "Add at least one player before starting."
+            )
         finally:
             helper.close()
 
@@ -362,6 +492,43 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertIsNone(helper.worker_process)
             focus.assert_called_once_with(center_cursor_when_switching=True)
             self.assertEqual(helper.status.text(), "Cannot start: unable to focus Ark")
+        finally:
+            helper.close()
+
+    def test_transfer_worker_start_failure_restores_config_and_cleans_runtime_file(
+        self,
+    ):
+        helper = self._transfer_helper(account_count=1)
+
+        try:
+            with (
+                patch.object(helper, "_current_config", return_value=helper.config),
+                patch(
+                    "source.launcher.server_transfer_helper.missing_runtime_inputs",
+                    return_value=[],
+                ),
+                patch("source.launcher.server_transfer_helper.focus_game_window"),
+                patch.object(
+                    helper, "_write_runtime_config", return_value="runtime.json"
+                ),
+                patch.object(
+                    helper,
+                    "_start_worker",
+                    side_effect=OSError("worker unavailable"),
+                ),
+                patch.object(helper, "_cleanup_runtime_config") as cleanup,
+            ):
+                helper.start()
+
+            self.assertFalse(helper.starting)
+            self.assertFalse(helper.running_ui_active)
+            self.assertFalse(helper.isHidden())
+            self.assertEqual(helper.start_stop_button.text(), "START")
+            self.assertEqual(
+                helper.status.text(),
+                "Cannot start transfer helper: worker unavailable",
+            )
+            cleanup.assert_called_once_with()
         finally:
             helper.close()
 
@@ -473,13 +640,30 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         try:
             helper.set_all_collapsible_expanded(False)
 
-            self.assertTrue(all(panel.body_widget.isHidden() for panel in helper.collapsible_panels))
-            self.assertTrue(all(row["details"].isHidden() for row in helper.resource_dedi_rows + helper.destination_dedi_rows))
+            self.assertTrue(
+                all(panel.body_widget.isHidden() for panel in helper.collapsible_panels)
+            )
+            self.assertTrue(
+                all(
+                    row["details"].isHidden()
+                    for row in helper.resource_dedi_rows + helper.destination_dedi_rows
+                )
+            )
 
             helper.set_all_collapsible_expanded(True)
 
-            self.assertTrue(all(not panel.body_widget.isHidden() for panel in helper.collapsible_panels))
-            self.assertTrue(all(not row["details"].isHidden() for row in helper.resource_dedi_rows + helper.destination_dedi_rows))
+            self.assertTrue(
+                all(
+                    not panel.body_widget.isHidden()
+                    for panel in helper.collapsible_panels
+                )
+            )
+            self.assertTrue(
+                all(
+                    not row["details"].isHidden()
+                    for row in helper.resource_dedi_rows + helper.destination_dedi_rows
+                )
+            )
         finally:
             helper.close()
 
@@ -575,7 +759,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 helper._persist_dedis()
 
                 self.assertEqual(
-                    save_dedis.call_args.args[0]["resource"]["items"][0]["location"]["yaw"],
+                    save_dedis.call_args.args[0]["resource"]["items"][0]["location"][
+                        "yaw"
+                    ],
                     "44",
                 )
             finally:
@@ -593,15 +779,15 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 helper._persist_dedis()
 
                 self.assertEqual(
-                    save_dedis.call_args.args[0]["destination"]["items"][0][
-                        "location"
-                    ]["yaw"],
+                    save_dedis.call_args.args[0]["destination"]["items"][0]["location"][
+                        "yaw"
+                    ],
                     "88",
                 )
                 self.assertEqual(
-                    save_dedis.call_args.args[0]["resource"]["items"][0][
-                        "location"
-                    ]["yaw"],
+                    save_dedis.call_args.args[0]["resource"]["items"][0]["location"][
+                        "yaw"
+                    ],
                     "0.0",
                 )
             finally:
@@ -733,6 +919,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                         "loop_count": 1,
                         "structure_load_delay": 10,
                         "transfer_retry_delay": 5,
+                        "steam_restart_interval": 30,
                     },
                     "players": {
                         "players": [
@@ -754,6 +941,15 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         ):
             return ServerTransferHelper(owner)
 
+    def test_transfer_settings_include_steam_restart_interval(self) -> None:
+        helper = self._transfer_helper(account_count=1)
+        try:
+            self.assertEqual(
+                helper.setting_fields["steam_restart_interval"].text(), "30"
+            )
+        finally:
+            helper.close()
+
     def test_auto_join_running_ui_shrinks_and_restores(self):
         with patch(
             "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
@@ -774,8 +970,8 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertEqual(helper.height(), helper.sizeHint().height())
             self.assertTrue(helper.description.isHidden())
             self.assertTrue(helper.server_row_widget.isHidden())
-            self.assertTrue(helper.start_stop_button.isHidden())
-            self.assertTrue(helper.status.isHidden())
+            self.assertFalse(helper.start_stop_button.isHidden())
+            self.assertFalse(helper.status.isHidden())
 
             helper._set_running_ui(False)
             self.app.processEvents()
@@ -790,6 +986,78 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper.adjustSize()
             self.app.processEvents()
             self.assertGreaterEqual(helper.height(), helper.idle_min_height)
+        finally:
+            helper.close()
+
+    def test_auto_join_starting_state_becomes_ready_stop_state(self):
+        with patch(
+            "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+        process = Mock()
+        process.poll.return_value = None
+        process.stdout = None
+
+        def launch_worker(*_args):
+            helper._set_running_ui(True)
+            helper.worker_process = process
+
+        try:
+            helper.server_field.setText("5147")
+            with (
+                patch("source.launcher.auto_join_server_helper.focus_game_window"),
+                patch.object(helper, "_start_worker", side_effect=launch_worker),
+            ):
+                helper.start()
+
+            self.assertTrue(helper.starting)
+            self.assertEqual(helper.start_stop_button.text(), "LOADING")
+            self.assertFalse(helper.start_stop_button.isEnabled())
+            self.assertEqual(helper.status.text(), "Loading auto join modules...")
+
+            with patch.object(helper, "stop") as stop:
+                helper.handle_hotkey()
+            stop.assert_not_called()
+
+            helper._handle_worker_output("__HELPER_READY__")
+            self.app.processEvents()
+
+            self.assertFalse(helper.starting)
+            self.assertEqual(helper.start_stop_button.text(), "STOP")
+            self.assertEqual(helper.start_stop_button.variant, "danger")
+            self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertEqual(
+                helper.status.text(), "Starting auto join for server 5147..."
+            )
+        finally:
+            helper.worker_process = None
+            helper.close()
+
+    def test_auto_join_startup_failure_restores_start_button(self):
+        with patch(
+            "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            helper.server_field.setText("5147")
+            with (
+                patch("source.launcher.auto_join_server_helper.focus_game_window"),
+                patch.object(
+                    helper,
+                    "_start_worker",
+                    side_effect=OSError("worker unavailable"),
+                ),
+            ):
+                helper.start()
+
+            self.assertFalse(helper.starting)
+            self.assertEqual(helper.start_stop_button.text(), "START")
+            self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertFalse(helper.start_stop_button._loading_timer.isActive())
+            self.assertEqual(helper.status.text(), "Cannot start: worker unavailable")
         finally:
             helper.close()
 
@@ -815,8 +1083,8 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertEqual(helper.width(), MINIMAL_HELPER_RUNNING_WIDTH)
             self.assertLess(helper.height(), idle_height)
             self.assertTrue(helper.description.isHidden())
-            self.assertTrue(helper.start_stop_button.isHidden())
-            self.assertTrue(helper.status.isHidden())
+            self.assertFalse(helper.start_stop_button.isHidden())
+            self.assertFalse(helper.status.isHidden())
 
             helper._set_running_ui(False)
             self.app.processEvents()
@@ -829,6 +1097,78 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertFalse(helper.description.isHidden())
             self.assertFalse(helper.start_stop_button.isHidden())
             self.assertFalse(helper.status.isHidden())
+        finally:
+            helper.close()
+
+    def test_fertilizer_starting_state_becomes_ready_stop_state(self):
+        with patch(
+            "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            helper = FertilizerRefreshHelper(self._worker_owner())
+        process = Mock()
+        process.poll.return_value = None
+        process.stdout = None
+
+        def launch_worker(*_args):
+            helper._set_running_ui(True)
+            helper.worker_process = process
+
+        try:
+            with (
+                patch("source.launcher.fertilizer_refresh_helper.focus_game_window"),
+                patch.object(helper, "_start_worker", side_effect=launch_worker),
+            ):
+                helper.start()
+
+            self.assertTrue(helper.starting)
+            self.assertEqual(helper.start_stop_button.text(), "LOADING")
+            self.assertFalse(helper.start_stop_button.isEnabled())
+            self.assertTrue(helper.start_stop_button._loading_timer.isActive())
+            self.assertEqual(helper.status.text(), "Loading fertilizer modules...")
+
+            with patch.object(helper, "stop") as stop:
+                helper.handle_hotkey()
+            stop.assert_not_called()
+
+            helper._handle_worker_output("__HELPER_READY__")
+            self.app.processEvents()
+
+            self.assertFalse(helper.starting)
+            self.assertEqual(helper.start_stop_button.text(), "STOP")
+            self.assertEqual(helper.start_stop_button.variant, "danger")
+            self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertFalse(helper.start_stop_button._loading_timer.isActive())
+            self.assertEqual(
+                helper.status.text(), "Aim at a crop plot to refresh fertilizer..."
+            )
+        finally:
+            helper.worker_process = None
+            helper.close()
+
+    def test_fertilizer_startup_failure_restores_start_button(self):
+        with patch(
+            "source.launcher.fertilizer_refresh_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            helper = FertilizerRefreshHelper(self._worker_owner())
+
+        try:
+            with (
+                patch("source.launcher.fertilizer_refresh_helper.focus_game_window"),
+                patch.object(
+                    helper,
+                    "_start_worker",
+                    side_effect=OSError("worker unavailable"),
+                ),
+            ):
+                helper.start()
+
+            self.assertFalse(helper.starting)
+            self.assertEqual(helper.start_stop_button.text(), "START")
+            self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertFalse(helper.start_stop_button._loading_timer.isActive())
+            self.assertEqual(helper.status.text(), "Cannot start: worker unavailable")
         finally:
             helper.close()
 
@@ -865,9 +1205,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.app.processEvents()
             content_height = overlay.height()
 
-            self.assertEqual(overlay.width(), 200)
-            self.assertEqual(overlay.minimumWidth(), 200)
-            self.assertEqual(overlay.maximumWidth(), 200)
+            self.assertEqual(overlay.width(), RUNNER_WIDTH)
+            self.assertEqual(overlay.minimumWidth(), RUNNER_WIDTH)
+            self.assertEqual(overlay.maximumWidth(), RUNNER_WIDTH)
             self.assertGreater(content_height, idle_height)
             self.assertGreaterEqual(idle_height, HELPER_HEIGHT)
             self.assertEqual(
@@ -887,7 +1227,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             overlay.refresh({"running": [], "active": [], "waiting": []})
             self.app.processEvents()
 
-            self.assertEqual(overlay.width(), 200)
+            self.assertEqual(overlay.width(), RUNNER_WIDTH)
             self.assertEqual(overlay.height(), idle_height)
             self.assertTrue(overlay.log_divider.isHidden())
             self.assertTrue(all(label.isHidden() for label in overlay.log_labels))
@@ -902,9 +1242,20 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             stop_program=Mock(),
         )
         overlay = RunnerOverlay(owner)
+        long_current_task = (
+            "currently running a very long task name that cannot fit inside the overlay"
+        )
+        long_upcoming_tasks = [
+            "upcoming task one with a very long name that cannot fit inside the overlay",
+            "upcoming task two with a very long name that cannot fit inside the overlay",
+            "upcoming task three with a very long name that cannot fit inside the overlay",
+        ]
         snapshot = {
-            "running": [{"name": "pego 1"}],
-            "active": [],
+            "running": [{"name": long_current_task}],
+            "active": [
+                {"name": name, "execution_time": 0, "state": "READY"}
+                for name in long_upcoming_tasks
+            ],
             "waiting": [],
         }
         long_log = (
@@ -934,6 +1285,18 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 label.fontMetrics().horizontalAdvance(label.text()),
                 label.contentsRect().width(),
             )
+            task_labels = [overlay.current_label, *overlay.upcoming_labels]
+            for task_label, full_text in zip(
+                task_labels,
+                [long_current_task, *long_upcoming_tasks],
+            ):
+                self.assertFalse(task_label.wordWrap())
+                self.assertEqual(task_label._full_text, full_text)
+                self.assertTrue(task_label.text().endswith("..."))
+                self.assertLessEqual(
+                    task_label.fontMetrics().horizontalAdvance(task_label.text()),
+                    task_label.contentsRect().width(),
+                )
 
             stable_geometry = overlay.geometry()
             for _ in range(3):

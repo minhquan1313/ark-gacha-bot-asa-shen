@@ -1,4 +1,7 @@
+import contextlib
+import threading
 import time
+from collections.abc import Iterator
 
 import pyautogui
 import win32clipboard
@@ -9,7 +12,31 @@ from source.ASA.player import player_state
 from source.logs import gachalogs as logs
 from source.utility import template, utils
 
-last_command = ""
+_clipboard_lock = threading.Lock()
+_clipboard_open_timeout = 3
+_clipboard_retry_delay = 0.05
+
+
+@contextlib.contextmanager
+def _open_clipboard() -> Iterator[None]:
+    """Open the shared Windows clipboard with bounded contention retries."""
+    with _clipboard_lock:
+        dl = utils.get_default_clock(_clipboard_open_timeout)
+        is_dled = dl()
+        while not is_dled:
+            is_dled = dl()
+            try:
+                win32clipboard.OpenClipboard()
+                break
+            except Exception:
+                if is_dled:
+                    raise
+                time.sleep(_clipboard_retry_delay)
+
+        try:
+            yield
+        finally:
+            win32clipboard.CloseClipboard()
 
 
 def is_open():
@@ -18,22 +45,18 @@ def is_open():
     ) or template.console_strip_check(template.console_strip_middle())
 
 
-def enter_data(data: str):
-    global last_command
+def enter_data(data: str) -> bool:
     logs.logger.debug(f"using clipboard to put {data} into the console")
-    clipboard_opened = False
-    try:  # my pc had issues where it would run threw this and not open clipoard then crash trying to close it
-        win32clipboard.OpenClipboard()
-        clipboard_opened = True
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardText(data, win32clipboard.CF_TEXT)
+    try:
+        with _open_clipboard():
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardText(data, win32clipboard.CF_TEXT)
     except Exception as e:
-        print(f"Clipboard error: {e}")
-    finally:
-        if clipboard_opened:
-            win32clipboard.CloseClipboard()
+        logs.logger.warning(f"Unable to write to clipboard: {e}")
+        return False
+
     pyautogui.hotkey("ctrl", "v")
-    last_command = data
+    return True
 
 
 def console_reset():
@@ -49,10 +72,10 @@ def console_reset():
     time.sleep(0.3)
 
 
-def console_ccc(reset_state_before_capture=True):
+def console_ccc(reset_state_before_capture: bool = True) -> list[str] | None:
     data = None
     attempts = 0
-    while data == None:
+    while data is None:
         attempts += 1
         logs.logger.debug(
             f"trying to get ccc data {attempts} / {source.ASA.config.console_ccc_attempts}"
@@ -74,20 +97,31 @@ def console_ccc(reset_state_before_capture=True):
         if is_open():
             middle = template.console_strip_check(template.console_strip_middle())
             if attempts >= source.ASA.config.console_ccc_attempts:
-                console_write("ccc")
+                command_entered = console_write("ccc")
             else:
-                enter_data("ccc")
-                close_console(middle)
+                command_entered = enter_data("ccc")
+                if command_entered:
+                    close_console(middle)
+
+            if not command_entered:
+                if attempts >= source.ASA.config.console_ccc_attempts:
+                    logs.logger.error(
+                        f"CCC could not access the clipboard after {attempts} attempts"
+                    )
+                    console_reset()
+                    break
+                continue
 
             time.sleep(
                 0.1 * settings.lag_offset
             )  # slow to try and prevent opening clipboard to empty data
             try:
-                win32clipboard.OpenClipboard()
-                data = win32clipboard.GetClipboardData()
-                win32clipboard.EmptyClipboard()
-            finally:
-                win32clipboard.CloseClipboard()
+                with _open_clipboard():
+                    data = win32clipboard.GetClipboardData()
+                    win32clipboard.EmptyClipboard()
+            except Exception as e:
+                logs.logger.warning(f"Unable to read from clipboard: {e}")
+                data = None
 
             try:
                 ccc_data = data.split()
@@ -97,7 +131,7 @@ def console_ccc(reset_state_before_capture=True):
                 logs.logger.warning(f"CCC returned invalid clipboard data: {data!r}")
                 data = None
 
-        if data == None and attempts >= source.ASA.config.console_ccc_attempts:
+        if data is None and attempts >= source.ASA.config.console_ccc_attempts:
             logs.logger.error(
                 f"CCC is still returning invalid data after {attempts} attempts"
             )
@@ -107,14 +141,13 @@ def console_ccc(reset_state_before_capture=True):
             console_reset()
             # Enter current command to clear it and also close console
             break
-    if data != None:
+    if data is not None:
         ccc_data = data.split()
         return ccc_data
     return data
 
 
-def console_write(text: str):
-    global last_command
+def console_write(text: str) -> bool:
     attempts = 0
     while not is_open():
         console_reset()
@@ -130,12 +163,14 @@ def console_write(text: str):
 
     if is_open():
         middle = template.console_strip_check(template.console_strip_middle())
-        enter_data(text)
+        if not enter_data(text):
+            return False
         close_console(middle)
-        last_command = text
         time.sleep(
             0.1 * settings.lag_offset
         )  # slow to try and prevent opening clipboard to empty data
+        return True
+    return False
 
 
 def close_console(middle):
@@ -146,9 +181,9 @@ def close_console(middle):
     time.sleep(0.1 * settings.lag_offset)
     utils.press_key("Enter")
 
-    if middle == True:
+    if middle:
         logs.logger.warning(
-            f"middle console open if this is happening alot something should be changed"
+            "middle console open if this is happening alot something should be changed"
         )
         time.sleep(0.1 * settings.lag_offset)
         utils.press_key("Enter")

@@ -204,7 +204,8 @@ class DebugScreenshotHelperTests(unittest.TestCase):
 def _debug_capture_module():
     captures = {}
     debug = types.ModuleType("source.utility.debug_screenshots")
-    debug.CAPTURE_DEDI_DEPOSIT = False
+    debug.CAPTURE_DEDI_DEPOSIT_CRYSTAL = False
+    debug.CAPTURE_DEDI_DEPOSIT_GRIND = False
     debug.CAPTURE_IGUANADON_SEED = False
     debug.CAPTURE_GACHA_SEED = False
     debug.CAPTURE_GACHA_OVERCAP = False

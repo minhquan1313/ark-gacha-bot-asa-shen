@@ -7,15 +7,15 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 
-from source.launcher.deposit_helper_capture import (
+from source.launcher.components.helper_window import BaseHelperWindow
+from source.launcher.components.widgets import AnimatedButton, WrappedStatusLabel
+from source.launcher.deposit_route_helper import DepositHelperGuide
+from source.launcher.utils.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
     register_alt_n_hotkey,
     unregister_hotkey,
     view_yaw,
 )
-from source.launcher.deposit_route_helper import DepositHelperGuide
-from source.launcher.helper_window import BaseHelperWindow
-from source.launcher.widgets import AnimatedButton, WrappedStatusLabel
 
 
 class PositionRenderGuide(DepositHelperGuide):

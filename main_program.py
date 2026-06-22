@@ -1,12 +1,13 @@
 import asyncio
+import contextlib
 import sys
 import time
 
 import pyautogui
 
 import settings
-from source.launcher.constants import GAME_WINDOW_TITLE
-from source.launcher.system import focus_window_if_needed
+from source.launcher.config.constants import GAME_WINDOW_TITLE
+from source.launcher.utils.system import focus_window_if_needed
 from source.logs import gachalogs as logs
 from source.utility import windows
 from source.utility.debug_screenshots import stop_debug_screenshot_worker
@@ -47,10 +48,8 @@ async def cancel_focus_window():
     if task is None or task.done():
         return
     task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
 
 async def main():
@@ -84,6 +83,6 @@ if __name__ == "__main__":
         print("[WARN] Offline runner stopped.")
     except Exception as exc:
         print(f"[ERROR] {exc}")
-        logs.logger.critical(f"Something happened and GBot stopped", exc_info=True)
+        logs.logger.critical("Something happened and GBot stopped", exc_info=True)
         time.sleep(1)
         sys.exit(1)

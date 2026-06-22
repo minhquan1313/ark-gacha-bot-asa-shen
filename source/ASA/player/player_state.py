@@ -2,7 +2,6 @@ import time
 
 import settings
 import source.gacha_bot.render
-from source.ASA.inventories import inventory
 from source.ASA.player import buffs, player_inventory, tribelog
 from source.ASA.strucutres import bed, teleporter
 from source.join_sim.source import main
@@ -12,7 +11,7 @@ from source.utility.debug_screenshots import (
     CAPTURE_PLAYER_STATE,
     capture_for,
 )
-from source.utility.structures.transmitter import transmitter, transmitter_transfer_menu
+from source.utility.structures.transmitter import transmitter
 
 global crouched
 global uploaded
@@ -25,7 +24,6 @@ capture_state = capture_for("player_state", active=CAPTURE_PLAYER_STATE)
 
 class charecter:
     def __init__(self):
-        self.inventory = inventory.inventory()
         self.crouched = False
         self.weight = 0
         self.health = 0
@@ -44,7 +42,7 @@ class charecter:
 
     def reset_crouch(self):
         if self.crouched:
-            for x in range(3):  # just ensuring that we are standing up properly
+            for _x in range(3):  # just ensuring that we are standing up properly
                 utils.press_key("Run")
             time.sleep(0.1)  # takes time to uncrouch ensuring that it has properly
             self.crouched = False
@@ -80,7 +78,7 @@ def check_disconnected():
 
 
 def reset_state():
-    logs.logger.debug(f"resetting char state now")
+    logs.logger.debug("resetting char state now")
     player_inventory.close()
     teleporter.close()
     tribelog.close()

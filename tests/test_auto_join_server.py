@@ -1,21 +1,50 @@
+import importlib
+import sys
+import types
 import unittest
 from unittest.mock import Mock, patch
 
-from source.join_sim.source.auto_join import normalize_server_number, run_auto_join_server
+from source.join_sim.source.server_number import normalize_server_number
+
+
+join_main = types.ModuleType("source.join_sim.source.main")
+join_main.is_menu = Mock(return_value=False)
+join_main.join_round = Mock(return_value=True)
+crash = types.ModuleType("source.join_sim.source.crash.crash")
+crash.detect_crash = Mock(return_value=False)
+crash.re_open_game = Mock()
+
+with patch.dict(
+    sys.modules,
+    {
+        "source.join_sim.source.main": join_main,
+        "source.join_sim.source.crash.crash": crash,
+    },
+):
+    auto_join = importlib.import_module("source.join_sim.source.auto_join")
 
 
 class FakeClock:
-    def __init__(self):
+    def __init__(self) -> None:
         self.value = 0
 
-    def now(self):
+    def now(self) -> int:
         return self.value
 
-    def sleep(self, seconds):
+    def sleep(self, seconds: int | float) -> None:
         self.value += seconds
 
 
 class AutoJoinServerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        join_main.is_menu.reset_mock(return_value=True, side_effect=True)
+        join_main.is_menu.return_value = False
+        join_main.join_round.reset_mock(return_value=True, side_effect=True)
+        join_main.join_round.return_value = True
+        crash.detect_crash.reset_mock(return_value=True, side_effect=True)
+        crash.detect_crash.return_value = False
+        crash.re_open_game.reset_mock(return_value=True, side_effect=True)
+
     def test_normalize_server_number_rejects_invalid_values(self):
         for value in ["", "0", "abc", "12a"]:
             with self.subTest(value=value):
@@ -26,106 +55,63 @@ class AutoJoinServerTests(unittest.TestCase):
 
     def test_exits_successfully_when_join_round_returns_true(self):
         statuses = []
-        calls = []
         clock = FakeClock()
 
-        result = run_auto_join_server(
-            "5147",
-            status_callback=statuses.append,
-            join_round=lambda server: calls.append(server) or True,
-            is_menu=lambda: False,
-            detect_crash=lambda: False,
-            re_open_game=lambda: None,
-            sleep=clock.sleep,
-            now=clock.now,
-        )
+        with (
+            patch.object(auto_join.time, "sleep", side_effect=clock.sleep),
+            patch.object(auto_join.time, "monotonic", side_effect=clock.now),
+        ):
+            result = auto_join.run_auto_join_server("5147", statuses.append)
 
         self.assertTrue(result)
-        self.assertEqual(calls, ["5147"])
+        join_main.join_round.assert_called_once_with("5147")
         self.assertEqual(statuses[-1], "Joined server 5147.")
 
     def test_keeps_retrying_until_join_round_succeeds(self):
         clock = FakeClock()
-        outcomes = [False, False, True]
-        calls = []
+        join_main.join_round.side_effect = [False, False, True]
 
-        result = run_auto_join_server(
-            "5147",
-            join_round=lambda server: calls.append(server) or outcomes.pop(0),
-            is_menu=lambda: False,
-            detect_crash=lambda: False,
-            re_open_game=lambda: None,
-            sleep=clock.sleep,
-            now=clock.now,
-            retry_delay=2,
-        )
+        with (
+            patch.object(auto_join.time, "sleep", side_effect=clock.sleep),
+            patch.object(auto_join.time, "monotonic", side_effect=clock.now),
+        ):
+            result = auto_join.run_auto_join_server("5147")
 
         self.assertTrue(result)
-        self.assertEqual(calls, ["5147", "5147", "5147"])
+        self.assertEqual(join_main.join_round.call_count, 3)
         self.assertGreaterEqual(clock.value, 4)
-
-    def test_default_join_round_uses_join_sim_main_flow(self):
-        clock = FakeClock()
-        join_main = Mock()
-        join_main.is_menu.return_value = False
-        join_main.join_round.return_value = True
-
-        with patch.dict("sys.modules", {"source.join_sim.source.main": join_main}):
-            result = run_auto_join_server(
-                "5147",
-                detect_crash=lambda: False,
-                re_open_game=lambda: None,
-                sleep=clock.sleep,
-                now=clock.now,
-            )
-
-        self.assertTrue(result)
-        join_main.join_round.assert_called_once_with("5147")
 
     def test_triggers_crash_reopen_before_retrying(self):
         clock = FakeClock()
-        crash_checks = [True, False]
-        reopened = []
-        calls = []
+        crash.detect_crash.side_effect = [True, False]
 
-        result = run_auto_join_server(
-            "5147",
-            join_round=lambda server: calls.append(server) or True,
-            is_menu=lambda: False,
-            detect_crash=lambda: crash_checks.pop(0),
-            re_open_game=lambda: reopened.append("reopen"),
-            sleep=clock.sleep,
-            now=clock.now,
-            reopen_pause=5,
-        )
+        with (
+            patch.object(auto_join.time, "sleep", side_effect=clock.sleep),
+            patch.object(auto_join.time, "monotonic", side_effect=clock.now),
+        ):
+            result = auto_join.run_auto_join_server("5147")
 
         self.assertTrue(result)
-        self.assertEqual(reopened, ["reopen"])
-        self.assertEqual(calls, ["5147"])
-        self.assertGreaterEqual(clock.value, 5)
+        crash.re_open_game.assert_called_once_with()
+        join_main.join_round.assert_called_once_with("5147")
+        self.assertGreaterEqual(clock.value, auto_join.REOPEN_PAUSE_SECONDS)
 
     def test_triggers_periodic_reopen_while_still_in_menu(self):
         clock = FakeClock()
-        reopened = []
-        calls = []
-        outcomes = [False, True]
+        join_main.is_menu.return_value = True
+        join_main.join_round.side_effect = [False, True]
 
-        result = run_auto_join_server(
-            "5147",
-            join_round=lambda server: calls.append(server) or outcomes.pop(0),
-            is_menu=lambda: True,
-            detect_crash=lambda: False,
-            re_open_game=lambda: reopened.append("reopen"),
-            sleep=clock.sleep,
-            now=clock.now,
-            retry_delay=901,
-            reopen_interval=900,
-            reopen_pause=0,
-        )
+        with (
+            patch.object(auto_join.time, "sleep", side_effect=clock.sleep),
+            patch.object(auto_join.time, "monotonic", side_effect=clock.now),
+            patch.object(auto_join, "RETRY_DELAY_SECONDS", 901),
+            patch.object(auto_join, "REOPEN_PAUSE_SECONDS", 0),
+        ):
+            result = auto_join.run_auto_join_server("5147")
 
         self.assertTrue(result)
-        self.assertEqual(reopened, ["reopen"])
-        self.assertEqual(calls, ["5147", "5147"])
+        crash.re_open_game.assert_called_once_with()
+        self.assertEqual(join_main.join_round.call_count, 2)
 
 
 if __name__ == "__main__":

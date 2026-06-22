@@ -26,7 +26,7 @@ def open():
         )
         utils.press_key("AccessInventory")
         if template.template_await_true(is_open, 3):
-            logs.logger.debug(f"inventory opened")
+            logs.logger.debug("inventory opened")
             is_still_loading = template.template_await_false(
                 template.check_template, 3, "waiting_inv", 0.8
             )
@@ -35,16 +35,17 @@ def open():
                 while is_open() and not is_ready() and not dl():
                     time.sleep(1)
                     player_state.check_disconnected()
-                close()
-            break
+                if is_open() and not is_ready():
+                    close()
+            return
 
         # check state of the char before redoing
         else:
             player_state.check_state()
         if attempts >= source.ASA.config.inventory_open_attempts:
-            logs.logger.error(f"unable to open up the objects inventory")
+            logs.logger.error("unable to open up the objects inventory")
             break
-    time.sleep(0.3 * settings.lag_offset)
+        time.sleep(0.3 * settings.lag_offset)
 
 
 def close():
@@ -87,7 +88,7 @@ def search_in_object(item: str):
 
 def drop_all_obj():
     if is_open():
-        logs.logger.debug(f"dropping all items from object")
+        logs.logger.debug("dropping all items from object")
         time.sleep(0.2 * settings.lag_offset)
         windows.click(
             variables.get_pixel_loc("drop_all_obj_x"),
@@ -98,7 +99,7 @@ def drop_all_obj():
 
 def transfer_all_from():
     if is_open():
-        logs.logger.debug(f"transfering all from object")
+        logs.logger.debug("transfering all from object")
         time.sleep(0.2 * settings.lag_offset)
         windows.click(
             variables.get_pixel_loc("transfer_all_from_x"),

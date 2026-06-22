@@ -18,7 +18,8 @@ def open():
     player should already be looking down at the teleporter this just opens and WILL try and correct if there are issues
     """
     attempts = 0
-    while not is_open():
+    dl = utils.get_default_clock()
+    while not is_open() and not dl():
         attempts += 1
         logs.logger.debug(
             f"trying to open teleporter {attempts} / {source.ASA.config.teleporter_open_attempts}"
@@ -35,7 +36,7 @@ def open():
             utils.turn_down(80)
             time.sleep(0.2 * settings.lag_offset)
         else:
-            logs.logger.debug(f"teleporter opened")
+            logs.logger.debug("teleporter opened")
 
         if attempts - 1 == source.ASA.config.teleporter_open_attempts:
             logs.logger.error(
@@ -50,9 +51,16 @@ def open():
 
         if attempts >= source.ASA.config.teleporter_open_attempts:
             logs.logger.error(
-                f"unable to open up the teleporter after {source.ASA.config.teleporter_open_attempts} attempts"
+                f"unable to open up the teleporter after {source.ASA.config.teleporter_open_attempts} attempts, eating implant and trying to reset"
             )
-            break
+            bed.spawn_in(settings.bed_spawn)
+            time.sleep(20)
+            utils.pitch_zero()  # reseting the chars pitch/yaw
+            utils.turn_down(80)
+            time.sleep(5)
+
+            attempts = 0
+            dl = utils.get_default_clock()
 
 
 def close():
@@ -75,9 +83,12 @@ def close():
             break
 
 
-def teleport_not_default(arg, fallback_bed_name=None):
+def teleport_not_default(
+    arg: source.ASA.stations.custom_stations.station_metadata | str,
+    fallback_bed_name=None,
+):
     fallback_bed_name = fallback_bed_name or settings.bed_spawn
-    if player_state.human.on_tp == False:
+    if not player_state.human.on_tp:
         time.sleep(0.2 * settings.lag_offset)
         utils.turn_down(80)
         time.sleep(0.3 * settings.lag_offset)
@@ -110,7 +121,7 @@ def teleport_not_default(arg, fallback_bed_name=None):
             )
             if not template.template_await_true(template.check_teleporter_orange, 3):
                 logs.logger.warning(
-                    f"orange pixel for teleporter ready not found - list not loaded"
+                    "orange pixel for teleporter ready not found - list not loaded"
                 )
                 player_state.check_disconnected()
             else:
@@ -144,7 +155,7 @@ def teleport_not_default(arg, fallback_bed_name=None):
             utils.write(teleporter_name)
             time.sleep(0.5 * settings.lag_offset)
             if counter >= 3:
-                logs.logger.error(f"search still detected likely did type anything")
+                logs.logger.error("search still detected likely did type anything")
                 break
         windows.click(
             variables.get_pixel_loc("first_bed_slot_x"),
@@ -155,7 +166,7 @@ def teleport_not_default(arg, fallback_bed_name=None):
         )  # preventing the orange text from the starting teleport screen messing things up
         if not template.template_await_true(template.check_teleporter_orange, 3):
             logs.logger.warning(
-                f"orange pixel for teleporter ready not found likely already on the tp we are just exiting the tp treating it as the tp we should be on"
+                "orange pixel for teleporter ready not found likely already on the tp we are just exiting the tp treating it as the tp we should be on"
             )
             close()  # closing out as either the TP couldnt be found however we still want to change to the station yaw so we still continue
         else:
@@ -171,7 +182,7 @@ def teleport_not_default(arg, fallback_bed_name=None):
             )
 
             if template.template_await_true(template.white_flash, 1):
-                logs.logger.debug(f"white flash detected waiting for up too 5 seconds")
+                logs.logger.debug("white flash detected waiting for up too 5 seconds")
                 template.template_await_false(template.white_flash, 5)
 
             # Extra step to ensure we are teleported(not sitting at the old teleport due to server lag/save)

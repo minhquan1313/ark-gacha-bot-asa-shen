@@ -1,3 +1,4 @@
+import contextlib
 import subprocess
 import time
 
@@ -18,22 +19,16 @@ def _terminate_with_psutil(process, terminate_timeout, kill_timeout):
     children = parent.children(recursive=True)
     targets = children + [parent]
     for target in targets:
-        try:
+        with contextlib.suppress(psutil.AccessDenied, psutil.NoSuchProcess):
             target.terminate()
-        except (psutil.AccessDenied, psutil.NoSuchProcess):
-            pass
     gone, alive = psutil.wait_procs(targets, timeout=terminate_timeout)
     if alive:
         for target in alive:
-            try:
+            with contextlib.suppress(psutil.AccessDenied, psutil.NoSuchProcess):
                 target.kill()
-            except (psutil.AccessDenied, psutil.NoSuchProcess):
-                pass
         psutil.wait_procs(alive, timeout=kill_timeout)
-    try:
+    with contextlib.suppress(subprocess.TimeoutExpired, OSError):
         process.wait(timeout=0)
-    except (subprocess.TimeoutExpired, OSError):
-        pass
 
 
 def _terminate_direct(process, terminate_timeout, kill_timeout):

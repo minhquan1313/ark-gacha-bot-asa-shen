@@ -1,3 +1,4 @@
+import contextlib
 import os
 
 from PySide6.QtCore import QSize, Qt, QTimer
@@ -28,7 +29,14 @@ from source.gacha_bot.deposit_config import (
     save_deposit_config,
 )
 from source.launcher.auto_join_server_helper import AutoJoinServerHelper
-from source.launcher.constants import (
+from source.launcher.components.widgets import (
+    AnimatedButton,
+    ClickableTextEdit,
+    CyberSwitch,
+    HeroBanner,
+    MeterBar,
+)
+from source.launcher.config.constants import (
     APP_NAME,
     APP_TITLE,
     APP_VERSION,
@@ -38,12 +46,7 @@ from source.launcher.constants import (
     SETTINGS_GROUPS,
     setting_label,
 )
-from source.launcher.deposit_route_helper import DepositRouteHelper
-from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
-from source.launcher.position_render_helper import PositionRenderHelper
-from source.launcher.server_transfer_helper import ServerTransferHelper
-from source.launcher.settings_store import load_settings
-from source.launcher.station_config import (
+from source.launcher.config.station_config import (
     DEFAULT_PEGO_DELAY,
     DEFAULT_PEGO_SNOW_OWLS_PER_GACHA,
     DEFAULT_PEGO_STATION_SECONDS,
@@ -65,13 +68,12 @@ from source.launcher.station_config import (
     save_pego_config,
     set_all_pego_delays,
 )
-from source.launcher.widgets import (
-    AnimatedButton,
-    ClickableTextEdit,
-    CyberSwitch,
-    HeroBanner,
-    MeterBar,
-)
+from source.launcher.deposit_route_helper import DepositRouteHelper
+from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
+from source.launcher.position_render_helper import PositionRenderHelper
+from source.launcher.server_transfer_helper import ServerTransferHelper
+from source.launcher.switch_steam_helper import SwitchSteamHelper
+from source.launcher.utils.settings_store import load_settings
 
 
 def _counted_title(title: str, count: int | str) -> str:
@@ -347,7 +349,9 @@ class LauncherPagesMixin:
         badge.setObjectName(
             "BadgeDone"
             if state == "DONE"
-            else "BadgeWarn" if state == "INCOMPLETE" else "BadgePending"
+            else "BadgeWarn"
+            if state == "INCOMPLETE"
+            else "BadgePending"
         )
         layout.addWidget(label)
         layout.addWidget(title, 1)
@@ -531,21 +535,6 @@ class LauncherPagesMixin:
         expand_row.addWidget(expand_all)
         expand_row.addWidget(collapse_all)
         storage_layout.addLayout(expand_row)
-        timeout_row = QHBoxLayout()
-        timeout_label = QLabel(setting_label("dedi_handshake_timeout"))
-        timeout_label.setObjectName("FormLabel")
-        timeout = QLineEdit(str(self.form_values.get("dedi_handshake_timeout", 30)))
-        timeout.setObjectName("SettingField")
-        timeout.editingFinished.connect(
-            lambda: self.persist_single_setting("dedi_handshake_timeout")
-        )
-        timeout.returnPressed.connect(
-            lambda: self.persist_single_setting("dedi_handshake_timeout")
-        )
-        self.fields["dedi_handshake_timeout"] = timeout
-        timeout_row.addWidget(timeout_label)
-        timeout_row.addWidget(timeout, 1)
-        storage_layout.addLayout(timeout_row)
         content_layout.addWidget(storage_settings)
 
         crystal_heading = QLabel(
@@ -580,9 +569,7 @@ class LauncherPagesMixin:
 
         groups = grouped_gacha_entries(self.gacha_config)
         heading = QLabel(
-            _counted_title(
-                "GACHA SETTINGS", f"{len(groups)}({len(self.gacha_config)})"
-            )
+            _counted_title("GACHA SETTINGS", f"{len(groups)}({len(self.gacha_config)})")
         )
         heading.setObjectName("SectionHeading")
         self.settings_form_layout.addWidget(heading, 0, 0, 1, 4)
@@ -679,8 +666,8 @@ class LauncherPagesMixin:
         teleporter_label.setObjectName("FormLabel")
         teleporter_field = self._deposit_line_edit(teleporter)
         teleporter_field.editingFinished.connect(
-            lambda field=teleporter_field, old=teleporter: self.update_gacha_group_teleporter(
-                old, field
+            lambda field=teleporter_field, old=teleporter: (
+                self.update_gacha_group_teleporter(old, field)
             )
         )
         teleporter_row.addWidget(teleporter_label)
@@ -766,8 +753,8 @@ class LauncherPagesMixin:
         calculator = self._pego_calculator_panel()
         calculator.setVisible(getattr(self, "pego_calculator_expanded", False))
         calc_toggle.clicked.connect(
-            lambda checked=False, target=calculator, button=calc_toggle: self._toggle_pego_calculator(
-                target, button
+            lambda checked=False, target=calculator, button=calc_toggle: (
+                self._toggle_pego_calculator(target, button)
             )
         )
         controls_layout.addWidget(calculator)
@@ -794,10 +781,10 @@ class LauncherPagesMixin:
         copy = self._button("COPY", "secondary")
         copy.setObjectName("HelperIconButton")
         copy.setToolTip("Copy teleport name")
+
+        teleporter = entry.get("teleporter", "")
         copy.clicked.connect(
-            lambda checked=False, value=entry.get("teleporter", ""): self.copy_text(
-                value
-            )
+            lambda checked=False, value=teleporter: self.copy_text(value)
         )
         remove = self._icon_button("icon.trash_junk", "Remove pego entry", "danger")
         remove.clicked.connect(
@@ -910,8 +897,8 @@ class LauncherPagesMixin:
             layout.addLayout(
                 self._dedi_row(
                     item,
-                    lambda checked=False, r=route_index, i=item_index: self.remove_crystal_dedi(
-                        r, i
+                    lambda checked=False, r=route_index, i=item_index: (
+                        self.remove_crystal_dedi(r, i)
                     ),
                 )
             )
@@ -927,8 +914,8 @@ class LauncherPagesMixin:
             layout.addLayout(
                 self._vault_row(
                     vault,
-                    lambda checked=False, r=route_index, i=vault_index: self.remove_crystal_vault(
-                        r, i
+                    lambda checked=False, r=route_index, i=vault_index: (
+                        self.remove_crystal_vault(r, i)
                     ),
                 )
             )
@@ -979,8 +966,8 @@ class LauncherPagesMixin:
             layout.addLayout(
                 self._dedi_row(
                     item,
-                    lambda checked=False, r=route_index, i=item_index: self.remove_grindable_dedi(
-                        r, i
+                    lambda checked=False, r=route_index, i=item_index: (
+                        self.remove_grindable_dedi(r, i)
                     ),
                 )
             )
@@ -1135,6 +1122,25 @@ class LauncherPagesMixin:
         helper.activateWindow()
         self.deposit_helper = helper
 
+    def open_switch_steam_helper(self) -> None:
+        if not self._can_open_setup_helper():
+            return
+        helper = self.find_deposit_helper("switch_steam", None)
+        if helper is not None:
+            helper.show()
+            helper.raise_()
+            helper.activateWindow()
+            self.deposit_helper = helper
+            return
+
+        self.close_external_helpers()
+        helper = SwitchSteamHelper(self)
+        self.register_deposit_helper(helper)
+        helper.show()
+        helper.raise_()
+        helper.activateWindow()
+        self.deposit_helper = helper
+
     def _can_open_setup_helper(self):
         if self.is_program_running() or getattr(self, "program_stopping", False):
             self.dialog(
@@ -1173,10 +1179,8 @@ class LauncherPagesMixin:
 
     def close_external_helpers(self):
         for helper in list(getattr(self, "external_helpers", [])):
-            try:
+            with contextlib.suppress(RuntimeError):
                 helper.close()
-            except RuntimeError:
-                pass
         self.external_helpers.clear()
 
     def refresh_json_configs(self):
@@ -1461,13 +1465,13 @@ class LauncherPagesMixin:
         label.setObjectName("FormLabel")
         field = self._deposit_line_edit(value)
         field.editingFinished.connect(
-            lambda field=field, index=entry_index, key=label_text, name=kind: self.update_station_field(
-                name, index, key, field
+            lambda field=field, index=entry_index, key=label_text, name=kind: (
+                self.update_station_field(name, index, key, field)
             )
         )
         field.returnPressed.connect(
-            lambda field=field, index=entry_index, key=label_text, name=kind: self.update_station_field(
-                name, index, key, field
+            lambda field=field, index=entry_index, key=label_text, name=kind: (
+                self.update_station_field(name, index, key, field)
             )
         )
         row.addWidget(label)
@@ -1761,7 +1765,7 @@ class LauncherPagesMixin:
             DEFAULT_PEGO_SNOW_OWLS_PER_GACHA,
             DEFAULT_PEGO_STATION_SECONDS,
         ]
-        for field, value in zip(self._pego_calculator_fields(), defaults):
+        for field, value in zip(self._pego_calculator_fields(), defaults, strict=False):
             field.setText(str(value))
         self.update_pego_delay_recommendation(show_error=False)
 
@@ -1825,11 +1829,8 @@ class LauncherPagesMixin:
             filter_row.addWidget(button)
         filter_row.addStretch()
         clear = self._button("CLEAR LOGS", "danger")
-        export = self._button("EXPORT", "secondary")
         clear.clicked.connect(self.clear_logs)
-        export.clicked.connect(self.copy_logs)
         filter_row.addWidget(clear)
-        filter_row.addWidget(export)
 
         console, console_layout = self._panel()
         self.full_log = self._console_widget()
@@ -1837,12 +1838,12 @@ class LauncherPagesMixin:
         layout.addWidget(console, 1)
         bottom = QHBoxLayout()
         test = self._button("TEST CONSOLE COLOURS  >", "secondary")
-        copy = self._button("COPY LOGS", "primary")
+        open_logs = self._button("OPEN LOGS", "primary")
         test.clicked.connect(self.check_colours)
-        copy.clicked.connect(self.copy_logs)
+        open_logs.clicked.connect(self.open_logs)
         bottom.addWidget(test)
         bottom.addStretch()
-        bottom.addWidget(copy)
+        bottom.addWidget(open_logs)
         layout.addLayout(bottom)
         return page
 
@@ -1895,9 +1896,22 @@ class LauncherPagesMixin:
         card_layout.addWidget(description)
         card_layout.addWidget(open_tool)
 
+        switch_card, switch_layout = self._panel("SWITCH STEAM")
+        switch_description = QLabel(
+            "Restart Steam with any saved account, or switch accounts before "
+            "launching ARK. ARK is closed safely before Steam restarts."
+        )
+        switch_description.setObjectName("MutedCopy")
+        switch_description.setWordWrap(True)
+        open_switch = self._button("OPEN TOOL", "primary")
+        open_switch.clicked.connect(self.open_switch_steam_helper)
+        switch_layout.addWidget(switch_description)
+        switch_layout.addWidget(open_switch)
+
         tools_grid.addWidget(auto_join_card, 0, 0)
         tools_grid.addWidget(transfer_card, 0, 1)
         tools_grid.addWidget(fertilizer_card, 1, 0)
+        tools_grid.addWidget(switch_card, 1, 1)
         layout.addLayout(tools_grid)
         layout.addStretch()
         return page

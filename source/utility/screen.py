@@ -4,7 +4,7 @@ from ctypes import wintypes
 import mss
 import numpy as np
 
-from source.launcher.constants import GAME_WINDOW_TITLE
+from source.launcher.config.constants import GAME_WINDOW_TITLE
 
 
 def find_window_by_title(title):
@@ -29,7 +29,7 @@ else:
     print(
         f"{screen_width}x{screen_height} is not a valid screen res it needs to be 1920x1080"
     )
-    input(f"")  # prevents the closing of the window instantly
+    input("")  # prevents the closing of the window instantly
     exit()
 
 

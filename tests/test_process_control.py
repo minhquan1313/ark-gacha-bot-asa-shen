@@ -2,7 +2,7 @@ import subprocess
 import unittest
 from unittest.mock import Mock, patch
 
-from source.launcher.process_control import (
+from source.launcher.utils.process_control import (
     poll_kill_after_deadline,
     terminate_process_tree,
 )

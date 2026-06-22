@@ -1,4 +1,4 @@
-from source.launcher.constants import COLORS, FONT_SIZES
+from source.launcher.config.constants import COLORS, FONT_SIZES
 
 
 def launcher_style_sheet():

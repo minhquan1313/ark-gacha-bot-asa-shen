@@ -137,6 +137,11 @@ def close_steam() -> None:
     subprocess.run(["taskkill", "/F", "/IM", "steam.exe"], check=False)
 
 
+def launch_steam() -> None:
+    """Open the registered Steam client without resolving its executable path."""
+    subprocess.Popen(["cmd", "/c", "start", "", "steam://open/main"])
+
+
 def launch_ark_with_steam() -> None:
     """Launch ARK through Steam using the configured auto-login user."""
     subprocess.Popen(["cmd", "/c", "start", "", ARK_STEAM_URL])
@@ -148,9 +153,12 @@ def _iter_account_blocks(vdf_text: str):
         block_end = _matching_brace(vdf_text, block_start - 1)
         if block_end is None:
             continue
-        yield match.group("steam_id"), vdf_text[
-            block_start:block_end
-        ], block_start, block_end
+        yield (
+            match.group("steam_id"),
+            vdf_text[block_start:block_end],
+            block_start,
+            block_end,
+        )
 
 
 def _matching_brace(text: str, opening_index: int) -> int | None:

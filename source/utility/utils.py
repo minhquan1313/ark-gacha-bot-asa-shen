@@ -74,7 +74,6 @@ def keymap_return(key_input):
     if (
         key in default_keymap
     ):  # this would only be triggered if the input.ini file is empty || base key mpa
-
         key = default_keymap[key]
         if key in keymap:
             return keymap[key]
@@ -133,8 +132,9 @@ def timed_out_counter(limit_seconds=3):
     return is_excess
 
 
-def get_default_clock(deadline=config.timeout_deadline, lag_offset=1):
-    return timed_out_counter(deadline * lag_offset)
+def get_default_clock(deadline=config.timeout_deadline, multiplier=1):
+    m = max(settings.lag_offset, multiplier)
+    return timed_out_counter(deadline * m)
 
 
 """

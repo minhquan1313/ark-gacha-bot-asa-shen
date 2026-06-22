@@ -26,14 +26,15 @@ data = {
     "inv_slot_start_y": 236,
     "inv_slot_end_x": 262,
     "inv_slot_end_y": 326,
+    "inv_slot_player_2nd_x": 313,
+    "inv_slot_player_first_row_y": 280,
     "buff_button_x": 960,
     "buff_button_y": 885,
-    "drop_all_obj_x":1483,
+    "drop_all_obj_x": 1483,
     "back_button_tp_x": 180,
-    "back_button_tp_y": 963
+    "back_button_tp_y": 963,
 }
+
 
 def get_pixel_loc(location):
     return data.get(location)
- 
-

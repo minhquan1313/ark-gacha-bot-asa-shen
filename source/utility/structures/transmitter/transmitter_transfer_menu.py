@@ -182,11 +182,11 @@ def do_join_server(server: str):
     time.sleep(0.3)
     if not template.template_await_true(template.check_transfer_server_orange, 1):
         logs.logger.warning(
-            f"orange pixel for transmitter server not found likely server is shutdown"
+            "orange pixel for transmitter server not found likely server is shutdown"
         )
         return False
     else:
-        logs.logger.debug(f"Orange detected, ready for transfer")
+        logs.logger.debug("Orange detected, ready for transfer")
         time.sleep(0.3)
         if is_join_button_visible():
             windows.click(
@@ -196,7 +196,7 @@ def do_join_server(server: str):
             if template.template_await_true(is_server_join_success, 30):
                 # raise RuntimeError("SUCCESS")
                 player_state.uploaded = True
-                logs.logger.warning(f"Detected Survival UPLOADED")
+                logs.logger.warning("Detected Survival UPLOADED")
 
                 time.sleep(3)
                 search_bar_search("Joining...")

@@ -147,7 +147,7 @@ def get_region_roi(region):
 
 def template_await_true(func, sleep_amount: float, *args) -> bool:
     count = 0
-    while bool(func(*args)) == False:
+    while not bool(func(*args)):
         if count >= sleep_amount * 20:
             break
         time.sleep(0.05)
@@ -157,7 +157,7 @@ def template_await_true(func, sleep_amount: float, *args) -> bool:
 
 def template_await_false(func, sleep_amount: float, *args) -> bool:
     count = 0
-    while bool(func(*args)) != False:
+    while bool(func(*args)):
         if count >= sleep_amount * 20:
             break
         time.sleep(0.05)
@@ -454,7 +454,7 @@ def get_file():
             if not data:
                 return []
             return json.loads(data)
-    except (json.JSONDecodeError, FileNotFoundError) as e:
+    except (json.JSONDecodeError, FileNotFoundError):
         return []
 
 

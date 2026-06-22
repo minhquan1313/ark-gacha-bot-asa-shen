@@ -18,7 +18,7 @@ def detect_crash():
     for proc in psutil.process_iter(attrs=["name", "exe"]):
         if proc.info["name"] == "CrashReportClient.exe":
             crash_process = proc
-            logs.logger.critical(f"Crash detected")
+            logs.logger.critical("Crash detected")
             return True
     return False
 
@@ -27,8 +27,8 @@ def close_game():
     try:
         global crash_process
         if crash_process:
-            print(f"terminating crash process")
-            logs.logger.critical(f"terminating crash process")
+            print("terminating crash process")
+            logs.logger.critical("terminating crash process")
             crash_process.terminate()
             crash_process = None
 

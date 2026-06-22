@@ -16,7 +16,7 @@ from source.launcher.pages import (
     _counted_title,
     _deposit_route_child_count,
 )
-from source.launcher.station_config import (
+from source.launcher.config.station_config import (
     auto_fill_gacha_group,
     calculate_pego_delay,
     default_gacha_entry,
@@ -93,14 +93,24 @@ class StationConfigTests(unittest.TestCase):
             data = load_pego_config(path)
             saved = save_pego_config(data, path)
 
-            self.assertEqual(saved, [{"name": "pego1", "teleporter": "pego1", "delay": 1600}])
+            self.assertEqual(
+                saved, [{"name": "pego1", "teleporter": "pego1", "delay": 1600}]
+            )
 
     def test_default_gacha_pair_uses_expected_teleporter_and_sides(self):
         self.assertEqual(
             default_gacha_pair(index=2),
             [
-                {"name": "GACHAPAIR_2_left", "teleporter": "GACHAPAIR_2", "side": "left"},
-                {"name": "GACHAPAIR_2_right", "teleporter": "GACHAPAIR_2", "side": "right"},
+                {
+                    "name": "GACHAPAIR_2_left",
+                    "teleporter": "GACHAPAIR_2",
+                    "side": "left",
+                },
+                {
+                    "name": "GACHAPAIR_2_right",
+                    "teleporter": "GACHAPAIR_2",
+                    "side": "right",
+                },
             ],
         )
 
@@ -113,7 +123,9 @@ class StationConfigTests(unittest.TestCase):
 
         groups = grouped_gacha_entries(entries)
 
-        self.assertEqual([teleporter for teleporter, _ in groups], ["GACHAPAIR_1", "GACHAPAIR_10"])
+        self.assertEqual(
+            [teleporter for teleporter, _ in groups], ["GACHAPAIR_1", "GACHAPAIR_10"]
+        )
         self.assertEqual(len(groups[0][1]), 2)
 
     def test_missing_gacha_side_fills_left_then_right(self):
@@ -147,8 +159,16 @@ class StationConfigTests(unittest.TestCase):
         self.assertEqual(
             group,
             [
-                {"name": "GACHAPAIR_7_left", "teleporter": "GACHAPAIR_7", "side": "left"},
-                {"name": "GACHAPAIR_7_right", "teleporter": "GACHAPAIR_7", "side": "right"},
+                {
+                    "name": "GACHAPAIR_7_left",
+                    "teleporter": "GACHAPAIR_7",
+                    "side": "left",
+                },
+                {
+                    "name": "GACHAPAIR_7_right",
+                    "teleporter": "GACHAPAIR_7",
+                    "side": "right",
+                },
             ],
         )
 
@@ -163,8 +183,16 @@ class StationConfigTests(unittest.TestCase):
         self.assertEqual(
             group,
             [
-                {"name": "GACHAPAIR_2_left", "teleporter": "GACHAPAIR_2", "side": "left"},
-                {"name": "GACHAPAIR_2_right", "teleporter": "GACHAPAIR_2", "side": "right"},
+                {
+                    "name": "GACHAPAIR_2_left",
+                    "teleporter": "GACHAPAIR_2",
+                    "side": "left",
+                },
+                {
+                    "name": "GACHAPAIR_2_right",
+                    "teleporter": "GACHAPAIR_2",
+                    "side": "right",
+                },
             ],
         )
 

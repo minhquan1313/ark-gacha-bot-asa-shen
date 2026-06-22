@@ -1,3 +1,5 @@
+import contextlib
+
 from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QCursor, QPixmap
 from PySide6.QtWidgets import (
@@ -16,16 +18,20 @@ from PySide6.QtWidgets import (
 
 from source.gacha_bot.deposit_config import default_dedi_item, default_vault_item
 from source.launcher.components.custom_pyside_component import NoWheelComboBox
-from source.launcher.constants import ASSETS
-from source.launcher.deposit_helper_capture import (
+from source.launcher.components.helper_window import BaseHelperWindow
+from source.launcher.components.widgets import (
+    AnimatedButton,
+    CyberSwitch,
+    WrappedStatusLabel,
+)
+from source.launcher.config.constants import ASSETS
+from source.launcher.utils.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
     register_alt_n_hotkey,
     unregister_hotkey,
     view_route_entry,
 )
-from source.launcher.helper_window import BaseHelperWindow
-from source.launcher.vault_items_store import add_vault_item, load_vault_items
-from source.launcher.widgets import AnimatedButton, CyberSwitch, WrappedStatusLabel
+from source.launcher.utils.vault_items_store import add_vault_item, load_vault_items
 
 
 class DepositHelperGuide(QDialog):
@@ -353,10 +359,8 @@ class DepositRouteHelper(BaseHelperWindow):
         self.pending_focus_row = None
         if self.closing or row not in self.row_widgets:
             return
-        try:
+        with contextlib.suppress(RuntimeError):
             self._focus_row(row)
-        except RuntimeError:
-            pass
 
     def _focus_row(self, row):
         row.expand()
@@ -660,20 +664,20 @@ class CollapsibleHelperRow(QFrame):
                 combo.addItem(value)
             combo.setCurrentText(value)
             combo.activated.connect(
-                lambda selected_index, vault=self.entry, index=item_index, widget=combo: self.helper.update_vault_item(
-                    vault, index, widget
+                lambda selected_index, vault=self.entry, index=item_index, widget=combo: (
+                    self.helper.update_vault_item(vault, index, widget)
                 )
             )
             if combo.lineEdit() is not None:
                 combo.lineEdit().editingFinished.connect(
-                    lambda vault=self.entry, index=item_index, widget=combo: self.helper.update_vault_item(
-                        vault, index, widget
+                    lambda vault=self.entry, index=item_index, widget=combo: (
+                        self.helper.update_vault_item(vault, index, widget)
                     )
                 )
             remove = self.helper._icon_button("-", "Remove this vault item")
             remove.clicked.connect(
-                lambda checked=False, vault=self.entry, index=item_index: self.helper.remove_vault_item_row(
-                    vault, index
+                lambda checked=False, vault=self.entry, index=item_index: (
+                    self.helper.remove_vault_item_row(vault, index)
                 )
             )
             row.addWidget(label)
@@ -705,8 +709,7 @@ class CollapsibleHelperRow(QFrame):
             active = " active" if self.entry.get("active", False) else ""
             return f"GRINDER   yaw {yaw}   pitch {pitch}{suffix}{active}"
         return (
-            f"{self.kind.upper()} {self.index + 1}   "
-            f"yaw {yaw}   pitch {pitch}{suffix}"
+            f"{self.kind.upper()} {self.index + 1}   yaw {yaw}   pitch {pitch}{suffix}"
         )
 
 

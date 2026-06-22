@@ -24,7 +24,7 @@ def get_custom_stations():
             if not data:
                 return []
             return json.loads(data)
-    except (json.JSONDecodeError, FileNotFoundError) as e:
+    except (json.JSONDecodeError, FileNotFoundError):
         return []
 
 

@@ -133,7 +133,7 @@ def missing_gacha_side(group_entries):
 
 def auto_fill_gacha_group(group_entries, teleporter=None):
     sides = ["left", "right"]
-    for entry, side in zip(group_entries[:2], sides):
+    for entry, side in zip(group_entries[:2], sides, strict=False):
         if teleporter is not None:
             entry["teleporter"] = str(teleporter)
         entry["side"] = side

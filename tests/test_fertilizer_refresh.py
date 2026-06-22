@@ -1,12 +1,58 @@
+import importlib
+import io
+import sys
 import types
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
-from source.gacha_bot.fertilizer_refresh import (
-    _close_crop_plot_inventory,
-    _open_crop_plot_inventory,
-    run_fertilizer_refresh,
+
+def _module(name: str, **attributes: object) -> types.ModuleType:
+    module = types.ModuleType(name)
+    for key, value in attributes.items():
+        setattr(module, key, value)
+    return module
+
+
+settings = _module("settings", lag_offset=0)
+asa_config = _module(
+    "source.ASA.config",
+    inventory_open_attempts=3,
+    inventory_close_attempts=3,
 )
+inventory = _module(
+    "source.ASA.strucutres.inventory",
+    open=Mock(),
+    close=Mock(),
+    is_open=Mock(return_value=False),
+    transfer_all_from=Mock(),
+)
+player_inventory = _module(
+    "source.ASA.player.player_inventory",
+    transfer_all_inventory=Mock(),
+)
+logs = _module(
+    "source.logs.gachalogs",
+    logger=types.SimpleNamespace(debug=Mock(), error=Mock()),
+)
+template = _module(
+    "source.utility.template",
+    check_template=Mock(return_value=False),
+    check_template_no_bounds=Mock(return_value=False),
+    template_await_false=Mock(),
+)
+with patch.dict(
+    sys.modules,
+    {
+        "settings": settings,
+        "source.ASA.config": asa_config,
+        "source.ASA.strucutres.inventory": inventory,
+        "source.ASA.player.player_inventory": player_inventory,
+        "source.logs.gachalogs": logs,
+        "source.utility.template": template,
+    },
+):
+    fertilizer_refresh = importlib.import_module("source.gacha_bot.fertilizer_refresh")
 
 
 class StopLoop(RuntimeError):
@@ -14,156 +60,174 @@ class StopLoop(RuntimeError):
 
 
 class FertilizerRefreshTests(unittest.TestCase):
+    def setUp(self) -> None:
+        inventory.is_open.reset_mock(return_value=True, side_effect=True)
+        inventory.is_open.return_value = False
+        inventory.transfer_all_from.reset_mock(return_value=True, side_effect=True)
+        player_inventory.transfer_all_inventory.reset_mock(
+            return_value=True, side_effect=True
+        )
+        template.check_template.reset_mock(return_value=True, side_effect=True)
+        template.check_template.return_value = False
+        template.check_template_no_bounds.reset_mock(
+            return_value=True, side_effect=True
+        )
+        template.check_template_no_bounds.return_value = False
+
     def test_prompt_opens_refreshes_closes_then_waits_for_prompt_to_clear(self):
         actions = []
-        state = {"open": False, "prompt_checks": 0}
+        template.check_template.side_effect = [False, True]
+        template.check_template_no_bounds.side_effect = [True, True, StopLoop]
+        inventory.transfer_all_from.side_effect = lambda: actions.append("from_plot")
+        player_inventory.transfer_all_inventory.side_effect = lambda: actions.append(
+            "to_plot"
+        )
 
-        def prompt_is_visible():
-            state["prompt_checks"] += 1
-            if state["prompt_checks"] == 3:
-                raise StopLoop
-            return True
-
-        def open_inventory():
-            actions.append("open")
-            state["open"] = True
-
-        def close_inventory():
-            actions.append("close")
-            state["open"] = False
-
-        with self.assertRaises(StopLoop):
-            run_fertilizer_refresh(
-                poll_interval=0,
-                crop_plot_is_open=lambda: state["open"],
-                crop_plot_prompt_is_visible=prompt_is_visible,
-                inventory_is_open=lambda: state["open"],
-                open_inventory=open_inventory,
-                close_inventory=close_inventory,
-                transfer_all_from=lambda: actions.append("from_plot"),
-                transfer_all_inventory=lambda: actions.append("to_plot"),
-            )
+        with (
+            patch.object(
+                fertilizer_refresh,
+                "_open_crop_plot_inventory",
+                side_effect=lambda: actions.append("open"),
+            ),
+            patch.object(
+                fertilizer_refresh,
+                "_close_crop_plot_inventory",
+                side_effect=lambda: actions.append("close"),
+            ),
+            patch.object(fertilizer_refresh.time, "sleep"),
+            self.assertRaises(StopLoop),
+        ):
+            fertilizer_refresh.run_fertilizer_refresh()
 
         self.assertEqual(actions, ["open", "from_plot", "to_plot", "close"])
-        self.assertEqual(state["prompt_checks"], 3)
 
     def test_already_open_crop_plot_refreshes_without_opening_again(self):
         actions = []
+        template.check_template.return_value = True
+        inventory.transfer_all_from.side_effect = lambda: actions.append("from_plot")
+        player_inventory.transfer_all_inventory.side_effect = lambda: actions.append(
+            "to_plot"
+        )
 
         def close_inventory():
             actions.append("close")
             raise StopLoop
 
-        with self.assertRaises(StopLoop):
-            run_fertilizer_refresh(
-                poll_interval=0,
-                crop_plot_is_open=lambda: True,
-                crop_plot_prompt_is_visible=lambda: False,
-                inventory_is_open=lambda: True,
-                open_inventory=lambda: actions.append("open"),
-                close_inventory=close_inventory,
-                transfer_all_from=lambda: actions.append("from_plot"),
-                transfer_all_inventory=lambda: actions.append("to_plot"),
-            )
+        with (
+            patch.object(
+                fertilizer_refresh, "_open_crop_plot_inventory"
+            ) as open_inventory,
+            patch.object(
+                fertilizer_refresh,
+                "_close_crop_plot_inventory",
+                side_effect=close_inventory,
+            ),
+            self.assertRaises(StopLoop),
+        ):
+            fertilizer_refresh.run_fertilizer_refresh()
 
         self.assertEqual(actions, ["from_plot", "to_plot", "close"])
+        open_inventory.assert_not_called()
 
     def test_failed_open_closes_wrong_inventory_and_waits_for_prompt_to_clear(self):
         actions = []
-        prompt_checks = 0
-
-        def prompt_is_visible():
-            nonlocal prompt_checks
-            prompt_checks += 1
-            if prompt_checks == 3:
-                raise StopLoop
-            return True
-
-        with self.assertRaises(StopLoop):
-            run_fertilizer_refresh(
-                poll_interval=0,
-                crop_plot_is_open=lambda: False,
-                crop_plot_prompt_is_visible=prompt_is_visible,
-                inventory_is_open=lambda: True,
-                open_inventory=lambda: actions.append("open"),
-                close_inventory=lambda: actions.append("close"),
-                transfer_all_from=lambda: actions.append("from_plot"),
-                transfer_all_inventory=lambda: actions.append("to_plot"),
-            )
-
-        self.assertEqual(actions, ["open", "close"])
-        self.assertEqual(prompt_checks, 3)
-
-    def test_default_inventory_wrappers_use_local_open(self):
-        inventory = types.SimpleNamespace(
-            is_open=Mock(return_value=False),
-            transfer_all_from=Mock(),
-        )
-        structures = types.ModuleType("source.ASA.strucutres")
-        structures.inventory = inventory
+        template.check_template.return_value = False
+        template.check_template_no_bounds.side_effect = [True, True, StopLoop]
+        inventory.is_open.return_value = True
 
         with (
-            patch.dict("sys.modules", {"source.ASA.strucutres": structures}),
-            patch(
-                "source.gacha_bot.fertilizer_refresh._open_crop_plot_inventory",
-                side_effect=StopLoop,
-            ) as open_inventory,
+            patch.object(
+                fertilizer_refresh,
+                "_open_crop_plot_inventory",
+                side_effect=lambda: actions.append("open"),
+            ),
+            patch.object(
+                fertilizer_refresh,
+                "_close_crop_plot_inventory",
+                side_effect=lambda: actions.append("close"),
+            ),
+            patch.object(fertilizer_refresh.time, "sleep"),
+            self.assertRaises(StopLoop),
         ):
-            with self.assertRaises(StopLoop):
-                run_fertilizer_refresh(
-                    poll_interval=0,
-                    crop_plot_is_open=lambda: False,
-                    crop_plot_prompt_is_visible=lambda: True,
-                    transfer_all_inventory=Mock(),
-                )
+            fertilizer_refresh.run_fertilizer_refresh()
 
-        open_inventory.assert_called_once_with()
+        self.assertEqual(actions, ["open", "close"])
+        self.assertEqual(template.check_template_no_bounds.call_count, 3)
 
 
 class FertilizerLocalInventoryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        inventory.open.reset_mock(return_value=True, side_effect=True)
+        inventory.close.reset_mock(return_value=True, side_effect=True)
+        inventory.is_open.reset_mock(return_value=True, side_effect=True)
+        template.check_template.reset_mock(return_value=True, side_effect=True)
+        template.template_await_false.reset_mock(return_value=True, side_effect=True)
+        logs.logger.debug.reset_mock()
+        logs.logger.error.reset_mock()
+
     def test_local_open_retries_until_inventory_opens(self):
-        template = types.SimpleNamespace(
-            check_template=Mock(side_effect=[False, True, False]),
-            template_await_true=Mock(return_value=True),
-            template_await_false=Mock(),
-        )
-        utils = types.SimpleNamespace(press_key=Mock())
-        logs = types.SimpleNamespace(logger=types.SimpleNamespace(debug=Mock(), error=Mock()))
+        template.check_template.side_effect = [False, False]
+        inventory.is_open.side_effect = [False, True]
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "settings": types.SimpleNamespace(lag_offset=0),
-                "source.logs.gachalogs": logs,
-            },
-        ), patch("source.utility.template", template, create=True), patch(
-            "source.utility.utils", utils, create=True
-        ):
-            _open_crop_plot_inventory()
+        with patch.object(fertilizer_refresh.time, "sleep"):
+            fertilizer_refresh._open_crop_plot_inventory()
 
-        utils.press_key.assert_called_once_with("AccessInventory")
+        self.assertEqual(inventory.open.call_count, 2)
+        self.assertEqual(inventory.is_open.call_count, 2)
+        logs.logger.error.assert_not_called()
 
     def test_local_close_retries_until_inventory_closes(self):
-        template = types.SimpleNamespace(
-            check_template=Mock(side_effect=[True, False]),
-            template_await_false=Mock(),
+        template.check_template.side_effect = [True, False]
+        with patch.object(fertilizer_refresh.time, "sleep"):
+            fertilizer_refresh._close_crop_plot_inventory()
+
+        inventory.close.assert_called_once_with()
+
+
+class FertilizerRunnerTests(unittest.TestCase):
+    def test_runner_emits_ready_after_import_before_starting_tool(self):
+        from source.launcher.components import helper_runner
+
+        calls = []
+        runtime_module = _module(
+            "source.gacha_bot.fertilizer_refresh",
+            run_fertilizer_refresh=Mock(
+                side_effect=lambda _status: calls.append("run")
+            ),
         )
-        variables = types.SimpleNamespace(get_pixel_loc=Mock(return_value=0))
-        windows = types.SimpleNamespace(click=Mock())
-        logs = types.SimpleNamespace(logger=types.SimpleNamespace(debug=Mock(), error=Mock()))
+        output = io.StringIO()
 
-        with patch.dict(
-            "sys.modules",
-            {
-                "settings": types.SimpleNamespace(lag_offset=0),
-                "source.logs.gachalogs": logs,
-            },
-        ), patch("source.utility.template", template, create=True), patch(
-            "source.utility.variables", variables, create=True
-        ), patch("source.utility.windows", windows, create=True):
-            _close_crop_plot_inventory()
+        with (
+            patch.dict(
+                sys.modules,
+                {"source.gacha_bot.fertilizer_refresh": runtime_module},
+            ),
+            redirect_stdout(output),
+        ):
+            result = helper_runner.run_fertilizer_refresh(types.SimpleNamespace())
 
-        windows.click.assert_called_once_with(0, 0)
+        self.assertEqual(result, 0)
+        self.assertEqual(calls, ["run"])
+        self.assertEqual(
+            output.getvalue().splitlines(),
+            [helper_runner.READY_MESSAGE, "__HELPER_RESULT__ Stopped."],
+        )
+
+    def test_runner_does_not_emit_ready_when_import_fails(self):
+        from source.launcher.components import helper_runner
+
+        output = io.StringIO()
+        with (
+            patch.dict(
+                sys.modules,
+                {"source.gacha_bot.fertilizer_refresh": None},
+            ),
+            redirect_stdout(output),
+            self.assertRaises(ModuleNotFoundError),
+        ):
+            helper_runner.run_fertilizer_refresh(types.SimpleNamespace())
+
+        self.assertEqual(output.getvalue(), "")
 
 
 if __name__ == "__main__":

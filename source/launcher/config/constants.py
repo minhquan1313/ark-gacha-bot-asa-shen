@@ -13,6 +13,7 @@ PHONE_MINIMUM_SIZE = (420, 640)
 TITLE_BAR_HEIGHT = 42
 WINDOW_RESIZE_BORDER_PX = 8
 ENABLE_NATIVE_CUSTOM_CHROME = True
+RUNNER_WIDTH = 240
 HELPER_WIDTH = 240
 HELPER_HEIGHT = 100
 MINIMAL_HELPER_RUNNING_WIDTH = 240
@@ -126,7 +127,6 @@ DEFAULT_SETTINGS = {
     "helper_inactive_opacity": 0.3,
     "launcher_width": 1200,
     "launcher_height": 800,
-    "dedi_handshake_timeout": 30,
 }
 
 HIDDEN_SETTINGS = {
@@ -152,7 +152,6 @@ SETTING_LABELS = {
     "helper_inactive_opacity": "Helper inactive opacity",
     "allow_focus_ark_window": "Allow Ark window focus",
     "focus_ark_window_interval": "Ark window focus interval",
-    "dedi_handshake_timeout": "Dedi handshake timeout",
     "launcher_width": "Launcher startup width",
     "launcher_height": "Launcher startup height",
 }

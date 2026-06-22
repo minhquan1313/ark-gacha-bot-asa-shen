@@ -182,7 +182,9 @@ class BerryCollectionGuardTests(unittest.TestCase):
     def tearDown(self):
         config.tek_trough_attempts = self.original_attempts
 
-    def test_valid_first_trough_transfers_then_collects_second_without_revalidation(self):
+    def test_valid_first_trough_transfers_then_collects_second_without_revalidation(
+        self,
+    ):
         self.iguanadon.berry_station(self.metadata)
 
         self.assertEqual(self.inventory.open.call_count, 2)
@@ -194,7 +196,9 @@ class BerryCollectionGuardTests(unittest.TestCase):
         self.utils.turn_down.assert_called_once_with(50)
         self.utils.turn_up.assert_called_once_with(50)
 
-    def test_wrong_first_inventory_closes_teleports_and_retries_without_withdrawing(self):
+    def test_wrong_first_inventory_closes_teleports_and_retries_without_withdrawing(
+        self,
+    ):
         self.template.template_await_true.side_effect = [False, True]
 
         self.iguanadon._collect_first_trough(self.metadata)
@@ -336,6 +340,7 @@ class BerryStationTaskGuardTests(unittest.TestCase):
 
         teleporter.teleport_not_default.assert_called_once_with(metadata["PEGO"])
         stations.deposit.deposit_all.assert_called_once_with(None)
+
 
 if __name__ == "__main__":
     unittest.main()

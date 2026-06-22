@@ -12,8 +12,10 @@ try:
 except ImportError:
     psutil = None
 
-from PySide6.QtCore import QPoint, QRect, Qt, QTimer
-from PySide6.QtGui import QIcon, QPixmap
+import contextlib
+
+from PySide6.QtCore import QPoint, QRect, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -28,10 +30,15 @@ from PySide6.QtWidgets import (
 )
 
 from source.launcher import ark_game_setup
-from source.launcher.constants import (
+from source.launcher.components.widgets import (
+    AnimatedButton,
+    CyberDialog,
+    LogBridge,
+    TitleBar,
+)
+from source.launcher.config.constants import (
     APP_NAME,
     APP_TITLE,
-    APP_VERSION,
     ASSETS,
     BREAKPOINT_NARROW_WIDTH,
     COLORS,
@@ -44,11 +51,14 @@ from source.launcher.constants import (
     SUPPORTED_GAME_RESOLUTIONS,
     WINDOW_RESIZE_BORDER_PX,
 )
-from source.launcher.deposit_helper_capture import (
+from source.launcher.pages import LauncherPagesMixin
+from source.launcher.runner_overlay import RunnerOverlay
+from source.launcher.styles import launcher_style_sheet
+from source.launcher.utils.deposit_helper_capture import (
     register_shift_alt_n_hotkey,
     unregister_hotkey,
 )
-from source.launcher.native_window import (
+from source.launcher.utils.native_window import (
     HTBOTTOM,
     HTBOTTOMLEFT,
     HTBOTTOMRIGHT,
@@ -64,23 +74,14 @@ from source.launcher.native_window import (
     WindowsMSG,
     global_pos_from_lparam,
 )
-from source.launcher.pages import LauncherPagesMixin
-from source.launcher.process_control import terminate_process_tree
-from source.launcher.runner_overlay import RunnerOverlay
-from source.launcher.settings_store import load_settings, save_settings
-from source.launcher.styles import launcher_style_sheet
-from source.launcher.system import (
+from source.launcher.utils.process_control import terminate_process_tree
+from source.launcher.utils.settings_store import load_settings, save_settings
+from source.launcher.utils.system import (
     calculate_cpu_percent,
     find_window_size,
     get_cpu_times,
     get_memory_usage_gb,
     validate_ark_window,
-)
-from source.launcher.widgets import (
-    AnimatedButton,
-    CyberDialog,
-    LogBridge,
-    TitleBar,
 )
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
 
@@ -88,6 +89,7 @@ START_GAME_DISABLE_DELAY = 10000
 
 
 class SettingsGUI(LauncherPagesMixin, QMainWindow):
+    start_game_enabled_changed = Signal(bool)
 
     def __init__(self):
         super().__init__()
@@ -508,10 +510,15 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         )
 
     def _unlock_start_game_button(self):
+        self._set_start_game_enabled(True)
+        self._update_start_game_button_visibility()
+
+    def _set_start_game_enabled(self, enabled: bool) -> None:
+        """Update and broadcast the shared START GAME enabled state."""
         button = getattr(self, "start_game_button", None)
         if button is not None:
-            button.setEnabled(True)
-        self._update_start_game_button_visibility()
+            button.setEnabled(enabled)
+        self.start_game_enabled_changed.emit(enabled)
 
     def _unlock_restore_game_button(self):
         button = getattr(self, "restore_game_settings_button", None)
@@ -520,10 +527,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self._update_game_restore_button_visibility()
 
     def start_game(self):
-        button = getattr(self, "start_game_button", None)
-        if button is not None:
-            button.setEnabled(False)
-            QTimer.singleShot(START_GAME_DISABLE_DELAY, self._unlock_start_game_button)
+        self._set_start_game_enabled(False)
+        QTimer.singleShot(START_GAME_DISABLE_DELAY, self._unlock_start_game_button)
 
         button = getattr(self, "restore_game_settings_button", None)
         if button is not None:
@@ -585,10 +590,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         if not self.start_stop_hotkey_registered or not hasattr(ctypes, "windll"):
             self.start_stop_hotkey_registered = False
             return
-        try:
+        with contextlib.suppress(Exception):
             unregister_hotkey(int(self.winId()), self.start_stop_hotkey_id)
-        except Exception:
-            pass
         self.start_stop_hotkey_registered = False
 
     def _handle_native_hotkey_message(self, message):
@@ -865,10 +868,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         self.runner_overlay = None
         if overlay is None:
             return
-        try:
+        with contextlib.suppress(RuntimeError):
             overlay.close()
-        except RuntimeError:
-            pass
 
     def _sync_runner_overlay(self):
         if self.is_program_running() and not self.program_stopping:
@@ -890,10 +891,8 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
     def _close_output_reader(self, process):
         self.output_reader_stop.set()
         if process is not None and process.stdout is not None:
-            try:
+            with contextlib.suppress(OSError, ValueError):
                 process.stdout.close()
-            except (OSError, ValueError):
-                pass
         thread = self.output_reader_thread
         if (
             thread is not None
@@ -1139,9 +1138,15 @@ class SettingsGUI(LauncherPagesMixin, QMainWindow):
         except Exception as exc:
             self.append_log(f"[ERROR] Unable to clear log file: {exc}\n")
 
-    def copy_logs(self):
-        QApplication.clipboard().setText("".join(self._filtered_logs()))
-        self.toast("Logs copied to clipboard.", "success")
+    def open_logs(self) -> None:
+        """Open the launcher log file with the operating system's default app."""
+        log_url = QUrl.fromLocalFile(os.path.abspath(GACHA_LOG_FILE))
+        if not QDesktopServices.openUrl(log_url):
+            self.dialog(
+                "Open Logs Failed",
+                f"Unable to open the log file:\n{GACHA_LOG_FILE}",
+                "error",
+            )
 
     def check_colours(self):
         if not self.require_ark_window("check console colours"):

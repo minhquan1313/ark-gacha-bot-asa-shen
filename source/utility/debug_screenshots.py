@@ -1,3 +1,4 @@
+import contextlib
 import multiprocessing
 import os
 import re
@@ -55,10 +56,8 @@ def stop_debug_screenshot_worker():
     if state is None:
         return
 
-    try:
+    with contextlib.suppress(Exception):
         state.request_queue.put(None)
-    except Exception:
-        pass
 
     process = state.process
     try:
@@ -88,7 +87,7 @@ def cleanup_debug_screenshots_on_program_start():
         _warn(f"Unable to cleanup debug screenshots: {exc}")
 
 
-def _noop_capture(label="capture"):
+def _noop_capture():
     return None
 
 

@@ -12,11 +12,15 @@ from PySide6.QtCore import QSize
 from PySide6.QtWidgets import QLineEdit, QPushButton, QWidget
 from PySide6.QtWidgets import QApplication
 
-from source.launcher.constants import APP_NAME, MAX_LAUNCHER_LOG_LINES
-from source.launcher.gui import SettingsGUI
-from source.launcher.native_window import WM_HOTKEY, WindowsMSG
+from source.launcher.config.constants import (
+    APP_NAME,
+    GACHA_LOG_FILE,
+    MAX_LAUNCHER_LOG_LINES,
+)
+from source.launcher.gui import START_GAME_DISABLE_DELAY, SettingsGUI
+from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
 from source.launcher.runner_overlay import format_runner_logs, format_runner_overlay
-from source.launcher.widgets import AnimatedButton
+from source.launcher.components.widgets import AnimatedButton
 
 
 class LauncherLogTests(unittest.TestCase):
@@ -143,6 +147,35 @@ class LauncherLogTests(unittest.TestCase):
         self.assertEqual(self.launcher.log_file_position, 0)
         with open(temp_log_path, "r", encoding="utf-8") as temp_log:
             self.assertEqual(temp_log.read(), "")
+
+    def test_open_logs_uses_default_os_application(self):
+        log_path = os.path.join("source", "logs", "logs.txt")
+        launcher = SimpleNamespace(dialog=Mock())
+
+        with patch("source.launcher.gui.GACHA_LOG_FILE", log_path):
+            with patch(
+                "source.launcher.gui.QDesktopServices.openUrl", return_value=True
+            ) as open_url:
+                SettingsGUI.open_logs(launcher)
+
+        opened_url = open_url.call_args.args[0]
+        self.assertEqual(
+            os.path.normpath(opened_url.toLocalFile()),
+            os.path.abspath(log_path),
+        )
+        launcher.dialog.assert_not_called()
+
+    def test_open_logs_reports_os_open_failure(self):
+        launcher = SimpleNamespace(dialog=Mock())
+
+        with patch("source.launcher.gui.QDesktopServices.openUrl", return_value=False):
+            SettingsGUI.open_logs(launcher)
+
+        launcher.dialog.assert_called_once_with(
+            "Open Logs Failed",
+            f"Unable to open the log file:\n{GACHA_LOG_FILE}",
+            "error",
+        )
 
     def test_finalize_program_stop_preserves_queue_and_running_state(self):
         self.launcher.process = object()
@@ -303,9 +336,7 @@ class LauncherDashboardTests(unittest.TestCase):
                         with patch("source.launcher.pages.QVBoxLayout"):
                             with patch("source.launcher.pages.CyberSwitch") as switch:
                                 with patch("source.launcher.pages.QLabel"):
-                                    grid.return_value.itemAtPosition.return_value.widget.return_value = (
-                                        Mock()
-                                    )
+                                    grid.return_value.itemAtPosition.return_value.widget.return_value = Mock()
                                     switch.return_value.toggled.connect = Mock()
                                     with patch("source.launcher.pages.QTimer"):
                                         SettingsGUI._dashboard_page(launcher)
@@ -355,6 +386,7 @@ class LauncherDashboardTests(unittest.TestCase):
     ):
         launcher = SimpleNamespace(
             start_game_button=Mock(),
+            _set_start_game_enabled=Mock(),
             _unlock_start_game_button=Mock(),
             append_log=Mock(),
             _update_game_restore_button_visibility=Mock(),
@@ -362,20 +394,34 @@ class LauncherDashboardTests(unittest.TestCase):
 
         SettingsGUI.start_game(launcher)
 
-        launcher.start_game_button.setEnabled.assert_called_once_with(False)
-        single_shot.assert_called_once_with(20000, launcher._unlock_start_game_button)
+        launcher._set_start_game_enabled.assert_called_once_with(False)
+        single_shot.assert_called_once_with(
+            START_GAME_DISABLE_DELAY, launcher._unlock_start_game_button
+        )
         launcher._update_game_restore_button_visibility.assert_called_once_with()
 
     def test_unlock_start_game_button_enables_and_refreshes_visibility(self):
         launcher = SimpleNamespace(
             start_game_button=Mock(),
+            _set_start_game_enabled=Mock(),
             _update_start_game_button_visibility=Mock(),
         )
 
         SettingsGUI._unlock_start_game_button(launcher)
 
-        launcher.start_game_button.setEnabled.assert_called_once_with(True)
+        launcher._set_start_game_enabled.assert_called_once_with(True)
         launcher._update_start_game_button_visibility.assert_called_once_with()
+
+    def test_set_start_game_enabled_updates_button_and_emits(self):
+        launcher = SimpleNamespace(
+            start_game_button=Mock(),
+            start_game_enabled_changed=SimpleNamespace(emit=Mock()),
+        )
+
+        SettingsGUI._set_start_game_enabled(launcher, False)
+
+        launcher.start_game_button.setEnabled.assert_called_once_with(False)
+        launcher.start_game_enabled_changed.emit.assert_called_once_with(False)
 
     @patch("source.launcher.gui.find_window_size", return_value=None)
     def test_start_game_button_visible_when_ark_window_is_missing(self, _find_window):
@@ -386,9 +432,7 @@ class LauncherDashboardTests(unittest.TestCase):
         launcher.start_game_button.setVisible.assert_called_once_with(True)
 
     @patch("source.launcher.gui.find_window_size", return_value=(1920, 1080))
-    def test_start_game_button_hidden_when_ark_is_supported_size(
-        self, _find_window
-    ):
+    def test_start_game_button_hidden_when_ark_is_supported_size(self, _find_window):
         launcher = SimpleNamespace(start_game_button=Mock())
 
         SettingsGUI._update_start_game_button_visibility(launcher)
@@ -396,9 +440,7 @@ class LauncherDashboardTests(unittest.TestCase):
         launcher.start_game_button.setVisible.assert_called_once_with(False)
 
     @patch("source.launcher.gui.find_window_size", return_value=(2560, 1440))
-    def test_start_game_button_visible_when_ark_size_is_unsupported(
-        self, _find_window
-    ):
+    def test_start_game_button_visible_when_ark_size_is_unsupported(self, _find_window):
         launcher = SimpleNamespace(start_game_button=Mock())
 
         SettingsGUI._update_start_game_button_visibility(launcher)
