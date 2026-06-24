@@ -37,6 +37,7 @@ def open():
                     player_state.check_disconnected()
                 if is_open() and not is_ready():
                     close()
+            time.sleep(0.2 * settings.lag_offset)
             return
 
         # check state of the char before redoing
@@ -68,7 +69,7 @@ def close():
             # check state of the char the reason we can do it now is that the latter should spam click close inv
             player_state.check_state()
             break
-    time.sleep(0.3 * settings.lag_offset)
+    time.sleep(0.2 * settings.lag_offset)
 
 
 # these functions assume that the inventory is already open

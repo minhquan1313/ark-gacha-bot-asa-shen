@@ -112,6 +112,7 @@ def failure_is_connection_failed():
 
 
 def failure_is_not_ready():
+    """This happened right after click transfer IF Player still has timer, not ready to upload yet, so expect to press cancel to prevent item loss"""
     return template.check_template_no_bounds("transfer_not_ready_popup", 0.7)
 
 
@@ -131,7 +132,7 @@ def has_failure():
             )
             time.sleep(1)
         else:
-            logs.logger.warning("Server connection timeout but player uploadeded")
+            logs.logger.warning("Server connection timeout but player uploaded")
             time.sleep(
                 10
             )  # Wait 10s, maybe after 10s, the screen will turn to other server
@@ -179,7 +180,7 @@ def do_join_server(server: str):
 
     windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
 
-    time.sleep(0.3)
+    time.sleep(0.2)
     if not template.template_await_true(template.check_transfer_server_orange, 1):
         logs.logger.warning(
             "orange pixel for transmitter server not found likely server is shutdown"
@@ -187,18 +188,38 @@ def do_join_server(server: str):
         return False
     else:
         logs.logger.debug("Orange detected, ready for transfer")
-        time.sleep(0.3)
+        time.sleep(0.2)
         if is_join_button_visible():
             windows.click(
                 get_pixel_loc("join_button_x"), get_pixel_loc("join_button_y")
             )
+            time.sleep(0.2)
 
-            if template.template_await_true(is_server_join_success, 30):
-                # raise RuntimeError("SUCCESS")
+            while failure_is_not_ready():
+                # Timer not ready
+                cancel_transfer()
+                time.sleep(1)
+
+                windows.click(
+                    get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y")
+                )
+                time.sleep(0.2)
+                windows.click(
+                    get_pixel_loc("join_button_x"), get_pixel_loc("join_button_y")
+                )
+                time.sleep(1)
+                player_state.check_disconnected()
+
+            if is_open() and template.template_await_true(is_server_join_success, 20):
                 player_state.uploaded = True
                 logs.logger.warning("Detected Survival UPLOADED")
 
-                time.sleep(3)
+                time.sleep(2)
                 search_bar_search("Joining...")
                 time.sleep(10)
+            else:
+                close()
+                time.sleep(0.2)
+            has_failure()
+
     return False

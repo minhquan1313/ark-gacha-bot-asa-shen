@@ -17,7 +17,7 @@ def is_clear_search():
     return template.check_template_no_bounds("search_player_inv", 0.8)
 
 
-def wait_clear_search(timeout=2):
+def wait_clear_search(timeout=1):
     return template.template_await_true(is_clear_search, timeout)
 
 
@@ -31,13 +31,14 @@ def open():
         utils.press_key("ShowMyInventory")
         if template.template_await_true(is_open, 3):
             logs.logger.debug("inventory opened")
+            time.sleep(0.2 * settings.lag_offset)
             return
 
         # check state of the char before redoing
         if attempts >= config.inventory_open_attempts:
             logs.logger.error("unable to open up the players inventory")
             break
-    time.sleep(0.3 * settings.lag_offset)
+        time.sleep(0.2 * settings.lag_offset)
 
 
 def close():
@@ -59,7 +60,7 @@ def close():
             )
             # check state of the char the reason we can do it now is that the latter should spam click close inv
             break
-    time.sleep(0.3 * settings.lag_offset)
+    time.sleep(0.2 * settings.lag_offset)
 
 
 # these functions assume that the inventory is already open
@@ -128,14 +129,17 @@ def implant_eat():
         logs.logger.debug(
             f"trying to eat player implant {attempts} / {config.suicide_attempts}"
         )
-        utils.press_key("ShowMyInventory")
         open()
         close()
 
         # moving backwards so we dont die on tps and create bags
         for _x in range(30):
             utils.press_key("s")
+
         open()
+
+        time.sleep(0.5 * settings.lag_offset)
+
         windows.move_mouse(
             variables.get_pixel_loc("implant_eat_x"),
             variables.get_pixel_loc("implant_eat_y"),
@@ -147,6 +151,12 @@ def implant_eat():
 
         time.sleep(10)  # accounting for high ping lag
         utils.press_key("Use")
+
+        time.sleep(1)
+        windows.move_mouse(
+            variables.get_pixel_loc("close_inv_x"),
+            variables.get_pixel_loc("close_inv_y"),
+        )
 
         if not template.template_await_true(
             template.check_template, 10, "death_regions", 0.7

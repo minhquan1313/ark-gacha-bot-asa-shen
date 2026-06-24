@@ -1,16 +1,20 @@
-import os
-import subprocess
 import time
 
 import psutil
 import win32process
 
 from source.join_sim.source.logs import logger as logs
-from source.join_sim.source.utility import local_player, recon_utils
-from source.utility import windows
+from source.launcher import ark_game_setup
+from source.launcher.utils import system
+from source.launcher.utils.deposit_helper_capture import focus_game_window
+from source.utility import utils, windows
 
 appid = "2399830"
 crash_process: psutil.Process | None = None
+REOPEN_RETRY_DELAY_SECONDS = 10
+ARK_WINDOW_READY_TIMEOUT_SECONDS = 120
+ARK_WINDOW_POLL_SECONDS = 1
+ARK_FOCUS_DELAY_SECONDS = 3
 
 
 def detect_crash():
@@ -18,7 +22,7 @@ def detect_crash():
     for proc in psutil.process_iter(attrs=["name", "exe"]):
         if proc.info["name"] == "CrashReportClient.exe":
             crash_process = proc
-            logs.logger.critical("Crash detected")
+            logs.logger.critical("Crash detected", stack_info=True)
             return True
     return False
 
@@ -45,27 +49,52 @@ def close_game():
         logs.logger.critical(f"error: {e}")
 
 
-def launch_game_with_steam():
-    steam_path = local_player.path("steam.exe")
-    if os.path.exists(steam_path):
-        subprocess.run([steam_path, f"steam://run/{appid}"])
-        logs.logger.critical(f"launching game with appid {appid} via steam")
-    else:
-        logs.logger.critical(
-            "steam exe not found at the expected location cannot relaunch game"
-        )
+def _process_running(process_name):
+    for proc in psutil.process_iter(attrs=["name"]):
+        try:
+            if str(proc.info.get("name", "")).lower() == process_name.lower():
+                return True
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            continue
+    return False
 
 
-def re_open_game():
-    close_game()
-    time.sleep(10)
-    launch_game_with_steam()
-    recon_utils.template_sleep_no_bounds("join_last_session", 0.7, 60)
+def _wait_for_usable_ark_window(timeout_seconds: float) -> None:
+    """Wait until ARK has a valid window, then focus it and skip the intro."""
+    deadline = utils.timed_out_counter(timeout_seconds)
+    last_error: RuntimeError | None = None
+
+    while not deadline():
+        if _process_running(ark_game_setup.ARK_PROCESS_NAME):
+            try:
+                _window_size = system.validate_ark_window()
+                time.sleep(ARK_FOCUS_DELAY_SECONDS)
+                focus_game_window(center_cursor_when_switching=True)
+                return
+            except RuntimeError as exc:
+                last_error = exc
+                logs.logger.warning(f"ARK window is not ready: {exc}")
+        time.sleep(ARK_WINDOW_POLL_SECONDS)
+
+    if last_error is not None:
+        raise RuntimeError(f"ARK window did not become usable: {last_error}")
+    raise RuntimeError("ARK process did not produce a usable window.")
 
 
-def crash_rejoin():
-    if detect_crash():
+def re_open_game() -> None:
+    """Restart ARK until its window can be validated and focused."""
+    attempt = 1
+
+    while True:
         close_game()
-        time.sleep(10)
-        launch_game_with_steam()
-        recon_utils.template_sleep_no_bounds("join_last_session", 0.7, 60)
+        ark_game_setup.kill_running_ark()
+        time.sleep(REOPEN_RETRY_DELAY_SECONDS)
+
+        try:
+            ark_game_setup.launch_ark_through_steam()
+            _wait_for_usable_ark_window(ARK_WINDOW_READY_TIMEOUT_SECONDS)
+            return
+        except Exception as exc:
+            message = f"ARK reopen attempt {attempt} failed: {exc}"
+            logs.logger.warning(message)
+            attempt += 1

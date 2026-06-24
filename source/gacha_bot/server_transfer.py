@@ -6,15 +6,18 @@ import psutil
 import pyautogui
 
 import settings as global_settings
-from source.ASA.player import buffs, console, player_inventory, player_state, tribelog
+from source.ASA.player import player_state, tribelog
 from source.ASA.stations import custom_stations
 from source.ASA.strucutres import bed, teleporter
+from source.data import shared
 from source.gacha_bot import render
 from source.join_sim.source import main as join_main
 from source.join_sim.source.auto_join import run_auto_join_server
-from source.join_sim.source.utility import recon_utils
-from source.launcher.ark_game_setup import ARK_PROCESS_NAME, launch_ark_through_steam
-from source.launcher.config.constants import GAME_WINDOW_TITLE
+from source.launcher import ark_game_setup
+from source.launcher.ark_game_setup import (
+    ARK_PROCESS_NAME,
+    launch_ark_through_steam,
+)
 from source.launcher.config.transfer_helper_config import (
     active_transfer_dedis,
     missing_runtime_inputs,
@@ -127,7 +130,7 @@ def _transfer_task_plan(settings: dict, players: dict, account_count: int) -> li
                 _transfer_task_label(account, "Check Player State"),
                 _transfer_task_label(account, "Withdraw Resources"),
                 _transfer_task_label(
-                    account, "Fast Travel", _bed_name(players, account)
+                    account, "Going back to Tekpod", _bed_name(players, account)
                 ),
                 _transfer_task_label(account, "Enter Tekpod"),
             ]
@@ -183,9 +186,6 @@ def _transfer_task_plan(settings: dict, players: dict, account_count: int) -> li
                         loop_number=loop_number,
                     ),
                     _transfer_task_label(
-                        account, "Stabilize Bed", loop_number=loop_number
-                    ),
-                    _transfer_task_label(
                         account, "Deposit Resources", loop_number=loop_number
                     ),
                     _transfer_task_label(
@@ -217,10 +217,25 @@ def _transfer_task_plan(settings: dict, players: dict, account_count: int) -> li
                             account, "Withdraw Resources", loop_number=loop_number
                         ),
                         _transfer_task_label(
-                            account, "Enter Tekpod", loop_number=loop_number
+                            account,
+                            "Going back to Tekpod",
+                            loop_number=loop_number,
                         ),
                     ]
                 )
+            tasks.append(
+                _transfer_task_label(account, "Enter Tekpod", loop_number=loop_number)
+            )
+    if account_count > 1:
+        tasks.extend(
+            [
+                _transfer_task_label(1, "Restore Steam", _steam_account(players, 1)),
+                _transfer_task_label(1, "Restore ARK"),
+                _transfer_task_label(
+                    1, "Restore Resource", str(settings["resource_server"])
+                ),
+            ]
+        )
     return tasks
 
 
@@ -229,6 +244,7 @@ def run_transfer_helper(
     status_callback: Callable[[str], object] | None = None,
     task_callback: Callable[[dict], object] | None = None,
 ) -> bool:
+
     settings = config["settings"]
     dedis = config["dedis"]
     ui_coords = config["ui_coords"]
@@ -257,6 +273,7 @@ def run_transfer_helper(
 
     emit("Starting resource fill phase.")
     for account in accounts:
+        global_settings.station_yaw = float(settings["resource_station_yaw"])
         if account_count > 1:
             task_tracker.start(
                 _transfer_task_label(
@@ -275,14 +292,7 @@ def run_transfer_helper(
         task_tracker.start(_transfer_task_label(account, "Ensure ARK Ready"))
         if ensure_ark_running(status_callback, settings, ui_coords) is False:
             return False
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(_transfer_task_label(account, "Check Menu State"))
-        was_in_menu = is_menu()
-        if was_in_menu:
-            task_tracker.insert_after(
-                _transfer_task_label(account, "Verify Tribe Log"),
-                _transfer_task_label(account, "Wait Resource Structures"),
-            )
+
         # -=-=-=-=-=-=-=-=-=-=-=-=
         emit(
             f"Account {account}: joining resource server {settings['resource_server']}."
@@ -304,6 +314,13 @@ def run_transfer_helper(
             )
             continue
         # -=-=-=-=-=-=-=-=-=-=-=-=
+        task_tracker.start(_transfer_task_label(account, "Check Menu State"))
+        if shared.was_in_mainmenu:
+            task_tracker.insert_after(
+                _transfer_task_label(account, "Verify Tribe Log"),
+                _transfer_task_label(account, "Wait Resource Structures"),
+            )
+        # -=-=-=-=-=-=-=-=-=-=-=-=
         task_tracker.start(_transfer_task_label(account, "Verify Tribe Log"))
         if not verify_tribelog():
             if account_count == 1:
@@ -317,7 +334,8 @@ def run_transfer_helper(
                 "assuming character is elsewhere and skipping."
             )
             continue
-        if was_in_menu:
+        # -=-=-=-=-=-=-=-=-=-=-=-=
+        if shared.was_in_mainmenu:
             task_tracker.start(
                 _transfer_task_label(account, "Wait Resource Structures")
             )
@@ -333,16 +351,21 @@ def run_transfer_helper(
             return False
         # -=-=-=-=-=-=-=-=-=-=-=-=
         task_tracker.start(
-            _transfer_task_label(account, "Fast Travel", _bed_name(players, account))
+            _transfer_task_label(
+                account, "Going back to Tekpod", _bed_name(players, account)
+            )
         )
-        fast_travel_to_bed(_bed_name(players, account))
+        go_back_to_bed(_bed_name(players, account))
         # -=-=-=-=-=-=-=-=-=-=-=-=
         task_tracker.start(_transfer_task_label(account, "Enter Tekpod"))
         enter_tekpod()
 
+    # Starting loop of go to [des -> deposit -> go back -> withdraw]
     for loop_number in range(1, int(settings["loop_count"]) + 1):
         emit(f"Starting destination loop {loop_number}/{settings['loop_count']}.")
         for account in accounts:
+            global_settings.station_yaw = float(settings["resource_station_yaw"])
+
             if account_count > 1:
                 task_tracker.start(
                     _transfer_task_label(
@@ -415,7 +438,8 @@ def run_transfer_helper(
                 )
             )
             wait_for_bed_screen()
-            # -=-=-=-=-=-=-=-=-=-=-=-=
+            # -=-=-=-=-=-=HERE WE ARE AT THE DESTINATION SERVER-=-=-=-=-=-=
+            global_settings.station_yaw = float(settings["destination_station_yaw"])
             task_tracker.start(
                 _transfer_task_label(
                     account,
@@ -436,18 +460,15 @@ def run_transfer_helper(
             time.sleep(int(settings["structure_load_delay"]))
             # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(
-                _transfer_task_label(account, "Stabilize Bed", loop_number=loop_number)
-            )
-            stabilize_bed_position()
-            # -=-=-=-=-=-=-=-=-=-=-=-=
-            task_tracker.start(
                 _transfer_task_label(
                     account, "Deposit Resources", loop_number=loop_number
                 )
             )
             if deposit_to_transfer_dedis(dedis, settings, players, account) is False:
                 return False
-            # -=-=-=-=-=-=-=-=-=-=-=-=
+
+            # -=-=-=-=-=-GO BACK TO RESOURCE SERVER=-=-=-=-=-=-=
+
             task_tracker.start(
                 _transfer_task_label(
                     account,
@@ -470,7 +491,9 @@ def run_transfer_helper(
                 )
             )
             wait_for_bed_screen()
-            # -=-=-=-=-=-=-=-=-=-=-=-=
+            # -=-=-=-=-=Here we are back to Resource server-=-=-=-=-=-=-=
+            global_settings.station_yaw = float(settings["resource_station_yaw"])
+
             task_tracker.start(
                 _transfer_task_label(
                     account,
@@ -489,6 +512,7 @@ def run_transfer_helper(
                 )
             )
             time.sleep(int(settings["structure_load_delay"]))
+            # -=-=-=-=-=-=IF THERE IS STILL MORE LOOP-=-=-=-=-=-=
             if loop_number < int(settings["loop_count"]):
                 task_tracker.start(
                     _transfer_task_label(
@@ -503,10 +527,44 @@ def run_transfer_helper(
                 # -=-=-=-=-=-=-=-=-=-=-=-=
                 task_tracker.start(
                     _transfer_task_label(
-                        account, "Enter Tekpod", loop_number=loop_number
+                        account, "Going back to Tekpod", loop_number=loop_number
                     )
                 )
-                enter_tekpod()
+                go_back_to_bed(_bed_name(players, account))
+            else:
+                utils.zero_center()  # This will fix player aim wrong direction in the enter_tekpod below
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(
+                _transfer_task_label(account, "Enter Tekpod", loop_number=loop_number)
+            )
+            enter_tekpod()
+    # Everything is done, now logging back to original account, which is player 1
+    if account_count > 1:
+        task_tracker.start(
+            _transfer_task_label(1, "Restore Steam", _steam_account(players, 1))
+        )
+        current_steam_account = switch_steam_account(
+            1,
+            current_steam_account,
+            players,
+            ui_coords,
+            status_callback,
+            steam_restart_interval=settings.get("steam_restart_interval", 30),
+        )
+        # -=-=-=-=-=-=-=-=-=-=-=-=
+        task_tracker.start(_transfer_task_label(1, "Restore ARK"))
+        if ensure_ark_running(status_callback, settings, ui_coords) is False:
+            emit("Player 1 restoration failed: ARK did not become ready.")
+            return False
+        # -=-=-=-=-=-=-=-=-=-=-=-=
+        task_tracker.start(
+            _transfer_task_label(
+                1, "Restore Resource", str(settings["resource_server"])
+            )
+        )
+        if not join_server(settings["resource_server"], status_callback):
+            emit("Player 1 restoration failed: resource server join did not complete.")
+            return False
 
     emit("Server transfer helper finished.")
     return True
@@ -548,8 +606,7 @@ def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
             "ARK did not reach a usable window state; relaunching "
             f"({attempt}/{attempts})."
         )
-        if not kill_ark(status_callback=status_callback):
-            return False
+        ark_game_setup.kill_running_ark()
         time.sleep(2)
         launched = False
     if last_error is not None:
@@ -563,28 +620,16 @@ def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
 def _prepare_ark_window_for_join(status_callback=None, window_size=None):
     emit = status_callback or (lambda _message: None)
     emit("ARK detected. Focusing game before joining server.")
-    time.sleep(2)
-    _focus_ark_window_for_join(window_size)
+    focus_game_window(center_cursor_when_switching=True)
+    time.sleep(1)
     return True
 
 
 def _focus_ark_window_for_join(window_size=None):
     focus_game_window(center_cursor_when_switching=True)
-    _refresh_join_sim_ark_handle()
     # Click in middle of screen to skip the intro and quickly go to the main menu, which can help with faster joins
     width, height = window_size or (1920, 1080)
     pyautogui.click(int(width) // 2, int(height) // 2)
-
-
-def _refresh_join_sim_ark_handle():
-    hwnd = _ark_window_handle(GAME_WINDOW_TITLE)
-    if not hwnd:
-        raise RuntimeError(f"{GAME_WINDOW_TITLE} window was not found.")
-    return hwnd
-
-
-def _ark_window_handle(window_title):
-    return ctypes.windll.user32.FindWindowW(None, window_title)
 
 
 def is_menu():
@@ -593,6 +638,8 @@ def is_menu():
 
 def join_server(server, status_callback=None):
     _focus_ark_window_for_join(validate_ark_window())
+
+    shared.was_in_mainmenu = False
 
     return run_auto_join_server(server, status_callback)
 
@@ -604,54 +651,15 @@ def verify_tribelog():
     return bool(opened)
 
 
-def check_player_state():
-    check_transfer_player_state({})
-
-
 def check_transfer_player_state(settings, players=None, account=None, server=None):
-    check_transfer_disconnected(settings, server)
-    reset_transfer_state(players, account)
-    buff_state = buffs.check_buffs().check_buffs()
-    if buff_state == 1 or render.render_flag:
-        render.leave_tekpod()
-    elif buff_state == 2 or buff_state == 3:
-        target = _bed_name(players or {}, account) if account is not None else ""
-        if not target:
-            target = str(settings.get("transmitter_teleport", "")).strip()
-        if target:
-            teleporter.teleport_not_default(target, fallback_bed_name=target)
-            render.enter_tekpod()
-            time.sleep(30)
-            render.leave_tekpod()
-            time.sleep(1)
+    bed = _bed_name(players or {}, account) if account is not None else ""
+    if not bed:
+        bed = str(settings.get("transmitter_teleport", "")).strip()
 
+    global_settings.server_number = server
+    global_settings.bed_spawn = bed
 
-def check_transfer_disconnected(settings, server):
-    if not (join_main.is_menu() or join_main.is_crashed()):
-        return
-    target_server = str(server or settings.get("resource_server", ""))
-    logs.logger.critical("transfer helper disconnected from the server")
-    join_main.main_loop(target_server)
-    tribelog.close()
-    logs.logger.critical(
-        "transfer helper rejoined the server; waiting 30 seconds for structures"
-    )
-    time.sleep(30)
-    yaw_key = (
-        "destination_station_yaw"
-        if str(target_server) == str(settings.get("destination_server"))
-        else "resource_station_yaw"
-    )
-    utils.set_yaw(float(settings.get(yaw_key, 0.0)))
-
-
-def reset_transfer_state(players=None, account=None):
-    player_inventory.close()
-    teleporter.close()
-    tribelog.close()
-    if bed.is_open() and account is not None:
-        bed.spawn_in(_bed_name(players or {}, account))
-    utils.press_key("Run")
+    player_state.check_state()
 
 
 def withdraw_from_transfer_dedis(
@@ -662,14 +670,16 @@ def withdraw_from_transfer_dedis(
 ) -> bool:
     global_settings.lag_offset = float(settings["lag_offset"])
     global_settings.station_yaw = float(settings["resource_station_yaw"])
+
     resource_route = transfer_dedi_route(dedis, "resource")
     route_metadata = custom_stations.get_station_metadata(resource_route["teleport"])
     fallback_bed_name = _fallback_bed_name(players, account)
     if fallback_bed_name:
         global_settings.bed_spawn = fallback_bed_name
+
     teleporter.teleport_not_default(route_metadata, fallback_bed_name=fallback_bed_name)
-    player_state.human.reset_crouch()
-    utils.turn_to(route_metadata.yaw, 0)
+    utils.zero_center()
+
     items: list[DediStorageState] = active_transfer_dedis(dedis, "resource")
     for index, item in enumerate(items, 1):
         label = f"Transfer dedi {index}"
@@ -677,7 +687,7 @@ def withdraw_from_transfer_dedis(
             logs.logger.error(f"{label} transfer withdraw failed")
             return False
         logs.logger.debug(f"{label} transfer withdraw completed")
-    utils.set_yaw(float(settings["resource_station_yaw"]))
+
     return True
 
 
@@ -689,11 +699,16 @@ def deposit_to_transfer_dedis(
 ) -> bool:
     global_settings.lag_offset = float(settings["lag_offset"])
     global_settings.station_yaw = float(settings["destination_station_yaw"])
+
     destination_route = transfer_dedi_route(dedis, "destination")
     route_metadata = custom_stations.get_station_metadata(destination_route["teleport"])
     fallback_bed_name = _fallback_bed_name(players, account)
     if fallback_bed_name:
         global_settings.bed_spawn = fallback_bed_name
+
+    teleporter.teleport_not_default(route_metadata, fallback_bed_name=fallback_bed_name)
+    utils.zero_center()
+
     items: list[DediStorageState] = active_transfer_dedis(dedis, "destination")
     for index, item in enumerate(items, 1):
         label = f"Transfer dedi {index}"
@@ -701,6 +716,7 @@ def deposit_to_transfer_dedis(
             logs.logger.error(f"{label} transfer deposit failed")
             return False
         logs.logger.debug(f"{label} transfer deposit completed")
+
     return True
 
 
@@ -789,30 +805,33 @@ def transfer_to_server(
     account=None,
 ):
     emit = status_callback or (lambda _message: None)
-    yaw_key = (
-        "resource_station_yaw"
-        if str(server) == str(settings["destination_server"])
-        else "destination_station_yaw"
-    )
+
     fallback_bed_name = _fallback_bed_name(players, account)
     metadata = custom_stations.get_station_metadata(settings["transmitter_teleport"])
+
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
         teleporter.teleport_not_default(
             metadata,
             fallback_bed_name=fallback_bed_name,
         )
-        utils.set_yaw(float(settings[yaw_key]))
+        utils.zero_center()
+
         emit(
             f"Transferring to server {server} "
             f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
         )
+
         if transmitter.open_and_transfer(metadata, server):
             emit(f"Transfer to server {server} requested.")
             return True
+
         if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
             emit("Transmitter transfer did not complete; recovering player state.")
             check_transfer_player_state(settings, players, account, server)
+
+            utils.zero_center()
             time.sleep(0.5)
+
     raise RuntimeError(f"Transfer to server {server} did not complete.")
 
 
@@ -828,96 +847,26 @@ def spawn_bed(name):
     return True
 
 
-def fast_travel_to_bed(name):
-    bed.fast_travel(name)
+def go_back_to_bed(name):
+    global_settings.bed_spawn = name
+
+    if not render.render_flag:
+        logs.logger.debug(
+            f"render flag{render.render_flag} we are trying to get into the pod now"
+        )
+        player_state.reset_state()
+        teleporter.teleport_not_default(name)
+    else:
+        player_state.check_disconnected()
     return True
 
 
-def stabilize_bed_position():
-    leave_tekpod()
-
-
 def enter_tekpod():
-    render.enter_tekpod()
+    render.enter_tekpod(allow_eat_implant=False)
 
 
 def leave_tekpod():
     render.leave_tekpod()
-
-
-def kill_ark(status_callback=None):
-    close_ark_with_console_exit(status_callback)
-    return True
-
-
-def close_ark_with_console_exit(status_callback=None):
-    emit = status_callback or (lambda _message: None)
-    attempt = 0
-    while True:
-        attempt += 1
-        if not _ark_window_exists():
-            return True
-        try:
-            focus_game_window(center_cursor_when_switching=True)
-            _send_ark_exit_command(emit, attempt)
-        except Exception as exc:
-            emit(f"ARK exit command failed: {exc}; retrying.")
-        deadline = utils.timed_out_counter(10)
-        while not deadline():
-            if not _ark_window_exists():
-                return True
-            time.sleep(0.5)
-        emit("ARK window is still visible after exit command; retrying.")
-
-
-def _send_ark_exit_command(status_callback=None, attempt=1):
-    emit = status_callback or (lambda _message: None)
-    emit(f"Closing ARK with console exit (attempt {attempt}).")
-    player_state.reset_state()
-    console.console_write("exit")
-
-
-def _ark_window_exists():
-    return bool(_ark_window_handle(GAME_WINDOW_TITLE))
-
-
-def _reset_open_main_menu_console():
-    utils.press_key("ConsoleKeys")
-    time.sleep(0.1)
-    utils.press_key("Enter")
-    return True
-
-
-def _wait_for_ark_loading_screen(timeout=30):
-    deadline = utils.timed_out_counter(float(timeout))
-    while not deadline():
-        if _safe_check_join_template_no_bounds("loading_screen", 0.7):
-            return True
-        time.sleep(0.5)
-    return bool(_safe_check_join_template_no_bounds("loading_screen", 0.7))
-
-
-def _wait_for_ark_main_menu(timeout=30):
-    deadline = utils.timed_out_counter(float(timeout))
-    while not deadline():
-        if _safe_is_ark_main_menu():
-            return True
-        time.sleep(0.5)
-    return bool(_safe_is_ark_main_menu())
-
-
-def _safe_check_join_template_no_bounds(item, threshold):
-    try:
-        return bool(recon_utils.check_template_no_bounds(item, threshold))
-    except Exception:
-        return False
-
-
-def _safe_is_ark_main_menu():
-    try:
-        return bool(join_main.is_menu())
-    except Exception:
-        return False
 
 
 def _bed_name(players, account):
@@ -934,17 +883,14 @@ def _fallback_bed_name(players, account):
     return _bed_name(players or {}, account)
 
 
-def _click_coord(coord):
-    pyautogui.click(int(coord["x"]), int(coord["y"]))
-
-
-def _focus_steam_window_maximized(window_title):
+def _focus_steam_window_maximized(window_title: str) -> bool:
     if not focus_window_if_needed(window_title, center_cursor_when_switching=True):
         return False
     hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
     if not hwnd:
         return False
-    ctypes.windll.user32.ShowWindow(hwnd, 3)
+    if not ctypes.windll.user32.IsZoomed(hwnd):
+        ctypes.windll.user32.ShowWindow(hwnd, 3)
     ctypes.windll.user32.BringWindowToTop(hwnd)
     return True
 

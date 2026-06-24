@@ -3,7 +3,8 @@ import time
 
 import settings
 from source.ASA import config
-from source.ASA.player import console
+from source.ASA.player import console, player_state
+from source.launcher.utils import deposit_helper_capture
 from source.logs import gachalogs as logs
 
 from . import local_player, windows
@@ -133,8 +134,38 @@ def timed_out_counter(limit_seconds=3):
 
 
 def get_default_clock(deadline=config.timeout_deadline, multiplier=1):
+    """Default 2 minutes timeout"""
     m = max(settings.lag_offset, multiplier)
     return timed_out_counter(deadline * m)
+
+
+def close_ark_with_console_exit() -> bool:
+    """Try closing a visible ARK window through the in-game console."""
+
+    for attempt in range(1, config.console_open_attempts + 1):
+        hwnd = windows.ark_hwnd()
+        if not hwnd or not ctypes.windll.user32.IsWindowVisible(hwnd):
+            return True
+
+        logs.logger.debug(
+            f"closing ARK with console exit {attempt} / {config.console_open_attempts}"
+        )
+        try:
+            deposit_helper_capture.focus_game_window(center_cursor_when_switching=True)
+            player_state.reset_state()
+            if not console.console_write("exit"):
+                logs.logger.warning("ARK console did not accept the exit command")
+        except Exception as e:
+            logs.logger.warning(f"ARK exit command failed: {e}")
+
+        time.sleep(5)
+
+    hwnd = windows.ark_hwnd()
+    if not hwnd or not ctypes.windll.user32.IsWindowVisible(hwnd):
+        return True
+
+    logs.logger.warning("ARK did not close gracefully; forcing shutdown")
+    return False
 
 
 """
@@ -252,18 +283,33 @@ def pitch_zero(ccc_data=_CCC_NOT_PROVIDED):
         return False
 
 
-def zero_center(target_yaw=settings.station_yaw):
+def zero_center_no_ccc():
+    """
+    Won't trigger CCC
+
+    Should only be used after multiple dedi interaction, turn to dedi, then go back without doing ccc(for quicker process)
+    """
+
+    turn_to(settings.station_yaw, 0)
+
+
+def zero_opposite(target_yaw: float = None, target_pitch: float = None):
     """
     Trigger CCC
 
-    Will set yaw to settings.station_yaw by default and pitch to 0.
-    So player should be aiming at the desired center view
+    Will set yaw to opposite of settings.station_yaw by default and pitch to 0.
+    So player should be aiming at the opposite of zero_center()
     """
 
     logs.logger.debug("setting view angles back to station_yaw and pitch 0")
 
     global current_yaw
     global current_pitch
+
+    if target_yaw is None:
+        target_yaw = settings.station_yaw + 180
+    if target_pitch is None:
+        target_pitch = 0
 
     ccc_data = console.console_ccc()
     if ccc_data is None:
@@ -276,8 +322,59 @@ def zero_center(target_yaw=settings.station_yaw):
         except (IndexError, TypeError, ValueError) as e:
             logs.logger.error(f"error processing ccc yaw and pitch: {e}")
 
-    try:  # had an issue where this was a string for some reason
-        pitch_zero(ccc_data)
+    try:
+        if target_pitch == 0:
+            pitch_zero(ccc_data)
+        else:
+            set_pitch(target_pitch)
+
+        target = float(target_yaw)
+        current = float(current_yaw)
+
+        diff = ((target - current) + 180) % 360 - 180
+        if diff < 0:
+            turn_left(-diff)
+        else:
+            turn_right(diff)
+        current_yaw = normalize_yaw(target)
+    except Exception as e:
+        logs.logger.error(f"error processing data into floats: {e}")
+
+
+def zero_center(target_yaw: float = None, target_pitch: float = None):
+    """
+    Trigger CCC
+
+    Will set yaw to settings.station_yaw by default and pitch to 0.
+    So player should be aiming at the desired center view
+    """
+
+    logs.logger.debug("setting view angles back to station_yaw and pitch 0")
+
+    global current_yaw
+    global current_pitch
+
+    if target_yaw is None:
+        target_yaw = settings.station_yaw
+    if target_pitch is None:
+        target_pitch = 0
+
+    ccc_data = console.console_ccc()
+    if ccc_data is None:
+        logs.logger.warning("CCC unavailable; setting yaw from cached angle")
+    else:
+        try:
+            current_yaw = float(ccc_data[3])
+            current_pitch = float(ccc_data[4])
+            logs.logger.debug(f"setting yaw as {current_yaw}")
+        except (IndexError, TypeError, ValueError) as e:
+            logs.logger.error(f"error processing ccc yaw and pitch: {e}")
+
+    try:
+        if target_pitch == 0:
+            pitch_zero(ccc_data)
+        else:
+            set_pitch(target_pitch)
 
         target = float(target_yaw)
         current = float(current_yaw)

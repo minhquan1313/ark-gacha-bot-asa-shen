@@ -9,14 +9,15 @@ with open("json_files/settings.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
 lag_offset: float = data["lag_offset"]
-iguanadon: str = data["iguanadon"]
+station_yaw: float = data["station_yaw"]
 bed_spawn: str = data["bed_spawn"]
+server_number: str = data["server_number"]
+
+iguanadon: str = data["iguanadon"]
 berry_station: str = data["berry_station"]
 berry_type: str = data["berry_type"]
-station_yaw: float = data["station_yaw"]
 external_berry: bool = data["external_berry"]
 singleplayer: bool = data["singleplayer"]
-server_number: str = data["server_number"]
 seeds_230: bool = data["seeds_230"]
 gacha_feed_delay: int = int(data.get("gacha_feed_delay", 6600))
 gacha_230_feed_delay: int = int(data.get("gacha_230_feed_delay", 10700))

@@ -1,6 +1,7 @@
 import time
 
 import source.join_sim.source.crash.crash as crash
+from source.data import shared
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.menus import (
     failure,
@@ -27,10 +28,16 @@ def is_crashed():
 
 
 def join_round(server: str) -> bool:
+    # This click will skip game intro
+    windows.click(2, 2)
+    time.sleep(0.5)
+
     if not is_menu():
         time.sleep(0.5)
         logs.logger.debug("joined server")
         return success.joined_server()  # if we arent in the menu we need to restart
+
+    shared.was_in_mainmenu = True
 
     if not recon_utils.template_await_false(
         recon_utils.check_template, 10.0, "is_logging", 0.7
@@ -53,16 +60,6 @@ def join_round(server: str) -> bool:
     time.sleep(0.5)
 
     return False
-
-
-def sim_loop():
-    if is_menu():
-        is_success = False
-        logs.logger.debug("starting sim")
-        while not is_success:
-            is_success = join_round(server)
-            time.sleep(0.2)
-        logs.logger.debug("stop sim")
 
 
 def main_loop(server=server):

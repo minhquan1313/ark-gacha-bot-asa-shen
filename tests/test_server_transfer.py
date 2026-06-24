@@ -30,7 +30,7 @@ auto_join_module = _module(
     "source.join_sim.source.auto_join", run_auto_join_server=Mock(return_value=True)
 )
 recon_utils_module = _module("source.join_sim.source.utility.recon_utils")
-steam_accounts_module = _module("source.launcher.steam_accounts")
+steam_accounts_module = _module("source.launcher.utils.steam_accounts")
 ark_setup_module = _module(
     "source.launcher.ark_game_setup",
     ARK_PROCESS_NAME="ArkAscended.exe",
@@ -51,7 +51,7 @@ logs_module = _module(
     logger=SimpleNamespace(debug=Mock(), error=Mock(), critical=Mock()),
 )
 template_module = _module("source.utility.template")
-utils_module = _module("source.utility.utils")
+utils_module = _module("source.utility.utils", zero_center=Mock())
 windows_module = _module("source.utility.windows")
 dedi_module = _module("source.utility.structures.dedi.dedi")
 transmitter_module = _module("source.utility.structures.transmitter.transmitter")
@@ -81,7 +81,7 @@ with patch.dict(
         "source.join_sim.source.main": join_main_module,
         "source.join_sim.source.auto_join": auto_join_module,
         "source.join_sim.source.utility.recon_utils": recon_utils_module,
-        "source.launcher.steam_accounts": steam_accounts_module,
+        "source.launcher.utils.steam_accounts": steam_accounts_module,
         "source.launcher.ark_game_setup": ark_setup_module,
         "source.launcher.constants": constants_module,
         "source.launcher.deposit_helper_capture": capture_module,
@@ -100,9 +100,7 @@ sys.modules["source.gacha_bot.server_transfer"] = server_transfer
 
 STEAM_DIALOG_BUTTONS = server_transfer.STEAM_DIALOG_BUTTONS
 TransferConfigError = server_transfer.TransferConfigError
-close_ark_with_console_exit = server_transfer.close_ark_with_console_exit
 _focus_visible_steam_window = server_transfer._focus_visible_steam_window
-_refresh_join_sim_ark_handle = server_transfer._refresh_join_sim_ark_handle
 check_transfer_player_state = server_transfer.check_transfer_player_state
 deposit_to_transfer_dedis = server_transfer.deposit_to_transfer_dedis
 join_server = server_transfer.join_server
@@ -152,13 +150,12 @@ def runtime_dependencies(**overrides: object) -> Iterator[SimpleNamespace]:
         "verify_tribelog": Mock(return_value=True),
         "check_transfer_player_state": Mock(),
         "withdraw_from_transfer_dedis": Mock(return_value=True),
-        "fast_travel_to_bed": Mock(),
+        "go_back_to_bed": Mock(),
         "enter_tekpod": Mock(),
         "leave_tekpod": Mock(),
         "transfer_to_server": Mock(),
         "wait_for_bed_screen": Mock(),
         "spawn_bed": Mock(),
-        "stabilize_bed_position": Mock(),
         "deposit_to_transfer_dedis": Mock(return_value=True),
     }
     defaults.update(overrides)
@@ -201,9 +198,84 @@ class ServerTransferRunnerTests(unittest.TestCase):
         ]
         self.assertIn("2222", transferred_servers)
         self.assertIn("1111", transferred_servers)
-        dependencies.fast_travel_to_bed.assert_called_once_with("Bed1")
+        dependencies.go_back_to_bed.assert_called_once_with("Bed1")
         dependencies.spawn_bed.assert_any_call("Bed1")
+        dependencies.switch_steam_account.assert_not_called()
+        self.assertEqual(dependencies.ensure_ark_running.call_count, 2)
+        self.assertEqual(dependencies.join_server.call_count, 2)
         self.assertEqual(status[-1], "Server transfer helper finished.")
+
+    def test_multi_account_flow_restores_player_one_on_resource_server(self):
+        config = ready_config()
+        config["players"]["players"].append(
+            {"bed_name": "Bed2", "steam_account": "beta"}
+        )
+        config["steam_accounts"].append(
+            {"account_name": "beta", "most_recent": False, "timestamp": 0}
+        )
+
+        snapshots = []
+        with runtime_dependencies() as dependencies:
+            self.assertTrue(run_transfer_helper(config, task_callback=snapshots.append))
+
+        final_switch = dependencies.switch_steam_account.call_args_list[-1]
+        self.assertEqual(final_switch.args[:2], (1, 2))
+        self.assertEqual(final_switch.kwargs["steam_restart_interval"], 30)
+        self.assertEqual(dependencies.ensure_ark_running.call_count, 5)
+        self.assertEqual(dependencies.join_server.call_count, 5)
+        self.assertEqual(dependencies.join_server.call_args.args[0], "1111")
+        restore_steam = next(
+            snapshot
+            for snapshot in snapshots
+            if snapshot["running"]
+            and snapshot["running"][0]["name"] == "Acc 1 - Restore Steam - alpha"
+        )
+        self.assertEqual(
+            [task["name"] for task in restore_steam["active"]],
+            ["Acc 1 - Restore ARK", "Acc 1 - Restore Resource - 1111"],
+        )
+
+    def test_player_one_restore_ark_failure_returns_false(self):
+        config = ready_config()
+        config["players"]["players"].append(
+            {"bed_name": "Bed2", "steam_account": "beta"}
+        )
+        config["steam_accounts"].append(
+            {"account_name": "beta", "most_recent": False, "timestamp": 0}
+        )
+        status = []
+
+        with runtime_dependencies(
+            ensure_ark_running=Mock(side_effect=[True, True, True, True, False])
+        ) as dependencies:
+            self.assertFalse(run_transfer_helper(config, status_callback=status.append))
+
+        self.assertEqual(
+            status[-1], "Player 1 restoration failed: ARK did not become ready."
+        )
+        self.assertEqual(dependencies.join_server.call_count, 4)
+        self.assertNotIn("Server transfer helper finished.", status)
+
+    def test_player_one_restore_join_failure_returns_false(self):
+        config = ready_config()
+        config["players"]["players"].append(
+            {"bed_name": "Bed2", "steam_account": "beta"}
+        )
+        config["steam_accounts"].append(
+            {"account_name": "beta", "most_recent": False, "timestamp": 0}
+        )
+        status = []
+
+        with runtime_dependencies(
+            join_server=Mock(side_effect=[True, True, True, True, False])
+        ):
+            self.assertFalse(run_transfer_helper(config, status_callback=status.append))
+
+        self.assertEqual(
+            status[-1],
+            "Player 1 restoration failed: resource server join did not complete.",
+        )
+        self.assertNotIn("Server transfer helper finished.", status)
 
     def test_task_snapshots_track_dependency_actions_and_next_three(self):
         config = ready_config()
@@ -257,6 +329,21 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 and snapshot["running"][0]["name"] == "Acc 2 L2 - Deposit Resources"
                 for snapshot in snapshots
             )
+        )
+        published_tasks = [
+            snapshot["running"][0]["name"]
+            for snapshot in snapshots
+            if snapshot["running"]
+        ]
+        self.assertEqual(
+            published_tasks,
+            server_transfer._transfer_task_plan(config["settings"], config["players"], 2),
+        )
+        self.assertIn("Acc 1 L1 - Going back to Tekpod", published_tasks)
+        self.assertIn("Acc 1 L1 - Enter Tekpod", published_tasks)
+        self.assertIn("Acc 1 L2 - Enter Tekpod", published_tasks)
+        self.assertFalse(
+            any("Stabilize Bed" in task_name for task_name in published_tasks)
         )
 
     def test_task_snapshots_insert_confirmed_conditional_wait(self):
@@ -376,6 +463,26 @@ class ServerTransferRunnerTests(unittest.TestCase):
         user32.IsWindowVisible.assert_called_once_with(123)
         maximize.assert_not_called()
 
+    def test_focus_steam_window_only_maximizes_when_needed(self):
+        user32 = SimpleNamespace(
+            FindWindowW=Mock(return_value=123),
+            IsZoomed=Mock(side_effect=[True, False]),
+            ShowWindow=Mock(),
+            BringWindowToTop=Mock(),
+        )
+
+        with (
+            patch("ctypes.windll", SimpleNamespace(user32=user32), create=True),
+            patch.object(server_transfer, "focus_window_if_needed", return_value=True),
+        ):
+            self.assertTrue(server_transfer._focus_steam_window_maximized("Steam"))
+            user32.ShowWindow.assert_not_called()
+
+            self.assertTrue(server_transfer._focus_steam_window_maximized("Steam"))
+
+        user32.ShowWindow.assert_called_once_with(123, 3)
+        self.assertEqual(user32.BringWindowToTop.call_count, 2)
+
     def test_steam_has_failure_handles_launch_option_dialog(self):
         steam = default_transfer_ui_coords()["steam"]
         status = []
@@ -455,12 +562,6 @@ class ServerTransferRunnerTests(unittest.TestCase):
             STEAM_DIALOG_BUTTONS["cloud_sync_conflict_play"]["y"],
         )
         self.assertEqual(status[-1], "Detected Steam cloud sync conflict dialog.")
-
-    def test_refresh_ark_handle_returns_live_handle_without_cached_assignment(self):
-        with patch(
-            "source.gacha_bot.server_transfer._ark_window_handle", return_value=123
-        ):
-            self.assertEqual(_refresh_join_sim_ark_handle(), 123)
 
     def test_join_server_focuses_ark_then_reuses_auto_join(self):
         run_auto_join = Mock(return_value=True)
@@ -725,31 +826,16 @@ class ServerTransferRunnerTests(unittest.TestCase):
         self.assertEqual(result, "alpha")
         kill.assert_not_called()
 
-    def test_close_ark_with_console_exit_retries_until_window_disappears(self):
-        player_state = SimpleNamespace(reset_state=Mock())
-        console = SimpleNamespace(console_write=Mock())
-        capture = SimpleNamespace(focus_game_window=Mock())
-        utils = SimpleNamespace(timed_out_counter=Mock(return_value=lambda: False))
+    def test_kill_ark_uses_shared_graceful_close(self):
+        with patch.object(
+            server_transfer.utils,
+            "close_ark_with_console_exit",
+            return_value=True,
+            create=True,
+        ) as close_ark:
+            self.assertTrue(server_transfer.kill_ark(Mock()))
 
-        with (
-            patch.object(server_transfer, "player_state", player_state),
-            patch.object(server_transfer, "console", console),
-            patch.object(
-                server_transfer, "focus_game_window", capture.focus_game_window
-            ),
-            patch.object(server_transfer, "utils", utils),
-            patch(
-                "source.gacha_bot.server_transfer._ark_window_exists",
-                side_effect=[True, False],
-            ),
-            patch.object(server_transfer.time, "sleep"),
-        ):
-            self.assertTrue(close_ark_with_console_exit())
-
-        capture.focus_game_window.assert_called_once_with(
-            center_cursor_when_switching=True
-        )
-        console.console_write.assert_called_once_with("exit")
+        close_ark.assert_called_once_with()
 
     def test_transfer_to_server_uses_transmitter_helper_after_teleport_and_yaw(self):
         config = ready_config()

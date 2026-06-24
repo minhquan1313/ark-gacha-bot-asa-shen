@@ -14,8 +14,8 @@ from source.utility.debug_screenshots import (
 from source.utility.types import DediStorageState
 
 buttons = {
-    "dedi_withdraw_x": 967,
-    "dedi_withdraw_y": 838,
+    "dedi_withdraw_x": 1438,
+    "dedi_withdraw_y": 200,
     "dedi_deposit_x": 967,
     "dedi_deposit_y": 879,
 }
@@ -135,6 +135,7 @@ def open_deposit_all(metadata: station_metadata, item: DediStorageState) -> bool
         logs.logger.debug(f"Trying to deposit all[{attempt}]")
 
         turn_to_dedi(item)
+        time.sleep(0.2 * settings.lag_offset)
 
         open(metadata, item)
         if not is_open():
@@ -172,6 +173,7 @@ def open_withdraw_all(metadata: station_metadata, item: DediStorageState):
         logs.logger.debug(f"Trying to withdraw all[{attempt}]")
 
         turn_to_dedi(item)
+        time.sleep(0.2 * settings.lag_offset)
 
         open(metadata, item)
 
@@ -180,8 +182,7 @@ def open_withdraw_all(metadata: station_metadata, item: DediStorageState):
             continue
 
         windows.click(
-            get_pixel_loc("dedi_withdraw_x"),
-            get_pixel_loc("dedi_withdraw_y"),
+            get_pixel_loc("dedi_withdraw_x"), get_pixel_loc("dedi_withdraw_y")
         )
         inventory.close()
 

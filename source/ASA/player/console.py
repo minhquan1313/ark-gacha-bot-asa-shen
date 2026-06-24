@@ -69,7 +69,8 @@ def console_reset():
     pyautogui.press("c")
     time.sleep(0.1)
     utils.press_key("Enter")
-    time.sleep(0.3)
+    template.template_await_false(is_open, 1)
+    time.sleep(0.1)
 
 
 def console_ccc(reset_state_before_capture: bool = True) -> list[str] | None:
@@ -150,11 +151,14 @@ def console_ccc(reset_state_before_capture: bool = True) -> list[str] | None:
 def console_write(text: str) -> bool:
     attempts = 0
     while not is_open():
-        console_reset()
         attempts += 1
 
         utils.press_key("ConsoleKeys")
         template.template_await_true(is_open, 1)
+
+        if not is_open():
+            console_reset()
+
         if attempts >= source.ASA.config.console_open_attempts:
             logs.logger.error(
                 f"console didnt open after {attempts} attempts unable to input {text}"

@@ -4,33 +4,32 @@ from ctypes import wintypes
 import mss
 import numpy as np
 
-from source.launcher.config.constants import GAME_WINDOW_TITLE
+from source.launcher.config.constants import (
+    GAME_WINDOW_TITLE,
+    SUPPORTED_GAME_RESOLUTIONS,
+)
+
+capture_width, capture_height = SUPPORTED_GAME_RESOLUTIONS[0]
+mon = {"top": 0, "left": 0, "width": capture_width, "height": capture_height}
 
 
 def find_window_by_title(title):
     return ctypes.windll.user32.FindWindowW(None, title)
 
 
-def find_screen_size():
+def find_screen_size() -> tuple[int, int] | None:
+    """Return the ARK window size when Windows exposes a valid rectangle."""
     hwnd = find_window_by_title(GAME_WINDOW_TITLE)
+    if not hwnd:
+        return None
+
     rect = wintypes.RECT()
     if ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(rect)):
         height = rect.bottom - rect.top
         width = rect.right - rect.left
         print(f"application size is {width}x{height}")
         return width, height
-
-
-screen_width, screen_height = find_screen_size()
-
-if (screen_width, screen_height) == (1920, 1080):
-    mon = {"top": 0, "left": 0, "width": 1920, "height": 1080}
-else:
-    print(
-        f"{screen_width}x{screen_height} is not a valid screen res it needs to be 1920x1080"
-    )
-    input("")  # prevents the closing of the window instantly
-    exit()
+    return None
 
 
 def get_screen_roi(start_x, start_y, width, height):

@@ -59,10 +59,11 @@ def ensure_active(metadata: station_metadata):
 
 
 def close():
+    transmitter_transfer_menu.close()
+
     if is_open():
         windows.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
         template.template_await_false(is_open, 2)
-    transmitter_transfer_menu.close()
 
 
 def open_transfer_server_list():
@@ -93,8 +94,8 @@ def open_raw(metadata: station_metadata):
     while not dl():
         inventory.open()
 
-        if is_open():
-            break
+        if inventory.is_open():
+            return
         else:
             recover_if_problem(metadata)
 

@@ -72,8 +72,10 @@ def _teleport_to_route(route: dict) -> station_metadata:
     teleport_name = _route_teleport_name(route)
     metadata = custom_stations.get_station_metadata(teleport_name)
     logs.logger.debug(f"Teleporting to deposit route {teleport_name}")
+
     teleporter.teleport_not_default(metadata)
     utils.zero_center()
+
     return metadata
 
 
@@ -206,9 +208,6 @@ def _process_vault(route, route_metadata, vault, index):
         capture_vault_after_transfer(label)
 
     inventory.close()
-    template.template_await_false(template.check_template, 1, "inventory", 0.7)
-    time.sleep(0.2 * settings.lag_offset)
-    _restore_route_view(route_metadata, reset_crouch=False)
 
 
 def _process_grinder(route, route_metadata):
@@ -255,7 +254,6 @@ def _process_grinder(route, route_metadata):
 
     template.template_await_false(template.check_template, 1, "inventory", 0.7)
     time.sleep(0.2 * settings.lag_offset)
-    _restore_route_view(route_metadata, reset_crouch=False)
 
 
 def _process_grindable_dedi(
@@ -268,6 +266,7 @@ def _process_grindable_dedi(
     label = f"Grindable dedi {index} on teleport {teleport_name}"
     logs.logger.debug(label)
     dedi.capture_name = label
+
     if not dedi.open_deposit_all(route_metadata, item):
         _recover_after_dedi_failure(label)
         return False
@@ -292,6 +291,8 @@ def _process_crystal_route(
     if open_first_route_crystals:
         logs.logger.debug("opening crystals")
         open_crystals()
+        utils.zero_center()
+
     capture_route_ready(f"Crystal route {_route_teleport_name(route)}")
 
     for index, item in enumerate(_items(route.get("dedi", {})), start=1):
@@ -301,7 +302,6 @@ def _process_crystal_route(
     for index, vault in enumerate(_items(route.get("vault", {})), start=1):
         _process_vault(route, route_metadata, vault, index)
 
-    _restore_route_view(route_metadata)
     return True
 
 
@@ -317,7 +317,7 @@ def _process_grindable_route(route: dict, route_metadata: station_metadata) -> b
     for index, item in enumerate(_items(route.get("dedi", {})), start=1):
         if not _process_grindable_dedi(route, route_metadata, item, index):
             return False
-    _restore_route_view(route_metadata)
+
     return True
 
 
@@ -336,25 +336,29 @@ def _process_grindable_routes(routes: list[dict]) -> bool:
 
     active_route = routes[active_index]
     route_metadata = _teleport_to_route(active_route)
+
     _restore_route_view(route_metadata)
     _process_grinder(active_route, route_metadata)
+
     if not _sync_post_grinder_route_view(route_metadata):
         return False
     if not _process_grindable_route(active_route, route_metadata):
         return False
-    last_route_metadata = route_metadata
+
+    _last_route_metadata = route_metadata
 
     for index, route in enumerate(routes):
         if index == active_index:
             continue
         route_metadata = _teleport_to_route(route)
         _restore_route_view(route_metadata)
+
         if not _process_grindable_route(route, route_metadata):
             return False
-        last_route_metadata = route_metadata
+        _last_route_metadata = route_metadata
 
     drop_useless()
-    _restore_route_view(last_route_metadata)
+
     return True
 
 

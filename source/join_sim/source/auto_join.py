@@ -4,8 +4,8 @@ from collections.abc import Callable
 from source.join_sim.source import main as join_main
 from source.join_sim.source.crash import crash
 from source.join_sim.source.server_number import normalize_server_number
+from source.launcher.utils import deposit_helper_capture
 
-RETRY_DELAY_SECONDS = 2
 REOPEN_INTERVAL_SECONDS = 15 * 60
 REOPEN_PAUSE_SECONDS = 5
 
@@ -24,6 +24,8 @@ def run_auto_join_server(
     emit(f"Starting auto join for server {server}...")
 
     while True:
+        deposit_helper_capture.focus_game_window(center_cursor_when_switching=True)
+
         if crash.detect_crash():
             emit("Crash detected. Reopening game...")
             crash.re_open_game()
@@ -45,5 +47,3 @@ def run_auto_join_server(
         if join_main.join_round(server):
             emit(f"Joined server {server}.")
             return True
-
-        time.sleep(RETRY_DELAY_SECONDS)

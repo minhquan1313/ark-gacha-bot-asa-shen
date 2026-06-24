@@ -14,9 +14,16 @@ capture_iguanadon_seed_withdraw = capture_for(
     "iguanadon_seed_withdraw", active=CAPTURE_IGUANADON_SEED
 )
 
+should_drop_useless = False
+
+
+def is_tek_trough():
+    return template.check_template("tek_trough", 0.7)
+
 
 def _recover_berry_station(metadata):
     teleporter.teleport_not_default(metadata)
+
     if settings.external_berry:
         logs.logger.debug("sleeping for 20 seconds as external")
         time.sleep(20)  # letting station spawn in if you have to tp away
@@ -24,6 +31,7 @@ def _recover_berry_station(metadata):
 
 
 def berry_collection(metadata, turn_down=0):
+    global should_drop_useless
     attempt = 0
     dl = utils.get_default_clock()
 
@@ -32,9 +40,17 @@ def berry_collection(metadata, turn_down=0):
         time.sleep(0.5)
 
         inventory.open()
-        if inventory.is_open() and template.template_await_true(
-            template.check_template, 1, "tek_trough", 0.7
-        ):
+
+        if inventory.is_open() and template.template_await_true(is_tek_trough, 1):
+            if should_drop_useless:
+                player_inventory.drop_all_inv()
+                time.sleep(0.2 * settings.lag_offset)
+                inventory.close()
+                inventory.open()
+                if not inventory.is_open():
+                    _recover_berry_station(metadata)
+                    continue
+
             inventory.transfer_all_from()
             inventory.close()
             return
@@ -55,13 +71,15 @@ def berry_collection(metadata, turn_down=0):
             player_state.check_state()
 
         _recover_berry_station(metadata)
-        time.sleep(1)
 
 
 def berry_station(metadata):
+    global should_drop_useless
+    should_drop_useless = False
+
     berry_collection(metadata, 0)
+
     berry_collection(metadata, 50)
-    utils.turn_up(50)
 
 
 def transfer_berries_to_iguanodon(attempts=1):

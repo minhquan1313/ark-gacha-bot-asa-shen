@@ -41,7 +41,3 @@ def pego_pickup(metadata):
         time.sleep(0.2 * settings.lag_offset)
         capture_pego_crystal_withdraw(metadata.name)
         inventory.close()
-
-    time.sleep(0.1 * settings.lag_offset)
-    utils.turn_down(utils.current_pitch)
-    time.sleep(0.1 * settings.lag_offset)

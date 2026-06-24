@@ -37,6 +37,11 @@ class FakeClock:
 
 class AutoJoinServerTests(unittest.TestCase):
     def setUp(self) -> None:
+        focus_patcher = patch.object(
+            auto_join.deposit_helper_capture, "focus_game_window"
+        )
+        focus_patcher.start()
+        self.addCleanup(focus_patcher.stop)
         join_main.is_menu.reset_mock(return_value=True, side_effect=True)
         join_main.is_menu.return_value = False
         join_main.join_round.reset_mock(return_value=True, side_effect=True)
@@ -79,17 +84,17 @@ class AutoJoinServerTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertEqual(join_main.join_round.call_count, 3)
-        self.assertGreaterEqual(clock.value, 4)
 
     def test_triggers_crash_reopen_before_retrying(self):
         clock = FakeClock()
         crash.detect_crash.side_effect = [True, False]
+        statuses = []
 
         with (
             patch.object(auto_join.time, "sleep", side_effect=clock.sleep),
             patch.object(auto_join.time, "monotonic", side_effect=clock.now),
         ):
-            result = auto_join.run_auto_join_server("5147")
+            result = auto_join.run_auto_join_server("5147", statuses.append)
 
         self.assertTrue(result)
         crash.re_open_game.assert_called_once_with()
@@ -100,14 +105,18 @@ class AutoJoinServerTests(unittest.TestCase):
         clock = FakeClock()
         join_main.is_menu.return_value = True
         join_main.join_round.side_effect = [False, True]
+        statuses = []
 
         with (
             patch.object(auto_join.time, "sleep", side_effect=clock.sleep),
-            patch.object(auto_join.time, "monotonic", side_effect=clock.now),
-            patch.object(auto_join, "RETRY_DELAY_SECONDS", 901),
+            patch.object(
+                auto_join.time,
+                "monotonic",
+                side_effect=[0, 901, 901, 901, 901],
+            ),
             patch.object(auto_join, "REOPEN_PAUSE_SECONDS", 0),
         ):
-            result = auto_join.run_auto_join_server("5147")
+            result = auto_join.run_auto_join_server("5147", statuses.append)
 
         self.assertTrue(result)
         crash.re_open_game.assert_called_once_with()

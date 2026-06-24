@@ -34,7 +34,9 @@ def find_window_size(window_title):
     return rect.right - rect.left, rect.bottom - rect.top
 
 
-def focus_window_if_needed(window_title, center_cursor_when_switching=False):
+def focus_window_if_needed(
+    window_title: str, center_cursor_when_switching: bool = False
+) -> bool:
     user32 = ctypes.windll.user32
     hwnd = user32.FindWindowW(None, window_title)
     if not hwnd:
@@ -56,7 +58,8 @@ def focus_window_if_needed(window_title, center_cursor_when_switching=False):
                     f"Unable to attach to the foreground thread for {window_title}."
                 )
 
-        user32.ShowWindow(hwnd, 9)
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9)
         if center_cursor_when_switching:
             rect = wintypes.RECT()
             if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
@@ -84,9 +87,12 @@ def validate_ark_window():
     if game_size is None:
         raise RuntimeError(f"{GAME_WINDOW_TITLE} window was not found.")
     if game_size not in SUPPORTED_GAME_RESOLUTIONS:
+        supported_sizes = ", ".join(
+            f"{width}x{height}" for width, height in SUPPORTED_GAME_RESOLUTIONS
+        )
         raise RuntimeError(
             f"Detected {GAME_WINDOW_TITLE} size: {game_size[0]}x{game_size[1]}. "
-            f"{GAME_WINDOW_TITLE} must run at 1920x1080."
+            f"{GAME_WINDOW_TITLE} must run at one of: {supported_sizes}."
         )
     return game_size
 

@@ -5,7 +5,7 @@ import pyautogui
 import settings
 import source.gacha_bot.config
 from source.ASA.player import buffs, player_inventory, player_state
-from source.ASA.strucutres import teleporter
+from source.ASA.strucutres import bed, teleporter
 from source.logs import gachalogs as logs
 from source.utility import local_player, template, utils, variables, windows
 
@@ -17,24 +17,34 @@ def is_open():
     return template.check_template_no_bounds("bed_radical", 0.6)
 
 
-def enter_tekpod():
+def enter_tekpod(allow_eat_implant=True):
     global render_flag
     attempts = 0
+    player_state.check_disconnected()
+    dl = utils.get_default_clock()
     while not render_flag:
         attempts += 1
-        if attempts >= source.gacha_bot.config.render_attempts:
+        if attempts >= source.gacha_bot.config.render_attempts and not dl():
             logs.logger.warning(
                 f"{attempts} attempts however bot could not get into the render bed we are dieing and respawning to try and fix this"
             )
-            player_inventory.implant_eat()
-            player_state.check_state()  # this should respawn our char in the bed
-        time.sleep(0.5 * settings.lag_offset)
-        utils.press_key(
-            local_player.get_input_settings("Run")
-        )  # uncrouching char just in case
-        utils.zero_center()
+            if allow_eat_implant:
+                player_inventory.implant_eat()
+                player_state.check_state()  # this should respawn our char in the bed
+            else:
+                teleporter.teleport_not_default(settings.bed_spawn)
+
+            attempts = 0
+            dl = utils.get_default_clock()
+            utils.zero_center()
+            time.sleep(0.3 * settings.lag_offset)
+
+        player_state.human.reset_crouch()
+
+        utils.zero_center_no_ccc()
         utils.turn_down(15)
         time.sleep(0.3 * settings.lag_offset)
+
         pyautogui.keyDown(
             chr(utils.keymap_return(local_player.get_input_settings("Use")))
         )
@@ -47,8 +57,8 @@ def enter_tekpod():
             )
             time.sleep(0.5 * settings.lag_offset)
             utils.press_key(local_player.get_input_settings("Run"))
-            utils.zero()
-            utils.set_yaw(settings.station_yaw)
+
+            utils.zero_center()
             utils.turn_down(15)
             time.sleep(0.3 * settings.lag_offset)
             pyautogui.keyDown(
@@ -93,18 +103,29 @@ def enter_tekpod():
 
 def leave_tekpod():
     global render_flag
+    player_state.check_disconnected()
     player_state.reset_state()
+
     time.sleep(0.2 * settings.lag_offset)
     utils.press_key(local_player.get_input_settings("Use"))
-    time.sleep(1 * settings.lag_offset)
-    buff = buffs.check_buffs()
-    if buff.check_buffs() == 1:
-        time.sleep(3)
-        logs.logger.warning("bot didnt leave the tekpod first try we are retrying now")
+    time.sleep(0.5 * settings.lag_offset)
+    utils.zero_opposite()
+
+    if buffs.check_buffs().check_buffs() == 1:
         utils.press_key(local_player.get_input_settings("Use"))
-        time.sleep(1 * settings.lag_offset)
-    # utils.set_yaw(settings.station_yaw)
-    # time.sleep(0.5 * settings.lag_offset)
+        time.sleep(0.5 * settings.lag_offset)
+
+        dl = utils.get_default_clock()
+        while buffs.check_buffs().check_buffs() == 1 and not dl():
+            player_state.check_disconnected()
+
+            utils.zero_opposite()
+            time.sleep(1)
+
+    bed.close()
+
+    player_state.check_disconnected()
+    player_state.reset_state()
     render_flag = False
 
 

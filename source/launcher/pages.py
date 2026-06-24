@@ -1853,10 +1853,10 @@ class LauncherPagesMixin:
         layout.addWidget(self._page_title("TOOLS"))
         tools_grid = QGridLayout()
         tools_grid.setContentsMargins(0, 0, 0, 0)
-        tools_grid.setHorizontalSpacing(14)
-        tools_grid.setVerticalSpacing(14)
-        tools_grid.setColumnStretch(0, 1)
-        tools_grid.setColumnStretch(1, 1)
+        tools_grid.setHorizontalSpacing(12)
+        tools_grid.setVerticalSpacing(12)
+        # tools_grid.setColumnStretch(0, 1)
+        # tools_grid.setColumnStretch(1, 1)
 
         auto_join_card, auto_join_layout = self._panel("AUTO JOIN SERVER")
         auto_join_description = QLabel(
@@ -1872,9 +1872,7 @@ class LauncherPagesMixin:
 
         transfer_card, transfer_layout = self._panel("SERVER TRANSFER HELPER")
         transfer_description = QLabel(
-            "Move resources between two servers across multiple Steam accounts. "
-            "The helper saves its own settings and blocks start until required "
-            "Steam and transfer UI inputs are configured."
+            "Move resources between two servers across multiple Steam accounts."
         )
         transfer_description.setObjectName("MutedCopy")
         transfer_description.setWordWrap(True)
@@ -1884,11 +1882,7 @@ class LauncherPagesMixin:
         transfer_layout.addWidget(open_transfer)
 
         fertilizer_card, card_layout = self._panel("CROP PLOT FERTILIZER REFRESH")
-        description = QLabel(
-            "Refresh crop plot fertilizer with one quick helper. Start the tool, "
-            "and it will open a crop plot inventory, transfer everything to your "
-            "player inventory and back into the crop plot."
-        )
+        description = QLabel("Refresh crop plot fertilizer with one quick helper.")
         description.setObjectName("MutedCopy")
         description.setWordWrap(True)
         open_tool = self._button("OPEN TOOL", "primary")
@@ -1899,7 +1893,7 @@ class LauncherPagesMixin:
         switch_card, switch_layout = self._panel("SWITCH STEAM")
         switch_description = QLabel(
             "Restart Steam with any saved account, or switch accounts before "
-            "launching ARK. ARK is closed safely before Steam restarts."
+            "launching ARK."
         )
         switch_description.setObjectName("MutedCopy")
         switch_description.setWordWrap(True)
@@ -1908,10 +1902,12 @@ class LauncherPagesMixin:
         switch_layout.addWidget(switch_description)
         switch_layout.addWidget(open_switch)
 
-        tools_grid.addWidget(auto_join_card, 0, 0)
-        tools_grid.addWidget(transfer_card, 0, 1)
-        tools_grid.addWidget(fertilizer_card, 1, 0)
-        tools_grid.addWidget(switch_card, 1, 1)
+        max_cols = 3
+        helpers = [auto_join_card, fertilizer_card, transfer_card, switch_card]
+        for index, helper in enumerate(helpers):
+            row, col = divmod(index, max_cols)
+            tools_grid.addWidget(helper, row, col)
+
         layout.addLayout(tools_grid)
         layout.addStretch()
         return page

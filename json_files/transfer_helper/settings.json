@@ -8,7 +8,7 @@
   "loop_count": 1,
   "structure_load_delay": 10,
   "transfer_retry_delay": 5,
-"steam_restart_interval": 30,
+  "steam_restart_interval": 30,
   "ark_window_ready_timeout": 120,
   "ark_launch_attempts": 10
 }

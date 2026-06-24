@@ -46,12 +46,22 @@ def spawn_in(bed_name: str):
     Careful, this one also auto trigger IMPLANT EAT/SUICIDE
     """
 
-    if not is_open():
+    dl = utils.get_default_clock()
+    while not is_open() and not dl():
         player_inventory.implant_eat()
 
+        if is_open():
+            break
+
+        player_state.check_disconnected()
+        time.sleep(1 * settings.lag_offset)
+
     if is_open():
+        time.sleep(3 * settings.lag_offset)
+
         state = "death screen" if is_dead() else "fast travel screen"
         logs.logger.debug(f"char is in the {state}")
+
         search_bar_x = variables.get_pixel_loc(
             "search_bar_bed_dead_x" if is_dead() else "search_bar_bed_alive_x"
         )
@@ -84,13 +94,13 @@ def spawn_in(bed_name: str):
         time.sleep(0.3 * settings.lag_offset)
 
         # Click random on the screen to make sure it will spawn player or skip trailers.
-        pyautogui.moveTo(1000, 300, duration=0.3)
+        pyautogui.moveTo(1000, 300, duration=0.5)
         pyautogui.rightClick(1000, 300)
         pyautogui.press("space")
         time.sleep(0.2 * settings.lag_offset)
 
-        pyautogui.moveTo(1600, 800, duration=0.3)
-        pyautogui.rightClick(1600, 800)
+        pyautogui.moveTo(1400, 800, duration=0.5)
+        pyautogui.rightClick(1400, 800)
         pyautogui.press("space")
         time.sleep(0.2 * settings.lag_offset)
 

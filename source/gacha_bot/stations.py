@@ -125,6 +125,7 @@ class pego_station(base_task):
         #     template.check_template_no_bounds("search_player_inv", 0.7)
         #     time.sleep(0.3)
 
+        # utils.zero_center()
         # transmitter.open_and_transfer(5842)
         # print("Done debugging - Waiting 9999")
         # time.sleep(9999)

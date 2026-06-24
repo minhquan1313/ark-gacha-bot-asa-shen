@@ -126,6 +126,25 @@ class ArkWindowValidationTests(unittest.TestCase):
             [call(321, 789, True), call(321, 789, False)]
         )
 
+    def test_focus_window_if_needed_does_not_restore_non_minimized_window(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.side_effect = [456, 123]
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
+        user32.IsIconic.return_value = False
+        user32.SetForegroundWindow.return_value = True
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
+
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertTrue(focus_window_if_needed("Steam"))
+
+        user32.ShowWindow.assert_not_called()
+        user32.BringWindowToTop.assert_called_once_with(123)
+        user32.SetForegroundWindow.assert_called_once_with(123)
+
     def test_focus_window_if_needed_reports_window_position_failure(self):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
