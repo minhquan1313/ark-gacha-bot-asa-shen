@@ -6,12 +6,10 @@ from source.ASA.player import player_state
 from source.ASA.stations.custom_stations import station_metadata
 from source.ASA.strucutres import inventory, teleporter
 from source.logs import gachalogs as logs
-from source.utility import template, utils, windows
+from source.utility import template, utils, utils_simple, windows
 from source.utility.structures.transmitter import transmitter_transfer_menu
 
 buttons = {
-    "transfer_to_another_server_button_x": 960,
-    "transfer_to_another_server_button_y": 790,
     "back_x": 1800,
     "back_y": 66,
 }
@@ -29,29 +27,18 @@ def is_open_ready():
     return is_open() and template.check_template("trans_inv_ready", 0.7)
 
 
-def is_turned_on():
+def ensure_active(metadata: station_metadata):
+    """This function to make sure the transmitter is ON, so if it's not, turn it on and reopen inv"""
     if not is_open():
         return False
 
-    coords = template.check_template("structure_turn_on", 0.7)
-    return not coords
-
-
-def ensure_active(metadata: station_metadata):
-    """This function to make sure the transmitter is ON, so if it's not, turn it on and reopen inv"""
-    if is_turned_on():
+    if inventory.is_turned_on():
         return True
 
-    coords = template.check_template("structure_turn_on", 0.7)
-    if not coords:
-        return False
-    logs.logger.warning("Transmitter is off, trying to turn it on now...")
-
-    windows.click(*coords)
-    time.sleep(0.5 * settings.lag_offset)
+    inventory.turn_on()
 
     inventory.close()
-    time.sleep(0.5 * settings.lag_offset)
+    time.sleep(1 * settings.lag_offset)
 
     open_raw(metadata)
 
@@ -61,25 +48,22 @@ def ensure_active(metadata: station_metadata):
 def close():
     transmitter_transfer_menu.close()
 
-    if is_open():
-        windows.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
-        template.template_await_false(is_open, 2)
-
-
-def open_transfer_server_list():
-    if not is_open():
-        return
-
-    dl = utils.get_default_clock()
-    while not dl() and not transmitter_transfer_menu.is_open():
-        windows.click(
-            get_pixel_loc("transfer_to_another_server_button_x"),
-            get_pixel_loc("transfer_to_another_server_button_y"),
+    attempts = 0
+    while is_open():
+        attempts += 1
+        logs.logger.debug(
+            f"Trying to close Transmitter inventory {attempts} / {config.inventory_close_attempts}"
         )
-        time.sleep(0.3 * settings.lag_offset)
+        windows.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
 
-    if not transmitter_transfer_menu.is_open():
-        logs.logger.error("Can't open transmitter server menu")
+        if not template.template_await_false(is_open, 2):
+            return time.sleep(0.3 * settings.lag_offset)
+
+        if attempts >= config.inventory_close_attempts:
+            logs.logger.error(f"Unable to close Transmitter after {attempts} attempts")
+            # check state of the char the reason we can do it now is that the latter should spam click close inv
+            player_state.check_state()
+            break
 
 
 def recover_if_problem(metadata: station_metadata):
@@ -90,7 +74,7 @@ def recover_if_problem(metadata: station_metadata):
 
 def open_raw(metadata: station_metadata):
     # Open inventory
-    dl = utils.get_default_clock()
+    dl = utils_simple.get_default_clock()
     while not dl():
         inventory.open()
 
@@ -113,7 +97,7 @@ def open(metadata: station_metadata):
         return
 
     # Wait for loading
-    dl = utils.get_default_clock()
+    dl = utils_simple.get_default_clock()
     while is_open() and not dl():
         if template.template_await_true(is_open_ready, 1):
             logs.logger.debug("Transmitter is ready for actions")
@@ -167,17 +151,14 @@ def open_and_transfer(metadata: station_metadata, server_number=0):
             return False
 
         # OPEN TRANS SERVER LIST
-        open_transfer_server_list()
+        transmitter_transfer_menu.open()
 
         # PERFORM TRANSFER, SUCCESS ONLY WHEN IT SHOW BEDS
         success = transmitter_transfer_menu.do_join_server(str(server_number))
         if success:
             logs.logger.debug("Successfully joined destination server!")
-
             return True
-
         else:
-            # elif not player_state.uploaded:
             transmitter_transfer_menu.has_failure()
             if not player_state.uploaded:
                 player_state.check_state()

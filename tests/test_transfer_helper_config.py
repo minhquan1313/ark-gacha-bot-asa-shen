@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from source.launcher.config.transfer_helper_config import (
+    calculate_same_structure_destination_dedis,
     default_transfer_ui_coords,
     generated_player_bed_names,
     load_transfer_dedis,
@@ -51,10 +52,11 @@ class TransferHelperConfigTests(unittest.TestCase):
             self.assertTrue(path.exists())
             self.assertEqual(settings["resource_server"], "0")
             self.assertEqual(settings["destination_server"], "0")
-            self.assertEqual(settings["ark_window_ready_timeout"], 180)
-            self.assertEqual(settings["ark_launch_attempts"], 3)
+            self.assertEqual(settings["ark_window_ready_timeout"], 120)
+            self.assertEqual(settings["ark_launch_attempts"], 10)
             self.assertEqual(settings["steam_restart_interval"], 30)
             self.assertNotIn("account_count", settings)
+            self.assertNotIn("transfer_retry_delay", settings)
 
     def test_normalize_settings_ignores_old_account_and_rejects_invalid_loop_values(
         self,
@@ -216,10 +218,14 @@ class TransferHelperConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "settings.json"
 
-            settings = save_transfer_settings({"account_count": 12}, path)
+            settings = save_transfer_settings(
+                {"account_count": 12, "transfer_retry_delay": 5}, path
+            )
 
             self.assertNotIn("account_count", settings)
+            self.assertNotIn("transfer_retry_delay", settings)
             self.assertNotIn("account_count", path.read_text(encoding="utf-8"))
+            self.assertNotIn("transfer_retry_delay", path.read_text(encoding="utf-8"))
 
     def test_ui_coords_load_save_is_code_only(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -266,6 +272,7 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertEqual(config["resource"]["items"][0]["location"]["yaw"], 12.5)
         self.assertNotIn("enabled", config["resource"]["items"][0])
         self.assertTrue(config["resource"]["items"][0]["crouched"])
+        self.assertEqual(config["destination"]["items"][0]["location"]["yaw"], 0.0)
 
     def test_flat_dedi_config_migrates_to_resource_and_destination(self):
         config = normalize_transfer_dedis(
@@ -283,6 +290,102 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertEqual(config["resource"], config["destination"])
         self.assertEqual(config["resource"]["teleport"], "TRANSFERDEDI")
         self.assertEqual(config["resource"]["items"][0]["location"]["pitch"], -4.0)
+
+    def test_same_structure_calculation_applies_station_relative_yaw(self):
+        dedis = normalize_transfer_dedis(
+            {
+                "resource": {
+                    "teleport": "RESOURCE",
+                    "items": [
+                        {
+                            "location": {"yaw": 50, "pitch": 10},
+                            "crouched": True,
+                        }
+                    ],
+                },
+                "destination": {
+                    "teleport": "DEST",
+                    "items": [
+                        {
+                            "location": {"yaw": 0, "pitch": 0},
+                            "crouched": False,
+                        }
+                    ],
+                },
+            }
+        )
+
+        calculated = calculate_same_structure_destination_dedis(dedis, 10, 20)
+        destination = calculated["destination"]["items"][0]
+
+        self.assertEqual(destination["location"], {"yaw": 60.0, "pitch": 10.0})
+        self.assertTrue(destination["crouched"])
+
+    def test_same_structure_calculation_wraps_destination_yaw(self):
+        dedis = normalize_transfer_dedis(
+            {
+                "resource": {
+                    "teleport": "RESOURCE",
+                    "items": [{"location": {"yaw": 170, "pitch": -5}}],
+                },
+                "destination": {
+                    "teleport": "DEST",
+                    "items": [{"location": {"yaw": 0, "pitch": 0}}],
+                },
+            }
+        )
+
+        calculated = calculate_same_structure_destination_dedis(dedis, -20, 30)
+
+        self.assertEqual(
+            calculated["destination"]["items"][0]["location"],
+            {"yaw": -140.0, "pitch": -5.0},
+        )
+
+    def test_runtime_config_keeps_station_yaws_in_settings(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings_path = root / "settings.json"
+            dedis_path = root / "dedis.json"
+            players_path = root / "players.json"
+            settings_path.write_text(
+                '{"resource_station_yaw": "-10.5", "destination_station_yaw": "20"}',
+                encoding="utf-8",
+            )
+            dedis_path.write_text(
+                '{"resource": {"teleport": "R", "items": []},'
+                ' "destination": {"teleport": "D", "items": []}}',
+                encoding="utf-8",
+            )
+            players_path.write_text(
+                '{"players": [{"bed_name": "A"}]}',
+                encoding="utf-8",
+            )
+            import source.launcher.config.transfer_helper_config as config_module
+
+            old_paths = (
+                config_module.TRANSFER_SETTINGS_PATH,
+                config_module.TRANSFER_DEDIS_PATH,
+                config_module.TRANSFER_PLAYERS_PATH,
+            )
+            config_module.TRANSFER_SETTINGS_PATH = settings_path
+            config_module.TRANSFER_DEDIS_PATH = dedis_path
+            config_module.TRANSFER_PLAYERS_PATH = players_path
+            try:
+                config = config_module.load_transfer_runtime_config(
+                    create_missing=False
+                )
+            finally:
+                (
+                    config_module.TRANSFER_SETTINGS_PATH,
+                    config_module.TRANSFER_DEDIS_PATH,
+                    config_module.TRANSFER_PLAYERS_PATH,
+                ) = old_paths
+
+        self.assertEqual(config["settings"]["resource_station_yaw"], -10.5)
+        self.assertEqual(config["settings"]["destination_station_yaw"], 20.0)
+        self.assertNotIn("station_yaw", config["dedis"]["resource"])
+        self.assertNotIn("station_yaw", config["dedis"]["destination"])
 
     def test_missing_dedis_file_creates_default_route(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -357,7 +460,7 @@ class TransferHelperConfigTests(unittest.TestCase):
 
         self.assertNotIn("transfer", coords)
 
-    def test_validation_blocks_missing_destination_dedi_route(self):
+    def test_missing_destination_dedi_items_are_padded_with_blank_defaults(self):
         settings = normalize_transfer_settings(
             {
                 "resource_server": "1111",
@@ -380,7 +483,8 @@ class TransferHelperConfigTests(unittest.TestCase):
         missing = missing_runtime_inputs(settings, dedis, coords, players)
 
         self.assertIn("dedis.destination.teleport", missing)
-        self.assertIn("dedis.destination.items must include at least one dedi", missing)
+        self.assertNotIn("dedis.destination.items must include at least one dedi", missing)
+        self.assertEqual(dedis["destination"]["items"][0]["location"]["yaw"], 0.0)
 
     def test_legacy_transfer_dedi_overrides_are_discarded_and_not_validated(self):
         settings = normalize_transfer_settings(

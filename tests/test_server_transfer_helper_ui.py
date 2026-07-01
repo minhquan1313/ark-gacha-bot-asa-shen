@@ -34,6 +34,30 @@ class ServerTransferHelperUiTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def setUp(self) -> None:
+        """Prevent UI fixtures from saving test data to user transfer configuration."""
+        self.config_writer_patches = [
+            patch(
+                "source.launcher.server_transfer_helper.save_transfer_settings",
+                side_effect=lambda data, *_args, **_kwargs: data,
+            ),
+            patch(
+                "source.launcher.server_transfer_helper.save_transfer_dedis",
+                side_effect=lambda data, *_args, **_kwargs: data,
+            ),
+            patch(
+                "source.launcher.server_transfer_helper.save_transfer_players",
+                side_effect=lambda data, *_args, **_kwargs: data,
+            ),
+            patch(
+                "source.launcher.server_transfer_helper.save_transfer_ui_coords",
+                side_effect=lambda data, *_args, **_kwargs: data,
+            ),
+        ]
+        for config_writer in self.config_writer_patches:
+            config_writer.start()
+            self.addCleanup(config_writer.stop)
+
     def test_tools_page_opens_server_transfer_helper(self):
         helper = Mock()
         launcher = SimpleNamespace(
@@ -231,7 +255,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         finally:
             helper.close()
 
-    def test_player_rows_follow_account_count_with_editable_names(self):
+    def test_player_rows_follow_saved_players_with_editable_names(self):
         helper = self._transfer_helper(account_count=12)
 
         try:
@@ -261,13 +285,10 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertIn("ignored", helper.player_rows[4]["frame"].toolTip())
             self.assertIn("#ff4d6d", helper.player_rows[4]["frame"].styleSheet())
 
-            helper.setting_fields["account_count"].setText("2")
-            helper._refresh_player_rows()
+            helper._remove_player_row(helper.player_rows[-1])
 
-            self.assertEqual(
-                [row["name"].text() for row in helper.player_rows],
-                ["Player1", "Player2"],
-            )
+            self.assertEqual(len(helper.player_rows), 11)
+            self.assertEqual(helper.player_rows[-1]["label"].text(), "P11")
         finally:
             helper.close()
 
@@ -281,7 +302,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertTrue(all(not body.isHidden() for body in bodies))
             self.assertNotIn("enabled", helper.dedi_rows[0])
             self.assertEqual(
-                helper.loop_hint.text(), "1 dedi x 1 account = 6 suggested loop(s)."
+                helper.loop_hint.text(), "1 dedi x 1 account = 6 transfer(s)."
             )
         finally:
             helper.close()
@@ -384,67 +405,55 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                             {"bed_name": "ManualBed", "steam_account": "steam1"},
                             {"bed_name": "Player2", "steam_account": "steam2"},
                         ]
-                    },
-                    account_count=2,
+                    }
                 )
             finally:
                 helper.close()
 
-    def test_account_count_edit_resizes_and_saves_players_json(self):
+    def test_add_player_button_appends_and_saves_players_json(self):
         with patch(
             "source.launcher.server_transfer_helper.save_transfer_players",
-            side_effect=lambda data, account_count=1: data,
+            side_effect=lambda data, account_count=None: data,
         ) as save_players:
             helper = self._transfer_helper(account_count=1)
 
             try:
-                helper.setting_fields["account_count"].setText("3")
-                helper._refresh_player_rows(persist=True)
+                helper._add_player_row_from_button()
 
-                self.assertEqual(len(helper.player_rows), 3)
+                self.assertEqual(len(helper.player_rows), 2)
                 save_players.assert_called_with(
                     {
                         "players": [
                             {"bed_name": "Player1", "steam_account": "steam1"},
                             {"bed_name": "BBedPlayer2", "steam_account": ""},
-                            {"bed_name": "BBedPlayer3", "steam_account": ""},
                         ]
-                    },
-                    account_count=3,
+                    }
                 )
+                self.assertEqual(helper.setting_fields["loop_count"].text(), "3")
             finally:
                 helper.close()
 
-    def test_account_count_zero_resets_players_json(self):
+    def test_remove_player_blocks_last_row(self):
         with patch(
             "source.launcher.server_transfer_helper.save_transfer_players",
-            side_effect=lambda data, account_count=1: data,
-        ) as save_players:
+            side_effect=lambda data, account_count=None: data,
+        ):
             helper = self._transfer_helper(account_count=1)
 
             try:
-                helper.setting_fields["account_count"].setText("0")
-                helper._refresh_player_rows(persist=True)
+                helper._remove_player_row(helper.player_rows[0])
 
-                self.assertEqual(helper.player_rows, [])
-                save_players.assert_called_with({"players": []}, account_count=0)
-                self.assertEqual(
-                    helper.loop_hint.text(),
-                    "1 dedi x 0 account = no runnable accounts.",
-                )
+                self.assertEqual(len(helper.player_rows), 1)
+                self.assertEqual(helper.status.text(), "At least one player row is required.")
             finally:
                 helper.close()
 
-    def test_start_blocks_zero_players_before_runtime_validation(self):
+    def test_transfer_helper_normalizes_empty_player_config_to_one_row(self):
         helper = self._transfer_helper(account_count=0)
 
         try:
-            helper.start()
-
-            helper.owner.dialog.assert_called_once()
-            self.assertEqual(
-                helper.status.text(), "Add at least one player before starting."
-            )
+            self.assertEqual(len(helper.player_rows), 1)
+            self.assertEqual(helper.player_rows[0]["name"].text(), "BBedPlayer1")
         finally:
             helper.close()
 
@@ -789,6 +798,71 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                         "yaw"
                     ],
                     "0.0",
+                )
+            finally:
+                helper.close()
+
+    def test_destination_same_structure_calculate_button_is_available(self):
+        helper = self._transfer_helper(account_count=1)
+
+        try:
+            button = helper.destination_same_structure_calculate
+
+            self.assertEqual(button.text(), "CALCULATE")
+            self.assertEqual(
+                button.toolTip(),
+                server_transfer_helper_module.SAME_STRUCTURE_TOOLTIP,
+            )
+        finally:
+            helper.close()
+
+    def test_destination_same_structure_calculate_updates_and_saves_rows(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_dedis",
+            side_effect=lambda data: data,
+        ) as save_dedis:
+            helper = self._transfer_helper(account_count=1)
+
+            try:
+                helper.setting_fields["resource_station_yaw"].setText("10")
+                helper.setting_fields["destination_station_yaw"].setText("20")
+                helper.dedi_rows[0]["yaw"].setText("50")
+                helper.dedi_rows[0]["pitch"].setText("10")
+                helper.dedi_rows[0]["crouched"].setChecked(True)
+                helper.destination_dedi_rows[0]["yaw"].setText("0")
+                helper.destination_dedi_rows[0]["pitch"].setText("0")
+                save_dedis.reset_mock()
+
+                helper.destination_same_structure_calculate.click()
+
+                destination = helper.destination_dedi_rows[0]
+                self.assertEqual(destination["yaw"].text(), "60.0")
+                self.assertEqual(destination["pitch"].text(), "10.0")
+                self.assertTrue(destination["crouched"].isChecked())
+                self.assertEqual(
+                    destination["summary"].text(),
+                    "Yaw 60.0 | Pitch 10.0 | Crouch on",
+                )
+                self.assertEqual(
+                    save_dedis.call_args.args[0]["destination"]["items"][0],
+                    {
+                        "location": {"yaw": "60.0", "pitch": "10.0"},
+                        "crouched": True,
+                    },
+                )
+                self.assertEqual(
+                    helper.status.text(),
+                    "Destination dedis calculated from resource structure.",
+                )
+
+                destination["yaw"].setText("88")
+                helper._persist_dedis()
+
+                self.assertEqual(
+                    save_dedis.call_args.args[0]["destination"]["items"][0][
+                        "location"
+                    ]["yaw"],
+                    "88",
                 )
             finally:
                 helper.close()

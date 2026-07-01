@@ -1,5 +1,6 @@
 import time
 
+import settings
 import source.ASA.config
 from source.ASA.player import player_state
 from source.logs import gachalogs as logs
@@ -33,9 +34,8 @@ def close():
             variables.get_pixel_loc("close_inv_x"),
             variables.get_pixel_loc("close_inv_y"),
         )
-        template.template_await_false(
-            template.check_template_no_bounds, 2, "tribelog_check", 0.8
-        )
+        if not template.template_await_false(is_open, 2):
+            return time.sleep(0.3 * settings.lag_offset)
 
         if attempts >= source.ASA.config.inventory_close_attempts:
             logs.logger.error(

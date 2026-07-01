@@ -30,11 +30,12 @@ from source.launcher.components.widgets import (
 )
 from source.launcher.config.transfer_helper_config import (
     MAX_TRANSFER_RUNTIME_ACCOUNTS,
+    calculate_same_structure_destination_dedis,
+    default_transfer_dedi_item,
     load_transfer_runtime_config,
     missing_runtime_inputs,
     normalize_transfer_dedis,
     normalize_transfer_players,
-    player_account_count,
     player_bed_name_search_conflicts,
     save_transfer_dedis,
     save_transfer_players,
@@ -62,6 +63,10 @@ from source.launcher.utils.steam_accounts import (
 DEFAULT_PANELS_EXPANDED = True
 PLAYER_SEARCH_WARNING_COLOR = "#ffb020"
 IGNORED_PLAYER_COLOR = "#ff4d6d"
+SAME_STRUCTURE_TOOLTIP = (
+    "If destinate deposit outpost has THE SAME SETUP, this will automatically "
+    "calculate the yaw pitch and crouch for your destinate dedis!"
+)
 
 
 class ServerTransferHelper(WorkerHelperWindow):
@@ -169,6 +174,9 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.players_layout.setSpacing(6)
         players_layout.addLayout(self.players_layout)
         self._refresh_player_rows()
+        add_player = AnimatedButton("ADD PLAYER", "secondary")
+        add_player.clicked.connect(self._add_player_row_from_button)
+        players_layout.addWidget(add_player)
         content_layout.addWidget(players_card)
 
         resource_card = self._build_dedi_section("resource", "RESOURCE DEDIS")
@@ -208,14 +216,10 @@ class ServerTransferHelper(WorkerHelperWindow):
         settings = self.config["settings"]
         rows = [
             ("lag_offset", "Lag offset"),
-            ("resource_station_yaw", "Resource yaw"),
-            ("destination_station_yaw", "Destination yaw"),
             ("transmitter_teleport", "Transmitter teleport"),
             ("resource_server", "Resource server"),
             ("destination_server", "Destination server"),
-            ("account_count", "Accounts"),
-            ("structure_load_delay", "Delay on logged in"),
-            ("transfer_retry_delay", "Retry transfer delay"),
+            ("structure_load_delay", "Wait structures"),
             ("steam_restart_interval", "Steam restart interval"),
         ]
         for index, (key, label_text) in enumerate(rows):
@@ -223,45 +227,19 @@ class ServerTransferHelper(WorkerHelperWindow):
             column = 0
             label = QLabel(label_text)
             label.setObjectName("FormLabel")
-            value = (
-                player_account_count(self.config.get("players", {}))
-                if key == "account_count"
-                else settings.get(key, "")
-            )
+            value = settings.get(key, "")
             field = self._line_edit(value)
-            if key in {"resource_station_yaw", "destination_station_yaw"}:
-                row_layout = QHBoxLayout()
-                row_layout.setSpacing(4)
-                row_layout.setContentsMargins(0, 0, 0, 0)
-                capture = self._helper_button("C", f"Capture {label_text.lower()}")
-                capture.clicked.connect(
-                    lambda checked=False, target=field: self._capture_yaw(target)
-                )
-                row_layout.addWidget(field, 1)
-                row_layout.addWidget(capture)
-                value_widget = QWidget()
-                value_widget.setLayout(row_layout)
-            else:
-                value_widget = field
-            if key == "account_count":
-                field.editingFinished.connect(
-                    lambda: self._refresh_player_rows(persist=True)
-                )
-                field.returnPressed.connect(
-                    lambda: self._refresh_player_rows(persist=True)
-                )
-            else:
-                field.editingFinished.connect(self._persist_settings)
-                field.returnPressed.connect(self._persist_settings)
+            value_widget = field
+            field.editingFinished.connect(self._persist_settings)
+            field.returnPressed.connect(self._persist_settings)
             field.editingFinished.connect(self._sync_loop_hint)
             self.setting_fields[key] = field
             grid.addWidget(label, row, column)
             grid.addWidget(value_widget, row, column + 1)
         loop_row = len(rows) + 1
-        loop_label = QLabel("LOOPS")
+        loop_label = QLabel("Transfer")
         loop_label.setObjectName("FormLabel")
         loop_field = self._line_edit(settings.get("loop_count", ""))
-        loop_field.editingFinished.connect(self._sync_loop_hint)
         loop_field.editingFinished.connect(self._persist_settings)
         loop_field.returnPressed.connect(self._persist_settings)
         self.setting_fields["loop_count"] = loop_field
@@ -275,6 +253,24 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _build_dedi_section(self, side, title):
         card, layout = self._panel(title)
         route = self.config["dedis"].get(side, {})
+        yaw_key = f"{side}_station_yaw"
+        station_yaw = self._line_edit(self.config["settings"].get(yaw_key, 0.0))
+        station_yaw.editingFinished.connect(self._persist_settings)
+        station_yaw.returnPressed.connect(self._persist_settings)
+        self.setting_fields[yaw_key] = station_yaw
+        setattr(self, f"{side}_station_yaw", station_yaw)
+        yaw_row = QHBoxLayout()
+        yaw_row.setSpacing(4)
+        yaw_row.setContentsMargins(0, 0, 0, 0)
+        yaw_row.addWidget(station_yaw, 1)
+        capture_yaw = self._helper_button("C", f"Capture {side} yaw")
+        capture_yaw.clicked.connect(
+            lambda checked=False, target=station_yaw: self._capture_station_yaw(target)
+        )
+        yaw_row.addWidget(capture_yaw)
+        yaw_widget = QWidget()
+        yaw_widget.setLayout(yaw_row)
+        layout.addLayout(self._labeled_row("YAW", yaw_widget))
         teleport = self._line_edit(route.get("teleport", ""))
         teleport.editingFinished.connect(self._sync_loop_hint)
         teleport.editingFinished.connect(self._persist_dedis)
@@ -283,6 +279,12 @@ class ServerTransferHelper(WorkerHelperWindow):
         if side == "resource":
             self.dedi_teleport = teleport
         layout.addLayout(self._labeled_row("TELEPORT", teleport))
+        if side == "destination":
+            calculate = AnimatedButton("CALCULATE", "secondary")
+            calculate.setToolTip(SAME_STRUCTURE_TOOLTIP)
+            calculate.clicked.connect(self._calculate_destination_dedis)
+            self.destination_same_structure_calculate = calculate
+            layout.addWidget(calculate)
         rows_layout = QVBoxLayout()
         rows_layout.setSpacing(6)
         setattr(self, f"{side}_dedi_rows_layout", rows_layout)
@@ -293,8 +295,8 @@ class ServerTransferHelper(WorkerHelperWindow):
             self._add_dedi_row(item, side=side)
         add_dedi = AnimatedButton("ADD DEDI", "secondary")
         add_dedi.clicked.connect(
-            lambda checked=False, target_side=side: self._add_dedi_row(
-                side=target_side, persist=True
+            lambda checked=False, target_side=side: self._add_synced_dedi_pair(
+                target_side
             )
         )
         layout.addWidget(add_dedi)
@@ -307,11 +309,18 @@ class ServerTransferHelper(WorkerHelperWindow):
             else self.resource_dedi_rows
         )
 
+    @staticmethod
+    def _opposite_dedi_side(side):
+        return "resource" if side == "destination" else "destination"
+
+    def _add_synced_dedi_pair(self, side="resource"):
+        self._add_dedi_row(side=side)
+        self._add_dedi_row(side=self._opposite_dedi_side(side))
+        self._autosync_transfer_count(persist=False)
+        self._persist_dedis()
+
     def _add_dedi_row(self, item=None, persist=False, side="resource"):
-        item = item or {
-            "location": {"yaw": 0.0, "pitch": 0.0},
-            "crouched": False,
-        }
+        item = item or default_transfer_dedi_item()
         row = QFrame()
         row.setObjectName("HelperRow")
         layout = QVBoxLayout(row)
@@ -407,11 +416,19 @@ class ServerTransferHelper(WorkerHelperWindow):
         if len(rows) <= 1:
             self.status.setText("At least one transfer dedi row is required.")
             return
-        rows.remove(row_data)
+        index = rows.index(row_data)
+        self._remove_dedi_row_at("resource", index)
+        self._remove_dedi_row_at("destination", index)
+        self._autosync_transfer_count(persist=False)
+        self._persist_dedis()
+
+    def _remove_dedi_row_at(self, side, index):
+        rows = self._dedi_rows_for_side(side)
+        if index >= len(rows):
+            return
+        row_data = rows.pop(index)
         row_data["frame"].deleteLater()
         self._renumber_dedi_rows(side)
-        self._sync_loop_hint()
-        self._persist_dedis()
 
     def _toggle_dedi_row(self, row_data):
         visible = row_data["details"].isHidden()
@@ -431,6 +448,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         )
 
     def _current_config(self):
+        self._autosync_transfer_count(persist=False)
         self.config["settings"] = save_transfer_settings(self._settings_from_fields())
         self.config["dedis"] = save_transfer_dedis(self._dedis_from_rows())
         self.config["players"] = self._save_players_from_rows()
@@ -439,16 +457,31 @@ class ServerTransferHelper(WorkerHelperWindow):
         return self.config
 
     def _sync_loop_hint(self):
+        self._autosync_transfer_count(persist=False)
+
+    def _autosync_transfer_count(self, persist=False):
+        if not hasattr(self, "loop_hint") or "loop_count" not in self.setting_fields:
+            return
         try:
-            account_count = int(self.setting_fields["account_count"].text())
+            account_count = len(self.player_rows)
             active_count = len(self.resource_dedi_rows)
             if account_count == 0:
+                self.setting_fields["loop_count"].setText("1")
                 self.loop_hint.setText(
                     f"{active_count} dedi x 0 account = no runnable accounts."
                 )
                 return
+            if active_count == 0:
+                self.setting_fields["loop_count"].setText("1")
+                self.loop_hint.setText(
+                    f"0 dedi x {account_count} account = no transfer dedis."
+                )
+                if persist:
+                    self._persist_settings()
+                return
             effective_accounts = min(account_count, MAX_TRANSFER_RUNTIME_ACCOUNTS)
             suggested = suggested_loop_count(active_count, effective_accounts)
+            self.setting_fields["loop_count"].setText(str(suggested))
             suffix = (
                 f" Only first {effective_accounts} account(s) run."
                 if account_count > effective_accounts
@@ -456,8 +489,10 @@ class ServerTransferHelper(WorkerHelperWindow):
             )
             self.loop_hint.setText(
                 f"{active_count} dedi x {effective_accounts} account = "
-                f"{suggested} suggested loop(s).{suffix}"
+                f"{suggested} transfer(s).{suffix}"
             )
+            if persist:
+                self._persist_settings()
         except Exception as exc:
             self.loop_hint.setText(f"Loop hint unavailable: {exc}")
 
@@ -701,15 +736,11 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _refresh_player_rows(self, persist=False):
         if not hasattr(self, "players_layout"):
             return
-        try:
-            account_count = self._account_count_from_field()
-        except ValueError as exc:
-            self.status.setText(str(exc))
-            return
         if self.player_rows:
             source_players = self._players_from_rows()
         else:
             source_players = self.config.get("players", {})
+        account_count = max(1, len(source_players.get("players", [])))
         try:
             self.config["players"] = normalize_transfer_players(
                 source_players, account_count
@@ -730,13 +761,12 @@ class ServerTransferHelper(WorkerHelperWindow):
             try:
                 self.config["players"] = save_transfer_players(
                     self.config["players"],
-                    account_count=account_count,
                 )
             except ValueError as exc:
                 self.status.setText(str(exc))
                 return
             self.status.setText("Player settings saved.")
-        self._sync_loop_hint()
+        self._autosync_transfer_count(persist=persist)
 
     def _add_player_row(self, account):
         row = QFrame()
@@ -756,11 +786,14 @@ class ServerTransferHelper(WorkerHelperWindow):
         copy.clicked.connect(
             lambda checked=False, field=name: self._copy_name(field.text())
         )
+        remove = AnimatedButton("X", "danger")
+        remove.setObjectName("HelperIconButton")
         info = QHBoxLayout()
         info.addWidget(label)
         info.addWidget(QLabel("Bed/Teleport"))
         info.addWidget(name, 1)
         info.addWidget(copy)
+        info.addWidget(remove)
 
         layout.addLayout(info)
         steam_row = QHBoxLayout()
@@ -786,20 +819,40 @@ class ServerTransferHelper(WorkerHelperWindow):
         steam_row.addWidget(steam, 1)
         layout.addLayout(steam_row)
         self.players_layout.addWidget(row)
-        self.player_rows.append(
-            {"frame": row, "name": name, "steam": steam, "account": account}
+        row_data = {
+            "frame": row,
+            "label": label,
+            "name": name,
+            "steam": steam,
+            "account": account,
+        }
+        self.player_rows.append(row_data)
+        remove.clicked.connect(
+            lambda checked=False, target=row_data: self._remove_player_row(target)
         )
 
-    def _account_count_from_field(self):
-        try:
-            account_count = int(self.setting_fields["account_count"].text())
-        except KeyError as exc:
-            raise ValueError("account_count field is missing.") from exc
-        except ValueError as exc:
-            raise ValueError("account_count must be an integer.") from exc
-        if account_count < 0:
-            raise ValueError("account_count must be at least 0.")
-        return account_count
+    def _add_player_row_from_button(self):
+        players = self._players_from_rows().get("players", [])
+        next_account = len(players) + 1
+        players.append({"bed_name": "", "steam_account": ""})
+        self.config["players"] = normalize_transfer_players(
+            {"players": players}, next_account
+        )
+        self.player_rows = []
+        self._refresh_player_rows(persist=True)
+
+    def _remove_player_row(self, row_data):
+        if len(self.player_rows) <= 1:
+            self.status.setText("At least one player row is required.")
+            return
+        self.player_rows.remove(row_data)
+        row_data["frame"].deleteLater()
+        for index, row in enumerate(self.player_rows, 1):
+            row["account"] = index
+            row["label"].setText(f"P{index}")
+        self._save_players_from_rows()
+        self._sync_player_search_warnings()
+        self._autosync_transfer_count(persist=True)
 
     def _players_from_rows(self):
         if self.player_rows:
@@ -818,7 +871,6 @@ class ServerTransferHelper(WorkerHelperWindow):
         try:
             players = save_transfer_players(
                 self._players_from_rows(),
-                account_count=self._account_count_from_field(),
             )
         except ValueError as exc:
             self.status.setText(str(exc))
@@ -826,6 +878,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.config["players"] = players
         self.status.setText("Player settings saved.")
         self._sync_player_search_warnings()
+        self._autosync_transfer_count(persist=True)
         return players
 
     def _sync_player_search_warnings(self):
@@ -952,6 +1005,34 @@ class ServerTransferHelper(WorkerHelperWindow):
             ],
         }
 
+    def _calculate_destination_dedis(self):
+        try:
+            settings = self._settings_from_fields()
+            dedis = calculate_same_structure_destination_dedis(
+                self._dedis_from_rows(),
+                settings["resource_station_yaw"],
+                settings["destination_station_yaw"],
+            )
+        except ValueError as exc:
+            self.status.setText(str(exc))
+            return
+
+        self._apply_destination_dedi_route(dedis["destination"])
+        if self._persist_dedis():
+            self.status.setText("Destination dedis calculated from resource structure.")
+
+    def _apply_destination_dedi_route(self, route):
+        for row, item in zip(
+            self.destination_dedi_rows, route.get("items", []), strict=False
+        ):
+            location = item.get("location", {})
+            row["yaw"].setText(str(location.get("yaw", 0.0)))
+            row["pitch"].setText(str(location.get("pitch", 0.0)))
+            previous_blocked = row["crouched"].blockSignals(True)
+            row["crouched"].setChecked(bool(item.get("crouched", False)))
+            row["crouched"].blockSignals(previous_blocked)
+            self._sync_dedi_summary(row)
+
     def _persist_settings(self):
         try:
             self.config["settings"] = save_transfer_settings(
@@ -976,7 +1057,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         QApplication.clipboard().setText(str(value))
         self.status.setText("Bed/teleport name copied.")
 
-    def _capture_yaw(self, field):
+    def _capture_station_yaw(self, field):
         if not self._require_ark_window("capture yaw"):
             return
         cursor_position = QCursor.pos()

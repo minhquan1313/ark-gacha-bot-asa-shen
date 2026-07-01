@@ -16,6 +16,7 @@ pyautogui.FAILSAFE = False
 
 
 focus_window_task = None
+RUNNER_READY_MESSAGE = "__RUNNER_READY__"
 
 
 def focus_window(window_title=GAME_WINDOW_TITLE, interval=5.0, is_repeat_once=False):
@@ -56,8 +57,13 @@ async def main():
     try:
         print("[INFO] Offline runner starting.")
 
+        import task_manager
+
+        await asyncio.to_thread(task_manager.prepare)
+        print(RUNNER_READY_MESSAGE, flush=True)
+
         # Reset mouse position to center of the screen to prevent unintended movements when starting the program.
-        windows.move_mouse(1920 / 2, 1080 / 2)
+        windows.move_mouse(1920 // 2, 1080 // 2)
 
         if settings.allow_focus_ark_window:
             focus_window(GAME_WINDOW_TITLE, settings.focus_ark_window_interval)
@@ -68,9 +74,7 @@ async def main():
             print(f"[INFO] {GAME_WINDOW_TITLE} auto-focus disabled.")
             focus_window(GAME_WINDOW_TITLE, is_repeat_once=True)
 
-        import task_manager
-
-        await asyncio.to_thread(task_manager.main)
+        await asyncio.to_thread(task_manager.run)
     finally:
         await cancel_focus_window()
         stop_debug_screenshot_worker()

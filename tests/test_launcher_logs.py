@@ -1,26 +1,26 @@
+import ctypes
 import json
 import os
 import tempfile
+import threading
 import unittest
-import ctypes
 from types import MethodType, SimpleNamespace
 from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QSize
-from PySide6.QtWidgets import QLineEdit, QPushButton, QWidget
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton, QWidget
 
+from source.launcher.components.widgets import AnimatedButton
 from source.launcher.config.constants import (
     APP_NAME,
     GACHA_LOG_FILE,
     MAX_LAUNCHER_LOG_LINES,
 )
 from source.launcher.gui import START_GAME_DISABLE_DELAY, SettingsGUI
-from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
 from source.launcher.runner_overlay import format_runner_logs, format_runner_overlay
-from source.launcher.components.widgets import AnimatedButton
+from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
 
 
 class LauncherLogTests(unittest.TestCase):
@@ -50,7 +50,7 @@ class LauncherLogTests(unittest.TestCase):
     def append_snapshot(self, snapshot):
         SettingsGUI.append_log(self.launcher, f"[QUEUE_STATE] {json.dumps(snapshot)}")
 
-    @patch("source.launcher.gui.time.time", return_value=100)
+    @patch("source.launcher.gui_parts.runtime.time.time", return_value=100)
     def test_queue_snapshot_lists_soonest_task_last_before_running_task(self, _):
         self.launcher.queue_snapshot = {
             "running": [{"name": "current"}],
@@ -103,6 +103,13 @@ class LauncherLogTests(unittest.TestCase):
 
         self.launcher._sync_runner_overlay.assert_called_once_with()
 
+    def test_live_log_refreshes_runner_overlay_immediately(self):
+        self.launcher._sync_runner_overlay = Mock()
+
+        SettingsGUI.append_log(self.launcher, "[INFO] live log message\n")
+
+        self.launcher._sync_runner_overlay.assert_called_once_with()
+
     def test_running_filter_shows_history_and_current_task(self):
         self.launcher.running_history = ["[RUNNING] STARTED   gacha"]
         self.launcher.queue_snapshot["running"] = [{"name": "berry"}]
@@ -135,7 +142,7 @@ class LauncherLogTests(unittest.TestCase):
             lambda: os.path.exists(temp_log_path) and os.remove(temp_log_path)
         )
 
-        with patch("source.launcher.gui.GACHA_LOG_FILE", temp_log_path):
+        with patch("source.launcher.gui_parts.logs.GACHA_LOG_FILE", temp_log_path):
             SettingsGUI.clear_logs(self.launcher)
 
         self.assertEqual(self.launcher.log_lines, [])
@@ -152,11 +159,14 @@ class LauncherLogTests(unittest.TestCase):
         log_path = os.path.join("source", "logs", "logs.txt")
         launcher = SimpleNamespace(dialog=Mock())
 
-        with patch("source.launcher.gui.GACHA_LOG_FILE", log_path):
-            with patch(
-                "source.launcher.gui.QDesktopServices.openUrl", return_value=True
-            ) as open_url:
-                SettingsGUI.open_logs(launcher)
+        with (
+            patch("source.launcher.gui_parts.logs.GACHA_LOG_FILE", log_path),
+            patch(
+                "source.launcher.gui_parts.logs.QDesktopServices.openUrl",
+                return_value=True,
+            ) as open_url,
+        ):
+            SettingsGUI.open_logs(launcher)
 
         opened_url = open_url.call_args.args[0]
         self.assertEqual(
@@ -168,7 +178,7 @@ class LauncherLogTests(unittest.TestCase):
     def test_open_logs_reports_os_open_failure(self):
         launcher = SimpleNamespace(dialog=Mock())
 
-        with patch("source.launcher.gui.QDesktopServices.openUrl", return_value=False):
+        with patch("source.launcher.gui_parts.logs.QDesktopServices.openUrl", return_value=False):
             SettingsGUI.open_logs(launcher)
 
         launcher.dialog.assert_called_once_with(
@@ -230,7 +240,7 @@ class LauncherLogTests(unittest.TestCase):
             lambda: os.path.exists(temp_log_path) and os.remove(temp_log_path)
         )
 
-        with patch("source.launcher.gui.GACHA_LOG_FILE", temp_log_path):
+        with patch("source.launcher.gui_parts.logs.GACHA_LOG_FILE", temp_log_path):
             SettingsGUI.load_previous_logs(self.launcher)
 
         self.assertEqual(len(self.launcher.log_lines), MAX_LAUNCHER_LOG_LINES)
@@ -287,9 +297,13 @@ class LauncherDashboardTests(unittest.TestCase):
         dialog = Mock()
         dialog.finished.connect = Mock()
 
-        with patch("source.launcher.gui.CyberDialog", return_value=dialog) as cyber:
-            with patch("source.launcher.gui.QTimer.singleShot") as single_shot:
-                SettingsGUI.toast(launcher, "Copied", "success")
+        with (
+            patch(
+                "source.launcher.gui_parts.dialogs.CyberDialog", return_value=dialog
+            ) as cyber,
+            patch("source.launcher.gui_parts.dialogs.QTimer.singleShot") as single_shot,
+        ):
+            SettingsGUI.toast(launcher, "Copied", "success")
 
         cyber.assert_called_once()
         dialog.setModal.assert_called_once_with(False)
@@ -315,6 +329,9 @@ class LauncherDashboardTests(unittest.TestCase):
             _button=Mock(side_effect=buttons),
             _icon_button=Mock(return_value=restore_button),
             toggle_program=Mock(),
+            start_game=Mock(),
+            restore_game_settings=Mock(),
+            clear_game_restore_settings=Mock(),
             toggle_auto_start_program=Mock(),
             _update_auto_start_switch=Mock(),
             _update_start_stop_button=Mock(),
@@ -329,17 +346,19 @@ class LauncherDashboardTests(unittest.TestCase):
             _sync_dashboard_actions_width=Mock(),
         )
 
-        with patch("source.launcher.pages.HeroBanner"):
-            with patch("source.launcher.pages.QGridLayout") as grid:
-                with patch("source.launcher.pages.QHBoxLayout"):
-                    with patch("source.launcher.pages.QFrame"):
-                        with patch("source.launcher.pages.QVBoxLayout"):
-                            with patch("source.launcher.pages.CyberSwitch") as switch:
-                                with patch("source.launcher.pages.QLabel"):
-                                    grid.return_value.itemAtPosition.return_value.widget.return_value = Mock()
-                                    switch.return_value.toggled.connect = Mock()
-                                    with patch("source.launcher.pages.QTimer"):
-                                        SettingsGUI._dashboard_page(launcher)
+        with (
+            patch("source.launcher.pages.home.HeroBanner"),
+            patch("source.launcher.pages.home.QGridLayout") as grid,
+            patch("source.launcher.pages.home.QHBoxLayout"),
+            patch("source.launcher.pages.home.QFrame"),
+            patch("source.launcher.pages.home.QVBoxLayout"),
+            patch("source.launcher.pages.home.CyberSwitch") as switch,
+            patch("source.launcher.pages.home.QLabel"),
+            patch("source.launcher.pages.home.QTimer"),
+        ):
+            grid.return_value.itemAtPosition.return_value.widget.return_value = Mock()
+            switch.return_value.toggled.connect = Mock()
+            SettingsGUI._dashboard_page(launcher)
 
         launcher.start_stop_button.setToolTip.assert_called_once_with(
             "Hotkey: Shift + Alt + N"
@@ -351,7 +370,7 @@ class LauncherDashboardTests(unittest.TestCase):
             "icon.restore_settings",
             "Restore the original display mode and ARK config. "
             "Right-click to clear saved restore data.",
-            "secondary",
+            "danger",
         )
         self.assertIs(launcher.restore_game_settings_button, restore_button)
         launcher._update_start_game_button_visibility.assert_called_once_with()
@@ -361,7 +380,7 @@ class LauncherDashboardTests(unittest.TestCase):
         launcher = SimpleNamespace(_button=Mock(return_value=button))
         icon = Mock()
 
-        with patch("source.launcher.pages.QIcon", return_value=icon) as qicon:
+        with patch("source.launcher.pages.base.QIcon", return_value=icon) as qicon:
             result = SettingsGUI._icon_button(
                 launcher, "icon.trash_junk", "Remove item", "danger"
             )
@@ -371,14 +390,14 @@ class LauncherDashboardTests(unittest.TestCase):
         button.setObjectName.assert_called_once_with("HelperIconButton")
         qicon.assert_called_once()
         button.setIcon.assert_called_once_with(icon)
-        button.setIconSize.assert_called_once_with(QSize(18, 18))
-        button.setFixedWidth.assert_called_once_with(38)
+        button.setIconSize.assert_called_once_with(QSize(32, 32))
+        button.setMinimumWidth.assert_called_once_with(36)
         button.setFixedSize.assert_not_called()
         button.setToolTip.assert_called_once_with("Remove item")
 
-    @patch("source.launcher.gui.QTimer.singleShot")
+    @patch("source.launcher.gui_parts.settings_state.QTimer.singleShot")
     @patch(
-        "source.launcher.gui.ark_game_setup.prepare_and_launch_game",
+        "source.launcher.gui_parts.settings_state.ark_game_setup.prepare_and_launch_game",
         return_value="GameUserSettings.ini",
     )
     def test_start_game_disables_button_and_schedules_unlock(
@@ -386,8 +405,10 @@ class LauncherDashboardTests(unittest.TestCase):
     ):
         launcher = SimpleNamespace(
             start_game_button=Mock(),
+            restore_game_settings_button=Mock(),
             _set_start_game_enabled=Mock(),
             _unlock_start_game_button=Mock(),
+            _unlock_restore_game_button=Mock(),
             append_log=Mock(),
             _update_game_restore_button_visibility=Mock(),
         )
@@ -395,9 +416,14 @@ class LauncherDashboardTests(unittest.TestCase):
         SettingsGUI.start_game(launcher)
 
         launcher._set_start_game_enabled.assert_called_once_with(False)
-        single_shot.assert_called_once_with(
+        single_shot.assert_any_call(
             START_GAME_DISABLE_DELAY, launcher._unlock_start_game_button
         )
+        single_shot.assert_any_call(
+            START_GAME_DISABLE_DELAY, launcher._unlock_restore_game_button
+        )
+        self.assertEqual(single_shot.call_count, 2)
+        launcher.restore_game_settings_button.setEnabled.assert_called_once_with(False)
         launcher._update_game_restore_button_visibility.assert_called_once_with()
 
     def test_unlock_start_game_button_enables_and_refreshes_visibility(self):
@@ -423,7 +449,7 @@ class LauncherDashboardTests(unittest.TestCase):
         launcher.start_game_button.setEnabled.assert_called_once_with(False)
         launcher.start_game_enabled_changed.emit.assert_called_once_with(False)
 
-    @patch("source.launcher.gui.find_window_size", return_value=None)
+    @patch("source.launcher.gui_parts.settings_state.find_window_size", return_value=None)
     def test_start_game_button_visible_when_ark_window_is_missing(self, _find_window):
         launcher = SimpleNamespace(start_game_button=Mock())
 
@@ -431,7 +457,7 @@ class LauncherDashboardTests(unittest.TestCase):
 
         launcher.start_game_button.setVisible.assert_called_once_with(True)
 
-    @patch("source.launcher.gui.find_window_size", return_value=(1920, 1080))
+    @patch("source.launcher.gui_parts.settings_state.find_window_size", return_value=(1920, 1080))
     def test_start_game_button_hidden_when_ark_is_supported_size(self, _find_window):
         launcher = SimpleNamespace(start_game_button=Mock())
 
@@ -439,7 +465,7 @@ class LauncherDashboardTests(unittest.TestCase):
 
         launcher.start_game_button.setVisible.assert_called_once_with(False)
 
-    @patch("source.launcher.gui.find_window_size", return_value=(2560, 1440))
+    @patch("source.launcher.gui_parts.settings_state.find_window_size", return_value=(2560, 1440))
     def test_start_game_button_visible_when_ark_size_is_unsupported(self, _find_window):
         launcher = SimpleNamespace(start_game_button=Mock())
 
@@ -481,7 +507,7 @@ class LauncherDashboardTests(unittest.TestCase):
             last_activity="--:--:--",
         )
 
-        with patch("source.launcher.gui.psutil", fake_psutil):
+        with patch("source.launcher.gui_parts.runtime.psutil", fake_psutil):
             SettingsGUI._tick(launcher)
 
         launcher._update_start_game_button_visibility.assert_called_once_with()
@@ -492,6 +518,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         return SimpleNamespace(
             shutdown_started=False,
             program_stopping=False,
+            runner_loading=False,
             process=None,
             require_ark_window=Mock(return_value=ark_window_ok),
             close_external_helpers=Mock(),
@@ -504,11 +531,15 @@ class LauncherStartProgramTests(unittest.TestCase):
             _hide_runner_overlay=Mock(),
             output_reader_stop=None,
             output_reader_thread=None,
+            log_lines=[],
+            queue_snapshot={"running": [], "active": [], "waiting": []},
+            running_task_name=None,
         )
 
-    def test_start_program_cleans_debug_screenshots_before_launching_process(self):
+    def test_start_program_shows_loading_overlay_before_launching_process(self):
         launcher = self.make_launcher()
         events = []
+        launcher._show_runner_overlay.side_effect = lambda: events.append("overlay")
         process = Mock()
         thread = Mock()
 
@@ -519,28 +550,33 @@ class LauncherStartProgramTests(unittest.TestCase):
             events.append("popen")
             return process
 
-        with patch(
-            "source.launcher.gui.cleanup_debug_screenshots_on_program_start",
-            side_effect=cleanup,
-        ) as cleanup_mock:
-            with patch("source.launcher.gui.subprocess.Popen", side_effect=popen):
-                with patch("source.launcher.gui.threading.Thread", return_value=thread):
-                    SettingsGUI.start_program(launcher)
+        with (
+            patch(
+                "source.launcher.gui_parts.runtime.cleanup_debug_screenshots_on_program_start",
+                side_effect=cleanup,
+            ) as cleanup_mock,
+            patch("source.launcher.gui_parts.runtime.subprocess.Popen", side_effect=popen),
+            patch("source.launcher.gui_parts.runtime.threading.Thread", return_value=thread),
+        ):
+            SettingsGUI.start_program(launcher)
 
         cleanup_mock.assert_called_once_with()
-        self.assertEqual(events, ["cleanup", "popen"])
+        self.assertEqual(events, ["overlay", "cleanup", "popen", "overlay"])
         launcher.close_external_helpers.assert_called_once_with()
         thread.start.assert_called_once_with()
-        launcher._show_runner_overlay.assert_called_once_with()
+        self.assertTrue(launcher.runner_loading)
+        self.assertEqual(launcher._show_runner_overlay.call_count, 2)
 
     def test_start_program_does_not_clean_when_ark_window_validation_fails(self):
         launcher = self.make_launcher(ark_window_ok=False)
 
-        with patch(
-            "source.launcher.gui.cleanup_debug_screenshots_on_program_start"
-        ) as cleanup:
-            with patch("source.launcher.gui.subprocess.Popen") as popen:
-                SettingsGUI.start_program(launcher)
+        with (
+            patch(
+                "source.launcher.gui_parts.runtime.cleanup_debug_screenshots_on_program_start"
+            ) as cleanup,
+            patch("source.launcher.gui_parts.runtime.subprocess.Popen") as popen,
+        ):
+            SettingsGUI.start_program(launcher)
 
         cleanup.assert_not_called()
         popen.assert_not_called()
@@ -585,7 +621,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         launcher.process = Mock()
         launcher.process.poll.return_value = None
 
-        with patch("source.launcher.gui.time.time", return_value=100):
+        with patch("source.launcher.gui_parts.runtime.time.time", return_value=100):
             SettingsGUI.stop_program(launcher)
 
         launcher.process.terminate.assert_called_once_with()
@@ -595,6 +631,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         launcher = SimpleNamespace(
             process=Mock(),
             program_stopping=False,
+            runner_loading=False,
             runner_overlay=None,
             queue_snapshot={"running": [{"name": "gacha"}]},
             log_lines=["[DEBUG] 09:03:45 - DEBUG - open - inventory opened"],
@@ -602,7 +639,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         )
         overlay = Mock()
 
-        with patch("source.launcher.gui.RunnerOverlay", return_value=overlay):
+        with patch("source.launcher.gui_parts.runtime.RunnerOverlay", return_value=overlay):
             SettingsGUI._show_runner_overlay(launcher)
 
         self.assertIs(launcher.runner_overlay, overlay)
@@ -611,6 +648,57 @@ class LauncherStartProgramTests(unittest.TestCase):
         )
         overlay.show.assert_called_once_with()
         overlay.raise_.assert_called_once_with()
+
+    def test_show_runner_overlay_displays_loading_state(self) -> None:
+        launcher = SimpleNamespace(
+            process=None,
+            program_stopping=False,
+            runner_loading=True,
+            runner_overlay=None,
+            queue_snapshot={"running": [{"name": "stale task"}]},
+            log_lines=["[INFO] stale log"],
+            is_program_running=Mock(return_value=True),
+        )
+        overlay = Mock()
+
+        with patch("source.launcher.gui_parts.runtime.RunnerOverlay", return_value=overlay):
+            SettingsGUI._show_runner_overlay(launcher)
+
+        overlay.refresh.assert_called_once_with(
+            {
+                "running": [{"name": "Loading runner..."}],
+            },
+            [],
+        )
+        overlay.stop_button.set_loading.assert_called_once_with(True)
+
+    def test_runner_ready_reveals_collected_overlay_content(self) -> None:
+        launcher = SimpleNamespace(
+            runner_loading=True,
+            process=Mock(),
+            queue_snapshot={"running": [{"name": "pego 1"}]},
+            log_lines=["[DEBUG] 09:03:45 - DEBUG - open - inventory opened"],
+            is_program_running=Mock(return_value=True),
+            _show_runner_overlay=Mock(),
+        )
+
+        SettingsGUI._on_runner_ready(launcher)
+
+        self.assertFalse(launcher.runner_loading)
+        launcher._show_runner_overlay.assert_called_once_with()
+
+    def test_output_reader_emits_runner_ready_for_ready_marker(self) -> None:
+        launcher = SimpleNamespace(
+            output_reader_stop=threading.Event(),
+            runner_ready=Mock(),
+            stop_log_tail=Mock(),
+            _emit_log_line=Mock(),
+        )
+        process = SimpleNamespace(stdout=iter(["__RUNNER_READY__\n"]))
+
+        SettingsGUI.read_output(launcher, process)
+
+        launcher.runner_ready.emit.assert_called_once_with()
 
     def test_shutdown_hides_overlay_and_unregisters_hotkey(self):
         process = Mock()
@@ -662,11 +750,11 @@ class RunnerOverlayFormattingTests(unittest.TestCase):
 
         current, upcoming = format_runner_overlay(snapshot, now=100)
 
-        self.assertEqual(current, "Running pego deposit")
+        self.assertEqual(current, "pego deposit")
         self.assertEqual(
             upcoming,
             [
-                "ready ready task",
+                "ready task",
                 "00:00:12 feed gacha",
                 "00:00:20 task 2",
             ],
@@ -730,22 +818,33 @@ class LauncherHotkeyTests(unittest.TestCase):
             winId=Mock(return_value=123),
         )
 
-        with patch("source.launcher.gui.ctypes", SimpleNamespace(windll=object())):
-            with patch(
-                "source.launcher.gui.register_shift_alt_n_hotkey", return_value=True
-            ) as register:
-                SettingsGUI._register_start_stop_hotkey(launcher)
+        with (
+            patch(
+                "source.launcher.gui_parts.runtime.ctypes",
+                SimpleNamespace(windll=object()),
+            ),
+            patch(
+                "source.launcher.gui_parts.runtime.register_shift_alt_n_hotkey",
+                return_value=True,
+            ) as register,
+        ):
+            SettingsGUI._register_start_stop_hotkey(launcher)
 
         register.assert_called_once_with(123, 44)
         self.assertTrue(launcher.start_stop_hotkey_registered)
 
         launcher.start_stop_hotkey_registered = False
-        with patch("source.launcher.gui.ctypes", SimpleNamespace(windll=object())):
-            with patch(
-                "source.launcher.gui.register_shift_alt_n_hotkey",
+        with (
+            patch(
+                "source.launcher.gui_parts.runtime.ctypes",
+                SimpleNamespace(windll=object()),
+            ),
+            patch(
+                "source.launcher.gui_parts.runtime.register_shift_alt_n_hotkey",
                 side_effect=RuntimeError("blocked"),
-            ):
-                SettingsGUI._register_start_stop_hotkey(launcher)
+            ),
+        ):
+            SettingsGUI._register_start_stop_hotkey(launcher)
 
         self.assertFalse(launcher.start_stop_hotkey_registered)
 
@@ -756,9 +855,14 @@ class LauncherHotkeyTests(unittest.TestCase):
             winId=Mock(return_value=123),
         )
 
-        with patch("source.launcher.gui.ctypes", SimpleNamespace(windll=object())):
-            with patch("source.launcher.gui.unregister_hotkey") as unregister:
-                SettingsGUI._unregister_start_stop_hotkey(launcher)
+        with (
+            patch(
+                "source.launcher.gui_parts.runtime.ctypes",
+                SimpleNamespace(windll=object()),
+            ),
+            patch("source.launcher.gui_parts.runtime.unregister_hotkey") as unregister,
+        ):
+            SettingsGUI._unregister_start_stop_hotkey(launcher)
 
         unregister.assert_called_once_with(123, 44)
         self.assertFalse(launcher.start_stop_hotkey_registered)
@@ -806,15 +910,17 @@ class AnimatedButtonTests(unittest.TestCase):
         button = AnimatedButton("TEST", "primary")
         event = Mock()
 
-        with patch.object(QPushButton, "mouseReleaseEvent") as release:
-            with patch.object(
+        with (
+            patch.object(QPushButton, "mouseReleaseEvent") as release,
+            patch.object(
                 button,
                 "isEnabled",
                 side_effect=RuntimeError(
                     "Internal C++ object (AnimatedButton) already deleted."
                 ),
-            ):
-                button.mouseReleaseEvent(event)
+            ),
+        ):
+            button.mouseReleaseEvent(event)
 
         release.assert_called_once_with(event)
 

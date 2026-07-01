@@ -8,6 +8,7 @@ import source.logs.gachalogs as logs
 
 global scheduler
 global started
+scheduler = None
 started = False
 
 
@@ -179,9 +180,9 @@ def load_resolution_data(file_path):
         return []
 
 
-def main():
+def prepare() -> task_scheduler:
+    """Load configured tasks and publish their initial queue without running them."""
     global scheduler
-    global started
     scheduler = task_scheduler()
 
     pego_data = load_resolution_data("json_files/pego.json")
@@ -201,9 +202,25 @@ def main():
         scheduler.add_task(task)
 
     scheduler.add_task(stations.render_station())
+    logs.logger.info("scheduler prepared")
+    return scheduler
+
+
+def run() -> None:
+    """Start the scheduler loop after task preparation is complete."""
+    global scheduler
+    global started
+    if scheduler is None:
+        scheduler = prepare()
     logs.logger.info("scheduler now running")
     started = True
     scheduler.run()
+
+
+def main() -> None:
+    """Prepare configured tasks and start the scheduler loop."""
+    prepare()
+    run()
 
 
 if __name__ == "__main__":

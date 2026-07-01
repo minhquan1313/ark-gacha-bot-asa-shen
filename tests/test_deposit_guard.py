@@ -295,6 +295,15 @@ class DediDepositGuardTests(unittest.TestCase):
         )
         self.deposit.drop_useless.assert_not_called()
 
+    def test_empty_grindable_routes_are_skipped(self):
+        self.deposit._teleport_to_route = Mock()
+        self.deposit.drop_useless = Mock()
+
+        self.assertTrue(self.deposit._process_grindable_routes([]))
+
+        self.deposit._teleport_to_route.assert_not_called()
+        self.deposit.drop_useless.assert_not_called()
+
     def test_active_grinder_route_resyncs_once_after_grinder_before_dedis(self):
         order = []
         route = {

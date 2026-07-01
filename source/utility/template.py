@@ -13,7 +13,7 @@ roi_regions = {
     "beds_title": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
     "console": {"start_x": 0, "start_y": 1050, "width": 38, "height": 30},
     "crop_plot": {"start_x": 825, "start_y": 187, "width": 233, "height": 113},
-    "crop_plot_prompt": {"start_x": 300, "start_y": 150, "width": 1400, "height": 800},
+    "crop_plot_prompt": {"start_x": 300, "start_y": 0, "width": 1400, "height": 1080},
     "crystal_in_hotbar": {
         "start_x": 562,
         "start_y": 937,
@@ -27,6 +27,18 @@ roi_regions = {
     "tek_trough": {"start_x": 877, "start_y": 195, "width": 161, "height": 30},
     "exit_resume": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
     "inventory": {"start_x": 150, "start_y": 93, "width": 270, "height": 113},
+    "inventory_player_drop": {
+        "start_x": 300,
+        "start_y": 120,
+        "width": 300,
+        "height": 150,
+    },
+    "inventory_player_transfer_all": {
+        "start_x": 300,
+        "start_y": 120,
+        "width": 300,
+        "height": 150,
+    },
     "ready_clicked_bed": {"start_x": 435, "start_y": 187, "width": 113, "height": 750},
     "seed_inv": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
     "slot_capped": {"start_x": 1680, "start_y": 985, "width": 113, "height": 75},
@@ -54,6 +66,7 @@ roi_regions = {
     "vault_full": {"start_x": 1065, "start_y": 525, "width": 113, "height": 30},
     "search": {"start_x": 337, "start_y": 952, "width": 90, "height": 30},
     "search_player_inv": {"start_x": 62, "start_y": 62, "width": 430, "height": 246},
+    "search_object_inv": {"start_x": 1100, "start_y": 62, "width": 430, "height": 246},
     "server_list_trans_loaded": {
         "start_x": 140,
         "start_y": 280,
@@ -135,6 +148,21 @@ roi_regions = {
     },
 }
 
+# Use this to overwrite the bounds of opencv2.
+# Playground https://pseudopencv.site/utilities/hsvcolormask/
+template_l_bounds_overwrite = {
+    #
+    "inventory_player_drop": [0, 30, 150],
+    "inventory_player_transfer_all": [0, 30, 150],
+}
+
+# Use this to overwrite what template image will be used to compare.
+# This help reduce duplicate template images, but they serve only 1 template but different location
+template_image_overwrite = {
+    #
+    "search_object_inv": "search_player_inv"
+}
+
 IS_DEBUG = False
 DEBUG_ITEM = "search_player_inv"
 
@@ -169,7 +197,10 @@ def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[Fal
     region = roi_regions[item]
     roi = get_region_roi(region)
 
-    lower_boundary = np.array([0, 30, 200])
+    l_bound = template_l_bounds_overwrite.get(item, [0, 30, 200])
+
+    # Playground https://pseudopencv.site/utilities/hsvcolormask/
+    lower_boundary = np.array(l_bound)
     upper_boundary = np.array([255, 255, 255])
 
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
@@ -177,7 +208,8 @@ def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[Fal
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons1080/{item}.png")
+    image_path = template_image_overwrite.get(item, item)
+    image = cv2.imread(f"assets/icons1080/{image_path}.png")
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -209,8 +241,11 @@ def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[Fal
         template_path = dir_folder / f"{item}_template.png"
         roi_path = dir_folder / f"{item}_{score}_roi.png"
 
-        cv2.imwrite(str(template_path), image)
-        cv2.imwrite(str(roi_path), debug_roi)
+        if not template_path.exists():
+            cv2.imwrite(str(template_path), image)
+
+        if not roi_path.exists():
+            cv2.imwrite(str(roi_path), debug_roi)
 
         if max_val > threshold:
             winsound.Beep(1000, 100)
@@ -234,6 +269,7 @@ def check_template_no_bounds(
     region = roi_regions[item]
     roi = get_region_roi(region)
 
+    # Playground https://pseudopencv.site/utilities/hsvcolormask/
     lower_boundary = np.array([0, 0, 0])
     upper_boundary = np.array([255, 255, 255])
 
@@ -242,7 +278,8 @@ def check_template_no_bounds(
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons1080/{item}.png")
+    image_path = template_image_overwrite.get(item, item)
+    image = cv2.imread(f"assets/icons1080/{image_path}.png")
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -274,8 +311,10 @@ def check_template_no_bounds(
         template_path = dir_folder / f"{item}_template.png"
         roi_path = dir_folder / f"{item}_{score}_roi.png"
 
-        cv2.imwrite(str(template_path), image)
-        cv2.imwrite(str(roi_path), debug_roi)
+        if not template_path.exists():
+            cv2.imwrite(str(template_path), image)
+        if not roi_path.exists():
+            cv2.imwrite(str(roi_path), debug_roi)
 
         if max_val > threshold:
             winsound.Beep(1000, 50)

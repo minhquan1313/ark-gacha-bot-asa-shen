@@ -118,15 +118,15 @@ def load_stations_module():
     utility.local_player = types.SimpleNamespace()
     utility.screen = types.SimpleNamespace()
     utility.template = types.SimpleNamespace(check_template=Mock(return_value=False))
-    utility.utils = types.SimpleNamespace()
+    utility.utils = types.SimpleNamespace(zero_center=Mock())
     utility.variables = types.SimpleNamespace()
     utility.windows = types.SimpleNamespace()
     iguanadon = types.SimpleNamespace(berry_station=Mock(), iguanadon=Mock())
     gacha = types.SimpleNamespace(
-        collection=Mock(), drop_off_nocrop=Mock(), drop_off=Mock()
+        collection=Mock(), drop_off_nocrop=Mock()
     )
     bot_modules = types.ModuleType("source.gacha_bot")
-    bot_modules.config = types.SimpleNamespace(time_to_reberry=0.01)
+    bot_modules.config = types.SimpleNamespace()
     bot_modules.deposit = types.SimpleNamespace(deposit_all=Mock())
     bot_modules.gacha = gacha
     bot_modules.iguanadon = iguanadon
@@ -137,10 +137,8 @@ def load_stations_module():
             berry_station="BERRIES",
             iguanadon="IGUANADON",
             external_berry=False,
-            seeds_230=False,
+            time_to_reberry=0.01,
             gacha_feed_delay=123,
-            gacha_230_feed_delay=456,
-            side_crop_plot=False,
         ),
         "source.logs.gachalogs": logs,
         "source.utility": utility,
@@ -321,15 +319,6 @@ class BerryStationTaskGuardTests(unittest.TestCase):
         self.assertEqual(
             stations.gacha_station("gacha1", "GACHA1", "left").get_requeue_delay(),
             123,
-        )
-
-    def test_230_gacha_requeue_delay_uses_setting(self):
-        stations, _, _, _ = load_stations_module()
-        stations.settings.seeds_230 = True
-
-        self.assertEqual(
-            stations.gacha_station("gacha1", "GACHA1", "left").get_requeue_delay(),
-            456,
         )
 
     def test_pego_uses_dedi_routes_for_crystal_deposit(self):

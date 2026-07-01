@@ -1,12 +1,14 @@
 import time
+from typing import Literal
 
 import settings
 from source.ASA import config
 from source.ASA.player import player_state
 from source.logs import gachalogs as logs
-from source.utility import template, utils, variables, windows
+from source.utility import template, utils, utils_simple, variables, windows
 
 resets = 0  # resets happen when char cannot tp therefore it is a major issue
+inv_slots = {"x": 222, "y": 280, "distance": 93}
 
 
 def is_open():
@@ -15,6 +17,14 @@ def is_open():
 
 def is_clear_search():
     return template.check_template_no_bounds("search_player_inv", 0.8)
+
+
+def is_can_drop():
+    return template.check_template("inventory_player_drop", 0.8)
+
+
+def is_can_transfer_all():
+    return template.check_template("inventory_player_transfer_all", 0.8)
 
 
 def wait_clear_search(timeout=1):
@@ -52,7 +62,8 @@ def close():
             variables.get_pixel_loc("close_inv_x"),
             variables.get_pixel_loc("close_inv_y"),
         )
-        template.template_await_false(template.check_template, 2, "inventory", 0.7)
+        if not template.template_await_false(is_open, 2):
+            return time.sleep(0.3 * settings.lag_offset)
 
         if attempts >= config.inventory_close_attempts:
             logs.logger.error(
@@ -60,7 +71,6 @@ def close():
             )
             # check state of the char the reason we can do it now is that the latter should spam click close inv
             break
-    time.sleep(0.2 * settings.lag_offset)
 
 
 # these functions assume that the inventory is already open
@@ -115,6 +125,33 @@ def transfer_first_inventory():
         time.sleep(0.5 * settings.lag_offset)
 
 
+def popcorn(
+    count=0, direction: Literal["left", "down"] = "left", *, transfer_instead=False
+):
+    loc_gen = (
+        utils_simple.grid_loc_gen(row=6)
+        if direction == "down"
+        else utils_simple.grid_loc_gen(col=6)
+    )
+
+    if is_open() and count >= 1:
+        for i in range(count):
+            c, r = loc_gen(i)
+
+            time.sleep(0.05 * settings.lag_offset)
+
+            x = inv_slots["x"] + (inv_slots["distance"] * c)
+            # Y pos = startY + distanceBetweenSlots * i
+            y = inv_slots["y"] + (inv_slots["distance"] * r)
+            windows.move_mouse(x, y)
+
+            windows.click(x, y)
+            time.sleep(0.05 * settings.lag_offset)
+
+            utils.press_key("DropItem" if not transfer_instead else "TransferItem")
+        time.sleep(0.1 * settings.lag_offset)
+
+
 def implant_eat():
     global resets
     resets += 1
@@ -129,6 +166,8 @@ def implant_eat():
         logs.logger.debug(
             f"trying to eat player implant {attempts} / {config.suicide_attempts}"
         )
+
+        utils.zero_center()
         open()
         close()
 

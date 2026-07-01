@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 
 from source.launcher.components.helper_window import BaseHelperWindow
 from source.launcher.components.widgets import AnimatedButton, WrappedStatusLabel
+from source.launcher.config.constants import setting_label
 from source.launcher.deposit_route_helper import DepositHelperGuide
 from source.launcher.utils.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
@@ -69,7 +70,7 @@ class PositionRenderHelper(BaseHelperWindow):
         guide.clicked.connect(self.show_guide)
         self.add_header_action(guide)
 
-        for key in "station_yaw":
+        for key in ("station_yaw",):
             self.content_layout.addWidget(self._setting_row(key))
 
         self.status = WrappedStatusLabel("Ready.")
@@ -80,7 +81,7 @@ class PositionRenderHelper(BaseHelperWindow):
         row = QFrame()
         row.setObjectName("HelperRow")
         layout = QHBoxLayout(row)
-        label = QLabel(key)
+        label = QLabel(setting_label(key))
         label.setObjectName("HelperRowSummary")
         value = QLabel(str(self.owner.settings.get(key, 0.0)))
         value.setObjectName("HelperStatus")
@@ -109,7 +110,7 @@ class PositionRenderHelper(BaseHelperWindow):
             if field is not None:
                 field.setText(str(yaw))
             self.owner.persist_settings_from_visible_fields(show_log=False)
-            self.owner._render_settings_group("POSITION / RENDER")
+            self.owner._render_settings_group("STATIONS")
             self.status.setText(f"Saved {key}: {yaw:.2f}.")
         except Exception as exc:
             self.status.setText(f"Capture failed: {exc}")

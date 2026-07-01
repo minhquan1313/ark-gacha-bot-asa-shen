@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QSizePolicy,
     QTextEdit,
@@ -508,6 +509,120 @@ class CyberDialog(QDialog):
         layout.addWidget(body)
         layout.addLayout(actions)
         self.setFixedWidth(430)
+
+
+class CyberTextInputDialog(QDialog):
+    """Collect one text value using the launcher's custom dialog styling."""
+
+    def __init__(
+        self,
+        parent: QWidget,
+        title: str,
+        message: str,
+        value: str = "",
+        confirm_text: str = "SAVE",
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("CyberDialog")
+        self.setModal(True)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        shell = QFrame()
+        shell.setObjectName("DialogShell")
+        shell.setStyleSheet(f"""
+            QFrame#DialogShell {{ background: #050B12; border: 1px solid {COLORS["cyan"]}; }}
+            QLabel#DialogTitle {{ color: {COLORS["cyan"]}; font-size: {FONT_SIZES["dialog_title"]}px; font-weight: 800; }}
+            QLabel#DialogMessage {{ color: {COLORS["text"]}; font-size: {FONT_SIZES["dialog_message"]}px; }}
+            """)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(shell)
+        layout = QVBoxLayout(shell)
+        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setSpacing(14)
+
+        heading = QLabel(title.upper())
+        heading.setObjectName("DialogTitle")
+        body = QLabel(message)
+        body.setObjectName("DialogMessage")
+        body.setWordWrap(True)
+        self.field = QLineEdit(value)
+        self.field.setObjectName("SettingField")
+        self.field.selectAll()
+
+        actions = QHBoxLayout()
+        actions.addStretch()
+        cancel = AnimatedButton("CANCEL", "secondary")
+        cancel.clicked.connect(self.reject)
+        confirm = AnimatedButton(confirm_text, "primary")
+        confirm.clicked.connect(self._accept_non_empty)
+        actions.addWidget(cancel)
+        actions.addWidget(confirm)
+        layout.addWidget(heading)
+        layout.addWidget(body)
+        layout.addWidget(self.field)
+        layout.addLayout(actions)
+        self.setFixedWidth(430)
+
+    def _accept_non_empty(self) -> None:
+        """Accept only when a non-empty display name was entered."""
+        if self.field.text().strip():
+            self.accept()
+
+    def text_value(self) -> str:
+        """Return the exact entered display name."""
+        return self.field.text()
+
+
+class CyberTemplateConflictDialog(QDialog):
+    """Offer replace, keep-both, or cancel for a template collision."""
+
+    KEEP_BOTH_RESULT = 2
+
+    def __init__(self, parent: QWidget, template_name: str) -> None:
+        super().__init__(parent)
+        self.setObjectName("CyberDialog")
+        self.setModal(True)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        shell = QFrame()
+        shell.setObjectName("DialogShell")
+        shell.setStyleSheet(f"""
+            QFrame#DialogShell {{ background: #050B12; border: 1px solid {COLORS["yellow"]}; }}
+            QLabel#DialogTitle {{ color: {COLORS["yellow"]}; font-size: {FONT_SIZES["dialog_title"]}px; font-weight: 800; }}
+            QLabel#DialogMessage {{ color: {COLORS["text"]}; font-size: {FONT_SIZES["dialog_message"]}px; }}
+            """)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.addWidget(shell)
+        layout = QVBoxLayout(shell)
+        layout.setContentsMargins(22, 18, 22, 18)
+        layout.setSpacing(14)
+        heading = QLabel("TEMPLATE ALREADY EXISTS")
+        heading.setObjectName("DialogTitle")
+        body = QLabel(
+            f'A template conflicts with "{template_name}". Replace the existing '
+            "template or keep both under a new incoming name?"
+        )
+        body.setObjectName("DialogMessage")
+        body.setWordWrap(True)
+        actions = QHBoxLayout()
+        actions.addStretch()
+        cancel = AnimatedButton("CANCEL", "secondary")
+        cancel.clicked.connect(self.reject)
+        keep = AnimatedButton("KEEP BOTH", "secondary")
+        keep.clicked.connect(lambda: self.done(self.KEEP_BOTH_RESULT))
+        replace = AnimatedButton("REPLACE", "danger")
+        replace.clicked.connect(self.accept)
+        actions.addWidget(cancel)
+        actions.addWidget(keep)
+        actions.addWidget(replace)
+        layout.addWidget(heading)
+        layout.addWidget(body)
+        layout.addLayout(actions)
+        self.setFixedWidth(520)
 
 
 class HeroBanner(QFrame):

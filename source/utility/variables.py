@@ -5,6 +5,8 @@ data = {
     "drop_all_x": 457,
     "search_inventory_x": 240,
     "search_object_x": 1260,
+    "grinder_grind_all_x": 967,
+    "grinder_grind_all_y": 838,
     "dedi_withdraw_x": 967,
     "dedi_withdraw_y": 838,
     "dedi_deposit_x": 967,

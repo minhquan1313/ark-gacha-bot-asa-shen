@@ -10,6 +10,7 @@ from source.gacha_bot.deposit_config import (
     default_dedi_item,
     default_grindable_route,
     default_vault_item,
+    normalize_deposit_config,
 )
 from source.launcher.pages import (
     LauncherPagesMixin,
@@ -479,6 +480,97 @@ class StationConfigTests(unittest.TestCase):
         self.assertEqual(_deposit_route_child_count(route), 1)
         route["dedi"]["items"] = [default_dedi_item(), default_dedi_item()]
         self.assertEqual(_deposit_route_child_count(route), 3)
+
+    def test_deposit_route_check_interval_defaults_to_six(self):
+        data = {
+            "depositCrystalData": [{"teleport": "CRYSTAL"}],
+            "depositGrindableData": [{"teleport": "GRINDABLE"}],
+        }
+
+        normalized = normalize_deposit_config(data)
+
+        self.assertEqual(
+            normalized["depositCrystalData"][0]["check_on_every_dedi"], 6
+        )
+        self.assertEqual(
+            normalized["depositGrindableData"][0]["check_on_every_dedi"], 6
+        )
+
+    def test_deposit_route_arrays_can_be_empty(self):
+        data = {
+            "depositCrystalData": [],
+            "depositGrindableData": [],
+        }
+
+        normalized = normalize_deposit_config(data)
+
+        self.assertEqual(normalized["depositCrystalData"], [])
+        self.assertEqual(normalized["depositGrindableData"], [])
+
+    def test_deposit_route_ui_can_remove_last_routes(self):
+        launcher = SimpleNamespace(
+            deposit_config={
+                "depositCrystalData": [default_crystal_route()],
+                "depositGrindableData": [default_grindable_route()],
+            },
+            save_deposit_routes=Mock(),
+            _render_settings_group=Mock(),
+        )
+        launcher.remove_crystal_route = MethodType(
+            LauncherPagesMixin.remove_crystal_route, launcher
+        )
+        launcher.remove_grindable_route = MethodType(
+            LauncherPagesMixin.remove_grindable_route, launcher
+        )
+
+        launcher.remove_crystal_route(0)
+        launcher.remove_grindable_route(0)
+
+        self.assertEqual(launcher.deposit_config["depositCrystalData"], [])
+        self.assertEqual(launcher.deposit_config["depositGrindableData"], [])
+        self.assertEqual(launcher.save_deposit_routes.call_count, 2)
+        self.assertEqual(launcher._render_settings_group.call_count, 2)
+
+    def test_deposit_route_check_interval_is_preserved(self):
+        data = {
+            "depositCrystalData": [
+                {"teleport": "CRYSTAL", "check_on_every_dedi": "4"}
+            ],
+            "depositGrindableData": [
+                {"teleport": "GRINDABLE", "check_on_every_dedi": 8}
+            ],
+        }
+
+        normalized = normalize_deposit_config(data)
+
+        self.assertEqual(
+            normalized["depositCrystalData"][0]["check_on_every_dedi"], 4
+        )
+        self.assertEqual(
+            normalized["depositGrindableData"][0]["check_on_every_dedi"], 8
+        )
+
+    def test_deposit_route_check_interval_rejects_non_positive_values(self):
+        data = {
+            "depositCrystalData": [
+                {"teleport": "CRYSTAL", "check_on_every_dedi": 0}
+            ],
+            "depositGrindableData": [{"teleport": "GRINDABLE"}],
+        }
+
+        with self.assertRaisesRegex(ValueError, "check_on_every_dedi"):
+            normalize_deposit_config(data)
+
+    def test_deposit_route_check_interval_rejects_non_integer_values(self):
+        data = {
+            "depositCrystalData": [
+                {"teleport": "CRYSTAL", "check_on_every_dedi": "bad"}
+            ],
+            "depositGrindableData": [{"teleport": "GRINDABLE"}],
+        }
+
+        with self.assertRaisesRegex(ValueError, "check_on_every_dedi"):
+            normalize_deposit_config(data)
 
 
 if __name__ == "__main__":

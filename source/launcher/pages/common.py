@@ -1,0 +1,225 @@
+import contextlib
+import copy
+import os
+import subprocess
+from collections import Counter
+from pathlib import Path
+
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import QAction, QDesktopServices, QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMenu,
+    QScrollArea,
+    QSizePolicy,
+    QSpacerItem,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from source.gacha_bot.deposit_config import (
+    default_crystal_route,
+    default_dedi_item,
+    default_deposit_config,
+    default_grindable_route,
+    default_vault_item,
+    load_deposit_config,
+    save_deposit_config,
+)
+from source.launcher.auto_join_server_helper import AutoJoinServerHelper
+from source.launcher.components.custom_pyside_component import NoWheelComboBox
+from source.launcher.components.widgets import (
+    AnimatedButton,
+    ClickableTextEdit,
+    CyberSwitch,
+    CyberTemplateConflictDialog,
+    CyberTextInputDialog,
+    HeroBanner,
+    MeterBar,
+)
+from source.launcher.config.constants import (
+    APP_NAME,
+    APP_TITLE,
+    APP_VERSION,
+    ASSETS,
+    COLORS,
+    DEFAULT_SETTINGS,
+    SETTINGS_GROUPS,
+    TEMPLATE_GROUP_REFERENCE_KEYS,
+    TEMPLATE_GROUP_SETTING_KEYS,
+    setting_label,
+    setting_tooltip,
+)
+from source.launcher.config.station_config import (
+    DEFAULT_PEGO_DELAY,
+    DEFAULT_PEGO_SNOW_OWLS_PER_GACHA,
+    DEFAULT_PEGO_STATION_SECONDS,
+    DEFAULT_PEGO_TARGET_CRYSTALS,
+    auto_fill_gacha_group,
+    calculate_pego_delay,
+    default_gacha_entry,
+    default_gacha_pair,
+    default_pego_entry,
+    gacha_name_from_teleporter,
+    grouped_gacha_entries,
+    load_gacha_config,
+    load_pego_config,
+    missing_gacha_side,
+    next_gacha_teleporter,
+    next_pego_index,
+    risky_teleporter_names,
+    save_gacha_config,
+    save_pego_config,
+    set_all_pego_delays,
+)
+from source.launcher.config.template_settings import (
+    DEFAULT_TEMPLATE_FILENAME,
+    TEMPLATE_DIRECTORY,
+    TemplateCatalog,
+    build_template,
+    convert_deposit_yaw,
+    migrate_template_references,
+    next_unique_template_filename,
+    normalize_template_id,
+    read_template,
+    resolve_template_reference,
+    safe_template_filename,
+    scan_templates,
+    write_template,
+)
+from source.launcher.deposit_route_helper import DepositRouteHelper
+from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
+from source.launcher.position_render_helper import PositionRenderHelper
+from source.launcher.server_transfer_helper import ServerTransferHelper
+from source.launcher.switch_steam_helper import SwitchSteamHelper
+from source.launcher.utils.settings_store import load_settings, save_settings
+from source.utility import utils_simple
+
+__all__ = [
+    "APP_NAME",
+    "APP_TITLE",
+    "APP_VERSION",
+    "ASSETS",
+    "AnimatedButton",
+    "AutoJoinServerHelper",
+    "COLORS",
+    "ClickableTextEdit",
+    "Counter",
+    "CyberSwitch",
+    "CyberTemplateConflictDialog",
+    "CyberTextInputDialog",
+    "DEFAULT_PEGO_DELAY",
+    "DEFAULT_PEGO_SNOW_OWLS_PER_GACHA",
+    "DEFAULT_PEGO_STATION_SECONDS",
+    "DEFAULT_PEGO_TARGET_CRYSTALS",
+    "DEFAULT_SETTINGS",
+    "DEFAULT_TEMPLATE_FILENAME",
+    "DepositRouteHelper",
+    "FertilizerRefreshHelper",
+    "HeroBanner",
+    "MeterBar",
+    "NoWheelComboBox",
+    "Path",
+    "PositionRenderHelper",
+    "QAction",
+    "QApplication",
+    "QButtonGroup",
+    "QComboBox",
+    "QDesktopServices",
+    "QDialog",
+    "QFileDialog",
+    "QFrame",
+    "QGridLayout",
+    "QHBoxLayout",
+    "QIcon",
+    "QLabel",
+    "QLineEdit",
+    "QMenu",
+    "QPixmap",
+    "QScrollArea",
+    "QSize",
+    "QSizePolicy",
+    "QSpacerItem",
+    "QTimer",
+    "QToolButton",
+    "QUrl",
+    "QVBoxLayout",
+    "QWidget",
+    "Qt",
+    "SETTINGS_GROUPS",
+    "ServerTransferHelper",
+    "SwitchSteamHelper",
+    "TEMPLATE_DIRECTORY",
+    "TEMPLATE_GROUP_REFERENCE_KEYS",
+    "TEMPLATE_GROUP_SETTING_KEYS",
+    "TemplateCatalog",
+    "_counted_title",
+    "_deposit_route_child_count",
+    "auto_fill_gacha_group",
+    "build_template",
+    "calculate_pego_delay",
+    "contextlib",
+    "convert_deposit_yaw",
+    "copy",
+    "default_crystal_route",
+    "default_dedi_item",
+    "default_deposit_config",
+    "default_gacha_entry",
+    "default_gacha_pair",
+    "default_grindable_route",
+    "default_pego_entry",
+    "default_vault_item",
+    "gacha_name_from_teleporter",
+    "grouped_gacha_entries",
+    "load_deposit_config",
+    "load_gacha_config",
+    "load_pego_config",
+    "load_settings",
+    "migrate_template_references",
+    "missing_gacha_side",
+    "next_gacha_teleporter",
+    "next_pego_index",
+    "next_unique_template_filename",
+    "normalize_template_id",
+    "os",
+    "read_template",
+    "resolve_template_reference",
+    "risky_teleporter_names",
+    "safe_template_filename",
+    "save_deposit_config",
+    "save_gacha_config",
+    "save_pego_config",
+    "save_settings",
+    "scan_templates",
+    "set_all_pego_delays",
+    "setting_label",
+    "setting_tooltip",
+    "subprocess",
+    "utils_simple",
+    "write_template",
+]
+
+
+def _counted_title(title: str, count: int | str) -> str:
+    """Format a settings title with its collection count."""
+    return f"{title} - {count}"
+
+
+def _deposit_route_child_count(route: dict) -> int:
+    """Count configured child objects for a deposit route."""
+    count = len(route["dedi"]["items"])
+    if "vault" in route:
+        count += len(route["vault"]["items"])
+    if "grinder" in route:
+        count += 1
+    return count

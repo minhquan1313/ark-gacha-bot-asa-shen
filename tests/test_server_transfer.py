@@ -563,6 +563,107 @@ class ServerTransferRunnerTests(unittest.TestCase):
         )
         self.assertEqual(status[-1], "Detected Steam cloud sync conflict dialog.")
 
+    def test_ensure_ark_running_restarts_steam_before_retry(self):
+        status = []
+        events = []
+        steam = {"restart_delay": 3, "window_title": "Steam"}
+        steam_accounts = SimpleNamespace(
+            close_steam=Mock(side_effect=lambda: events.append("close_steam")),
+            launch_steam=Mock(side_effect=lambda: events.append("launch_steam")),
+        )
+        ark_game_setup = SimpleNamespace(
+            kill_running_ark=Mock(side_effect=lambda: events.append("kill_ark"))
+        )
+        launch_ark = Mock(side_effect=lambda: events.append("launch_ark"))
+
+        with (
+            patch.object(server_transfer, "steam_accounts", steam_accounts),
+            patch.object(server_transfer, "ark_game_setup", ark_game_setup),
+            patch.object(
+                server_transfer,
+                "launch_ark_through_steam",
+                launch_ark,
+            ),
+            patch.object(server_transfer, "_process_running", return_value=False),
+            patch.object(server_transfer, "steam_has_failure"),
+            patch.object(
+                server_transfer,
+                "_focus_visible_steam_window",
+                side_effect=lambda *_args: events.append("focus_steam") or True,
+            ) as focus_steam,
+            patch.object(
+                server_transfer.utils_simple,
+                "get_default_clock",
+                side_effect=[lambda: True, lambda: False, lambda: True],
+            ) as get_default_clock,
+            patch.object(
+                server_transfer.time,
+                "sleep",
+                side_effect=lambda seconds: events.append(f"sleep:{seconds}"),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "ARK did not start after 2"):
+                server_transfer.ensure_ark_running(
+                    status.append,
+                    {
+                        "ark_launch_attempts": 2,
+                        "ark_window_ready_timeout": 5,
+                        "steam_restart_interval": 7,
+                    },
+                    {"steam": steam},
+                )
+
+        self.assertEqual(
+            events,
+            [
+                "launch_ark",
+                "kill_ark",
+                "close_steam",
+                "sleep:3.0",
+                "launch_steam",
+                "focus_steam",
+                "launch_ark",
+            ],
+        )
+        self.assertEqual(launch_ark.call_count, 2)
+        focus_steam.assert_called_once()
+        self.assertEqual(
+            [call_args.args[0] for call_args in get_default_clock.call_args_list],
+            [5, 7, 5],
+        )
+        self.assertIn("Restarting Steam before relaunching ARK.", status)
+
+    def test_ensure_ark_running_does_not_restart_steam_after_final_attempt(self):
+        steam_accounts = SimpleNamespace(close_steam=Mock(), launch_steam=Mock())
+        ark_game_setup = SimpleNamespace(kill_running_ark=Mock())
+
+        with (
+            patch.object(server_transfer, "steam_accounts", steam_accounts),
+            patch.object(server_transfer, "ark_game_setup", ark_game_setup),
+            patch.object(server_transfer, "launch_ark_through_steam"),
+            patch.object(server_transfer, "_process_running", return_value=False),
+            patch.object(server_transfer, "steam_has_failure"),
+            patch.object(
+                server_transfer.utils_simple,
+                "get_default_clock",
+                return_value=lambda: True,
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "ARK did not start after 1"):
+                server_transfer.ensure_ark_running(
+                    Mock(),
+                    {
+                        "ark_launch_attempts": 1,
+                        "ark_window_ready_timeout": 5,
+                        "steam_restart_interval": 7,
+                    },
+                    {"steam": default_transfer_ui_coords()["steam"]},
+                )
+
+        ark_game_setup.kill_running_ark.assert_not_called()
+        steam_accounts.close_steam.assert_not_called()
+        steam_accounts.launch_steam.assert_not_called()
+
     def test_join_server_focuses_ark_then_reuses_auto_join(self):
         run_auto_join = Mock(return_value=True)
         with (

@@ -8,6 +8,20 @@
           "pitch": -19.58
         },
         "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -114.03,
+          "pitch": 9.94
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -116.66,
+          "pitch": 17.12
+        },
+        "crouched": false
       }
     ]
   },
@@ -16,10 +30,24 @@
     "items": [
       {
         "location": {
-          "yaw": -133.43,
-          "pitch": -24.61
+          "yaw": -132.15,
+          "pitch": -19.58
         },
         "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -133.9,
+          "pitch": 9.94
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -136.53,
+          "pitch": 17.12
+        },
+        "crouched": false
       }
     ]
   }

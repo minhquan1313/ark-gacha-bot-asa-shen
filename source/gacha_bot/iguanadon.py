@@ -3,9 +3,11 @@ import time
 import settings
 import source.gacha_bot.config
 from source.ASA.player import player_inventory, player_state
+from source.ASA.stations.custom_stations import station_metadata
 from source.ASA.strucutres import inventory, teleporter
+from source.gacha_bot import stations
 from source.logs import gachalogs as logs
-from source.utility import template, utils
+from source.utility import template, utils, utils_simple
 from source.utility.debug_screenshots import CAPTURE_IGUANADON_SEED, capture_for
 
 IGUANODON_REMOTE_LAG_THRESHOLD_SECONDS = 3.0
@@ -13,8 +15,8 @@ IGUANODON_REMOTE_LAG_THRESHOLD_SECONDS = 3.0
 capture_iguanadon_seed_withdraw = capture_for(
     "iguanadon_seed_withdraw", active=CAPTURE_IGUANADON_SEED
 )
-
 should_drop_useless = False
+g_metadata: station_metadata = None
 
 
 def is_tek_trough():
@@ -33,7 +35,7 @@ def _recover_berry_station(metadata):
 def berry_collection(metadata, turn_down=0):
     global should_drop_useless
     attempt = 0
-    dl = utils.get_default_clock()
+    dl = utils_simple.get_default_clock()
 
     while True:
         utils.turn_down(turn_down)
@@ -41,7 +43,7 @@ def berry_collection(metadata, turn_down=0):
 
         inventory.open()
 
-        if inventory.is_open() and template.template_await_true(is_tek_trough, 1):
+        if inventory.is_open() and is_tek_trough():
             if should_drop_useless:
                 player_inventory.drop_all_inv()
                 time.sleep(0.2 * settings.lag_offset)
@@ -65,7 +67,7 @@ def berry_collection(metadata, turn_down=0):
                 "tek trough failed to open; suiciding and restarting berry station"
             )
 
-            dl = utils.get_default_clock()
+            dl.reset()
 
             player_inventory.implant_eat()
             player_state.check_state()
@@ -75,77 +77,72 @@ def berry_collection(metadata, turn_down=0):
 
 def berry_station(metadata):
     global should_drop_useless
-    should_drop_useless = False
 
     berry_collection(metadata, 0)
 
     berry_collection(metadata, 50)
 
-
-def transfer_berries_to_iguanodon(attempts=1):
-    for _ in range(attempts):
-        player_inventory.search_in_inventory(
-            settings.berry_type
-        )  # iguanadon has 1450 weight for the 145 stacks of berries
-        player_inventory.transfer_all_inventory()
-        if attempts > 1:
-            time.sleep(0.1 * settings.lag_offset)
+    should_drop_useless = False
 
 
-def _reopen_iguanodon_inventory_and_measure_wait():
-    inventory.close()
-    start = time.time()
-
-    timeout = utils.get_default_clock()
-    while not inventory.is_open() and not timeout():
-        inventory.open()
-        if not inventory.is_open():
-            player_state.check_state()
-            time.sleep(0.2 * settings.lag_offset)
-
-    return time.time() - start
-
-
-def _refresh_iguanodon_berry_transfer_after_lag():
-    if inventory.is_open():
-        inventory.transfer_all_from()
-        transfer_berries_to_iguanodon()
-        time.sleep(0.1 * settings.lag_offset)
+def _seed_reset():
+    inventory.transfer_all_from()  # doing this should prevent the seed not appearing first try
+    player_inventory.search_in_inventory(settings.berry_type)
+    player_inventory.transfer_all_inventory()
 
 
 def seed(type):
+    global g_metadata
     if inventory.is_open():
-        time.sleep(0.1 * settings.lag_offset)
-        inventory.transfer_all_from()  # doing this should prevent the seed not appearing first try
+        _seed_reset()
+        inventory.close()
 
-        _reopen_iguanodon_inventory_and_measure_wait()
+        # ENSURE PROCESS
+        with inventory.detect_lag_long_process():
+            iguanadon_open(g_metadata)
+            if inventory.was_server_lag_last_open and inventory.is_open():
+                time.sleep(1 * settings.lag_offset)
+                _seed_reset()
 
-        if not inventory.is_open():
-            return
-
-        transfer_berries_to_iguanodon()
-        if type == 2:
+        if (
+            type == 2
+            and stations.did_collect_tek_troughs
+            and player_inventory.is_can_drop()
+        ):
             time.sleep(0.2 * settings.lag_offset)
-            elapsed = _reopen_iguanodon_inventory_and_measure_wait()
-            if elapsed > IGUANODON_REMOTE_LAG_THRESHOLD_SECONDS:
-                logs.logger.warning(
-                    f"iguanodon remote inventory lag detected after {elapsed:.2f}s; "
-                    "refreshing berry transfer before cleanup drop"
-                )
-                _refresh_iguanodon_berry_transfer_after_lag()
             player_inventory.drop_all_inv()  # doing this second time round to drop everything else that is not needed by the bot
+
+            # ENSURE PROCESS
+            inventory.close()
+            iguanadon_open(g_metadata)
+
         time.sleep(0.1 * settings.lag_offset)
-        player_inventory.close()
+    inventory.close()
 
     utils.press_key("Use")
     time.sleep(2 * settings.lag_offset)
-    inventory.open()
+
+    iguanadon_open(g_metadata)
     if inventory.is_open():
         inventory.search_in_object("seed")
+
+        if settings.iguanadon_seed_throw_amount > 0:
+            inventory.popcorn(settings.iguanadon_seed_throw_amount)
+            inventory.close()
+
+            # ENSURE
+            iguanadon_open(g_metadata)
+            if inventory.is_open() and inventory.was_server_lag_last_open:
+                inventory.search_in_object("seed")
+                inventory.popcorn(settings.iguanadon_seed_throw_amount)
+
+        # FINAL
         inventory.transfer_all_from()
         time.sleep(0.3 * settings.lag_offset)
+
         capture_iguanadon_seed_withdraw(f"seed_{type}")
         inventory.close()
+
     time.sleep(0.2 * settings.lag_offset)
 
 
@@ -169,54 +166,9 @@ def iguanadon_open(metadata):
             break
 
 
-def drop_seeds():
-    utils.press_key("Crouch")
-    player_inventory.open()
-    if player_inventory.is_open():
-        player_inventory.search_in_inventory("seed")
-        time.sleep(0.2 * settings.lag_offset)
-        player_inventory.drop_all_inv()
-        player_inventory.close()
-    for _x in range(3):
-        utils.press_key("Run")
+def iguanadon(metadata: station_metadata):
+    global g_metadata
+    g_metadata = metadata
 
-
-def pickup_seeds():
-    time.sleep(0.2 * settings.lag_offset)
-    utils.press_key("crouch")
-    utils.turn_down(80)
-    time.sleep(0.2 * settings.lag_offset)
-    inventory.open()
-    if inventory.is_open():
-        inventory.transfer_all_from()  # this should also cause us to get out of bag
-        if template.template_await_false(template.check_template, 1, "inventory", 0.7):
-            logs.logger.warning(
-                "the bag we dropped on the floor for 230 seeds couldnt be fully picked up popcorning now"
-            )
-            attempts = 0
-            while template.check_template("inventory", 0.7):
-                attempts += 1
-                inventory.popcorn_top_row()
-                if (
-                    attempts >= 60
-                ):  # 60 * 6  = 360 so whole inv should be popcorned with this value
-                    logs.logger.error(
-                        "bot got stuck in the popcorning the bag inventory mostlikly broken"
-                    )
-                    break
-
-            # popcorn the bag lateron ( will be due to inv being capped )
-    for _x in range(3):
-        utils.press_key("Run")
-
-
-def iguanadon(metadata):
     iguanadon_open(metadata)
-    if settings.seeds_230:
-        seed(1)
-        drop_seeds()
-        iguanadon_open(metadata)
-        seed(2)
-        pickup_seeds()
-    else:
-        seed(2)
+    seed(2)

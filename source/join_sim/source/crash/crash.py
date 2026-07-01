@@ -7,7 +7,7 @@ from source.join_sim.source.logs import logger as logs
 from source.launcher import ark_game_setup
 from source.launcher.utils import system
 from source.launcher.utils.deposit_helper_capture import focus_game_window
-from source.utility import utils, windows
+from source.utility import utils_simple, windows
 
 appid = "2399830"
 crash_process: psutil.Process | None = None
@@ -61,10 +61,10 @@ def _process_running(process_name):
 
 def _wait_for_usable_ark_window(timeout_seconds: float) -> None:
     """Wait until ARK has a valid window, then focus it and skip the intro."""
-    deadline = utils.timed_out_counter(timeout_seconds)
+    dl = utils_simple.get_default_clock(timeout_seconds)
     last_error: RuntimeError | None = None
 
-    while not deadline():
+    while not dl():
         if _process_running(ark_game_setup.ARK_PROCESS_NAME):
             try:
                 _window_size = system.validate_ark_window()

@@ -120,25 +120,6 @@ def ctrl_a():  # hotkey for sending ctrl a
     ctypes.windll.user32.SendMessageW(hwnd, WM_KEYUP, 0x11, 0)
 
 
-def time_now():
-    return time.monotonic()
-
-
-def timed_out_counter(limit_seconds=3):
-    timeout = time_now() + limit_seconds
-
-    def is_excess():
-        return time_now() >= timeout
-
-    return is_excess
-
-
-def get_default_clock(deadline=config.timeout_deadline, multiplier=1):
-    """Default 2 minutes timeout"""
-    m = max(settings.lag_offset, multiplier)
-    return timed_out_counter(deadline * m)
-
-
 def close_ark_with_console_exit() -> bool:
     """Try closing a visible ARK window through the in-game console."""
 
@@ -291,6 +272,13 @@ def zero_center_no_ccc():
     """
 
     turn_to(settings.station_yaw, 0)
+
+
+def zero_opposite_no_ccc():
+    """
+    Won't trigger CCC
+    """
+    turn_to(settings.station_yaw + 180, 0)
 
 
 def zero_opposite(target_yaw: float = None, target_pitch: float = None):

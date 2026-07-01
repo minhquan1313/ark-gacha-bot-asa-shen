@@ -9,6 +9,7 @@ def default_deposit_config(crystal_teleport="", grindable_teleport=""):
         "depositCrystalData": [
             {
                 "teleport": crystal_teleport,
+                "check_on_every_dedi": 6,
                 "dedi": {"items": []},
                 "vault": {"items": []},
             }
@@ -16,6 +17,7 @@ def default_deposit_config(crystal_teleport="", grindable_teleport=""):
         "depositGrindableData": [
             {
                 "teleport": grindable_teleport,
+                "check_on_every_dedi": 6,
                 "grinder": {
                     "active": False,
                     "location": {"yaw": 0.0, "pitch": 0.0},
@@ -30,6 +32,7 @@ def default_deposit_config(crystal_teleport="", grindable_teleport=""):
 def default_crystal_route():
     return {
         "teleport": "",
+        "check_on_every_dedi": 6,
         "dedi": {"items": []},
         "vault": {"items": []},
     }
@@ -38,6 +41,7 @@ def default_crystal_route():
 def default_grindable_route():
     return {
         "teleport": "",
+        "check_on_every_dedi": 6,
         "grinder": {
             "active": False,
             "location": {"yaw": 0.0, "pitch": 0.0},
@@ -61,10 +65,10 @@ def normalize_deposit_config(data):
 
     crystal_routes = data.get("depositCrystalData")
     grindable_routes = data.get("depositGrindableData")
-    if not isinstance(crystal_routes, list) or len(crystal_routes) == 0:
-        raise ValueError("depositCrystalData must be a non-empty array.")
-    if not isinstance(grindable_routes, list) or len(grindable_routes) == 0:
-        raise ValueError("depositGrindableData must be a non-empty array.")
+    if not isinstance(crystal_routes, list):
+        raise ValueError("depositCrystalData must be an array.")
+    if not isinstance(grindable_routes, list):
+        raise ValueError("depositGrindableData must be an array.")
 
     return {
         "depositCrystalData": [
@@ -112,6 +116,9 @@ def _normalize_crystal_route(route):
         route = {}
     return {
         "teleport": str(route.get("teleport", "")),
+        "check_on_every_dedi": _positive_int_value(
+            route.get("check_on_every_dedi", 6), "check_on_every_dedi"
+        ),
         "dedi": {"items": _normalize_object_items(route.get("dedi", {}))},
         "vault": {"items": _normalize_vault_items(route.get("vault", {}))},
     }
@@ -122,6 +129,9 @@ def _normalize_grindable_route(route):
         route = {}
     return {
         "teleport": str(route.get("teleport", "")),
+        "check_on_every_dedi": _positive_int_value(
+            route.get("check_on_every_dedi", 6), "check_on_every_dedi"
+        ),
         "grinder": _normalize_grinder(route.get("grinder", {})),
         "dedi": {"items": _normalize_object_items(route.get("dedi", {}))},
     }
@@ -188,3 +198,13 @@ def _float_value(value, name):
         return float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a float number.") from exc
+
+
+def _positive_int_value(value: object, name: str):
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a positive integer.") from exc
+    if normalized <= 0:
+        raise ValueError(f"{name} must be a positive integer.")
+    return normalized

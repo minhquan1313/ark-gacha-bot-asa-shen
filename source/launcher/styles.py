@@ -100,6 +100,15 @@ def launcher_style_sheet():
         QLabel#MutedCopy, QLabel#FormLabel {{
             color: {COLORS["muted"]};
         }}
+        QLabel#SettingsDividerLabel {{
+            color: {COLORS["cyan"]};
+            font-size: {FONT_SIZES["stat_label"]}px;
+            font-weight: 900;
+        }}
+        QFrame#SettingsDividerLine {{
+            background: {COLORS["border"]};
+            border: none;
+        }}
         QLabel#StatLabel {{
             color: {COLORS["muted"]};
             font-size: {FONT_SIZES["stat_label"]}px;
@@ -183,6 +192,92 @@ def launcher_style_sheet():
             color: {COLORS["muted"]};
             font-family: Consolas;
             font-size: {FONT_SIZES["footer"]}px;
+        }}
+        QToolButton#TemplateActionSplitButton {{
+            min-height: 28px;
+            min-width: 112px;
+            padding: 0 34px 0 14px;
+            background: rgba(10, 36, 49, 190);
+            color: {COLORS["text"]};
+            border: 1px solid rgba(0, 216, 255, 150);
+            font-weight: 900;
+        }}
+        QToolButton#TemplateActionSplitButton:hover {{
+            color: {COLORS["cyan"]};
+            border: 1px solid {COLORS["cyan"]};
+            background: rgba(14, 58, 77, 210);
+        }}
+        QToolButton#TemplateActionSplitButton::menu-button {{
+            subcontrol-origin: padding;
+            subcontrol-position: top right;
+            width: 28px;
+            border-left: 1px solid rgba(0, 216, 255, 120);
+        }}
+        QToolButton#TemplateActionSplitButton::menu-arrow {{
+            width: 8px;
+            height: 8px;
+        }}
+        QMenu#TemplateActionMenu {{
+            background: #050B12;
+            color: {COLORS["text"]};
+            border: 1px solid rgba(0, 216, 255, 150);
+            padding: 4px;
+        }}
+        QMenu#TemplateActionMenu::item {{
+            min-width: 190px;
+            padding: 8px 18px;
+            font-weight: 800;
+        }}
+        QMenu#TemplateActionMenu::item:selected {{
+            background: rgba(0, 216, 255, 45);
+            color: {COLORS["cyan"]};
+        }}
+        QComboBox#TemplateSelector, QComboBox#ActiveTemplateSelector, QComboBox#MissingTemplateSelector {{
+            min-height: 27px;
+            background: #050A10;
+            color: {COLORS["text"]};
+            border: 1px solid {COLORS["border"]};
+            padding: 2px 8px;
+            font-family: Consolas;
+        }}
+        QComboBox#TemplateSelector:hover {{
+            border: 1px solid {COLORS["cyan"]};
+        }}
+        QComboBox#ActiveTemplateSelector {{
+            color: {COLORS["green"]};
+            border: 1px solid {COLORS["green"]};
+        }}
+        QComboBox#MissingTemplateSelector {{
+            color: {COLORS["red"]};
+            border: 1px solid {COLORS["red"]};
+        }}
+        QFrame#TemplateFieldActive {{
+            background: rgba(107, 255, 158, 12);
+            border: 1px solid {COLORS["green"]};
+        }}
+        QFrame#TemplateFieldMissing {{
+            background: rgba(255, 77, 109, 12);
+            border: 1px solid {COLORS["red"]};
+        }}
+        QFrame#TemplateFieldActive QLineEdit#SettingField {{
+            border: 1px solid {COLORS["green"]};
+        }}
+        QFrame#TemplateFieldMissing QLineEdit#SettingField {{
+            border: 1px solid {COLORS["red"]};
+        }}
+        QLabel#TemplateTick {{
+            color: {COLORS["green"]};
+            font-weight: 900;
+        }}
+        QLabel#TemplateWarning {{
+            color: {COLORS["red"]};
+            font-weight: 900;
+        }}
+        QWidget#TemplateGroupActive {{
+            border: 1px solid {COLORS["green"]};
+        }}
+        QWidget#TemplateGroupMissing {{
+            border: 1px solid {COLORS["red"]};
         }}
         QLineEdit#SettingField {{
             min-height: 26px;

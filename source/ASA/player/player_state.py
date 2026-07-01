@@ -2,11 +2,11 @@ import time
 
 import settings
 import source.gacha_bot.render
-from source.ASA.player import buffs, player_inventory, tribelog
+from source.ASA.player import buffs, console, player_inventory, tribelog
 from source.ASA.strucutres import bed, teleporter
 from source.join_sim.source import main
 from source.logs import gachalogs as logs
-from source.utility import utils
+from source.utility import template, utils
 from source.utility.debug_screenshots import (
     CAPTURE_PLAYER_STATE,
     capture_for,
@@ -24,7 +24,7 @@ capture_state = capture_for("player_state", active=CAPTURE_PLAYER_STATE)
 
 class charecter:
     def __init__(self):
-        self.crouched = False
+        self.crouched = True
         self.weight = 0
         self.health = 0
         self.water = 0
@@ -37,15 +37,15 @@ class charecter:
     def crouch(self):
         if not self.crouched:
             utils.press_key("Crouch")
-            self.crouched = True
             time.sleep(0.1)  # takes time to crouch and view angles to change
+        self.crouched = True
 
     def reset_crouch(self):
         if self.crouched:
             for _x in range(3):  # just ensuring that we are standing up properly
                 utils.press_key("Run")
             time.sleep(0.1)  # takes time to uncrouch ensuring that it has properly
-            self.crouched = False
+        self.crouched = False
 
     def is_on_bed(self):
         self.on_bed = True
@@ -74,23 +74,26 @@ def check_disconnected():
         capture_state("joined")
         # DEBUG END
         time.sleep(30)  # letting everything load back in
-        utils.set_yaw(settings.station_yaw)
+        utils.zero_center()
+        return True
+    return False
 
 
 def reset_state():
     logs.logger.debug("resetting char state now")
+    console.close()
     player_inventory.close()
     teleporter.close()
     tribelog.close()
     transmitter.close()
-    if bed.is_open():
-        bed.spawn_in(
-            settings.bed_spawn
-        )  # guessing the char died will respawn it if the char hasnt died and it just in a tekpod screen it will just exit when it cant find its target bed
-    utils.press_key(
-        "Run"
-    )  # makes the char stand up doing this at the end ensures we arent in any inventory
-    human.crouched = False
+
+    # Ensure not the bed_title from teleport but the actual bed spawn screen
+    if template.template_await_false(bed.is_open, 1):
+        # guessing the char died will respawn it if the char hasnt died and it just in a tekpod screen it will just exit when it cant find its target bed
+        bed.spawn_in(settings.bed_spawn)
+
+    # makes the char stand up doing this at the end ensures we arent in any inventory
+    human.reset_crouch()
 
 
 def check_state():  # mainliy checked at the start of every task to check for food / water on the char

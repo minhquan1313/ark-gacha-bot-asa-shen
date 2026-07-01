@@ -3,6 +3,8 @@ import json
 import math
 from pathlib import Path
 
+from source.launcher.config.template_settings import normalize_yaw
+
 TRANSFER_HELPER_DIR = Path("json_files/transfer_helper")
 TRANSFER_SETTINGS_PATH = TRANSFER_HELPER_DIR / "settings.json"
 TRANSFER_DEDIS_PATH = TRANSFER_HELPER_DIR / "dedis.json"
@@ -21,7 +23,6 @@ DEFAULT_TRANSFER_SETTINGS = {
     "destination_server": "0",
     "loop_count": 1,
     "structure_load_delay": 10,
-    "transfer_retry_delay": 5,
     "steam_restart_interval": 30,
     "ark_window_ready_timeout": 120,
     "ark_launch_attempts": 10,
@@ -41,7 +42,7 @@ DEFAULT_TRANSFER_DEDIS = {
 DEFAULT_TRANSFER_UI_COORDS = {
     "steam": {
         "window_title": "Steam",
-        "restart_delay": 8,
+        "restart_delay": 1,
     },
 }
 
@@ -52,6 +53,10 @@ def default_transfer_settings():
 
 def default_transfer_dedis():
     return copy.deepcopy(DEFAULT_TRANSFER_DEDIS)
+
+
+def default_transfer_dedi_item():
+    return {"location": {"yaw": 0.0, "pitch": 0.0}, "crouched": False}
 
 
 def default_transfer_ui_coords():
@@ -209,25 +214,32 @@ def load_transfer_players(
     return normalize_transfer_players(data, count)
 
 
-def save_transfer_players(data, path=TRANSFER_PLAYERS_PATH, account_count=1):
+def save_transfer_players(data, path=TRANSFER_PLAYERS_PATH, account_count=None):
+    if account_count is None:
+        account_count = player_account_count(data)
     normalized = normalize_transfer_players(data, account_count)
     _write_json(normalized, path)
     return normalized
 
 
 def load_transfer_runtime_config(create_missing=True):
-    settings = load_transfer_settings(create_missing=create_missing)
+    settings = load_transfer_settings(
+        TRANSFER_SETTINGS_PATH, create_missing=create_missing
+    )
     player_count_hint = (
         None
         if TRANSFER_PLAYERS_PATH.exists()
         else _old_account_count_hint(TRANSFER_SETTINGS_PATH)
     )
+    dedis = load_transfer_dedis(TRANSFER_DEDIS_PATH, create_missing=create_missing)
     return {
         "settings": settings,
-        "dedis": load_transfer_dedis(create_missing=create_missing),
+        "dedis": dedis,
         "ui_coords": load_transfer_ui_coords(),
         "players": load_transfer_players(
-            account_count=player_count_hint, create_missing=create_missing
+            TRANSFER_PLAYERS_PATH,
+            account_count=player_count_hint,
+            create_missing=create_missing,
         ),
     }
 
@@ -254,9 +266,6 @@ def normalize_transfer_settings(data):
     normalized["loop_count"] = _int_min(normalized["loop_count"], "loop_count", 1)
     normalized["structure_load_delay"] = _int_min(
         normalized["structure_load_delay"], "structure_load_delay", 0
-    )
-    normalized["transfer_retry_delay"] = _int_min(
-        normalized["transfer_retry_delay"], "transfer_retry_delay", 1
     )
     normalized["steam_restart_interval"] = _int_min(
         normalized["steam_restart_interval"], "steam_restart_interval", 1
@@ -297,15 +306,41 @@ def normalize_transfer_dedis(data):
     if not isinstance(data, dict):
         data = {}
     if "resource" in data or "destination" in data:
-        return {
+        dedis = {
             "resource": _normalize_dedi_route(data.get("resource", {})),
             "destination": _normalize_dedi_route(data.get("destination", {})),
         }
+        _sync_dedi_route_lengths(dedis)
+        return dedis
     route = _normalize_dedi_route(data)
     return {
         "resource": copy.deepcopy(route),
         "destination": copy.deepcopy(route),
     }
+
+
+def calculate_same_structure_destination_dedis(
+    dedis: dict, resource_station_yaw: float, destination_station_yaw: float
+):
+    """Calculate destination dedis from resource dedis for matching outposts.
+
+    Example: resource yaw 50 at station yaw 10 becomes destination yaw 60
+    when destination station yaw is 20.
+    """
+    calculated = normalize_transfer_dedis(dedis)
+    adjustment = float(destination_station_yaw) - float(resource_station_yaw)
+    destination_items = calculated["destination"]["items"]
+    for index, resource_item in enumerate(calculated["resource"]["items"]):
+        destination_items[index] = {
+            "location": {
+                "yaw": normalize_yaw(
+                    float(resource_item["location"]["yaw"]) + adjustment
+                ),
+                "pitch": float(resource_item["location"]["pitch"]),
+            },
+            "crouched": bool(resource_item.get("crouched", False)),
+        }
+    return calculated
 
 
 def _normalize_dedi_route(data):
@@ -317,6 +352,15 @@ def _normalize_dedi_route(data):
         raw_items = []
     items = [_normalize_dedi_item(item) for item in raw_items]
     return {"teleport": teleport, "items": items}
+
+
+def _sync_dedi_route_lengths(dedis):
+    resource_items = dedis["resource"]["items"]
+    destination_items = dedis["destination"]["items"]
+    target_count = max(len(resource_items), len(destination_items))
+    for items in (resource_items, destination_items):
+        while len(items) < target_count:
+            items.append(default_transfer_dedi_item())
 
 
 def normalize_transfer_ui_coords(data):
@@ -351,9 +395,12 @@ def active_transfer_dedis(dedis, side=None):
 def missing_runtime_inputs(
     settings,
     dedis,
+    ui_coords_or_players=None,
     players=None,
     steam_accounts=None,
 ):
+    if players is None and _looks_like_players(ui_coords_or_players):
+        players = ui_coords_or_players
     missing = []
     if not settings.get("transmitter_teleport"):
         missing.append("settings.transmitter_teleport")
@@ -378,6 +425,10 @@ def missing_runtime_inputs(
         missing.append("dedis.destination.items must include at least one dedi")
 
     return missing
+
+
+def _looks_like_players(value):
+    return isinstance(value, dict) and "players" in value
 
 
 def steam_account_assignment_issues(players=None, steam_accounts=None):

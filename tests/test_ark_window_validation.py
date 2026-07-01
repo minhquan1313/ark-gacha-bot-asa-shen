@@ -32,7 +32,7 @@ class ArkWindowValidationTests(unittest.TestCase):
             validate_ark_window()
 
     @patch(
-        "source.launcher.deposit_helper_capture.validate_ark_window",
+        "source.launcher.utils.deposit_helper_capture.system.validate_ark_window",
         side_effect=RuntimeError("invalid Ark window"),
     )
     def test_focus_game_window_revalidates_before_focusing(self, _validate):
@@ -290,10 +290,10 @@ class ArkWindowValidationTests(unittest.TestCase):
         sleep.assert_not_called()
 
     @patch(
-        "source.launcher.deposit_helper_capture.focus_window_if_needed",
+        "source.launcher.utils.deposit_helper_capture.system.focus_window_if_needed",
         return_value=False,
     )
-    @patch("source.launcher.deposit_helper_capture.validate_ark_window")
+    @patch("source.launcher.utils.deposit_helper_capture.system.validate_ark_window")
     def test_focus_game_window_reports_missing_window(self, _validate, _focus):
         with self.assertRaisesRegex(RuntimeError, "window was not found"):
             focus_game_window()
@@ -459,7 +459,7 @@ class AutoJoinStopTests(unittest.TestCase):
 
 class DialogOwnershipTests(unittest.TestCase):
     @patch(
-        "source.launcher.gui.validate_ark_window",
+        "source.launcher.gui_parts.dialogs.validate_ark_window",
         side_effect=RuntimeError("invalid Ark window"),
     )
     def test_window_validation_forwards_dialog_parent(self, _validate):
@@ -485,7 +485,7 @@ class DialogOwnershipTests(unittest.TestCase):
         active_dialog.result.return_value = 7
         parent._active_cyber_dialog = active_dialog
 
-        with patch("source.launcher.gui.CyberDialog") as cyber_dialog:
+        with patch("source.launcher.gui_parts.dialogs.CyberDialog") as cyber_dialog:
             result = SettingsGUI.dialog(
                 Mock(), "ArkAscended Required", "Invalid resolution", parent=parent
             )
@@ -500,7 +500,7 @@ class DialogOwnershipTests(unittest.TestCase):
         parent = Mock()
         parent._active_cyber_dialog = None
 
-        with patch("source.launcher.gui.CyberDialog") as cyber_dialog:
+        with patch("source.launcher.gui_parts.dialogs.CyberDialog") as cyber_dialog:
             cyber_dialog.return_value.exec.return_value = 1
             result = SettingsGUI.dialog(
                 Mock(), "ArkAscended Required", "Invalid resolution", parent=parent

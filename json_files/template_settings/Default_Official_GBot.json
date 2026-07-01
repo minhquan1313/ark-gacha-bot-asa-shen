@@ -1,0 +1,32 @@
+{
+  "name": "Default Official GBot",
+  "type": "template_setting",
+  "version": 1,
+  "data": {
+    "settings": {
+      "lag_offset": 1.0,
+      "iguanadon": "GACHAIGUANADON",
+      "bed_spawn": "GACHARENDER",
+      "berry_station": "GACHABERRYSTATION",
+      "berry_type": "mejoberry",
+      "time_to_reberry": 30,
+      "server_number": "0",
+      "auto_start_program": false,
+      "singleplayer": false,
+      "external_berry": false,
+      "iguanadon_seed_throw_amount": 0,
+      "gacha_feed_delay": 6600,
+      "allow_focus_ark_window": true,
+      "focus_ark_window_interval": 5.0,
+      "helper_inactive_opacity": 0.3,
+      "launcher_width": 1200,
+      "launcher_height": 800
+    },
+    "dedis": {
+      "depositCrystalData": [],
+      "depositGrindableData": []
+    },
+    "gacha": [],
+    "pego": []
+  }
+}

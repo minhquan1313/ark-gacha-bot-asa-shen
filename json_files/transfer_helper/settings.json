@@ -5,9 +5,8 @@
   "transmitter_teleport": "TRANSFER_TTRANS",
   "resource_server": "5147",
   "destination_server": "6024",
-  "loop_count": 1,
+  "loop_count": 9,
   "structure_load_delay": 10,
-  "transfer_retry_delay": 5,
   "steam_restart_interval": 30,
   "ark_window_ready_timeout": 120,
   "ark_launch_attempts": 10

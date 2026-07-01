@@ -5,7 +5,7 @@ from source.ASA.player import player_inventory, player_state
 from source.ASA.stations.custom_stations import station_metadata
 from source.ASA.strucutres import inventory, teleporter
 from source.logs import gachalogs as logs
-from source.utility import template, utils, windows
+from source.utility import template, utils, utils_simple, windows
 from source.utility.debug_screenshots import (
     CAPTURE_DEDI_DEPOSIT_CRYSTAL,
     CAPTURE_DEDI_DEPOSIT_GRIND,
@@ -62,11 +62,13 @@ def turn_to_dedi(item: DediStorageState):
     pitch = float(location["pitch"])
     set_crouch(item)
     utils.turn_to(yaw, pitch)
+    time.sleep(0.2 * settings.lag_offset)
 
 
 def recover_if_problem(metadata: station_metadata, item: DediStorageState):
     player_state.check_state()
     teleporter.teleport_not_default(metadata)
+
     utils.zero_center()
     turn_to_dedi(item)
 
@@ -88,46 +90,67 @@ def ensure_has_resource():
     if not is_open():
         return
 
-    dl = utils.get_default_clock()
     attempt = 0
-    while is_open() and not is_has_resource() and not dl():
+    while (
+        is_open() and not is_has_resource() and player_inventory.is_can_transfer_all()
+    ):
         attempt += 1
+
+        if attempt > 3:
+            logs.logger.critical("Failed to put 1st item to dedi inventory")
+            return
+
         logs.logger.warning(f"Dedi is empty, trying to put 1 item inside[{attempt}]")
         deposit_first_item()
 
-        if template.template_await_true(is_has_resource, 2):
+        if template.template_await_true(is_has_resource, 3):
             return
         else:
             logs.logger.error("Dedi still empty, retying")
 
-    if dl():
-        logs.logger.critical("Failed to put 1st item to dedi inventory")
-
 
 def open(metadata: station_metadata, item: DediStorageState):
-    """Should be ready also, as it use inventory.open"""
-
-    dl = utils.get_default_clock()
     attempt = 0
-    while not dl():
+    dl = utils_simple.get_default_clock()
+    was_crounching = player_state.human.crouched
+    while not is_open():
         attempt += 1
         logs.logger.debug(f"Trying to open dedi inventory[{attempt}]")
-        inventory.open()
+        inventory.open()  # Might cause player to standup because of server lag and check_state
 
         if is_open():
-            return
+            if was_crounching and inventory.was_server_lag_last_open:
+                inventory.close()
+                turn_to_dedi(item)
+            else:
+                return
         else:
             logs.logger.error("Failed to open dedi inventory")
             recover_if_problem(metadata, item)
+
         time.sleep(0.3 * settings.lag_offset)
 
-    if dl():
-        logs.logger.critical("Failed to open dedi inventory")
+        if dl():
+            logs.logger.critical("Failed to open dedi inventory")
+            return
 
 
-def open_deposit_all(metadata: station_metadata, item: DediStorageState) -> bool:
+def unsafe_fast_deposit_all(item: DediStorageState):
     global capture_name
-    dl = utils.get_default_clock(multiplier=3)
+    turn_to_dedi(item)
+
+    utils.press_key("Use")
+    _capture_deposit()
+    time.sleep(0.3 * settings.lag_offset)
+
+    if capture_name:
+        logs.logger.debug(f"{capture_name} deposit handshake completed")
+    capture_name = None
+
+
+def open_deposit_all(metadata: station_metadata, item: DediStorageState):
+    global capture_name
+    dl = utils_simple.get_default_clock(multiplier=3)
     attempt = 0
     # Open inventory
     while not dl():
@@ -135,7 +158,6 @@ def open_deposit_all(metadata: station_metadata, item: DediStorageState) -> bool
         logs.logger.debug(f"Trying to deposit all[{attempt}]")
 
         turn_to_dedi(item)
-        time.sleep(0.2 * settings.lag_offset)
 
         open(metadata, item)
         if not is_open():
@@ -144,9 +166,15 @@ def open_deposit_all(metadata: station_metadata, item: DediStorageState) -> bool
 
         # Ready
         ensure_has_resource()
+
         if not is_has_resource():
-            recover_if_problem(metadata, item)
-            continue
+            if player_inventory.is_can_transfer_all():
+                recover_if_problem(metadata, item)
+                continue
+            else:
+                # NOTHING ON PLAYER INVENTORY, SO NOTHING TO DEPOSIT, RETURN TRUE
+                inventory.close()
+                return True
 
         windows.click(
             get_pixel_loc("dedi_deposit_x"),
@@ -165,7 +193,7 @@ def open_deposit_all(metadata: station_metadata, item: DediStorageState) -> bool
 
 
 def open_withdraw_all(metadata: station_metadata, item: DediStorageState):
-    dl = utils.get_default_clock(multiplier=3)
+    dl = utils_simple.get_default_clock(multiplier=3)
     attempt = 0
     # Open inventory
     while not dl():
@@ -173,7 +201,6 @@ def open_withdraw_all(metadata: station_metadata, item: DediStorageState):
         logs.logger.debug(f"Trying to withdraw all[{attempt}]")
 
         turn_to_dedi(item)
-        time.sleep(0.2 * settings.lag_offset)
 
         open(metadata, item)
 

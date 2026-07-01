@@ -55,8 +55,7 @@ def view_route_entry(yaw, pitch, crouched):
     from source.utility import utils
 
     utils.get_yaw_pitch()
-    utils.press_key("Run")
-    player_state.human.crouched = False
+    player_state.human.reset_crouch()
     utils.turn_to(float(yaw), float(pitch))
     if crouched:
         player_state.human.crouch()

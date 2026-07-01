@@ -2,6 +2,7 @@
   "depositCrystalData": [
     {
       "teleport": "GACHADEDI",
+      "check_on_every_dedi": 6,
       "dedi": {
         "items": [
           {
@@ -80,6 +81,7 @@
   "depositGrindableData": [
     {
       "teleport": "GACHAGRINDABLES",
+      "check_on_every_dedi": 6,
       "grinder": {
         "active": true,
         "location": {

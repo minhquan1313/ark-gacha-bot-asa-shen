@@ -113,15 +113,14 @@ DEFAULT_SETTINGS = {
     "bed_spawn": "GACHARENDER",
     "berry_station": "GACHABERRYSTATION",
     "berry_type": "mejoberry",
+    "time_to_reberry": 30,
     "station_yaw": 0.0,
     "server_number": "0",
     "auto_start_program": False,
     "singleplayer": False,
     "external_berry": False,
-    "seeds_230": False,
+    "iguanadon_seed_throw_amount": 18,
     "gacha_feed_delay": 6600,
-    "gacha_230_feed_delay": 10700,
-    "side_crop_plot": False,
     "allow_focus_ark_window": True,
     "focus_ark_window_interval": 5.0,
     "helper_inactive_opacity": 0.3,
@@ -129,31 +128,36 @@ DEFAULT_SETTINGS = {
     "launcher_height": 800,
 }
 
-HIDDEN_SETTINGS = {
-    "seeds_230",
-    "gacha_230_feed_delay",
+TEMPLATE_SETTING_KEYS = tuple(key for key in DEFAULT_SETTINGS if key != "station_yaw")
+TEMPLATE_REFERENCE_DEFAULTS = {
+    **{f"{key}_template": "" for key in TEMPLATE_SETTING_KEYS},
+    "dedis_template": "",
+    "gacha_template": "",
+    "pego_template": "",
 }
+
+HIDDEN_SETTINGS = set()
 
 SETTING_LABELS = {
     "lag_offset": "Lag offset",
-    "server_number": "Server number",
+    "server_number": "Server",
     "auto_start_program": "Auto start program",
     "singleplayer": "Singleplayer",
     "iguanadon": "Iguanadon",
-    "bed_spawn": "Bed & teleport",
+    "bed_spawn": "Bed spawn",
     "berry_station": "Berry station",
-    "berry_type": "Berry type",
+    "berry_type": "Berry name",
+    "time_to_reberry": "Reberry after",
     "station_yaw": "Station yaw",
-    "external_berry": "Troughs far away",
-    "seeds_230": "Seeds 230",
+    "external_berry": "Troughs away?",
+    "iguanadon_seed_throw_amount": "Seed drop",
     "gacha_feed_delay": "Gacha feed delay",
-    "gacha_230_feed_delay": "Gacha 230 feed delay",
-    "side_crop_plot": "Side crops plot",
     "helper_inactive_opacity": "Helper inactive opacity",
     "allow_focus_ark_window": "Allow Ark window focus",
     "focus_ark_window_interval": "Ark window focus interval",
     "launcher_width": "Launcher startup width",
     "launcher_height": "Launcher startup height",
+    "check_on_every_dedi": "Check every N dedis",
 }
 
 
@@ -161,35 +165,78 @@ def setting_label(key):
     return SETTING_LABELS.get(key, key.replace("_", " ").capitalize())
 
 
+SETTING_TOOLTIPS = {
+    "server_number": "Server number where you built Gacha Tower.",
+    "singleplayer": "Is this running in Single player mode?",
+    "bed_spawn": (
+        "AKA Render station, where you will respawn, render, the center of your tower."
+    ),
+    "iguanadon_seed_throw_amount": (
+        "Stack amount of seed that will be deleted after Iguanodon process. "
+        "This helps make sure Gacha still have space to pickup SnowOwl pells. "
+        "Suggest leaving it to 0 if your Iguanodon weight <= 1500."
+    ),
+    "berry_type": (
+        "Mejoberry, Narco, etc, what will be searched before transfer to "
+        "Iguanodon. This makes sure only berry will be consumed, no other else."
+    ),
+    "time_to_reberry": "How long should we refill berry from troughs to iguanodon? Put 0(second) to make it refill everytime",
+    "external_berry": (
+        "Check this if your berry station is far away from the Render station."
+    ),
+}
+
+
+def setting_tooltip(key):
+    return SETTING_TOOLTIPS.get(key, "")
+
+
 SETTINGS_GROUPS = {
-    "GENERAL": [
-        "lag_offset",
+    "SERVER": [
         "server_number",
-        "auto_start_program",
+        "lag_offset",
         "singleplayer",
     ],
     "STATIONS": [
-        "iguanadon",
         "bed_spawn",
+        "station_yaw",
+        "iguanadon",
+        "iguanadon_seed_throw_amount",
         "berry_station",
         "berry_type",
-    ],
-    "POSITION / RENDER": [
-        "station_yaw",
+        "time_to_reberry",
+        "external_berry",
     ],
     "PEGO": [],
-    "STORAGE": [],
-    "GACHA": [],
-    "FEATURES": [
-        "external_berry",
-        "side_crop_plot",
+    "DEDI": [],
+    "GACHA": [
         "gacha_feed_delay",
     ],
-    "WINDOW / HELPERS": [
+    "LAUNCHER": [
+        "auto_start_program",
         "helper_inactive_opacity",
         "allow_focus_ark_window",
         "focus_ark_window_interval",
         "launcher_width",
         "launcher_height",
     ],
+}
+
+TEMPLATE_GROUP_SETTING_KEYS = {
+    "SERVER": tuple(SETTINGS_GROUPS["SERVER"]),
+    "STATIONS": tuple(
+        key for key in SETTINGS_GROUPS["STATIONS"] if key != "station_yaw"
+    ),
+    "GACHA": tuple(SETTINGS_GROUPS["GACHA"]),
+    "LAUNCHER": tuple(SETTINGS_GROUPS["LAUNCHER"]),
+}
+
+TEMPLATE_GROUP_REFERENCE_KEYS = {
+    **{
+        group: tuple(f"{key}_template" for key in keys)
+        for group, keys in TEMPLATE_GROUP_SETTING_KEYS.items()
+    },
+    "DEDI": ("dedis_template",),
+    "GACHA": ("gacha_feed_delay_template", "gacha_template"),
+    "PEGO": ("pego_template",),
 }

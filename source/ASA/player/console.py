@@ -10,7 +10,7 @@ import settings
 import source.ASA.config
 from source.ASA.player import player_state
 from source.logs import gachalogs as logs
-from source.utility import template, utils
+from source.utility import template, utils, utils_simple
 
 _clipboard_lock = threading.Lock()
 _clipboard_open_timeout = 3
@@ -21,7 +21,7 @@ _clipboard_retry_delay = 0.05
 def _open_clipboard() -> Iterator[None]:
     """Open the shared Windows clipboard with bounded contention retries."""
     with _clipboard_lock:
-        dl = utils.get_default_clock(_clipboard_open_timeout)
+        dl = utils_simple.get_default_clock(_clipboard_open_timeout)
         is_dled = dl()
         while not is_dled:
             is_dled = dl()
@@ -60,16 +60,22 @@ def enter_data(data: str) -> bool:
 
 
 def console_reset():
-    # Open console
-    utils.press_key("ConsoleKeys")
-    time.sleep(0.2)
-    # Append "`" character into the console, in case the console already contain old value
+    # Open console - Might trigger middle console if the current console is blank
+    if not is_open():
+        utils.press_key("ConsoleKeys")
+        time.sleep(0.2)
+    # Append "?" character into the console, in case the console already contain old value
     # so maybe it contains "ccc" from previous ccc, but somehow failed to submit, here we
-    # add "c" -> "cccc" then we submit, that's a wrong console command so it execute nothing -> SAFE RESET CONSOLE
-    pyautogui.press("c")
+    # add "?" -> "ccc?" then we submit, that's a wrong console command so it execute nothing -> SAFE RESET CONSOLE
+    pyautogui.press("?")
     time.sleep(0.1)
+
     utils.press_key("Enter")
-    template.template_await_false(is_open, 1)
+
+    if template.template_await_false(is_open, 0.5):
+        # MIDDLE CONSOLE IS TRIGGERED FROM THE PRESS KEY ABOVE
+        utils.press_key("Escape")
+
     time.sleep(0.1)
 
 
@@ -88,8 +94,8 @@ def console_ccc(reset_state_before_capture: bool = True) -> list[str] | None:
             count += 1
             # OPEN AGAIN
             utils.press_key("ConsoleKeys")
-            template.template_await_true(is_open, 1)
-            if not is_open():
+
+            if not template.template_await_true(is_open, 1):
                 console_reset()
 
             if count >= source.ASA.config.console_open_attempts:
@@ -154,9 +160,8 @@ def console_write(text: str) -> bool:
         attempts += 1
 
         utils.press_key("ConsoleKeys")
-        template.template_await_true(is_open, 1)
 
-        if not is_open():
+        if not template.template_await_true(is_open, 1):
             console_reset()
 
         if attempts >= source.ASA.config.console_open_attempts:
@@ -175,6 +180,11 @@ def console_write(text: str) -> bool:
         )  # slow to try and prevent opening clipboard to empty data
         return True
     return False
+
+
+def close():
+    while is_open():
+        console_reset()
 
 
 def close_console(middle):

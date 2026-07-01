@@ -7,7 +7,14 @@ import source.ASA.config
 from source.ASA.player import player_inventory, player_state, tribelog
 from source.gacha_bot import render
 from source.logs import gachalogs as logs
-from source.utility import local_player, template, utils, variables, windows
+from source.utility import (
+    local_player,
+    template,
+    utils,
+    utils_simple,
+    variables,
+    windows,
+)
 
 
 def is_open():
@@ -31,7 +38,8 @@ def close():
             variables.get_pixel_loc("back_button_tp_x"),
             variables.get_pixel_loc("back_button_tp_y"),
         )
-        time.sleep(0.2 * settings.lag_offset)
+        if not template.template_await_false(is_open, 2):
+            return time.sleep(0.3 * settings.lag_offset)
 
         if attempts >= source.ASA.config.teleporter_close_attempts:
             logs.logger.error(
@@ -46,7 +54,7 @@ def spawn_in(bed_name: str):
     Careful, this one also auto trigger IMPLANT EAT/SUICIDE
     """
 
-    dl = utils.get_default_clock()
+    dl = utils_simple.get_default_clock()
     while not is_open() and not dl():
         player_inventory.implant_eat()
 
@@ -94,13 +102,15 @@ def spawn_in(bed_name: str):
         time.sleep(0.3 * settings.lag_offset)
 
         # Click random on the screen to make sure it will spawn player or skip trailers.
-        pyautogui.moveTo(1000, 300, duration=0.5)
-        pyautogui.rightClick(1000, 300)
+
+        (x1, y1), (x2, y2) = ((1000, 300), (1400, 800))
+        pyautogui.moveTo(x1, y1, duration=0.5)
+        pyautogui.rightClick(x1, y1)
         pyautogui.press("space")
         time.sleep(0.2 * settings.lag_offset)
 
-        pyautogui.moveTo(1400, 800, duration=0.5)
-        pyautogui.rightClick(1400, 800)
+        pyautogui.moveTo(x2, y2, duration=0.5)
+        pyautogui.rightClick(x2, y2)
         pyautogui.press("space")
         time.sleep(0.2 * settings.lag_offset)
 

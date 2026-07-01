@@ -29,9 +29,10 @@ Before implementing:
 - Add no abstractions for single-use code.
 - Add no flexibility or configurability that wasn't requested.
 - Add no error handling for impossible scenarios.
-- If 200 lines could be 50, rewrite them. But if it's hard to read for maintain later, don't. Long lines of code not always redundant.
-- When creating or modifying a function, always include type annotations for all parameters and the return value, avoid any/none type.
-- When creating a new function, always add a concise docstring that explains the function’s purpose clearly.
+- If 200 lines of code can be reduced to 50 without sacrificing readability or maintainability, rewrite them. Do not shorten code merely for the sake of reducing line count; longer code is not necessarily redundant.
+- Add type annotations to all function parameters, but omit return annotations and let the IDE infer them. Avoid using Any or None as parameter types.
+- When creating a new function, always add a concise docstring that clearly explains the function’s purpose. Whenever practical, include a short and concrete usage example in the docstring.
+- The most importance is code must be readable, linear code still a good code.
 
 Ask: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 

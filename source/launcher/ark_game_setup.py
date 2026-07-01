@@ -20,6 +20,7 @@ ARK_INSTALL_DIR_NAME = "ARK Survival Ascended"
 GAME_SETTINGS_RELATIVE_PATH = Path(
     "ShooterGame/Saved/Config/Windows/GameUserSettings.ini"
 )
+GAME_INPUT_RELATIVE_PATH = Path("ShooterGame/Saved/Config/Windows/Input.ini")
 
 TARGET_GAME_SETTINGS = {
     "ResolutionSizeX": "1920",
@@ -63,6 +64,10 @@ TARGET_GAME_SETTINGS = {
     "sg.ShadowQuality": "0",
     "sg.AntiAliasingQuality": "0",
     "sg.ShadingQuality": "1",
+}
+TARGET_GAME_INPUT_SETTINGS = {
+    #
+    "bEnableMouseSmoothing": "False",
 }
 
 ENUM_CURRENT_SETTINGS = -1
@@ -174,6 +179,32 @@ def find_game_user_settings_path(steam_dir=None):
     raise RuntimeError("ARK Survival Ascended GameUserSettings.ini was not found.")
 
 
+def find_game_user_input_path(steam_dir=None):
+    steam_root = Path(steam_dir) if steam_dir is not None else find_running_steam_dir()
+    library_vdf = steam_root / "steamapps" / "libraryfolders.vdf"
+    if not library_vdf.exists():
+        raise RuntimeError(f"Steam library file was not found: {library_vdf}")
+
+    library_paths = parse_steam_library_paths(
+        library_vdf.read_text(encoding="utf-8", errors="replace")
+    )
+    if not library_paths:
+        raise RuntimeError(f"No Steam library paths were found in {library_vdf}")
+
+    for library_path in library_paths:
+        ark_dir = library_path / "steamapps" / "common" / ARK_INSTALL_DIR_NAME
+        if not ark_dir.exists():
+            continue
+        file_path = ark_dir / GAME_INPUT_RELATIVE_PATH
+        try:
+            with file_path.open("r", encoding="utf-8", errors="replace"):
+                return file_path
+        except OSError:
+            continue
+
+    raise RuntimeError("ARK Survival Ascended GameUserSettings.ini was not found.")
+
+
 def get_current_display_mode():
     if not hasattr(ctypes, "windll"):
         raise RuntimeError("Display mode changes are only supported on Windows.")
@@ -278,13 +309,9 @@ def launch_ark_through_steam():
 
 def prepare_and_launch_game():
     settings_path = find_game_user_settings_path()
+    input_path = find_game_user_input_path()
     if restore_state_exists():
         state = load_restore_state()
-        # backup_path = Path(state.get("backup_path", CONFIG_BACKUP_PATH))
-        # if not backup_path.exists():
-        #     raise RuntimeError(
-        #         f"GameUserSettings.ini backup was not found: {backup_path}"
-        #     )
     else:
         backup_game_settings_once(settings_path, CONFIG_BACKUP_PATH)
         state = save_restore_state_once(settings_path, backup_path=CONFIG_BACKUP_PATH)
@@ -294,8 +321,9 @@ def prepare_and_launch_game():
     )
     kill_running_ark()
     patch_game_settings(settings_path)
+    patch_game_settings(input_path, TARGET_GAME_INPUT_SETTINGS)
     launch_ark_through_steam()
-    return settings_path
+    return f"{settings_path} | {input_path}"
 
 
 def clear_restore_state(state_path=RESTORE_STATE_PATH):

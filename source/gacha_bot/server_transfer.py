@@ -26,11 +26,12 @@ from source.launcher.config.transfer_helper_config import (
     runtime_account_count,
     transfer_dedi_route,
 )
+from source.launcher.utils import steam_accounts
 from source.launcher.utils.deposit_helper_capture import focus_game_window
 from source.launcher.utils.steam_switch import switch_steam_account
 from source.launcher.utils.system import focus_window_if_needed, validate_ark_window
 from source.logs import gachalogs as logs
-from source.utility import template, utils
+from source.utility import template, utils, utils_simple
 from source.utility.structures.dedi import dedi
 from source.utility.structures.transmitter import transmitter
 from source.utility.types import DediStorageState
@@ -586,8 +587,8 @@ def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
             emit("Launching ARK through Steam.")
             launch_ark_through_steam()
             launched = True
-        deadline = utils.timed_out_counter(timeout)
-        while not deadline():
+        dl = utils_simple.get_default_clock(timeout)
+        while not dl():
             if _process_running(ARK_PROCESS_NAME):
                 try:
                     window_size = validate_ark_window()
@@ -606,8 +607,11 @@ def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
             "ARK did not reach a usable window state; relaunching "
             f"({attempt}/{attempts})."
         )
-        ark_game_setup.kill_running_ark()
-        time.sleep(2)
+        _restart_steam_before_ark_retry(
+            steam,
+            _settings_int(settings, "steam_restart_interval", 30),
+            emit,
+        )
         launched = False
     if last_error is not None:
         raise RuntimeError(
@@ -768,6 +772,32 @@ def steam_has_failure(steam, status_callback=None):
         time.sleep(0.2)
         return True
 
+    return False
+
+
+def _restart_steam_before_ark_retry(
+    steam: dict | None, timeout: int, emit: Callable[[str], object]
+):
+    """Hard-reset ARK and Steam before the next ARK launch attempt."""
+    ark_game_setup.kill_running_ark()
+    steam_accounts.close_steam()
+
+    restart_delay = 8
+    if isinstance(steam, dict):
+        restart_delay = steam.get("restart_delay", restart_delay)
+    time.sleep(float(restart_delay))
+
+    emit("Restarting Steam before relaunching ARK.")
+    steam_accounts.launch_steam()
+
+    dl = utils_simple.get_default_clock(timeout)
+    while not dl():
+        if _focus_visible_steam_window(steam, emit):
+            emit("Steam is visible and maximized before ARK retry.")
+            return True
+        time.sleep(1)
+
+    emit("Steam was not visible and maximized before ARK retry; relaunching ARK.")
     return False
 
 

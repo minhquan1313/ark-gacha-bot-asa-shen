@@ -2,7 +2,6 @@ import time
 from abc import ABC, abstractmethod
 
 import settings
-import source.gacha_bot.config
 import source.gacha_bot.render
 from source.ASA.player import console, player_inventory, player_state, tribelog
 from source.ASA.stations import custom_stations
@@ -15,6 +14,7 @@ global berry_station
 global last_berry
 last_berry = 0
 berry_station = True
+did_collect_tek_troughs = False
 
 
 class base_task(ABC):
@@ -49,6 +49,7 @@ class gacha_station(base_task):
         player_state.check_state()
         global berry_station
         global last_berry
+        global did_collect_tek_troughs
 
         temp = False
         time_between = time.time() - last_berry
@@ -58,13 +59,10 @@ class gacha_station(base_task):
 
         berry_metadata = custom_stations.get_station_metadata(settings.berry_station)
         iguanadon_metadata = custom_stations.get_station_metadata(settings.iguanadon)
-        if (
-            berry_station
-            or time_between > source.gacha_bot.config.time_to_reberry * 60 * 60
-        ):  # if time is greater than 4 hours since the last time you went to berry station
-            teleporter.teleport_not_default(
-                berry_metadata
-            )  # or if berry station is true( when you go to tekpod and drop all ) and the time between has been longer than 30 mins since youve last been
+        # if time is greater than 4 hours since the last time you went to berry station
+        if berry_station or time_between > settings.time_to_reberry:
+            # or if berry station is true( when you go to tekpod and drop all ) and the time between has been longer than 36 second since youve last been
+            teleporter.teleport_not_default(berry_metadata)
             if settings.external_berry:
                 logs.logger.debug("sleeping for 20 seconds as external")
                 time.sleep(20)  # letting station spawn in if you have to tp away
@@ -73,13 +71,16 @@ class gacha_station(base_task):
             iguanadon.berry_station(berry_metadata)
             last_berry = time.time()
             berry_station = False
+            did_collect_tek_troughs = True
             temp = True
+        else:
+            did_collect_tek_troughs = False
 
         teleporter.teleport_not_default(
             iguanadon_metadata
         )  # iguanadon is a centeral tp
-        utils.zero_center()
 
+        utils.zero_center()
         if settings.external_berry and temp:  # quick fix for level 1 bug
             logs.logger.debug(
                 "reconnecting because of level 1 bug - you chose external berry will sleep for 60 seconds as a way to ensure that we are fully loaded in"
@@ -89,25 +90,15 @@ class gacha_station(base_task):
 
         iguanadon.iguanadon(iguanadon_metadata)
         teleporter.teleport_not_default(gacha_metadata)
-        utils.zero_center()
 
-        if settings.side_crop_plot:
-            gacha.drop_off(gacha_metadata)
-        else:
-            gacha.drop_off_nocrop(gacha_metadata)
+        utils.zero_center()
+        gacha.drop_off_nocrop(gacha_metadata)
 
     def get_priority_level(self):
         return 3
 
     def get_requeue_delay(self):
-        if settings.seeds_230:
-            delay = (
-                settings.gacha_230_feed_delay
-            )  # should take about this amount of time to do 230 slots of seeds
-        else:
-            # delay can be constant as it will be the same for all gachas 142 stacks took 110 mins
-            delay = settings.gacha_feed_delay
-        return delay
+        return settings.gacha_feed_delay
 
 
 class pego_station(base_task):
@@ -122,12 +113,13 @@ class pego_station(base_task):
 
         # print("Start debugging")
         # while True:
-        #     template.check_template_no_bounds("search_player_inv", 0.7)
+        #     template.check_template_no_bounds(template.DEBUG_ITEM, 0.7)
         #     time.sleep(0.3)
 
         # utils.zero_center()
         # transmitter.open_and_transfer(5842)
         # print("Done debugging - Waiting 9999")
+        # raise RuntimeError("DONE DEBUG")
         # time.sleep(9999)
 
         pego_metadata = custom_stations.get_station_metadata(self.teleporter_name)

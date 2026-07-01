@@ -1,0 +1,531 @@
+{
+  "name": "Shen",
+  "type": "template_setting",
+  "version": 1,
+  "data": {
+    "settings": {
+      "lag_offset": 1.0,
+      "iguanadon": "GACHAIGUANADON",
+      "bed_spawn": "GACHARENDER",
+      "berry_station": "GACHABERRYSTATION",
+      "berry_type": "mejoberry",
+      "time_to_reberry": 30,
+      "server_number": "5147",
+      "auto_start_program": false,
+      "singleplayer": false,
+      "external_berry": false,
+      "iguanadon_seed_throw_amount": 0,
+      "gacha_feed_delay": 6600,
+      "allow_focus_ark_window": true,
+      "focus_ark_window_interval": 5.0,
+      "helper_inactive_opacity": 0.3,
+      "launcher_width": 1200,
+      "launcher_height": 800
+    },
+    "dedis": {
+      "depositCrystalData": [
+        {
+          "teleport": "GACHADEDI",
+          "check_on_every_dedi": 6,
+          "dedi": {
+            "items": [
+              {
+                "location": {
+                  "yaw": -24.01,
+                  "pitch": 20.0
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 29.72,
+                  "pitch": 18.73
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -31.4,
+                  "pitch": -25.34
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 34.68,
+                  "pitch": -26.56
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -27.46,
+                  "pitch": -32.91
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": 30.27,
+                  "pitch": -32.07
+                },
+                "crouched": true
+              }
+            ]
+          },
+          "vault": {
+            "items": [
+              {
+                "location": {
+                  "yaw": -99.22,
+                  "pitch": -10.64
+                },
+                "crouched": true,
+                "items": ["riot"]
+              },
+              {
+                "location": {
+                  "yaw": 99.17,
+                  "pitch": -11.27
+                },
+                "crouched": true,
+                "items": ["assault", "tree", "gate", "riot"]
+              }
+            ]
+          }
+        }
+      ],
+      "depositGrindableData": [
+        {
+          "teleport": "GACHAGRINDABLES",
+          "check_on_every_dedi": 6,
+          "grinder": {
+            "active": true,
+            "location": {
+              "yaw": 97.04,
+              "pitch": -18.82
+            },
+            "crouched": false
+          },
+          "dedi": {
+            "items": [
+              {
+                "location": {
+                  "yaw": -26.76,
+                  "pitch": 21.76
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 38.86,
+                  "pitch": 23.2
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 37.1,
+                  "pitch": -19.39
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -34.89,
+                  "pitch": -22.67
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 33.75,
+                  "pitch": -38.14
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -36.31,
+                  "pitch": -36.29
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -100.86,
+                  "pitch": -20.23
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -126.5,
+                  "pitch": -17.43
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -127.89,
+                  "pitch": 5.03
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -97.45,
+                  "pitch": 4.51
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -96.58,
+                  "pitch": 11.25
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -125.98,
+                  "pitch": 6.22
+                },
+                "crouched": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "gacha": [
+      {
+        "name": "GACHAPAIR_1_left",
+        "teleporter": "GACHAPAIR_1",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR_1_right",
+        "teleporter": "GACHAPAIR_1",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR_2_left",
+        "teleporter": "GACHAPAIR_2",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR_2_right",
+        "teleporter": "GACHAPAIR_2",
+        "side": "right"
+      },
+      {
+        "name": "gacha5",
+        "teleporter": "GACHAPAIR_3",
+        "side": "left"
+      },
+      {
+        "name": "gacha6",
+        "teleporter": "GACHAPAIR_3",
+        "side": "right"
+      },
+      {
+        "name": "gacha7",
+        "teleporter": "GACHAPAIR4",
+        "side": "left"
+      },
+      {
+        "name": "gacha8",
+        "teleporter": "GACHAPAIR4",
+        "side": "right"
+      },
+      {
+        "name": "gacha9",
+        "teleporter": "GACHAPAIR5",
+        "side": "left"
+      },
+      {
+        "name": "gacha10",
+        "teleporter": "GACHAPAIR5",
+        "side": "right"
+      },
+      {
+        "name": "gacha11",
+        "teleporter": "GACHAPAIR6",
+        "side": "left"
+      },
+      {
+        "name": "gacha12",
+        "teleporter": "GACHAPAIR6",
+        "side": "right"
+      },
+      {
+        "name": "gacha13",
+        "teleporter": "GACHAPAIR7",
+        "side": "left"
+      },
+      {
+        "name": "gacha14",
+        "teleporter": "GACHAPAIR7",
+        "side": "right"
+      },
+      {
+        "name": "gacha15",
+        "teleporter": "GACHAPAIR8",
+        "side": "left"
+      },
+      {
+        "name": "gacha16",
+        "teleporter": "GACHAPAIR8",
+        "side": "right"
+      },
+      {
+        "name": "gacha17",
+        "teleporter": "GACHAPAIR9",
+        "side": "left"
+      },
+      {
+        "name": "gacha18",
+        "teleporter": "GACHAPAIR9",
+        "side": "right"
+      },
+      {
+        "name": "gacha19",
+        "teleporter": "GACHAPAIR10",
+        "side": "left"
+      },
+      {
+        "name": "gacha20",
+        "teleporter": "GACHAPAIR10",
+        "side": "right"
+      },
+      {
+        "name": "gacha21",
+        "teleporter": "GACHAPAIR11",
+        "side": "left"
+      },
+      {
+        "name": "gacha22",
+        "teleporter": "GACHAPAIR11",
+        "side": "right"
+      },
+      {
+        "name": "gacha23",
+        "teleporter": "GACHAPAIR12",
+        "side": "left"
+      },
+      {
+        "name": "gacha24",
+        "teleporter": "GACHAPAIR12",
+        "side": "right"
+      },
+      {
+        "name": "gacha25",
+        "teleporter": "GACHAPAIR13",
+        "side": "left"
+      },
+      {
+        "name": "gacha26",
+        "teleporter": "GACHAPAIR13",
+        "side": "right"
+      },
+      {
+        "name": "gacha27",
+        "teleporter": "GACHAPAIR14",
+        "side": "left"
+      },
+      {
+        "name": "gacha28",
+        "teleporter": "GACHAPAIR14",
+        "side": "right"
+      },
+      {
+        "name": "gacha29",
+        "teleporter": "GACHAPAIR15",
+        "side": "left"
+      },
+      {
+        "name": "gacha30",
+        "teleporter": "GACHAPAIR15",
+        "side": "right"
+      },
+      {
+        "name": "gacha31",
+        "teleporter": "GACHAPAIR16",
+        "side": "left"
+      },
+      {
+        "name": "gacha32",
+        "teleporter": "GACHAPAIR16",
+        "side": "right"
+      },
+      {
+        "name": "gacha33",
+        "teleporter": "GACHAPAIR17",
+        "side": "left"
+      },
+      {
+        "name": "gacha34",
+        "teleporter": "GACHAPAIR17",
+        "side": "right"
+      },
+      {
+        "name": "gacha35",
+        "teleporter": "GACHAPAIR18",
+        "side": "left"
+      },
+      {
+        "name": "gacha36",
+        "teleporter": "GACHAPAIR18",
+        "side": "right"
+      },
+      {
+        "name": "gacha37",
+        "teleporter": "GACHAPAIR19",
+        "side": "left"
+      },
+      {
+        "name": "gacha38",
+        "teleporter": "GACHAPAIR19",
+        "side": "right"
+      },
+      {
+        "name": "gacha39",
+        "teleporter": "GACHAPAIR20",
+        "side": "left"
+      },
+      {
+        "name": "gacha40",
+        "teleporter": "GACHAPAIR20",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR21_left",
+        "teleporter": "GACHAPAIR21",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR21_right",
+        "teleporter": "GACHAPAIR21",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR22_left",
+        "teleporter": "GACHAPAIR22",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR22_right",
+        "teleporter": "GACHAPAIR22",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR23_left",
+        "teleporter": "GACHAPAIR23",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR23_right",
+        "teleporter": "GACHAPAIR23",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR24_left",
+        "teleporter": "GACHAPAIR24",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR24_right",
+        "teleporter": "GACHAPAIR24",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR25_left",
+        "teleporter": "GACHAPAIR25",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR25_right",
+        "teleporter": "GACHAPAIR25",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR26_left",
+        "teleporter": "GACHAPAIR26",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR26_right",
+        "teleporter": "GACHAPAIR26",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR27_left",
+        "teleporter": "GACHAPAIR27",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR27_right",
+        "teleporter": "GACHAPAIR27",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR28_left",
+        "teleporter": "GACHAPAIR28",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR28_right",
+        "teleporter": "GACHAPAIR28",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR29_left",
+        "teleporter": "GACHAPAIR29",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR29_right",
+        "teleporter": "GACHAPAIR29",
+        "side": "right"
+      },
+      {
+        "name": "GACHAPAIR30_left",
+        "teleporter": "GACHAPAIR30",
+        "side": "left"
+      },
+      {
+        "name": "GACHAPAIR30_right",
+        "teleporter": "GACHAPAIR30",
+        "side": "right"
+      }
+    ],
+    "pego": [
+      {
+        "name": "pego1",
+        "teleporter": "pego1",
+        "delay": 1948
+      },
+      {
+        "name": "pego2",
+        "teleporter": "pego2",
+        "delay": 1948
+      },
+      {
+        "name": "pego3",
+        "teleporter": "pego3",
+        "delay": 1948
+      },
+      {
+        "name": "pego4",
+        "teleporter": "pego4",
+        "delay": 1948
+      },
+      {
+        "name": "pego5",
+        "teleporter": "pego5",
+        "delay": 1948
+      }
+    ]
+  }
+}

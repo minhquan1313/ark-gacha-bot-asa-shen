@@ -3,10 +3,10 @@ import time
 import settings
 import source.ASA.config
 import source.ASA.stations.custom_stations
-from source.ASA.player import player_state, tribelog
+from source.ASA.player import player_state
 from source.ASA.strucutres import bed
 from source.logs import gachalogs as logs
-from source.utility import template, utils, variables, windows
+from source.utility import template, utils, utils_simple, variables, windows
 
 
 def is_open():
@@ -18,7 +18,7 @@ def open():
     player should already be looking down at the teleporter this just opens and WILL try and correct if there are issues
     """
     attempts = 0
-    dl = utils.get_default_clock()
+    dl = utils_simple.get_default_clock()
     while not is_open():
         attempts += 1
         logs.logger.debug(
@@ -31,7 +31,7 @@ def open():
             # check state of char which should close out of any windows we are in or rejoin the game
             player_state.check_state()
 
-            utils.zero_center()  # reseting the chars pitch/yaw
+            utils.zero_center()
             look_down_teleport_raw()
             time.sleep(0.2 * settings.lag_offset)
         else:
@@ -49,7 +49,7 @@ def open():
             look_down_teleport_raw()
             time.sleep(0.2 * settings.lag_offset)
 
-            dl = utils.get_default_clock()
+            dl.reset()
 
 
 def close():
@@ -63,7 +63,9 @@ def close():
             variables.get_pixel_loc("back_button_tp_x"),
             variables.get_pixel_loc("back_button_tp_y"),
         )
-        time.sleep(0.2 * settings.lag_offset)
+
+        if not template.template_await_false(is_open, 2):
+            return time.sleep(0.3 * settings.lag_offset)
 
         if attempts >= source.ASA.config.teleporter_close_attempts:
             logs.logger.error(
@@ -73,7 +75,7 @@ def close():
 
 
 def look_down_teleport_raw():
-    utils.turn_down(360)
+    utils.turn_down(180)
 
 
 def look_down_teleport():
@@ -104,7 +106,7 @@ def teleport_not_default(
     if is_open():
         player_state.human.is_on_tp()
 
-        deadline = utils.get_default_clock()
+        dl = utils_simple.get_default_clock()
         while True:
             # ENSURE TP IS OPEN AND SERVER LOADED PROCESS
             windows.click(
@@ -125,7 +127,7 @@ def teleport_not_default(
                 0.3 * settings.lag_offset
             )  # preventing the orange text from the starting teleport screen messing things up
 
-            if deadline():
+            if dl():
                 player_state.reset_state()
                 time.sleep(0.3 * settings.lag_offset)
 
@@ -137,7 +139,7 @@ def teleport_not_default(
                 if not is_open():
                     return
 
-                deadline = utils.get_default_clock()
+                dl.reset()
 
         counter = 0
         while template.check_template_no_bounds("search", 0.7):
@@ -183,9 +185,8 @@ def teleport_not_default(
             # Extra step to ensure we are teleported(not sitting at the old teleport due to server lag/save)
             open()
             close()
-            tribelog.open()
-            tribelog.close()
-        time.sleep(0.3 * settings.lag_offset)
+            time.sleep(0.5 * settings.lag_offset)
+            # DONE
         if (
             settings.singleplayer
         ):  # single player for some reason changes view angles when you tp

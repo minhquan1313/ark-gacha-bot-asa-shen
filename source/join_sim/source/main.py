@@ -12,7 +12,7 @@ from source.join_sim.source.menus import (
     success,
 )
 from source.join_sim.source.utility import recon_utils
-from source.utility import windows
+from source.utility import utils_simple, windows
 
 server = 0000
 
@@ -29,7 +29,7 @@ def is_crashed():
 
 def join_round(server: str) -> bool:
     # This click will skip game intro
-    windows.click(2, 2)
+    windows.click(960, 1078)
     time.sleep(0.5)
 
     if not is_menu():
@@ -70,12 +70,12 @@ def main_loop(server=server):
     if is_menu():
         # start sim close game every 15 20 mins incase server crashed
         is_success = False
-        time1 = time.time()
+        dl = utils_simple.get_default_clock(60 * 15)
         logs.logger.debug("starting sim")
         while not is_success:
-            if time.time() - time1 >= 15 * 60 or crash.detect_crash():
+            if dl() or crash.detect_crash():
                 crash.re_open_game()
-                time1 = time.time()
+                dl.reset()
                 time.sleep(5)
 
             time.sleep(0.2)
