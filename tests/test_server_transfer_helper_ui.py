@@ -21,7 +21,7 @@ from source.launcher.position_render_helper import PositionRenderHelper
 from source.launcher import server_transfer_helper as server_transfer_helper_module
 from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.server_transfer_helper import ServerTransferHelper
-from source.launcher.components.widgets import WrappedStatusLabel
+from source.launcher.components.widgets import AnimatedButton, WrappedStatusLabel
 
 
 class NegativeHeightStatusLabel(WrappedStatusLabel):
@@ -67,7 +67,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             register_deposit_helper=Mock(),
         )
 
-        with patch("source.launcher.pages.ServerTransferHelper", return_value=helper):
+        with patch(
+            "source.launcher.pages.helpers.ServerTransferHelper", return_value=helper
+        ):
             SettingsGUI.open_server_transfer_helper(launcher)
 
         launcher.close_external_helpers.assert_called_once_with()
@@ -158,14 +160,14 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.app.processEvents()
 
             overlay = helper.transfer_overlay
-            self.assertEqual(overlay.stop_button.text(), "LOADING")
-            self.assertFalse(overlay.stop_button.isEnabled())
-            self.assertTrue(overlay.stop_button._loading_timer.isActive())
-            self.assertEqual(overlay.stop_button.width(), 96)
+            self.assertEqual(overlay.stop_button.text(), "STOP")
+            self.assertTrue(overlay.stop_button.isEnabled())
+            self.assertTrue(overlay.loading_spinner.timer.isActive())
+            self.assertEqual(overlay.current_label._full_text, "Loading runner...")
 
             with patch.object(helper, "stop") as stop:
                 helper.handle_hotkey()
-            stop.assert_not_called()
+            stop.assert_called_once_with()
 
             helper._handle_worker_output("__HELPER_READY__")
             self.app.processEvents()
@@ -174,7 +176,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertEqual(overlay.stop_button.text(), "STOP")
             self.assertEqual(overlay.stop_button.variant, "danger")
             self.assertTrue(overlay.stop_button.isEnabled())
-            self.assertFalse(overlay.stop_button._loading_timer.isActive())
+            self.assertFalse(overlay.loading_spinner.timer.isActive())
         finally:
             helper.worker_process = None
             helper._set_running_ui(False)
@@ -214,12 +216,12 @@ class ServerTransferHelperUiTests(unittest.TestCase):
 
             overlay = helper.transfer_overlay
             self.assertEqual(
-                overlay.current_label.text(),
-                "Running Acc 1 - Join Resource - 1111",
+                overlay.current_label._full_text,
+                "Acc 1 - Join Resource - 1111",
             )
             self.assertEqual(
-                overlay.upcoming_labels[0].text(),
-                "ready Acc 1 - Verify Tribe Log",
+                overlay.upcoming_labels[0]._full_text,
+                "Acc 1 - Verify Tribe Log",
             )
             self.assertEqual(
                 overlay.log_labels[0]._full_text,
@@ -361,12 +363,44 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         helper = self._transfer_helper(account_count=1)
 
         try:
+            button_texts = [
+                button.text() for button in helper.findChildren(AnimatedButton)
+            ]
             titles = [
                 label.text() for label in helper.findChildren(QLabel, "PanelTitle")
             ]
+            panels = helper.findChildren(QFrame, "Panel")
+            resource_panel = next(
+                panel
+                for panel in panels
+                if any(
+                    label.text() == "RESOURCE"
+                    for label in panel.findChildren(QLabel, "PanelTitle")
+                )
+            )
+            destination_panel = next(
+                panel
+                for panel in panels
+                if any(
+                    label.text() == "DESTINATE"
+                    for label in panel.findChildren(QLabel, "PanelTitle")
+                )
+            )
 
-            self.assertIn("RESOURCE DEDIS", titles)
-            self.assertIn("DESTINATION DEDIS", titles)
+            self.assertNotIn("EXPAND ALL", button_texts)
+            self.assertNotIn("COLLAPSE ALL", button_texts)
+            self.assertIn("RESOURCE", titles)
+            self.assertIn("DESTINATE", titles)
+            self.assertNotIn("RESOURCE DEDIS", titles)
+            self.assertNotIn("DESTINATION DEDIS", titles)
+            self.assertIn(
+                helper.setting_fields["resource_server"],
+                resource_panel.findChildren(QWidget),
+            )
+            self.assertIn(
+                helper.setting_fields["destination_server"],
+                destination_panel.findChildren(QWidget),
+            )
             self.assertEqual(len(helper.resource_dedi_rows), 1)
             self.assertEqual(len(helper.destination_dedi_rows), 1)
         finally:
@@ -748,11 +782,83 @@ class ServerTransferHelperUiTests(unittest.TestCase):
 
             try:
                 helper.setting_fields["resource_server"].setText("1234")
+                helper.setting_fields["destination_server"].setText("5678")
                 helper._persist_settings()
 
                 saved = save_settings.call_args.args[0]
                 self.assertEqual(saved["resource_server"], "1234")
+                self.assertEqual(saved["destination_server"], "5678")
                 self.assertNotIn("account_count", saved)
+            finally:
+                helper.close()
+
+    def test_current_config_does_not_autocalculate_manual_loop_count(self):
+        helper = self._transfer_helper(
+            account_count=2,
+            dedi_items=[
+                {"location": {"yaw": 0, "pitch": 0}, "crouched": False},
+                {"location": {"yaw": 1, "pitch": 1}, "crouched": False},
+                {"location": {"yaw": 2, "pitch": 2}, "crouched": False},
+            ],
+        )
+
+        try:
+            helper.setting_fields["loop_count"].setText("1")
+            config = helper._current_config()
+
+            self.assertEqual(config["settings"]["loop_count"], "1")
+            self.assertEqual(helper.setting_fields["loop_count"].text(), "1")
+            self.assertIn("9 transfer(s)", helper.loop_hint.text())
+        finally:
+            helper.close()
+
+    def test_unrelated_setting_edit_does_not_autocalculate_loop_count(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_settings",
+            side_effect=lambda data: data,
+        ) as save_settings:
+            helper = self._transfer_helper(
+                account_count=2,
+                dedi_items=[
+                    {"location": {"yaw": 0, "pitch": 0}, "crouched": False},
+                    {"location": {"yaw": 1, "pitch": 1}, "crouched": False},
+                    {"location": {"yaw": 2, "pitch": 2}, "crouched": False},
+                ],
+            )
+
+            try:
+                helper.setting_fields["loop_count"].setText("1")
+                helper.setting_fields["steam_restart_interval"].setText("45")
+                helper._persist_settings()
+
+                saved = save_settings.call_args.args[0]
+                self.assertEqual(saved["loop_count"], "1")
+                self.assertEqual(saved["steam_restart_interval"], "45")
+                self.assertEqual(helper.setting_fields["loop_count"].text(), "1")
+            finally:
+                helper.close()
+
+    def test_dedi_entry_edit_autocalculates_loop_count(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_settings",
+            side_effect=lambda data: data,
+        ) as save_settings:
+            helper = self._transfer_helper(
+                account_count=2,
+                dedi_items=[
+                    {"location": {"yaw": 0, "pitch": 0}, "crouched": False},
+                    {"location": {"yaw": 1, "pitch": 1}, "crouched": False},
+                    {"location": {"yaw": 2, "pitch": 2}, "crouched": False},
+                ],
+            )
+
+            try:
+                helper.setting_fields["loop_count"].setText("1")
+                helper.dedi_rows[0]["yaw"].setText("44")
+                helper.dedi_rows[0]["yaw"].editingFinished.emit()
+
+                self.assertEqual(helper.setting_fields["loop_count"].text(), "9")
+                self.assertEqual(save_settings.call_args.args[0]["loop_count"], "9")
             finally:
                 helper.close()
 
@@ -808,9 +914,13 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         try:
             button = helper.destination_same_structure_calculate
 
-            self.assertEqual(button.text(), "CALCULATE")
+            self.assertEqual(button.text(), "CAL")
             self.assertEqual(
                 button.toolTip(),
+                server_transfer_helper_module.SAME_STRUCTURE_TOOLTIP,
+            )
+            self.assertEqual(
+                helper.destination_same_structure_description.text(),
                 server_transfer_helper_module.SAME_STRUCTURE_TOOLTIP,
             )
         finally:
@@ -920,13 +1030,13 @@ class ServerTransferHelperUiTests(unittest.TestCase):
 
     def test_transfer_helper_open_survives_capture_preload_validation_failure(self):
         with patch(
-            "source.launcher.deposit_helper_capture.validate_ark_window",
+            "source.launcher.server_transfer_helper.preload_capture_view_dependencies",
             side_effect=RuntimeError("ARK missing"),
         ):
             helper = self._transfer_helper(account_count=1)
 
         try:
-            self.assertEqual(helper.status.text(), "Ready.")
+            self.assertEqual(helper.status.text(), "Capture preload skipped: ARK missing")
         finally:
             helper.close()
 
@@ -1024,6 +1134,46 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         finally:
             helper.close()
 
+    def test_transfer_start_mode_defaults_to_default(self) -> None:
+        helper = self._transfer_helper(account_count=1)
+        try:
+            mode = helper.setting_fields["transfer_start_mode"]
+            self.assertEqual(mode.currentData(), "default")
+            self.assertIn("Recommended", mode.toolTip())
+            self.assertEqual(mode.toolTip(), helper.transfer_start_mode_label.toolTip())
+            self.assertEqual(
+                mode.toolTip(),
+                helper.transfer_start_mode_description.text(),
+            )
+
+            mode.setCurrentIndex(mode.findData("destinate"))
+
+            self.assertIn("Optional", mode.toolTip())
+            self.assertEqual(mode.toolTip(), helper.transfer_start_mode_label.toolTip())
+            self.assertEqual(
+                mode.toolTip(),
+                helper.transfer_start_mode_description.text(),
+            )
+        finally:
+            helper.close()
+
+    def test_transfer_start_mode_persists_destinate(self) -> None:
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_settings",
+            side_effect=lambda data, *_args, **_kwargs: data,
+        ) as save_settings:
+            helper = self._transfer_helper(account_count=1)
+            try:
+                mode = helper.setting_fields["transfer_start_mode"]
+                mode.setCurrentIndex(mode.findData("destinate"))
+                helper._persist_settings()
+            finally:
+                helper.close()
+
+        self.assertEqual(
+            save_settings.call_args.args[0]["transfer_start_mode"], "destinate"
+        )
+
     def test_auto_join_running_ui_shrinks_and_restores(self):
         with patch(
             "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
@@ -1086,13 +1236,14 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 helper.start()
 
             self.assertTrue(helper.starting)
-            self.assertEqual(helper.start_stop_button.text(), "LOADING")
-            self.assertFalse(helper.start_stop_button.isEnabled())
+            self.assertEqual(helper.start_stop_button.text(), "STOP")
+            self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertTrue(helper.status_spinner.timer.isActive())
             self.assertEqual(helper.status.text(), "Loading auto join modules...")
 
             with patch.object(helper, "stop") as stop:
                 helper.handle_hotkey()
-            stop.assert_not_called()
+            stop.assert_called_once_with()
 
             helper._handle_worker_output("__HELPER_READY__")
             self.app.processEvents()
@@ -1101,6 +1252,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertEqual(helper.start_stop_button.text(), "STOP")
             self.assertEqual(helper.start_stop_button.variant, "danger")
             self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertEqual(
                 helper.status.text(), "Starting auto join for server 5147..."
             )
@@ -1130,7 +1282,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertFalse(helper.starting)
             self.assertEqual(helper.start_stop_button.text(), "START")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertFalse(helper.start_stop_button._loading_timer.isActive())
+            self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertEqual(helper.status.text(), "Cannot start: worker unavailable")
         finally:
             helper.close()
@@ -1196,14 +1348,14 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 helper.start()
 
             self.assertTrue(helper.starting)
-            self.assertEqual(helper.start_stop_button.text(), "LOADING")
-            self.assertFalse(helper.start_stop_button.isEnabled())
-            self.assertTrue(helper.start_stop_button._loading_timer.isActive())
+            self.assertEqual(helper.start_stop_button.text(), "STOP")
+            self.assertTrue(helper.start_stop_button.isEnabled())
+            self.assertTrue(helper.status_spinner.timer.isActive())
             self.assertEqual(helper.status.text(), "Loading fertilizer modules...")
 
             with patch.object(helper, "stop") as stop:
                 helper.handle_hotkey()
-            stop.assert_not_called()
+            stop.assert_called_once_with()
 
             helper._handle_worker_output("__HELPER_READY__")
             self.app.processEvents()
@@ -1212,7 +1364,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertEqual(helper.start_stop_button.text(), "STOP")
             self.assertEqual(helper.start_stop_button.variant, "danger")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertFalse(helper.start_stop_button._loading_timer.isActive())
+            self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertEqual(
                 helper.status.text(), "Aim at a crop plot to refresh fertilizer..."
             )
@@ -1241,7 +1393,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertFalse(helper.starting)
             self.assertEqual(helper.start_stop_button.text(), "START")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertFalse(helper.start_stop_button._loading_timer.isActive())
+            self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertEqual(helper.status.text(), "Cannot start: worker unavailable")
         finally:
             helper.close()
@@ -1286,7 +1438,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertGreaterEqual(idle_height, HELPER_HEIGHT)
             self.assertEqual(
                 [label.text() for label in overlay.upcoming_labels],
-                ["ready task 2", "ready task 3", "ready task 4"],
+                ["task 2", "task 3", "task 4"],
             )
             self.assertEqual(
                 [label._full_text for label in overlay.log_labels],
@@ -1305,6 +1457,43 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertEqual(overlay.height(), idle_height)
             self.assertTrue(overlay.log_divider.isHidden())
             self.assertTrue(all(label.isHidden() for label in overlay.log_labels))
+        finally:
+            overlay.close()
+
+    def test_runner_overlay_loading_mode_is_spinner_only_and_idempotent(self) -> None:
+        owner = SimpleNamespace(
+            screen=Mock(return_value=None),
+            stop_program=Mock(),
+        )
+        overlay = RunnerOverlay(owner)
+
+        try:
+            overlay.show()
+            overlay.refresh_loading(
+                ["09:03:45 - DEBUG - open - should stay hidden while loading"]
+            )
+            self.app.processEvents()
+            loading_height = overlay.height()
+
+            self.assertTrue(overlay.loading_spinner.timer.isActive())
+            self.assertFalse(overlay.loading_spinner.isHidden())
+            self.assertEqual(overlay.current_label._full_text, "Loading runner...")
+            self.assertTrue(all(label.isHidden() for label in overlay.upcoming_labels))
+            self.assertTrue(overlay.log_divider.isHidden())
+            self.assertTrue(all(label.isHidden() for label in overlay.log_labels))
+
+            with patch.object(overlay.loading_spinner.timer, "start") as start:
+                overlay.refresh_loading()
+
+            start.assert_not_called()
+            self.assertEqual(overlay.height(), loading_height)
+
+            overlay.refresh({"running": [{"name": "pego 1"}], "active": [], "waiting": []})
+            self.app.processEvents()
+
+            self.assertFalse(overlay.loading_spinner.timer.isActive())
+            self.assertTrue(overlay.loading_spinner.isHidden())
+            self.assertEqual(overlay.current_label._full_text, "pego 1")
         finally:
             overlay.close()
 

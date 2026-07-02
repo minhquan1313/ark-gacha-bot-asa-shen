@@ -66,6 +66,8 @@ class SettingsGUI(
         self.process = None
         self.program_stopping = False
         self.runner_loading = False
+        self.runner_launch_pending = False
+        self.runner_ready_pending = False
         self.stop_deadline = None
         self.shutdown_started = False
         self.queue_snapshot = {"running": [], "active": [], "waiting": []}

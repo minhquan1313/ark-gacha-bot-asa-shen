@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from source.launcher.components.widgets import AnimatedButton
+from source.launcher.components.widgets import AnimatedButton, LoadingSpinner
 from source.launcher.config.constants import (
     APP_TITLE,
     COLORS,
@@ -145,6 +145,7 @@ class RunnerOverlay(QWidget):
         self.drag_position = None
         self.upcoming_labels = []
         self.log_labels = []
+        self.loading_active = False
 
         self.setObjectName("RunnerOverlayWindow")
         self.setWindowTitle(f"{APP_TITLE} Runner")
@@ -245,7 +246,13 @@ class RunnerOverlay(QWidget):
 
         self.current_label = _ElidedLabel("Waiting for running task...")
         self.current_label.setObjectName("RunnerOverlayCurrent")
-        layout.addWidget(self.current_label)
+        self.loading_spinner = LoadingSpinner()
+        loading_row = QHBoxLayout()
+        loading_row.setContentsMargins(0, 0, 0, 0)
+        loading_row.setSpacing(8)
+        loading_row.addWidget(self.loading_spinner)
+        loading_row.addWidget(self.current_label, 1)
+        layout.addLayout(loading_row)
 
         for _ in range(RUNNER_OVERLAY_UPCOMING_LIMIT):
             label = _ElidedLabel()
@@ -267,6 +274,8 @@ class RunnerOverlay(QWidget):
             layout.addWidget(label)
 
     def refresh(self, snapshot: dict, log_lines: list[str] | None = None) -> None:
+        self.loading_active = False
+        self.loading_spinner.stop()
         self.clock_label.setText(time.strftime("%H:%M:%S"))
         current, upcoming = format_runner_overlay(snapshot)
         self.current_label.setText(current)
@@ -284,6 +293,21 @@ class RunnerOverlay(QWidget):
                 label.show()
             else:
                 label.hide()
+        self._resize_to_content_height()
+        self._position_set()
+
+    def refresh_loading(self, log_lines: list[str] | None = None) -> None:
+        if self.loading_active:
+            return
+        self.loading_active = True
+        self.clock_label.setText(time.strftime("%H:%M:%S"))
+        self.current_label.setText("Loading runner...")
+        self.loading_spinner.start()
+        for label in self.upcoming_labels:
+            label.hide()
+        self.log_divider.hide()
+        for label in self.log_labels:
+            label.hide()
         self._resize_to_content_height()
         self._position_set()
 

@@ -16,7 +16,6 @@ pyautogui.FAILSAFE = False
 
 
 focus_window_task = None
-RUNNER_READY_MESSAGE = "__RUNNER_READY__"
 
 
 def focus_window(window_title=GAME_WINDOW_TITLE, interval=5.0, is_repeat_once=False):
@@ -53,31 +52,46 @@ async def cancel_focus_window():
         await task
 
 
+async def prepare_bot():
+    """Prepare scheduler and game focus before the bot starts executing tasks."""
+    print("[INFO] Offline runner starting.")
+
+    import task_manager
+
+    await asyncio.to_thread(task_manager.prepare)
+
+    # Reset mouse position to center of the screen to prevent unintended movements when starting the program.
+    windows.move_mouse(1920 // 2, 1080 // 2)
+
+    if settings.allow_focus_ark_window:
+        focus_window(GAME_WINDOW_TITLE, settings.focus_ark_window_interval)
+        print(
+            f"[INFO] {GAME_WINDOW_TITLE} auto-focus enabled every {max(0.1, settings.focus_ark_window_interval)} seconds."
+        )
+    else:
+        print(f"[INFO] {GAME_WINDOW_TITLE} auto-focus disabled.")
+        focus_window(GAME_WINDOW_TITLE, is_repeat_once=True)
+
+    return task_manager
+
+
+async def run_bot(task_manager):
+    """Run the prepared task scheduler."""
+    await asyncio.to_thread(task_manager.run)
+
+
+async def shutdown_bot():
+    """Stop background helpers owned by the bot process."""
+    await cancel_focus_window()
+    stop_debug_screenshot_worker()
+
+
 async def main():
     try:
-        print("[INFO] Offline runner starting.")
-
-        import task_manager
-
-        await asyncio.to_thread(task_manager.prepare)
-        print(RUNNER_READY_MESSAGE, flush=True)
-
-        # Reset mouse position to center of the screen to prevent unintended movements when starting the program.
-        windows.move_mouse(1920 // 2, 1080 // 2)
-
-        if settings.allow_focus_ark_window:
-            focus_window(GAME_WINDOW_TITLE, settings.focus_ark_window_interval)
-            print(
-                f"[INFO] {GAME_WINDOW_TITLE} auto-focus enabled every {max(0.1, settings.focus_ark_window_interval)} seconds."
-            )
-        else:
-            print(f"[INFO] {GAME_WINDOW_TITLE} auto-focus disabled.")
-            focus_window(GAME_WINDOW_TITLE, is_repeat_once=True)
-
-        await asyncio.to_thread(task_manager.run)
+        task_manager = await prepare_bot()
+        await run_bot(task_manager)
     finally:
-        await cancel_focus_window()
-        stop_debug_screenshot_worker()
+        await shutdown_bot()
 
 
 if __name__ == "__main__":

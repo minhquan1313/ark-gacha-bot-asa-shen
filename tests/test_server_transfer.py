@@ -277,6 +277,39 @@ class ServerTransferRunnerTests(unittest.TestCase):
         )
         self.assertNotIn("Server transfer helper finished.", status)
 
+    def test_destinate_mode_starts_at_destination_loop(self):
+        config = ready_config()
+        config["settings"]["transfer_start_mode"] = "destinate"
+        status = []
+        snapshots = []
+
+        with runtime_dependencies() as dependencies:
+            self.assertTrue(
+                run_transfer_helper(
+                    config,
+                    status_callback=status.append,
+                    task_callback=snapshots.append,
+                )
+            )
+
+        self.assertEqual(
+            status[0], "Starting destination transfer phase from filled characters."
+        )
+        dependencies.verify_tribelog.assert_not_called()
+        dependencies.withdraw_from_transfer_dedis.assert_not_called()
+        dependencies.go_back_to_bed.assert_not_called()
+        dependencies.leave_tekpod.assert_called_once()
+        dependencies.deposit_to_transfer_dedis.assert_called_once()
+        dependencies.enter_tekpod.assert_called_once()
+        self.assertEqual(dependencies.join_server.call_count, 1)
+        self.assertEqual(
+            [call_args.args[0] for call_args in dependencies.transfer_to_server.call_args_list],
+            ["2222", "1111"],
+        )
+        self.assertEqual(
+            snapshots[0]["running"][0]["name"], "Acc 1 L1 - Ensure ARK Ready"
+        )
+
     def test_task_snapshots_track_dependency_actions_and_next_three(self):
         config = ready_config()
         config["settings"]["loop_count"] = 2

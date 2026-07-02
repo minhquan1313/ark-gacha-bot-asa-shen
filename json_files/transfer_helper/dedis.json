@@ -4,22 +4,22 @@
     "items": [
       {
         "location": {
-          "yaw": -112.28,
-          "pitch": -19.58
+          "yaw": 22.26,
+          "pitch": -22.61
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": -114.03,
-          "pitch": 9.94
+          "yaw": 22.26,
+          "pitch": 12.39
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": -116.66,
-          "pitch": 17.12
+          "yaw": 22.26,
+          "pitch": 12.39
         },
         "crouched": false
       }
@@ -30,22 +30,22 @@
     "items": [
       {
         "location": {
-          "yaw": -132.15,
-          "pitch": -19.58
+          "yaw": -117.68,
+          "pitch": -22.61
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": -133.9,
-          "pitch": 9.94
+          "yaw": -117.68,
+          "pitch": 12.39
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": -136.53,
-          "pitch": 17.12
+          "yaw": -117.68,
+          "pitch": 12.39
         },
         "crouched": false
       }

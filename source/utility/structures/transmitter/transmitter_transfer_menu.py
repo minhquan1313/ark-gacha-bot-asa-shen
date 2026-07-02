@@ -90,7 +90,7 @@ def is_server_list_loaded():
 
 
 def is_server_join_success():
-    return template.check_template("server_trans_success", 0.8)
+    return template.check_template("server_trans_uploaded", 0.8)
 
 
 def is_join_button_visible():
@@ -197,7 +197,9 @@ def has_failure():
 def do_join_server(server: str):
     if not is_open():
         time.sleep(0.5)
-        print("calling joined_server")
+        logs.logger.debug(
+            "Don't detect transmitter server menu, maybe already joined server, checking..."
+        )
         return success.joined_server()
 
     dl = utils_simple.get_default_clock()
@@ -220,7 +222,6 @@ def do_join_server(server: str):
 
     windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
 
-    time.sleep(0.2)
     if not template.template_await_true(template.check_transfer_server_orange, 1):
         logs.logger.warning(
             "orange pixel for transmitter server not found likely server is shutdown"
@@ -228,8 +229,8 @@ def do_join_server(server: str):
         return False
     else:
         logs.logger.debug("Orange detected, ready for transfer")
-        time.sleep(0.2)
-        if is_join_button_visible():
+
+        if template.template_await_true(is_join_button_visible, 1):
             windows.click(
                 get_pixel_loc("join_button_x"), get_pixel_loc("join_button_y")
             )
@@ -260,23 +261,31 @@ def do_join_server(server: str):
 
                     break
 
-                if template.template_await_true(is_server_join_success, 3):
+                if template.template_await_true(is_server_join_success, 5):
                     player_state.uploaded = True
                     logs.logger.warning("Detected Survival UPLOADED")
 
                     time.sleep(2)
-                    search_bar_search("Joining...")
+
+                    if is_open():
+                        search_bar_search("Joining...")
 
                     if template.template_await_true(bed.is_open, 30):  # noqa: SIM103
                         # Return False intentionally to trigger one additional verification cycle.
                         return False
                     else:
                         # Return True to exit when the upload succeeded but the destination server never loaded.
+                        console.console_exit_mainmenu()
                         return True
+                elif bed.is_open():
+                    logs.logger.warning("Detected Survival UPLOADED")
+                    player_state.uploaded = True
+                    return True
                 else:
                     has_failure()
-                    time.sleep(1)
+
                     if is_open():
+                        time.sleep(0.2)
                         windows.click(
                             get_pixel_loc("first_server_x"),
                             get_pixel_loc("first_server_y"),

@@ -52,6 +52,7 @@ class TransferHelperConfigTests(unittest.TestCase):
             self.assertTrue(path.exists())
             self.assertEqual(settings["resource_server"], "0")
             self.assertEqual(settings["destination_server"], "0")
+            self.assertEqual(settings["transfer_start_mode"], "default")
             self.assertEqual(settings["ark_window_ready_timeout"], 120)
             self.assertEqual(settings["ark_launch_attempts"], 10)
             self.assertEqual(settings["steam_restart_interval"], 30)
@@ -70,6 +71,18 @@ class TransferHelperConfigTests(unittest.TestCase):
             normalize_transfer_settings({"ark_window_ready_timeout": 0})
         with self.assertRaisesRegex(ValueError, "steam_restart_interval"):
             normalize_transfer_settings({"steam_restart_interval": 0})
+        self.assertEqual(
+            normalize_transfer_settings({"transfer_start_mode": "nope"})[
+                "transfer_start_mode"
+            ],
+            "default",
+        )
+        self.assertEqual(
+            normalize_transfer_settings({"transfer_start_mode": "destinate"})[
+                "transfer_start_mode"
+            ],
+            "destinate",
+        )
 
     def test_load_settings_migrates_missing_steam_restart_interval(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -80,7 +93,9 @@ class TransferHelperConfigTests(unittest.TestCase):
             saved = path.read_text(encoding="utf-8")
 
         self.assertEqual(settings["steam_restart_interval"], 30)
+        self.assertEqual(settings["transfer_start_mode"], "default")
         self.assertIn('"steam_restart_interval": 30', saved)
+        self.assertIn('"transfer_start_mode": "default"', saved)
 
     def test_player_bed_names_add_underscore_only_for_search_collision(self):
         self.assertEqual(

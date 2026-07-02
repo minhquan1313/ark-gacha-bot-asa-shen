@@ -78,6 +78,39 @@ class WrappedStatusLabel(QLabel):
             self.updateGeometry()
 
 
+class LoadingSpinner(QWidget):
+    """Paint a compact rotating spinner for launcher loading states."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.angle = 0
+        self.timer = QTimer(self)
+        self.timer.setInterval(80)
+        self.timer.timeout.connect(self._advance)
+        self.setFixedSize(18, 18)
+        self.hide()
+
+    def start(self) -> None:
+        if not self.timer.isActive():
+            self.timer.start()
+        self.show()
+
+    def stop(self) -> None:
+        self.timer.stop()
+        self.hide()
+
+    def _advance(self) -> None:
+        self.angle = (self.angle + 30) % 360
+        self.update()
+
+    def paintEvent(self, event: QPaintEvent) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        painter.setPen(QPen(QColor(COLORS["cyan"]), 2.2))
+        painter.drawArc(rect, -self.angle * 16, 270 * 16)
+
+
 class ClickableTextEdit(QTextEdit):
     copied = Signal()
 

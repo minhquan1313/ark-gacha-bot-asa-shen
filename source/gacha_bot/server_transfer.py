@@ -113,29 +113,31 @@ def _transfer_task_label(
 def _transfer_task_plan(settings: dict, players: dict, account_count: int) -> list[str]:
     """Build the normal-path dependency action plan for a transfer run."""
     tasks = []
-    for account in range(1, account_count + 1):
-        if account_count > 1:
-            tasks.append(
-                _transfer_task_label(
-                    account, "Switch Steam", _steam_account(players, account)
+    start_mode = str(settings.get("transfer_start_mode", "default")).strip().lower()
+    if start_mode != "destinate":
+        for account in range(1, account_count + 1):
+            if account_count > 1:
+                tasks.append(
+                    _transfer_task_label(
+                        account, "Switch Steam", _steam_account(players, account)
+                    )
                 )
+            tasks.extend(
+                [
+                    _transfer_task_label(account, "Ensure ARK Ready"),
+                    _transfer_task_label(account, "Check Menu State"),
+                    _transfer_task_label(
+                        account, "Join Resource", str(settings["resource_server"])
+                    ),
+                    _transfer_task_label(account, "Verify Tribe Log"),
+                    _transfer_task_label(account, "Check Player State"),
+                    _transfer_task_label(account, "Withdraw Resources"),
+                    _transfer_task_label(
+                        account, "Going back to Tekpod", _bed_name(players, account)
+                    ),
+                    _transfer_task_label(account, "Enter Tekpod"),
+                ]
             )
-        tasks.extend(
-            [
-                _transfer_task_label(account, "Ensure ARK Ready"),
-                _transfer_task_label(account, "Check Menu State"),
-                _transfer_task_label(
-                    account, "Join Resource", str(settings["resource_server"])
-                ),
-                _transfer_task_label(account, "Verify Tribe Log"),
-                _transfer_task_label(account, "Check Player State"),
-                _transfer_task_label(account, "Withdraw Resources"),
-                _transfer_task_label(
-                    account, "Going back to Tekpod", _bed_name(players, account)
-                ),
-                _transfer_task_label(account, "Enter Tekpod"),
-            ]
-        )
 
     loop_count = int(settings["loop_count"])
     for loop_number in range(1, loop_count + 1):
@@ -272,94 +274,98 @@ def run_transfer_helper(
         if status_callback is not None:
             status_callback(message)
 
-    emit("Starting resource fill phase.")
-    for account in accounts:
-        global_settings.station_yaw = float(settings["resource_station_yaw"])
-        if account_count > 1:
+    start_mode = str(settings.get("transfer_start_mode", "default")).strip().lower()
+    if start_mode == "destinate":
+        emit("Starting destination transfer phase from filled characters.")
+    else:
+        emit("Starting resource fill phase.")
+        for account in accounts:
+            global_settings.station_yaw = float(settings["resource_station_yaw"])
+            if account_count > 1:
+                task_tracker.start(
+                    _transfer_task_label(
+                        account, "Switch Steam", _steam_account(players, account)
+                    )
+                )
+                current_steam_account = switch_steam_account(
+                    account,
+                    current_steam_account,
+                    players,
+                    ui_coords,
+                    status_callback,
+                    steam_restart_interval=settings.get("steam_restart_interval", 30),
+                )
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(_transfer_task_label(account, "Ensure ARK Ready"))
+            if ensure_ark_running(status_callback, settings, ui_coords) is False:
+                return False
+
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            emit(
+                f"Account {account}: joining resource server {settings['resource_server']}."
+            )
             task_tracker.start(
                 _transfer_task_label(
-                    account, "Switch Steam", _steam_account(players, account)
+                    account, "Join Resource", str(settings["resource_server"])
                 )
             )
-            current_steam_account = switch_steam_account(
-                account,
-                current_steam_account,
-                players,
-                ui_coords,
-                status_callback,
-                steam_restart_interval=settings.get("steam_restart_interval", 30),
-            )
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(_transfer_task_label(account, "Ensure ARK Ready"))
-        if ensure_ark_running(status_callback, settings, ui_coords) is False:
-            return False
-
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        emit(
-            f"Account {account}: joining resource server {settings['resource_server']}."
-        )
-        task_tracker.start(
-            _transfer_task_label(
-                account, "Join Resource", str(settings["resource_server"])
-            )
-        )
-        if not join_server(settings["resource_server"], status_callback):
-            if account_count == 1:
+            if not join_server(settings["resource_server"], status_callback):
+                if account_count == 1:
+                    emit(
+                        "Account 1: resource join did not complete; stopping without "
+                        "closing ARK."
+                    )
+                    return False
                 emit(
-                    "Account 1: resource join did not complete; stopping without "
-                    "closing ARK."
+                    f"Account {account}: resource join did not complete; skipping account."
                 )
-                return False
-            emit(
-                f"Account {account}: resource join did not complete; skipping account."
-            )
-            continue
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(_transfer_task_label(account, "Check Menu State"))
-        if shared.was_in_mainmenu:
-            task_tracker.insert_after(
-                _transfer_task_label(account, "Verify Tribe Log"),
-                _transfer_task_label(account, "Wait Resource Structures"),
-            )
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(_transfer_task_label(account, "Verify Tribe Log"))
-        if not verify_tribelog():
-            if account_count == 1:
+                continue
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(_transfer_task_label(account, "Check Menu State"))
+            if shared.was_in_mainmenu:
+                task_tracker.insert_after(
+                    _transfer_task_label(account, "Verify Tribe Log"),
+                    _transfer_task_label(account, "Wait Resource Structures"),
+                )
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(_transfer_task_label(account, "Verify Tribe Log"))
+            if not verify_tribelog():
+                if account_count == 1:
+                    emit(
+                        "Account 1: tribe log unavailable on resource server; "
+                        "stopping so you can recover the character manually."
+                    )
+                    return False
                 emit(
-                    "Account 1: tribe log unavailable on resource server; "
-                    "stopping so you can recover the character manually."
+                    f"Account {account}: tribe log unavailable on resource server; "
+                    "assuming character is elsewhere and skipping."
                 )
-                return False
-            emit(
-                f"Account {account}: tribe log unavailable on resource server; "
-                "assuming character is elsewhere and skipping."
+                continue
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            if shared.was_in_mainmenu:
+                task_tracker.start(
+                    _transfer_task_label(account, "Wait Resource Structures")
+                )
+                time.sleep(int(settings["structure_load_delay"]))
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(_transfer_task_label(account, "Check Player State"))
+            check_transfer_player_state(
+                settings, players, account, settings["resource_server"]
             )
-            continue
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        if shared.was_in_mainmenu:
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(_transfer_task_label(account, "Withdraw Resources"))
+            if withdraw_from_transfer_dedis(dedis, settings, players, account) is False:
+                return False
+            # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(
-                _transfer_task_label(account, "Wait Resource Structures")
+                _transfer_task_label(
+                    account, "Going back to Tekpod", _bed_name(players, account)
+                )
             )
-            time.sleep(int(settings["structure_load_delay"]))
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(_transfer_task_label(account, "Check Player State"))
-        check_transfer_player_state(
-            settings, players, account, settings["resource_server"]
-        )
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(_transfer_task_label(account, "Withdraw Resources"))
-        if withdraw_from_transfer_dedis(dedis, settings, players, account) is False:
-            return False
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(
-            _transfer_task_label(
-                account, "Going back to Tekpod", _bed_name(players, account)
-            )
-        )
-        go_back_to_bed(_bed_name(players, account))
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(_transfer_task_label(account, "Enter Tekpod"))
-        enter_tekpod()
+            go_back_to_bed(_bed_name(players, account))
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(_transfer_task_label(account, "Enter Tekpod"))
+            enter_tekpod()
 
     # Starting loop of go to [des -> deposit -> go back -> withdraw]
     for loop_number in range(1, int(settings["loop_count"]) + 1):
@@ -405,12 +411,15 @@ def run_transfer_helper(
                 emit(f"Account {account}: resource join failed; stopping.")
                 return False
             # -=-=-=-=-=-=-=-=-=-=-=-=
-            task_tracker.start(
-                _transfer_task_label(
-                    account, "Wait Resource Structures", loop_number=loop_number
+            if start_mode == "default" or shared.was_in_mainmenu:
+                task_tracker.start(
+                    _transfer_task_label(
+                        account, "Wait Resource Structures", loop_number=loop_number
+                    )
                 )
-            )
-            time.sleep(int(settings["structure_load_delay"]))
+                time.sleep(int(settings["structure_load_delay"]))
+            else:
+                pass
             # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(
                 _transfer_task_label(account, "Leave Tekpod", loop_number=loop_number)

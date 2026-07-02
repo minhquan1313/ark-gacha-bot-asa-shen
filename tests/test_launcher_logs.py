@@ -1,6 +1,8 @@
 import ctypes
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -109,6 +111,32 @@ class LauncherLogTests(unittest.TestCase):
         SettingsGUI.append_log(self.launcher, "[INFO] live log message\n")
 
         self.launcher._sync_runner_overlay.assert_called_once_with()
+
+    def test_live_log_during_loading_keeps_overlay_loading_only(self):
+        overlay = Mock()
+        launcher = SimpleNamespace(
+            shutdown_started=False,
+            log_lines=[],
+            current_filter="ALL",
+            active_count=0,
+            waiting_count=0,
+            last_activity="--:--:--",
+            _render_logs=Mock(),
+            runner_loading=True,
+            program_stopping=False,
+            runner_overlay=overlay,
+            is_program_running=Mock(return_value=True),
+            _show_runner_overlay=Mock(),
+            _hide_runner_overlay=Mock(),
+        )
+        launcher._sync_runner_overlay = MethodType(
+            SettingsGUI._sync_runner_overlay, launcher
+        )
+
+        SettingsGUI.append_log(launcher, "[INFO] live log message\n")
+
+        overlay.refresh_loading.assert_not_called()
+        launcher._show_runner_overlay.assert_not_called()
 
     def test_running_filter_shows_history_and_current_task(self):
         self.launcher.running_history = ["[RUNNING] STARTED   gacha"]
@@ -514,6 +542,10 @@ class LauncherDashboardTests(unittest.TestCase):
 
 
 class LauncherStartProgramTests(unittest.TestCase):
+    def attach_runner_ready_methods(self, launcher):
+        method = getattr(SettingsGUI, "_reveal_runner_overlay_if_ready")
+        setattr(launcher, "_reveal_runner_overlay_if_ready", MethodType(method, launcher))
+
     def make_launcher(self, ark_window_ok=True):
         return SimpleNamespace(
             shutdown_started=False,
@@ -527,6 +559,7 @@ class LauncherStartProgramTests(unittest.TestCase):
             start_log_tail=Mock(),
             read_output=Mock(),
             dialog=Mock(),
+            _launch_program_process=Mock(),
             _show_runner_overlay=Mock(),
             _hide_runner_overlay=Mock(),
             output_reader_stop=None,
@@ -534,38 +567,65 @@ class LauncherStartProgramTests(unittest.TestCase):
             log_lines=[],
             queue_snapshot={"running": [], "active": [], "waiting": []},
             running_task_name=None,
+            runner_launch_pending=False,
+            runner_ready_pending=False,
         )
 
-    def test_start_program_shows_loading_overlay_before_launching_process(self):
+    def test_start_program_shows_loading_overlay_and_defers_launch(self):
         launcher = self.make_launcher()
-        events = []
-        launcher._show_runner_overlay.side_effect = lambda: events.append("overlay")
-        process = Mock()
-        thread = Mock()
-
-        def cleanup():
-            events.append("cleanup")
-
-        def popen(*_args, **_kwargs):
-            events.append("popen")
-            return process
-
         with (
             patch(
-                "source.launcher.gui_parts.runtime.cleanup_debug_screenshots_on_program_start",
-                side_effect=cleanup,
-            ) as cleanup_mock,
-            patch("source.launcher.gui_parts.runtime.subprocess.Popen", side_effect=popen),
-            patch("source.launcher.gui_parts.runtime.threading.Thread", return_value=thread),
+                "source.launcher.gui_parts.runtime.QTimer.singleShot"
+            ) as single_shot,
+            patch("source.launcher.gui_parts.runtime.subprocess.Popen") as popen,
         ):
             SettingsGUI.start_program(launcher)
 
-        cleanup_mock.assert_called_once_with()
-        self.assertEqual(events, ["overlay", "cleanup", "popen", "overlay"])
-        launcher.close_external_helpers.assert_called_once_with()
-        thread.start.assert_called_once_with()
         self.assertTrue(launcher.runner_loading)
-        self.assertEqual(launcher._show_runner_overlay.call_count, 2)
+        self.assertTrue(launcher.runner_launch_pending)
+        launcher._show_runner_overlay.assert_called_once_with()
+        launcher._update_start_stop_button.assert_called_once_with()
+        single_shot.assert_called_once_with(120, launcher._launch_program_process)
+        launcher.close_external_helpers.assert_not_called()
+        popen.assert_not_called()
+
+    def test_deferred_launch_starts_wrapper_process(self):
+        launcher = self.make_launcher()
+        launcher.runner_loading = True
+        launcher.runner_launch_pending = True
+        process = Mock()
+        thread = Mock()
+
+        with (
+            patch(
+                "source.launcher.gui_parts.runtime.cleanup_debug_screenshots_on_program_start"
+            ) as cleanup,
+            patch("source.launcher.gui_parts.runtime.subprocess.Popen", return_value=process) as popen,
+            patch("source.launcher.gui_parts.runtime.threading.Thread", return_value=thread),
+        ):
+            SettingsGUI._launch_program_process(launcher)
+
+        cleanup.assert_called_once_with()
+        launcher.close_external_helpers.assert_called_once_with()
+        self.assertEqual(
+            popen.call_args.args[0],
+            [sys.executable, "-u", "-m", "source.launcher.runner_process"],
+        )
+        self.assertEqual(popen.call_args.kwargs["stdin"], subprocess.PIPE)
+        thread.start.assert_called_once_with()
+        self.assertFalse(launcher.runner_launch_pending)
+
+    def test_stop_program_cancels_pending_runner_launch(self):
+        launcher = self.make_launcher()
+        launcher.runner_loading = True
+        launcher.runner_launch_pending = True
+
+        SettingsGUI.stop_program(launcher)
+
+        self.assertFalse(launcher.runner_loading)
+        self.assertFalse(launcher.runner_launch_pending)
+        launcher._hide_runner_overlay.assert_called_once_with()
+        launcher.append_log.assert_called_once_with("[WARN] Runner startup cancelled.\n")
 
     def test_start_program_does_not_clean_when_ark_window_validation_fails(self):
         launcher = self.make_launcher(ark_window_ok=False)
@@ -649,7 +709,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         overlay.show.assert_called_once_with()
         overlay.raise_.assert_called_once_with()
 
-    def test_show_runner_overlay_displays_loading_state(self) -> None:
+    def test_show_runner_overlay_displays_loading_state_with_stop_enabled(self) -> None:
         launcher = SimpleNamespace(
             process=None,
             program_stopping=False,
@@ -658,34 +718,132 @@ class LauncherStartProgramTests(unittest.TestCase):
             queue_snapshot={"running": [{"name": "stale task"}]},
             log_lines=["[INFO] stale log"],
             is_program_running=Mock(return_value=True),
+            _hide_runner_overlay=Mock(),
         )
         overlay = Mock()
 
         with patch("source.launcher.gui_parts.runtime.RunnerOverlay", return_value=overlay):
             SettingsGUI._show_runner_overlay(launcher)
 
-        overlay.refresh.assert_called_once_with(
-            {
-                "running": [{"name": "Loading runner..."}],
-            },
-            [],
-        )
-        overlay.stop_button.set_loading.assert_called_once_with(True)
+        overlay.refresh_loading.assert_called_once_with()
+        overlay.stop_button.setEnabled.assert_called_once_with(True)
+        overlay.stop_button.set_loading.assert_not_called()
+        overlay.show.assert_called_once_with()
 
-    def test_runner_ready_reveals_collected_overlay_content(self) -> None:
+    def test_sync_runner_overlay_during_loading_does_not_refresh_existing_overlay(self):
+        overlay = Mock()
         launcher = SimpleNamespace(
             runner_loading=True,
-            process=Mock(),
+            program_stopping=False,
+            runner_overlay=overlay,
+            is_program_running=Mock(return_value=True),
+            _show_runner_overlay=Mock(),
+            _hide_runner_overlay=Mock(),
+        )
+
+        SettingsGUI._sync_runner_overlay(launcher)
+
+        launcher._show_runner_overlay.assert_not_called()
+        overlay.refresh_loading.assert_not_called()
+
+    def test_runner_ready_reveals_collected_overlay_content_and_acks(self) -> None:
+        stdin = Mock()
+        process = Mock(stdin=stdin)
+        process.poll.return_value = None
+        launcher = SimpleNamespace(
+            runner_loading=True,
+            runner_ready_pending=False,
+            process=process,
             queue_snapshot={"running": [{"name": "pego 1"}]},
             log_lines=["[DEBUG] 09:03:45 - DEBUG - open - inventory opened"],
             is_program_running=Mock(return_value=True),
             _show_runner_overlay=Mock(),
+            append_log=Mock(),
         )
+        self.attach_runner_ready_methods(launcher)
+
+        with patch("source.launcher.gui_parts.runtime.QApplication.processEvents") as events:
+            SettingsGUI._on_runner_ready(launcher)
+
+        self.assertFalse(launcher.runner_loading)
+        self.assertFalse(launcher.runner_ready_pending)
+        launcher._show_runner_overlay.assert_called_once_with()
+        events.assert_called_once_with()
+        stdin.write.assert_called_once_with("__RUNNER_OVERLAY_READY__\n")
+        stdin.flush.assert_called_once_with()
+
+    def test_runner_ready_waits_for_queue_state_before_ack(self) -> None:
+        stdin = Mock()
+        process = Mock(stdin=stdin)
+        process.poll.return_value = None
+        launcher = SimpleNamespace(
+            runner_loading=True,
+            runner_ready_pending=False,
+            process=process,
+            queue_snapshot={"running": [], "active": [], "waiting": []},
+            log_lines=[],
+            is_program_running=Mock(return_value=True),
+            _show_runner_overlay=Mock(),
+            append_log=Mock(),
+        )
+        self.attach_runner_ready_methods(launcher)
 
         SettingsGUI._on_runner_ready(launcher)
 
+        self.assertTrue(launcher.runner_loading)
+        self.assertTrue(launcher.runner_ready_pending)
+        launcher._show_runner_overlay.assert_not_called()
+        stdin.write.assert_not_called()
+
+    def test_queue_snapshot_completes_pending_runner_ready(self) -> None:
+        stdin = Mock()
+        process = Mock(stdin=stdin)
+        process.poll.return_value = None
+        launcher = SimpleNamespace(
+            runner_loading=True,
+            runner_ready_pending=True,
+            process=process,
+            queue_snapshot={"running": [], "active": [], "waiting": []},
+            running_history=[],
+            running_task_name=None,
+            log_lines=[],
+            is_program_running=Mock(return_value=True),
+            _show_runner_overlay=Mock(),
+            _sync_runner_overlay=Mock(),
+            append_log=Mock(),
+        )
+        self.attach_runner_ready_methods(launcher)
+
+        with patch("source.launcher.gui_parts.runtime.QApplication.processEvents"):
+            SettingsGUI._update_queue_snapshot(
+                launcher, {"running": [{"name": "pego 1"}], "active": [], "waiting": []}
+            )
+
         self.assertFalse(launcher.runner_loading)
         launcher._show_runner_overlay.assert_called_once_with()
+        stdin.write.assert_called_once_with("__RUNNER_OVERLAY_READY__\n")
+
+    def test_runner_ready_does_not_ack_stopped_process(self) -> None:
+        stdin = Mock()
+        process = Mock(stdin=stdin)
+        process.poll.return_value = 1
+        launcher = SimpleNamespace(
+            runner_loading=True,
+            runner_ready_pending=False,
+            process=process,
+            queue_snapshot={"running": [{"name": "pego 1"}]},
+            log_lines=[],
+            is_program_running=Mock(return_value=False),
+            _show_runner_overlay=Mock(),
+            append_log=Mock(),
+        )
+        self.attach_runner_ready_methods(launcher)
+
+        SettingsGUI._on_runner_ready(launcher)
+
+        self.assertTrue(launcher.runner_loading)
+        launcher._show_runner_overlay.assert_not_called()
+        stdin.write.assert_not_called()
 
     def test_output_reader_emits_runner_ready_for_ready_marker(self) -> None:
         launcher = SimpleNamespace(

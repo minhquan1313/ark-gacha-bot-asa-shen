@@ -11,6 +11,9 @@ except ImportError:
 
 import contextlib
 
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+
 from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.utils.deposit_helper_capture import (
     register_shift_alt_n_hotkey,
@@ -29,7 +32,9 @@ from source.launcher.utils.system import (
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
 
 START_GAME_DISABLE_DELAY = 10000
+RUNNER_LAUNCH_DELAY_MS = 120
 RUNNER_READY_MESSAGE = "__RUNNER_READY__"
+RUNNER_OVERLAY_READY_MESSAGE = "__RUNNER_OVERLAY_READY__"
 
 
 class RuntimeGuiMixin:
@@ -76,7 +81,7 @@ class RuntimeGuiMixin:
         if self.program_stopping:
             target_text = "STOPPING..."
             target_variant = "secondary"
-        elif self.is_program_running():
+        elif getattr(self, "runner_loading", False) or self.is_program_running():
             target_text = "STOP PROGRAM"
             target_variant = "danger"
         else:
@@ -107,11 +112,35 @@ class RuntimeGuiMixin:
             self.queue_snapshot = {"running": [], "active": [], "waiting": []}
             self.running_task_name = None
             self.runner_loading = True
+            self.runner_launch_pending = True
+            self.runner_ready_pending = False
             self._show_runner_overlay()
+            self._update_start_stop_button()
+            QTimer.singleShot(RUNNER_LAUNCH_DELAY_MS, self._launch_program_process)
+        except Exception as exc:
+            self.runner_loading = False
+            self.runner_launch_pending = False
+            self.runner_ready_pending = False
+            self._hide_runner_overlay()
+            self._update_start_stop_button()
+            self.dialog("Start Failed", str(exc), "error")
+
+    def _launch_program_process(self):
+        if (
+            self.shutdown_started
+            or self.program_stopping
+            or not self.runner_launch_pending
+            or not self.runner_loading
+        ):
+            return
+
+        try:
+            self.runner_launch_pending = False
             self.close_external_helpers()
             cleanup_debug_screenshots_on_program_start()
             self.process = subprocess.Popen(
-                [sys.executable, "-u", "main_program.py"],
+                [sys.executable, "-u", "-m", "source.launcher.runner_process"],
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -126,13 +155,25 @@ class RuntimeGuiMixin:
                 target=self.read_output, args=(self.process,), daemon=True
             )
             self.output_reader_thread.start()
-            self._show_runner_overlay()
         except Exception as exc:
             self.runner_loading = False
+            self.runner_launch_pending = False
+            self.runner_ready_pending = False
             self._hide_runner_overlay()
+            self._update_start_stop_button()
             self.dialog("Start Failed", str(exc), "error")
 
     def stop_program(self):
+        if self.runner_loading and (
+            self.process is None or self.process.poll() is not None
+        ):
+            self.runner_launch_pending = False
+            self.runner_ready_pending = False
+            self.runner_loading = False
+            self.append_log("[WARN] Runner startup cancelled.\n")
+            self._update_start_stop_button()
+            self._hide_runner_overlay()
+            return
         if self.process and self.process.poll() is None:
             self.program_stopping = True
             self.stop_deadline = time.time() + 5
@@ -158,12 +199,14 @@ class RuntimeGuiMixin:
         self._close_output_reader(self.process)
         self.process = None
         self.runner_loading = False
+        self.runner_launch_pending = False
         self.program_stopping = False
         self.stop_deadline = None
         if was_stopping:
             self.append_log("[WARN] Program stopped.\n")
         elif was_loading:
             self.append_log("[ERROR] Runner stopped before it finished loading.\n")
+        self.runner_ready_pending = False
         self._update_start_stop_button()
         self._hide_runner_overlay()
 
@@ -178,15 +221,12 @@ class RuntimeGuiMixin:
             if overlay is None:
                 overlay = RunnerOverlay(self)
                 self.runner_overlay = overlay
+            overlay.stop_button.setText("STOP")
+            overlay.stop_button.set_variant("danger")
+            overlay.stop_button.setEnabled(True)
             if self.runner_loading:
-                overlay.stop_button.set_variant("primary")
-                overlay.stop_button.set_loading(True)
-                overlay.refresh({"running": [{"name": "Loading runner..."}]}, [])
+                overlay.refresh_loading()
             else:
-                overlay.stop_button.set_loading(False)
-                overlay.stop_button.setText("STOP")
-                overlay.stop_button.set_variant("danger")
-                overlay.stop_button.setEnabled(True)
                 overlay.refresh(self.queue_snapshot, self.log_lines)
             overlay.show()
             overlay.raise_()
@@ -202,9 +242,11 @@ class RuntimeGuiMixin:
             overlay.close()
 
     def _sync_runner_overlay(self):
-        if (
-            self.is_program_running() or self.runner_loading
-        ) and not self.program_stopping:
+        if self.runner_loading and not self.program_stopping:
+            if getattr(self, "runner_overlay", None) is None:
+                self._show_runner_overlay()
+            return
+        if self.is_program_running() and not self.program_stopping:
             self._show_runner_overlay()
         else:
             self._hide_runner_overlay()
@@ -245,8 +287,34 @@ class RuntimeGuiMixin:
         """Reveal live runner state after the bot completes startup preparation."""
         if not self.runner_loading or not self.is_program_running():
             return
+        self.runner_ready_pending = True
+        self._reveal_runner_overlay_if_ready()
+
+    def _reveal_runner_overlay_if_ready(self) -> None:
+        """Show the populated overlay and release the bot once task state exists."""
+        snapshot = getattr(self, "queue_snapshot", {})
+        has_tasks = any(snapshot.get(key) for key in ("running", "active", "waiting"))
+        if not (
+            getattr(self, "runner_ready_pending", False)
+            and self.runner_loading
+            and self.is_program_running()
+            and has_tasks
+        ):
+            return
         self.runner_loading = False
+        self.runner_ready_pending = False
         self._show_runner_overlay()
+        QApplication.processEvents()
+
+        process = getattr(self, "process", None)
+        stdin = getattr(process, "stdin", None)
+        if process is None or process.poll() is not None or stdin is None:
+            return
+        try:
+            stdin.write(f"{RUNNER_OVERLAY_READY_MESSAGE}\n")
+            stdin.flush()
+        except (BrokenPipeError, OSError, ValueError):
+            self.append_log("[ERROR] Unable to confirm runner overlay readiness.\n")
 
     def _tick(self):
         if self.shutdown_started:

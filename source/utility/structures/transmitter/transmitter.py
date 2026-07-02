@@ -29,10 +29,11 @@ def is_open_ready():
 
 def ensure_active(metadata: station_metadata):
     """This function to make sure the transmitter is ON, so if it's not, turn it on and reopen inv"""
-    if not is_open():
+    if not inventory.is_open():
         return False
 
     if inventory.is_turned_on():
+        logs.logger.debug("Transmitter is already ON, no need to turn it on again")
         return True
 
     inventory.turn_on()

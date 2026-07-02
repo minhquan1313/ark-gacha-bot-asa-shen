@@ -262,6 +262,7 @@ class WindowGuiMixin:
         self._close_output_reader(process)
         self.process = None
         self.runner_loading = False
+        self.runner_launch_pending = False
         self.program_stopping = False
         self.stop_deadline = None
         self.queue_snapshot = {"running": [], "active": [], "waiting": []}

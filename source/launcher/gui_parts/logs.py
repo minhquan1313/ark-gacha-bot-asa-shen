@@ -227,6 +227,9 @@ class LogsGuiMixin:
         if running_task_name and running_task_name != self.running_task_name:
             self.running_history.append(f"[RUNNING] STARTED   {running_task_name}")
         self.running_task_name = running_task_name
+        reveal_ready = getattr(self, "_reveal_runner_overlay_if_ready", None)
+        if callable(reveal_ready):
+            reveal_ready()
         self._sync_runner_overlay()
 
     def _format_running_snapshot(self):

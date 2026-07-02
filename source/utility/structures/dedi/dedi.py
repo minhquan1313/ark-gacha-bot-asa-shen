@@ -112,16 +112,22 @@ def ensure_has_resource():
 def open(metadata: station_metadata, item: DediStorageState):
     attempt = 0
     dl = utils_simple.get_default_clock()
-    was_crounching = player_state.human.crouched
+    recovered = False
     while not is_open():
         attempt += 1
         logs.logger.debug(f"Trying to open dedi inventory[{attempt}]")
         inventory.open()  # Might cause player to standup because of server lag and check_state
 
         if is_open():
-            if was_crounching and inventory.was_server_lag_last_open:
+            # inventory.was_server_lag_last_open may sometime being controlled by
+            # higher level function via inventory.detect_lag_long_process
+            # so it may always fail even the 2nd attempt of inventory.open()
+            # above is success, so we need to check if we have already
+            # recovered from server lag before
+            if inventory.was_server_lag_last_open and not recovered:
                 inventory.close()
                 turn_to_dedi(item)
+                recovered = True
             else:
                 return
         else:
@@ -153,7 +159,12 @@ def open_deposit_all(metadata: station_metadata, item: DediStorageState):
     dl = utils_simple.get_default_clock(multiplier=3)
     attempt = 0
     # Open inventory
-    while not dl():
+    while True:
+        if dl():
+            capture_name = None
+            logs.logger.critical("Failed to deposit all items to dedi inventory")
+            return False
+
         attempt += 1
         logs.logger.debug(f"Trying to deposit all[{attempt}]")
 
@@ -187,9 +198,6 @@ def open_deposit_all(metadata: station_metadata, item: DediStorageState):
 
         capture_name = None
         return True
-
-    capture_name = None
-    return False
 
 
 def open_withdraw_all(metadata: station_metadata, item: DediStorageState):

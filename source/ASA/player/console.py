@@ -79,6 +79,25 @@ def console_reset():
     time.sleep(0.1)
 
 
+def console_exit_mainmenu():
+    count = 0
+    while not is_open():
+        count += 1
+        # OPEN AGAIN
+        utils.press_key("ConsoleKeys")
+
+        if not template.template_await_true(is_open, 1):
+            console_reset()
+
+        if count >= 3:
+            logs.logger.error(f"console didnt open after {count} attempts")
+            break
+    if is_open():
+        console_write("open MainMenu")
+
+        return True
+
+
 def console_ccc(reset_state_before_capture: bool = True) -> list[str] | None:
     data = None
     attempts = 0

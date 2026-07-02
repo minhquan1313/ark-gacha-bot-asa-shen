@@ -17,9 +17,13 @@ from source.utility import (
 )
 
 
+def is_clear_search_death_screen():
+    return template.check_template_no_bounds("search_death_screen", 0.7)
+
+
 def is_open():
-    return template.check_template(
-        "beds_title", 0.7
+    return template.check_template("beds_title", 0.7) or template.check_template(
+        "beds_title_respawn", 0.7
     )  # bed title is found in both death and fast travel screens
 
 
@@ -65,26 +69,32 @@ def spawn_in(bed_name: str):
         time.sleep(1 * settings.lag_offset)
 
     if is_open():
-        time.sleep(3 * settings.lag_offset)
+        while True:
+            player_state.check_disconnected()
 
-        state = "death screen" if is_dead() else "fast travel screen"
-        logs.logger.debug(f"char is in the {state}")
+            state = "death screen" if is_dead() else "fast travel screen"
+            logs.logger.debug(f"char is in the {state}")
 
-        search_bar_x = variables.get_pixel_loc(
-            "search_bar_bed_dead_x" if is_dead() else "search_bar_bed_alive_x"
-        )
-        windows.click(
-            search_bar_x, variables.get_pixel_loc("search_bar_bed_y")
-        )  # search bar y axis is the same for both death/alive
+            search_bar_x = variables.get_pixel_loc(
+                "search_bar_bed_dead_x" if is_dead() else "search_bar_bed_alive_x"
+            )
+            windows.click(
+                search_bar_x, variables.get_pixel_loc("search_bar_bed_y")
+            )  # search bar y axis is the same for both death/alive
 
-        utils.ctrl_a()  # CTRL A removes all previous data in the search bar
-        utils.write(bed_name)
+            utils.ctrl_a()  # CTRL A removes all previous data in the search bar
+            utils.write(bed_name)
 
-        time.sleep(0.2 * settings.lag_offset)
-        windows.click(
-            variables.get_pixel_loc("first_bed_slot_x"),
-            variables.get_pixel_loc("first_bed_slot_y"),
-        )
+            time.sleep(0.2 * settings.lag_offset)
+            windows.click(
+                variables.get_pixel_loc("first_bed_slot_x"),
+                variables.get_pixel_loc("first_bed_slot_y"),
+            )
+            if (
+                template.template_await_true(template.check_teleporter_orange, 3)
+                and not is_clear_search_death_screen()
+            ):
+                break
 
         if not template.template_await_true(
             template.check_teleporter_orange, 3

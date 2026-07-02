@@ -1,10 +1,15 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QHBoxLayout,
     QLabel,
 )
 
 from source.launcher.components.helper_window import WorkerHelperWindow
-from source.launcher.components.widgets import AnimatedButton, WrappedStatusLabel
+from source.launcher.components.widgets import (
+    AnimatedButton,
+    LoadingSpinner,
+    WrappedStatusLabel,
+)
 from source.launcher.config.constants import HELPER_HEIGHT, HELPER_WIDTH
 from source.launcher.utils.deposit_helper_capture import (
     focus_game_window,
@@ -51,9 +56,15 @@ class FertilizerRefreshHelper(WorkerHelperWindow):
         self.start_stop_button.clicked.connect(self.toggle)
         self.content_layout.addWidget(self.start_stop_button)
 
+        self.status_spinner = LoadingSpinner()
         self.status = WrappedStatusLabel("Ready.")
         self.status.setObjectName("HelperStatus")
-        self.content_layout.addWidget(self.status)
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(0, 0, 0, 0)
+        status_row.setSpacing(8)
+        status_row.addWidget(self.status_spinner)
+        status_row.addWidget(self.status, 1)
+        self.content_layout.addLayout(status_row)
         self.register_minimal_running_widgets(self.description)
 
     def start(self) -> None:
@@ -77,19 +88,24 @@ class FertilizerRefreshHelper(WorkerHelperWindow):
             return
 
         self.starting = True
-        self.start_stop_button.set_variant("primary")
-        self.start_stop_button.set_loading(True)
+        self.status_spinner.start()
+        self.start_stop_button.setText("STOP")
+        self.start_stop_button.set_variant("danger")
+        self.start_stop_button.setEnabled(True)
         self.status.setText("Loading fertilizer modules...")
         try:
             self._start_worker("fertilizer_refresh")
         except Exception as exc:
             self.starting = False
-            self.start_stop_button.set_loading(False)
+            self.status_spinner.stop()
+            self.start_stop_button.setText("START")
+            self.start_stop_button.set_variant("primary")
+            self.start_stop_button.setEnabled(True)
             self._set_running_ui(False)
             self.status.setText(f"Cannot start: {exc}")
 
     def handle_hotkey(self) -> None:
-        if self.starting:
+        if self.starting and not self.is_running():
             return
         super().handle_hotkey()
 
@@ -97,7 +113,7 @@ class FertilizerRefreshHelper(WorkerHelperWindow):
         if not self.is_running():
             return
         self.starting = False
-        self.start_stop_button.set_loading(False)
+        self.status_spinner.stop()
         self.start_stop_button.setText("START")
         self.start_stop_button.set_variant("primary")
         self.start_stop_button.setEnabled(False)
@@ -109,7 +125,7 @@ class FertilizerRefreshHelper(WorkerHelperWindow):
         if not self.starting or not self.is_running():
             return
         self.starting = False
-        self.start_stop_button.set_loading(False)
+        self.status_spinner.stop()
         self.start_stop_button.setText("STOP")
         self.start_stop_button.set_variant("danger")
         self.start_stop_button.setEnabled(True)
@@ -117,7 +133,7 @@ class FertilizerRefreshHelper(WorkerHelperWindow):
 
     def _on_worker_finished(self, message: str) -> None:
         self.starting = False
-        self.start_stop_button.set_loading(False)
+        self.status_spinner.stop()
         if self._finish_worker():
             return
         self.start_stop_button.setText("START")

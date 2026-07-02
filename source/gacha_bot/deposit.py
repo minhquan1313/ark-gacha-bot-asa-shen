@@ -36,6 +36,10 @@ def is_grinder():
     return template.check_template("grinder", 0.7)
 
 
+def is_grinder_grindable():
+    return template.check_template("grinder_grind_button", 0.7)
+
+
 def load_deposit_config():
     try:
         return load_route_config(
@@ -229,9 +233,8 @@ def _process_grinder(route, route_metadata):
             if not _open_inventory_template("grinder", route_metadata, grinder, label):
                 _restore_route_view(route_metadata, reset_crouch=False)
                 return
-
-        if inventory.was_server_lag_last_open:
-            _grinder_1()
+            if inventory.was_server_lag_last_open:
+                _grinder_1()
 
     if is_grinder():
         inventory.transfer_all_from()
@@ -245,10 +248,16 @@ def _grinder_1():
     # Check turn on
     if not inventory.is_turned_on():
         inventory.turn_on()
+        # NO NEED TO CLOSE INV BECAUSE THE GRINDER WILL UPDATE UI AUTOMATICALLY
         time.sleep(1 * settings.lag_offset)
 
+    if not player_inventory.is_can_transfer_all():
+        return
+
     player_inventory.transfer_all_inventory()
-    time.sleep(0.3 * settings.lag_offset)
+    template.template_await_true(is_grinder_grindable, 0.5)
+    time.sleep(0.1 * settings.lag_offset)
+
     windows.click(
         variables.get_pixel_loc("grinder_grind_all_x"),
         variables.get_pixel_loc("grinder_grind_all_y"),
@@ -318,15 +327,15 @@ def process_dedi_list_route(
         with inventory.detect_lag_long_process():
             dedi.open_deposit_all(route_metadata, item)
 
-        if inventory.was_server_lag_last_open:
-            logs.logger.warning(
-                f"Server lag detected - retrying dedi "
-                f"{batch_start_index + 1} to {index + 1}"
-            )
+            if inventory.was_server_lag_last_open:
+                logs.logger.warning(
+                    f"Server lag detected - retrying dedi from "
+                    f"{batch_start_index + 1} to {index + 1}"
+                )
 
-            for retry_index in range(batch_start_index, index + 1):
-                retry_item = dedi_list[retry_index]
-                process_fast_dedi(route, retry_item, retry_index, _type)
+                for retry_index in range(batch_start_index, index + 1):
+                    retry_item = dedi_list[retry_index]
+                    process_fast_dedi(route, retry_item, retry_index, _type)
 
         batch_start_index = index + 1
     return True

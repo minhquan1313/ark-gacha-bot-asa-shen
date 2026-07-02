@@ -11,6 +11,7 @@ from source.utility import screen
 roi_regions = {
     "bed_radical": {"start_x": 840, "start_y": 258, "width": 188, "height": 188},
     "beds_title": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
+    "beds_title_respawn": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
     "console": {"start_x": 0, "start_y": 1050, "width": 38, "height": 30},
     "crop_plot": {"start_x": 825, "start_y": 187, "width": 233, "height": 113},
     "crop_plot_prompt": {"start_x": 300, "start_y": 0, "width": 1400, "height": 1080},
@@ -24,6 +25,12 @@ roi_regions = {
     "dedi": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
     "vault": {"start_x": 825, "start_y": 183, "width": 267, "height": 113},
     "grinder": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
+    "grinder_grind_button": {
+        "start_x": 730,
+        "start_y": 730,
+        "width": 450,
+        "height": 200,
+    },
     "tek_trough": {"start_x": 877, "start_y": 195, "width": 161, "height": 30},
     "exit_resume": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
     "inventory": {"start_x": 150, "start_y": 93, "width": 270, "height": 113},
@@ -39,13 +46,11 @@ roi_regions = {
         "width": 300,
         "height": 150,
     },
-    "ready_clicked_bed": {"start_x": 435, "start_y": 187, "width": 113, "height": 750},
     "seed_inv": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
     "slot_capped": {"start_x": 1680, "start_y": 985, "width": 113, "height": 75},
     "teleporter_title": {"start_x": 150, "start_y": 101, "width": 304, "height": 139},
     "tribelog_check": {"start_x": 862, "start_y": 26, "width": 113, "height": 113},
     "waiting_inv": {"start_x": 1500, "start_y": 75, "width": 375, "height": 188},
-    "bed_icon": {"start_x": 600, "start_y": 150, "width": 1268, "height": 825},
     "teleporter_icon": {"start_x": 600, "start_y": 150, "width": 1268, "height": 825},
     "teleporter_icon_pressed": {
         "start_x": 600,
@@ -62,9 +67,8 @@ roi_regions = {
     "chem_bench": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
     "indi_forge": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
     "access_inv": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
-    "turn_off": {"start_x": 900, "start_y": 870, "width": 150, "height": 30},
-    "vault_full": {"start_x": 1065, "start_y": 525, "width": 113, "height": 30},
     "search": {"start_x": 337, "start_y": 952, "width": 90, "height": 30},
+    "search_death_screen": {"start_x": 50, "start_y": 900, "width": 343, "height": 132},
     "search_player_inv": {"start_x": 62, "start_y": 62, "width": 430, "height": 246},
     "search_object_inv": {"start_x": 1100, "start_y": 62, "width": 430, "height": 246},
     "server_list_trans_loaded": {
@@ -73,7 +77,7 @@ roi_regions = {
         "width": 70,
         "height": 160,
     },
-    "server_trans_success": {"start_x": 765, "start_y": 0, "width": 382, "height": 60},
+    "server_trans_uploaded": {"start_x": 765, "start_y": 0, "width": 382, "height": 60},
     "transfer_join_button": {
         "start_x": 1504,
         "start_y": 857,
@@ -154,13 +158,18 @@ template_l_bounds_overwrite = {
     #
     "inventory_player_drop": [0, 30, 150],
     "inventory_player_transfer_all": [0, 30, 150],
+    "server_trans_uploaded": [40, 30, 200],
+}
+template_u_bounds_overwrite = {
+    "server_trans_uploaded": [70, 30, 200],
 }
 
 # Use this to overwrite what template image will be used to compare.
 # This help reduce duplicate template images, but they serve only 1 template but different location
 template_image_overwrite = {
     #
-    "search_object_inv": "search_player_inv"
+    "search_object_inv": "search_player_inv",
+    "search_death_screen": "search",
 }
 
 IS_DEBUG = False
@@ -198,10 +207,11 @@ def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[Fal
     roi = get_region_roi(region)
 
     l_bound = template_l_bounds_overwrite.get(item, [0, 30, 200])
+    u_bound = template_u_bounds_overwrite.get(item, [255, 255, 255])
 
     # Playground https://pseudopencv.site/utilities/hsvcolormask/
     lower_boundary = np.array(l_bound)
-    upper_boundary = np.array([255, 255, 255])
+    upper_boundary = np.array(u_bound)
 
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)

@@ -16,6 +16,7 @@ DEFAULT_BED_NAME_PREFIX = "BBedPlayer"
 
 DEFAULT_TRANSFER_SETTINGS = {
     "lag_offset": 1.0,
+    "transfer_start_mode": "default",
     "resource_station_yaw": 0.0,
     "destination_station_yaw": 0.0,
     "transmitter_teleport": "TRANSFER_TTRANS",
@@ -162,7 +163,7 @@ def load_transfer_settings(path=TRANSFER_SETTINGS_PATH, create_missing=True):
     with path.open("r", encoding="utf-8") as file:
         data = json.load(file)
     settings = normalize_transfer_settings(data)
-    if create_missing and "steam_restart_interval" not in data:
+    if create_missing and any(key not in data for key in DEFAULT_TRANSFER_SETTINGS):
         _write_json(settings, path)
     return settings
 
@@ -255,6 +256,9 @@ def normalize_transfer_settings(data):
     )
     normalized["destination_station_yaw"] = _float_value(
         normalized["destination_station_yaw"], "destination_station_yaw"
+    )
+    normalized["transfer_start_mode"] = _transfer_start_mode(
+        normalized["transfer_start_mode"]
     )
     normalized["transmitter_teleport"] = str(normalized["transmitter_teleport"]).strip()
     normalized["resource_server"] = _server_number(
@@ -551,6 +555,13 @@ def _float_value(value, name):
         return float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a number.") from exc
+
+
+def _transfer_start_mode(value: object):
+    value = str(value).strip().lower()
+    if value in {"default", "destinate"}:
+        return value
+    return "default"
 
 
 def _positive_float(value, name):

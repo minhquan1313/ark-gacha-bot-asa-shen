@@ -157,12 +157,19 @@ def teleport_not_default(
                 logs.logger.error("search still detected likely did type anything")
                 break
 
-        windows.click(
-            variables.get_pixel_loc("first_bed_slot_x"),
-            variables.get_pixel_loc("first_bed_slot_y"),
-        )
+        dl = utils_simple.get_default_clock(3)
+        while not template.check_teleporter_orange():
+            windows.click(
+                variables.get_pixel_loc("first_bed_slot_x"),
+                variables.get_pixel_loc("first_bed_slot_y"),
+            )
+            if (
+                template.template_await_true(template.check_teleporter_orange, 0.5)
+                or dl()
+            ):
+                break
 
-        if not template.template_await_true(template.check_teleporter_orange, 1):
+        if not template.check_teleporter_orange():
             logs.logger.warning(
                 "orange pixel for teleporter ready not found likely already on the tp we are just exiting the tp treating it as the tp we should be on"
             )
