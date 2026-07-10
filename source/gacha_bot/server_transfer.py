@@ -1,6 +1,6 @@
 import ctypes
 import time
-from typing import Callable, Literal, cast
+from typing import Callable, cast
 
 import psutil
 import pyautogui
@@ -18,7 +18,6 @@ from source.launcher.ark_game_setup import (
     launch_ark_through_steam,
 )
 from source.launcher.config.transfer_helper_config import (
-    active_transfer_dedis,
     missing_runtime_inputs,
     player_bed_name,
     player_steam_account,
@@ -33,7 +32,16 @@ from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple
 from source.utility.structures.dedi import dedi
 from source.utility.structures.transmitter import transmitter
-from source.utility.types import DediStorageState
+from source.utility.types import (
+    DediStorageState,
+    TransferDedisConfig,
+    TransferPlayersConfig,
+    TransferRuntimeConfig,
+    TransferSettings,
+    TransferStage,
+    TransferSteamUiCoords,
+    TransferUiCoords,
+)
 
 RECOVERABLE_RUNTIME_ATTEMPTS = 3
 STEAM_DIALOG_BUTTONS = {
@@ -111,12 +119,16 @@ def _account_order(account_count: int, start_account: int = 1):
     """Return the runtime account order starting at the requested player.
 
     Example: _account_order(4, 3) yields accounts 3 and 4.
+    Start at account 1
     """
     return range(max(1, int(start_account)), int(account_count) + 1)
 
 
 def _pre_plan(
-    settings: dict, players: dict, account_count: int, start_account: int = 1
+    settings: TransferSettings,
+    players: TransferPlayersConfig,
+    account_count: int,
+    start_account: int = 1,
 ):
     """Build the normal-path dependency action plan for a transfer run."""
     tasks = []
@@ -274,8 +286,8 @@ def _pre_plan(
 was_hotfix3_run = False
 is_withdrawed_all = False
 account_detect_withdrawed_all = None
-list_of_withdrawed_dedi = {-1}
-list_of_full_dedi = {-1}
+list_of_withdrawed_dedi: set[int] = set()
+list_of_full_dedi: set[int] = set()
 
 station_pushout_yaw_resource = None
 station_pushout_yaw_destination = None
@@ -283,7 +295,7 @@ transmitter_teleport = ""
 
 
 def run_transfer_helper(
-    config: dict,
+    config: TransferRuntimeConfig,
     status_callback: Callable[[str], object] | None = None,
     task_callback: Callable[[dict], object] | None = None,
 ):
@@ -292,13 +304,14 @@ def run_transfer_helper(
 
     did_last_transfer_after_withdrawed_all = False
     should_recovery_at_the_end = True
-    list_of_withdrawed_dedi = {-1}
-    list_of_full_dedi = {-1}
+    acc_1_last_server: TransferStage = "resource"
+    list_of_withdrawed_dedi = set()
+    list_of_full_dedi = set()
 
     settings = config["settings"]
     dedis = config["dedis"]
     ui_coords = config["ui_coords"]
-    players = config.get("players", {})
+    players = config["players"]
     account_count = runtime_account_count(players)
     try:
         start_account = int(config.get("start_account", 1))
@@ -342,8 +355,12 @@ def run_transfer_helper(
     else:
         emit("Starting resource fill phase.")
         for account in _account_order(account_count, start_account):
+            if is_withdrawed_all:
+                break
             # -=-=-=-=-=-=STARTING AT RESOURCE SERVER - DEFAULT MODE-=-=-=-=-=-=
-            update_global_config(settings, "resource", _bed_name(players, account))
+            update_global_config(
+                settings, "resource", _bed_name(players, account), dedis
+            )
 
             if account_count > 1:
                 task_tracker.start(
@@ -390,7 +407,7 @@ def run_transfer_helper(
                 wait_structure_load(was_in_bed=True)
             else:
                 # -=-=-=-=-=-=-=-=-=-=-=-=
-                task_tracker.start(_transfer_task_label(account, "Check Player"))
+                task_tracker.start(_transfer_task_label(account, "Leave Tekpod"))
                 player_state.check_state()
                 # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(_transfer_task_label(account, "Withdraw R"))
@@ -425,11 +442,15 @@ def run_transfer_helper(
                 and did_last_transfer_after_withdrawed_all
                 and account_detect_withdrawed_all is not None
                 and account > account_detect_withdrawed_all
+                # force loop at least once
+                and loop_number > 1
             ):
                 continue
 
             # -=-=-=-=-=-=STARTING AT RESOURCE SERVER - DELIVERY TO DESTINATION SERVER-=-=-=-=-=-=
-            update_global_config(settings, "resource", _bed_name(players, account))
+            update_global_config(
+                settings, "resource", _bed_name(players, account), dedis
+            )
             if account_count > 1:
                 task_tracker.start(
                     _transfer_task_label(
@@ -494,18 +515,20 @@ def run_transfer_helper(
                 transfer_to_server(
                     settings["destination_server"],
                     settings,
-                    status_callback,
                     players,
                     account,
                     dedis,
                     "resource",
+                    status_callback,
                 )
                 if transmitter.was_excess_amount:
                     go_back_to_dedi_and_fix_excess(dedis)
                 else:
                     break
             # -=-=-=-=-=-=HERE WE ARE AT THE DESTINATION SERVER-=-=-=-=-=-=
-            update_global_config(settings, "destination", _bed_name(players, account))
+            update_global_config(
+                settings, "destination", _bed_name(players, account), dedis
+            )
 
             task_tracker.start(
                 _transfer_task_label(account, "Wait D Bed", loop_number=loop_number)
@@ -571,8 +594,13 @@ def run_transfer_helper(
                 )
                 render.enter_tekpod(allow_eat_implant=False)
 
-                should_recovery_at_the_end = False
-                break
+                acc_1_last_server = "destination"
+
+                if loop_number > 1:
+                    should_recovery_at_the_end = False
+                    break
+                else:
+                    continue
 
             # -=-=-=-=-=-GO BACK TO RESOURCE SERVER=-=-=-=-=-=-=
 
@@ -587,14 +615,16 @@ def run_transfer_helper(
             transfer_to_server(
                 settings["resource_server"],
                 settings,
-                status_callback,
                 players,
                 account,
                 dedis,
                 "destination",
+                status_callback,
             )
             # -=-=-=-=-=Here we are back to Resource server-=-=-=-=-=-=-=
-            update_global_config(settings, "resource", _bed_name(players, account))
+            update_global_config(
+                settings, "resource", _bed_name(players, account), dedis
+            )
             task_tracker.start(
                 _transfer_task_label(account, "Wait R Bed", loop_number=loop_number)
             )
@@ -645,8 +675,10 @@ def run_transfer_helper(
 
     # Everything is done, now logging back to original account, which is player 1
     if account_count > 1 and should_recovery_at_the_end:
-        final_account = account_count
-        final_loop_number = int(settings["loop_count"])
+        final_account = 1
+
+        update_global_config(settings, acc_1_last_server, _bed_name(players, 1), dedis)
+        # -=-=-=-=-=-=-=-=-=-=-=-=
         task_tracker.start(
             _transfer_task_label(1, "Restore Steam", _steam_account(players, 1))
         )
@@ -671,69 +703,52 @@ def run_transfer_helper(
             emit("Player 1 restoration failed: resource server join did not complete.")
             return False
         # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(
-            _transfer_task_label(
-                final_account, "Wait Structures", loop_number=final_loop_number
+        if acc_1_last_server == "resource":
+            task_tracker.start(_transfer_task_label(final_account, "Wait R Structures"))
+            wait_structure_load(was_in_bed=True)
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(
+                _transfer_task_label(
+                    final_account, "Transfer D", str(settings["destination_server"])
+                )
             )
-        )
-        wait_structure_load(was_in_bed=True)
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(
-            _transfer_task_label(
+            transfer_to_server(
+                settings["destination_server"],
+                settings,
+                players,
                 final_account,
-                "Transfer D",
-                str(settings["destination_server"]),
-                final_loop_number,
+                dedis,
+                "resource",
+                status_callback,
             )
-        )
-        transfer_to_server(
-            settings["destination_server"],
-            settings,
-            status_callback,
-            players,
-            final_account,
-            dedis,
-            "resource",
-        )
-        # -=-=-=-=-=-=HERE WE ARE AT THE DESTINATION SERVER-=-=-=-=-=-=
-        update_global_config(settings, "destination", _bed_name(players, final_account))
-        task_tracker.start(
-            _transfer_task_label(
-                final_account, "Wait D Bed", loop_number=final_loop_number
+            # -=-=-=-=-=-=HERE WE ARE AT THE DESTINATION SERVER-=-=-=-=-=-=
+            update_global_config(
+                settings, "destination", _bed_name(players, final_account), dedis
             )
-        )
-        wait_for_bed_screen()
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(
-            _transfer_task_label(
-                final_account,
-                "Spawn D Bed",
-                _bed_name(players, final_account),
-                final_loop_number,
+            task_tracker.start(_transfer_task_label(final_account, "Wait D Bed"))
+            wait_for_bed_screen()
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(
+                _transfer_task_label(
+                    final_account, "Spawn D Bed", _bed_name(players, final_account)
+                )
             )
-        )
-        spawn_bed(_bed_name(players, final_account))
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(
-            _transfer_task_label(
-                final_account,
-                "Wait D Structures",
-                loop_number=final_loop_number,
-            )
-        )
-        wait_structure_load()
-        # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(
-            _transfer_task_label(
-                final_account, "Enter Tekpod", loop_number=final_loop_number
-            )
-        )
-        render.enter_tekpod(allow_eat_implant=False)
+            spawn_bed(_bed_name(players, final_account))
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(_transfer_task_label(final_account, "Wait D Structures"))
+            wait_structure_load()
+            # -=-=-=-=-=-=-=-=-=-=-=-=
+            task_tracker.start(_transfer_task_label(final_account, "Enter Tekpod"))
+            render.enter_tekpod(allow_eat_implant=False)
     emit("Server transfer helper finished.")
     return True
 
 
-def ensure_ark_running(status_callback=None, settings=None, ui_coords=None):
+def ensure_ark_running(
+    status_callback: Callable[[str], object] | None = None,
+    settings: TransferSettings | None = None,
+    ui_coords: TransferUiCoords | None = None,
+):
     emit = status_callback or (lambda _message: None)
     timeout = _settings_int(settings, "ark_window_ready_timeout", 120)
     attempts = _settings_int(settings, "ark_launch_attempts", 3)
@@ -802,20 +817,27 @@ def join_server(server, status_callback=None):
 
 
 def update_global_config(
-    settings: dict,
-    current_server: Literal["destination", "resource"] = "resource",
-    bed="",
+    settings: TransferSettings,
+    current_server: TransferStage,
+    bed: str,
+    dedis: TransferDedisConfig,
 ):
     global station_pushout_yaw_resource
     global station_pushout_yaw_destination
+    global transmitter_teleport
 
     utils.was_initialized = False
     global_settings.bed_spawn = bed
     global_settings.ping = int(settings["ping"])
-    global_settings.server_number = str(settings[f"{current_server}_server"])
-    global_settings.station_yaw = float(settings[f"{current_server}_station_yaw"])
+    if current_server == "resource":
+        global_settings.server_number = str(settings["resource_server"])
+        global_settings.station_yaw = float(settings["resource_station_yaw"])
+    else:
+        global_settings.server_number = str(settings["destination_server"])
+        global_settings.station_yaw = float(settings["destination_station_yaw"])
     # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
     global_settings.wait_structure_load = float(settings["structure_load_delay"])
+    # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
     if current_server == "resource":
         if global_settings.station_pushout_yaw is not None:
@@ -835,6 +857,8 @@ def update_global_config(
             if station_pushout_yaw_destination is not None
             else None
         )
+    # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+    transmitter_teleport = _transfer_transmitter_teleport(dedis, current_server)
 
 
 def wait_structure_load(was_in_bed=False):
@@ -846,23 +870,23 @@ def wait_structure_load(was_in_bed=False):
 
 
 def withdraw_from_transfer_dedis(
-    dedis: dict,
-    account: int | None = None,
+    dedis: TransferDedisConfig, account: int, *, ensure_timer=True, should_teleport=True
 ):
     global list_of_withdrawed_dedi
     global is_withdrawed_all
     global account_detect_withdrawed_all
+    global transmitter_teleport
 
     if is_withdrawed_all:
         return True
 
-    resource_route = transfer_dedi_route(dedis, "resource")
+    resource_route = dedis["resource"]
     route_teleport_name = resource_route["teleport"]
 
-    teleporter.teleport_not_default(route_teleport_name)
+    teleporter.teleport_not_default(route_teleport_name) if should_teleport else ...
     utils.zero_center()
 
-    items: list[DediStorageState] = active_transfer_dedis(dedis, "resource")
+    items: list[DediStorageState] = resource_route["items"]
     almost_full = False
     for index, item in enumerate(items, 1):
         if index in list_of_withdrawed_dedi:
@@ -883,7 +907,7 @@ def withdraw_from_transfer_dedis(
             # This above the g_last_check_can_transfer, just to make sure
             # about the case of dedi has less than 300 stack, like 200 stacks
             # which is not the maximum player can carry each time
-            return True
+            break
         if player_inventory.g_last_check_can_transfer:
             almost_full = True
 
@@ -907,22 +931,62 @@ def withdraw_from_transfer_dedis(
             account_detect_withdrawed_all = account
         # player_state.reset_state()  # Close inv
 
+    if not ensure_timer or not player_inventory.g_last_check_can_transfer:
+        return True
+
+    # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+    teleporter.teleport_not_default(transmitter_teleport)
+    utils.zero_center()
+
+    if not transmitter.open_and_has_timer():
+        return redo_withdraw_ensure_timer(dedis, account)
+
     return True
 
 
+def redo_withdraw_ensure_timer(
+    dedis: TransferDedisConfig,
+    account: int,
+):
+    resource_route = dedis["resource"]
+    route_teleport_name = resource_route["teleport"]
+
+    teleporter.teleport_not_default(route_teleport_name)
+    utils.zero_center()
+
+    items: list[DediStorageState] = resource_route["items"]
+    for index, item in enumerate(items, 1):
+        if index in list_of_withdrawed_dedi:
+            is_last_dedi = index == len(items)  # index started at 1(not 0)
+            if not is_last_dedi:
+                continue
+            else:
+                list_of_withdrawed_dedi.remove(index)
+
+        label = f"Transfer dedi {index}"
+        if not dedi.open_deposit_all(route_teleport_name, item):
+            logs.logger.error(f"{label} transfer withdraw failed")
+            return False
+        logs.logger.debug(f"{label} transfer withdraw completed")
+
+    return withdraw_from_transfer_dedis(
+        dedis, account, ensure_timer=False, should_teleport=False
+    )
+
+
 def deposit_to_transfer_dedis(
-    dedis: dict,
-    account: int | None = None,
+    dedis: TransferDedisConfig,
+    account: int,
 ):
     global list_of_full_dedi
 
-    destination_route = transfer_dedi_route(dedis, "destination")
+    destination_route = dedis["destination"]
     route_teleport_name = destination_route["teleport"]
 
     teleporter.teleport_not_default(route_teleport_name)
     utils.zero_center()
 
-    items: list[DediStorageState] = active_transfer_dedis(dedis, "destination")
+    items: list[DediStorageState] = destination_route["items"]
     for index, item in enumerate(items, 1):
         if index in list_of_full_dedi:
             continue
@@ -943,9 +1007,9 @@ def deposit_to_transfer_dedis(
     return True
 
 
-def _settings_int(settings, key, default):
+def _settings_int(settings: TransferSettings | None, key: str, default: int):
     try:
-        value = settings.get(key, default)
+        value = settings.get(key, default)  # type: ignore
     except AttributeError:
         value = default
     try:
@@ -995,7 +1059,7 @@ def steam_has_failure(steam, status_callback=None):
 
 
 def _restart_steam_before_ark_retry(
-    steam: dict | None, timeout: int, emit: Callable[[str], object]
+    steam: TransferSteamUiCoords | None, timeout: int, emit: Callable[[str], object]
 ):
     """Hard-reset ARK and Steam before the next ARK launch attempt."""
     ark_game_setup.kill_running_ark()
@@ -1020,7 +1084,9 @@ def _restart_steam_before_ark_retry(
     return False
 
 
-def _focus_visible_steam_window(steam: dict | None, status_callback=None):
+def _focus_visible_steam_window(
+    steam: TransferSteamUiCoords | None, status_callback=None
+):
     """Focus and maximize Steam only when its window exists and is visible."""
     emit = status_callback or (lambda _message: None)
     title = "Steam"
@@ -1090,7 +1156,6 @@ def hotfix3_recover_after_dedis():
 
 
 def hotfix3_structure_wont_load():
-
     player_state.check_disconnected()
     player_state.reset_state()
 
@@ -1136,14 +1201,14 @@ def hotfix3_structure_wont_load():
     was_hotfix3_run = True
 
 
-def go_back_to_dedi_and_fix_excess(dedis: dict):
-    resource_route = transfer_dedi_route(dedis, "resource")
+def go_back_to_dedi_and_fix_excess(dedis: TransferDedisConfig):
+    resource_route = dedis["resource"]
     route_teleport_name = resource_route["teleport"]
 
     teleporter.teleport_not_default(route_teleport_name)
     utils.zero_center()
 
-    items: list[DediStorageState] = active_transfer_dedis(dedis, "resource")
+    items: list[DediStorageState] = resource_route["items"]
     for index, item in enumerate(items, 1):
         label = f"Transfer dedi {index}"
         if not dedi.open_deposit_stack(
@@ -1157,25 +1222,23 @@ def go_back_to_dedi_and_fix_excess(dedis: dict):
 
 
 def transfer_to_server(
-    server,
-    settings,
+    server: str,
+    settings: TransferSettings,
+    players: TransferPlayersConfig,
+    account: int,
+    dedis: TransferDedisConfig,
+    transmitter_side: TransferStage = "resource",
     status_callback=None,
-    players=None,
-    account=None,
-    dedis=None,
-    transmitter_side="resource",
 ):
-    if isinstance(status_callback, dict) and callable(players):
-        status_callback, players, account, dedis = players, account, dedis, None
     emit = (
         cast(Callable[[str], object], status_callback)
         if callable(status_callback)
         else (lambda _message: None)
     )
 
-    transmitter_teleport = _transfer_transmitter_teleport(
-        settings, dedis, transmitter_side
-    )
+    emit("Teleport to transmitter ")
+
+    transmitter_teleport = _transfer_transmitter_teleport(dedis, transmitter_side)
 
     for attempt in range(1, RECOVERABLE_RUNTIME_ATTEMPTS + 1):
         teleporter.teleport_not_default(transmitter_teleport)
@@ -1203,13 +1266,14 @@ def transfer_to_server(
 
 
 def _transfer_transmitter_teleport(
-    settings: dict, dedis: dict | None = None, side: str = "resource"
+    dedis: TransferDedisConfig | None = None,
+    side: TransferStage = "resource",
 ):
-    route = transfer_dedi_route(dedis or {}, side)
+    route = dedis[side] if dedis is not None else transfer_dedi_route({}, side)
     transmitter_teleport = str(route.get("transmitter_teleport", "")).strip()
     if transmitter_teleport:
         return transmitter_teleport
-    return str(settings.get("transmitter_teleport", "")).strip()
+    return ""
 
 
 def wait_for_bed_screen():
@@ -1254,11 +1318,11 @@ def go_back_to_bed():
     return True
 
 
-def _bed_name(players, account):
+def _bed_name(players: TransferPlayersConfig, account: int):
     return player_bed_name(players, account)
 
 
-def _steam_account(players, account):
+def _steam_account(players: TransferPlayersConfig, account: int):
     return player_steam_account(players, account)
 
 

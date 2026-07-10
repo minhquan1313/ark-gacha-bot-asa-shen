@@ -128,7 +128,7 @@ def spawn_in(bed_name: str):
             variables.get_pixel_loc("spawn_button_x"),
             variables.get_pixel_loc("spawn_button_y"),
         )
-        time.sleep(0.3)
+        time.sleep(0.2)
 
         # Click random on the screen to make sure it will spawn player or skip trailers.
 
@@ -139,13 +139,31 @@ def spawn_in(bed_name: str):
             pyautogui.press("space")
             time.sleep(0.2)
 
-        if template.template_await_true(
-            template.white_flash, 2 if not player_state.uploaded else 15
-        ):
-            logs.logger.debug("white flash detected waiting for up too 5 seconds")
-            template.template_await_false(template.white_flash, 10)
+        t = 2 if not player_state.uploaded else 15
+        dl = utils_simple.get_default_clock(deadline=t)
+        while not dl():
+            if template.template_await_true(template.white_flash, 0.1):
+                logs.logger.debug(
+                    f"white flash detected waiting for up too {t} seconds"
+                )
+                template.template_await_false(template.white_flash, t)
+                break
+            else:
+                time.sleep(0.05)
 
-        time.sleep(10)  # animation spawn in is about 7 seconds
+            # tribelog.open(1)
+            # if tribelog.is_open():
+            #     break
+        dl = utils_simple.get_default_clock(deadline=10)
+        while not dl():
+            # animation spawn in is about 7 seconds
+            tribelog.open(1)
+            if tribelog.is_open():
+                break
+            else:
+                time.sleep(0.05)
+
+        time.sleep(3)
 
         tribelog.open()
         tribelog.close()

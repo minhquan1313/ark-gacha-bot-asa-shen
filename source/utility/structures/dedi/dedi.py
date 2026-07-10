@@ -46,8 +46,9 @@ def is_empty():
 
 def is_can_deposit():
     global was_last_dedi_empty
-    was_last_dedi_empty = bool(template.check_template("dedi_deposit_ready", 0.7))
-    return was_last_dedi_empty
+    has_deposit_button = bool(template.check_template("dedi_deposit_ready", 0.7))
+    was_last_dedi_empty = not has_deposit_button
+    return has_deposit_button
 
 
 def deposit_first_item():

@@ -3,7 +3,7 @@ import subprocess
 import time
 
 
-def terminate_process_tree(process, terminate_timeout=5, kill_timeout=2):
+def terminate_process_tree(process, terminate_timeout=5.0, kill_timeout=2.0):
     if process is None or process.poll() is not None:
         return
     try:

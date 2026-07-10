@@ -196,12 +196,14 @@ template_l_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
     "item_fertilizer": (0, 30, 0),
     "item_fertilizer_fece": (0, 30, 0),
     "transmitter_inv": (0, 0, 200),
+    "crop_plot_prompt": (0, 0, 100),
 }
 template_u_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
     "server_trans_uploaded": (70, 255, 255),
     "item_snow_owl_pellet": (60, 255, 255),
     "item_fertilizer": (60, 255, 255),
     "item_fertilizer_fece": (60, 255, 255),
+    "crop_plot_prompt": (255, 100, 255),
 }
 default_template_bounds = [(0, 30, 200), (255, 255, 255)]
 default_template_no_bounds = [(0, 0, 0), (255, 255, 255)]

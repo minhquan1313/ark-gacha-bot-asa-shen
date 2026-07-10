@@ -7,7 +7,7 @@ from source.ASA.strucutres import inventory
 from source.logs import gachalogs as logs
 from source.utility import template
 
-POLL_INTERVAL = 0.02
+POLL_INTERVAL = 0.01
 
 
 def _open_crop_plot_inventory():
@@ -45,9 +45,9 @@ def _close_crop_plot_inventory():
 
 def is_still_fece():
     return (
-        template.check_template_no_bounds("item_snow_owl_pellet", 0.7)
-        or template.check_template_no_bounds("item_fertilizer", 0.7)
-        or template.check_template_no_bounds("item_fertilizer_fece", 0.7)
+        template.check_template_no_bounds("item_snow_owl_pellet", 0.8)
+        or template.check_template_no_bounds("item_fertilizer", 0.8)
+        or template.check_template_no_bounds("item_fertilizer_fece", 0.8)
     )
 
 
@@ -71,19 +71,18 @@ def run_fertilizer_refresh(
     while True:
         set_status("Aim at a crop plot to refresh fertilizer...")
         while True:
-            if template.check_template("crop_plot", 0.7):
+            if is_open():
                 break
-            if template.check_template_no_bounds("crop_plot_prompt", 0.9):
+            if is_open_prompt():
                 set_status("Opening crop plot inventory...")
                 _open_crop_plot_inventory()
-                if template.check_template("crop_plot", 0.7):
+                if is_open():
                     break
                 if inventory.is_open():
                     _close_crop_plot_inventory()
                 set_status("Crop plot did not open. Aim away and try again.")
-                wait_for_prompt_to_clear()
+                # wait_for_prompt_to_clear()
                 set_status("Aim at a crop plot to refresh fertilizer...")
-                continue
             time.sleep(POLL_INTERVAL)
 
         set_status("Refreshing fertilizer...")
@@ -96,3 +95,11 @@ def run_fertilizer_refresh(
         set_status("Closing crop plot inventory...")
         _close_crop_plot_inventory()
         wait_for_prompt_to_clear()
+
+
+def is_open():
+    return template.check_template("crop_plot", 0.7)
+
+
+def is_open_prompt():
+    return template.check_template("crop_plot_prompt", 0.9)

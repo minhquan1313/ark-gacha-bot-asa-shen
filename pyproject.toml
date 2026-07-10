@@ -1,13 +1,26 @@
 [tool.pyright]
-ignore = [
+# off , basic , standard , strict
+typeCheckingMode = "standard"
+
+exclude = [
+    # Default
     "**/node_modules",
     "**/__pycache__",
     "**/.*",
 
     "venv",
     "tests",
+]
 
-    "**/launcher/**/*",
+ignore = [
+    # Runtime, python libs
+    "**/dist/**",
+    "**/Lib/**",
+
+    "**/launcher/*.py",
+    "**/launcher/pages",
+    "**/launcher/gui_parts",
+    "**/launcher/components",
 ]
 
 [tool.ruff]

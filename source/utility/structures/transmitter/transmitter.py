@@ -123,14 +123,13 @@ def is_item_has_timer():
     inventory.close()
 
     player_inventory.open()
-    # item_without_timer = template.capture_for_compare("capture_item_player_second_slot")
-    # score = template.compare_captures(item_with_timer, item_without_timer)
 
+    # If item before(when in transmitter) might has timer OR NOT, and the item in player inventory will never have timer
+    # If this function return true, mean it's changed -> still have timer
     is_still_timer = template.capture_compare_changed(
         "capture_item_player_second_slot", item_with_timer
     )
 
-    # is_still_timer = score > 0.02
     logs.logger.debug(f"{'Still have timer' if is_still_timer else 'Not have timer'}")
 
     inventory.close()
@@ -138,17 +137,21 @@ def is_item_has_timer():
     return is_still_timer
 
 
-def open_and_check_timer():
+def open_and_has_timer():
+    """
+    Return True if player still has timer
+    """
+    player_state.uploaded = False
     attempt_inv = 0
     # OPEN TRANS INV
-    while not is_open() and not player_state.uploaded:
+    while not is_open():
         attempt_inv += 1
 
         open()
 
         if not is_open():
-            player_state.check_state()
             time.sleep(0.5)
+            player_state.check_state()
 
         if attempt_inv >= config.inventory_open_attempts:
             logs.logger.critical(
@@ -162,7 +165,7 @@ def open_and_check_timer():
     return still
 
 
-def open_and_transfer(server_number=0):
+def open_and_transfer(server_number="0000"):
     """
     When this is done, it should be ready at the bed spawning screen
     """
@@ -187,8 +190,8 @@ def open_and_transfer(server_number=0):
             open()
 
             if not is_open():
-                player_state.check_state()
                 time.sleep(0.5)
+                player_state.check_state()
 
             if attempt_inv >= config.inventory_open_attempts:
                 logs.logger.critical(

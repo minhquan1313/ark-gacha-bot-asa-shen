@@ -7,6 +7,7 @@ from source.launcher import ark_game_setup
 from source.launcher.config.transfer_helper_config import player_steam_account
 from source.launcher.utils import steam_accounts
 from source.utility import utils
+from source.utility.types import TransferPlayersConfig, TransferUiCoords
 
 STEAM_SIGN_IN_WINDOW_TITLE = "Sign in to Steam"
 STEAM_WINDOW_POLL_SECONDS = 0.1
@@ -15,8 +16,8 @@ STEAM_WINDOW_POLL_SECONDS = 0.1
 def switch_steam_account(
     target_account: int,
     current_steam_account: str,
-    players: dict[str, object],
-    ui_coords: dict[str, object],
+    players: TransferPlayersConfig,
+    ui_coords: TransferUiCoords,
     status_callback: Callable[[str], object] | None = None,
     *,
     force_restart: bool = False,

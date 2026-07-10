@@ -43,7 +43,7 @@ def _int_value(value: object, name: str):
     if isinstance(value, float) and not value.is_integer():
         raise ValueError(f"{name} must be an integer.")
     try:
-        return int(value)
+        return int(value)  # type: ignore
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be an integer.") from exc
 

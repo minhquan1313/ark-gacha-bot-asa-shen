@@ -2,6 +2,7 @@
 
 :: Specify the required Python version
 set "PYTHON_VERSION=3.11"
+set "APP_ID=ShenGBot"
 
 :: Check if Python 3.11 is installed
 echo Checking for Python %PYTHON_VERSION%...
@@ -54,10 +55,13 @@ if errorlevel 1 (
   exit /b
 )
 echo Running main.py...
-python main.py
+python main.py --app-id "%APP_ID%"
 
 :: Deactivate virtual environment
 echo Deactivating virtual environment...
-deactivate
+call deactivate
 
-pause
+echo Killing remaining Shen GBot processes...
+powershell.exe -NoProfile -Command "$appId = '%APP_ID%'; Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'python.exe' -or $_.Name -eq 'pythonw.exe') -and $_.CommandLine -like ('*--app-id ' + $appId + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+@REM taskkill /F /IM python.exe /T
+@REM taskkill /F /IM pythonw.exe /T

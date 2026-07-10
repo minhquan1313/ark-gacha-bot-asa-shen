@@ -178,7 +178,7 @@ def set_yaw(yaw, ccc_data=_CCC_NOT_PROVIDED):
 
     global current_yaw
 
-    if ccc_data is _CCC_NOT_PROVIDED or isinstance(ccc_data, object):
+    if ccc_data is _CCC_NOT_PROVIDED or not isinstance(ccc_data, tuple):
         ccc_data = get_yaw_pitch_as_ccc_data()
     if ccc_data is None:
         logs.logger.warning("CCC unavailable; unable to zero pitch")
@@ -205,7 +205,7 @@ def set_pitch(pitch: float, ccc_data=_CCC_NOT_PROVIDED):
     """
     global current_pitch
 
-    if ccc_data is _CCC_NOT_PROVIDED or isinstance(ccc_data, object):
+    if ccc_data is _CCC_NOT_PROVIDED or not isinstance(ccc_data, tuple):
         ccc_data = get_yaw_pitch_as_ccc_data()
     if ccc_data is None:
         logs.logger.warning("CCC unavailable; unable to zero pitch")

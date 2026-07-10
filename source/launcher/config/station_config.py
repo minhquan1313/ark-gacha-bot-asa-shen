@@ -236,7 +236,7 @@ def _int_value(value, name):
 
 def _positive_float(value: object, name: str):
     try:
-        result = float(value)
+        result = float(value)  # type: ignore
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a positive number.") from exc
     if result <= 0:
@@ -246,7 +246,7 @@ def _positive_float(value: object, name: str):
 
 def _non_negative_float(value: object, name: str):
     try:
-        result = float(value)
+        result = float(value)  # type: ignore
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be zero or greater.") from exc
     if result < 0:

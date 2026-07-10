@@ -52,10 +52,10 @@ def convert_deposit_yaw(data: dict, station_yaw: float, exporting: bool):
     adjustment = -float(station_yaw) if exporting else float(station_yaw)
     for route in converted["depositCrystalData"]:
         for container in (route["dedi"]["items"], route["vault"]["items"]):
-            _adjust_item_yaws(container, adjustment)
+            _adjust_item_yaws(container, adjustment)  # type: ignore
     for route in converted["depositGrindableData"]:
-        _adjust_item_yaws([route["grinder"]], adjustment)
-        _adjust_item_yaws(route["dedi"]["items"], adjustment)
+        _adjust_item_yaws([route["grinder"]], adjustment)  # type: ignore
+        _adjust_item_yaws(route["dedi"]["items"], adjustment)  # type: ignore
     return converted
 
 
@@ -165,7 +165,7 @@ def _normalize_setting_value(key: str, value: object):
         if isinstance(value, bool):
             raise ValueError(f"Template setting {key} must be a number.")
         try:
-            return float(value)
+            return float(value)  # type: ignore
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Template setting {key} must be a number.") from exc
     return str(value)

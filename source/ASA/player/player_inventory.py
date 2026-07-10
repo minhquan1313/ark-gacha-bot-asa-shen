@@ -87,6 +87,9 @@ def close():
         logs.logger.debug(
             f"trying to close objects inventory {attempts} / {config.inventory_close_attempts}"
         )
+
+        is_can_transfer_all()
+
         windows.click(
             variables.get_pixel_loc("close_inv_x"),
             variables.get_pixel_loc("close_inv_y"),

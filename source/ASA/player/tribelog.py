@@ -10,14 +10,18 @@ def is_open():
     return template.check_template_no_bounds("tribelog_check", 0.8)
 
 
-def open():
+def open(overwrite_amount=0):
     attempts = 0
     logs.logger.debug("trying to open up the tribelog screen")
     while not is_open():
         attempts += 1
         utils.press_key("ShowTribeManager")
         time.sleep(0.1)
-        if attempts >= source.ASA.config.tribelog_open_attempts:
+        if (
+            attempts >= source.ASA.config.tribelog_open_attempts
+            if overwrite_amount == 0
+            else overwrite_amount + 1
+        ):
             logs.logger.warning(f"tribelogs didnt open in {attempts} attempts")
             break
 

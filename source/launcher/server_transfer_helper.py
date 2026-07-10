@@ -62,6 +62,7 @@ from source.launcher.utils.steam_accounts import (
     loginusers_path,
     most_recent_account_name,
 )
+from source.utility.types import TransferPlayersConfig, TransferRuntimeConfig
 
 DEFAULT_PANELS_EXPANDED = True
 PLAYER_SEARCH_WARNING_COLOR = "#ffb020"
@@ -112,8 +113,10 @@ class ServerTransferHelper(WorkerHelperWindow):
             "active": [],
             "waiting": [],
         }
-        self.config = load_transfer_runtime_config(create_missing=True)
-        self.config["dedis"] = normalize_transfer_dedis(self.config.get("dedis", {}))
+        self.config: TransferRuntimeConfig = load_transfer_runtime_config(
+            create_missing=True
+        )
+        self.config["dedis"] = normalize_transfer_dedis(self.config["dedis"])
         self._reload_steam_accounts()
 
         super().__init__(
@@ -1050,7 +1053,7 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _players_from_rows(self):
         if self.player_rows:
-            return {
+            v: TransferPlayersConfig = {
                 "players": [
                     {
                         "bed_name": row["name"].text(),
@@ -1059,6 +1062,8 @@ class ServerTransferHelper(WorkerHelperWindow):
                     for row in self.player_rows
                 ]
             }
+
+            return v
         return self.config.get("players", {})
 
     def _save_players_from_rows(self, *_args: object, autosync: bool = True):

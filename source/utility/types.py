@@ -1,4 +1,4 @@
-from typing import Literal, TypeAlias, TypedDict
+from typing import Literal, NotRequired, TypeAlias, TypedDict
 
 
 class ObjectAim(TypedDict):
@@ -47,6 +47,71 @@ class GrindableDepositRoute(DepositRouteBase):
 class DepositConfig(TypedDict):
     depositCrystalData: list[CrystalDepositRoute]
     depositGrindableData: list[GrindableDepositRoute]
+
+
+# -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+TransferStage: TypeAlias = Literal["destination", "resource"]
+
+TransferStartMode: TypeAlias = Literal["default", "destinate"]
+
+
+class TransferSettings(TypedDict):
+    ping: int
+    transfer_start_mode: TransferStartMode
+    resource_station_yaw: float
+    destination_station_yaw: float
+    resource_server: str
+    destination_server: str
+    loop_count: int
+    structure_load_delay: int
+    steam_restart_interval: int
+    ark_window_ready_timeout: int
+    ark_launch_attempts: int
+
+
+class TransferDediRoute(TypedDict):
+    teleport: str
+    transmitter_teleport: str
+    items: list[DediStorageState]
+
+
+class TransferDedisConfig(TypedDict):
+    resource: TransferDediRoute
+    destination: TransferDediRoute
+
+
+class TransferPlayer(TypedDict):
+    bed_name: str
+    steam_account: str
+
+
+class TransferPlayersConfig(TypedDict):
+    players: list[TransferPlayer]
+
+
+class TransferSteamUiCoords(TypedDict):
+    window_title: str
+    restart_delay: int
+
+
+class TransferUiCoords(TypedDict):
+    steam: TransferSteamUiCoords
+
+
+class SteamAccountState(TypedDict):
+    account_name: str
+    most_recent: bool
+    timestamp: int | float
+
+
+class TransferRuntimeConfig(TypedDict):
+    settings: TransferSettings
+    dedis: TransferDedisConfig
+    ui_coords: TransferUiCoords
+    players: TransferPlayersConfig
+    steam_accounts: NotRequired[list[SteamAccountState]]
+    start_account: NotRequired[int]
 
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

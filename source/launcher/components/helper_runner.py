@@ -3,6 +3,7 @@ import json
 import sys
 import traceback
 from pathlib import Path
+from typing import cast
 
 STATUS_PREFIX = "__HELPER_STATUS__ "
 RESULT_PREFIX = "__HELPER_RESULT__ "
@@ -51,9 +52,13 @@ def run_server_transfer(args: argparse.Namespace):
         TransferConfigError,
         run_transfer_helper,
     )
+    from source.launcher.config.transfer_helper_config import (
+        normalize_transfer_runtime_config,
+    )
 
     with open(args.config, "r", encoding="utf-8") as file:
-        config = json.load(file)
+        raw_config = cast(object, json.load(file))
+    config = normalize_transfer_runtime_config(raw_config)
     emit_ready()
     try:
         completed = run_transfer_helper(

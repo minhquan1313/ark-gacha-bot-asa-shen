@@ -24,7 +24,7 @@ def load_vault_items(
     return sorted(set(items), key=str.lower)
 
 
-def save_vault_items(items, path=VAULT_ITEMS_FILE):
+def save_vault_items(items, path: str | Path = VAULT_ITEMS_FILE):
     path = Path(path)
     values = sorted(
         {str(item).strip() for item in items if str(item).strip()}, key=str.lower

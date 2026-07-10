@@ -4,7 +4,7 @@ from typing import Literal
 
 import source.ASA.config
 from source.ASA.config import LAGGED_DETECT
-from source.ASA.player import player_state
+from source.ASA.player import player_inventory, player_state
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, variables, windows
 from source.utility.types import RoiRegion
@@ -150,6 +150,8 @@ def close():
         logs.logger.debug(
             f"trying to close objects inventory {attempts} / {source.ASA.config.inventory_close_attempts}"
         )
+        player_inventory.is_can_transfer_all()
+
         windows.click(
             variables.get_pixel_loc("close_inv_x"),
             variables.get_pixel_loc("close_inv_y"),

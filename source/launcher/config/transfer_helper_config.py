@@ -2,8 +2,20 @@ import copy
 import json
 import math
 from pathlib import Path
+from typing import cast
 
 from source.launcher.config.template_settings import normalize_yaw
+from source.utility.types import (
+    DediStorageState,
+    SteamAccountState,
+    TransferDediRoute,
+    TransferDedisConfig,
+    TransferPlayersConfig,
+    TransferRuntimeConfig,
+    TransferSettings,
+    TransferStartMode,
+    TransferUiCoords,
+)
 
 TRANSFER_HELPER_DIR = Path("json_files/transfer_helper")
 TRANSFER_SETTINGS_PATH = TRANSFER_HELPER_DIR / "settings.json"
@@ -14,7 +26,7 @@ MAX_TRANSFER_RUNTIME_ACCOUNTS = 4
 MAX_TRANSFER_PLAYER_ROWS = 99
 DEFAULT_BED_NAME_PREFIX = "BBedPlayer"
 
-DEFAULT_TRANSFER_SETTINGS = {
+DEFAULT_TRANSFER_SETTINGS: TransferSettings = {
     "ping": 100,
     "transfer_start_mode": "default",
     "resource_station_yaw": 0.0,
@@ -28,7 +40,7 @@ DEFAULT_TRANSFER_SETTINGS = {
     "ark_launch_attempts": 10,
 }
 
-DEFAULT_TRANSFER_DEDIS = {
+DEFAULT_TRANSFER_DEDIS: TransferDedisConfig = {
     "resource": {
         "teleport": "TRANSFER_DDEDI",
         "transmitter_teleport": "TRANSFER_TTRANS",
@@ -41,7 +53,7 @@ DEFAULT_TRANSFER_DEDIS = {
     },
 }
 
-DEFAULT_TRANSFER_UI_COORDS = {
+DEFAULT_TRANSFER_UI_COORDS: TransferUiCoords = {
     "steam": {
         "window_title": "Steam",
         "restart_delay": 1,
@@ -58,7 +70,8 @@ def default_transfer_dedis():
 
 
 def default_transfer_dedi_item():
-    return {"location": {"yaw": 0.0, "pitch": 0.0}, "crouched": False}
+    v: DediStorageState = {"location": {"yaw": 0.0, "pitch": 0.0}, "crouched": False}
+    return v
 
 
 def default_transfer_ui_coords():
@@ -66,16 +79,17 @@ def default_transfer_ui_coords():
 
 
 def default_transfer_players(account_count=1):
-    return {
+    v: TransferPlayersConfig = {
         "players": [
             {"bed_name": name, "steam_account": ""}
             for name in generated_player_bed_names(int(account_count))
         ]
     }
+    return v
 
 
-def generated_player_bed_names(account_count):
-    names = []
+def generated_player_bed_names(account_count: int):
+    names: list[str] = []
     for account in range(1, int(account_count) + 1):
         candidate = f"{DEFAULT_BED_NAME_PREFIX}{account}"
         if _has_numeric_prefix_collision(candidate, names):
@@ -84,7 +98,7 @@ def generated_player_bed_names(account_count):
     return names
 
 
-def player_bed_name(players, account_index):
+def player_bed_name(players: TransferPlayersConfig, account_index: int):
     try:
         player = players["players"][int(account_index) - 1]
     except (KeyError, IndexError, TypeError):
@@ -95,7 +109,7 @@ def player_bed_name(players, account_index):
     return generated_player_bed_names(int(account_index))[-1]
 
 
-def player_steam_account(players, account_index):
+def player_steam_account(players: TransferPlayersConfig, account_index: int):
     try:
         player = players["players"][int(account_index) - 1]
     except (KeyError, IndexError, TypeError):
@@ -103,7 +117,9 @@ def player_steam_account(players, account_index):
     return str(player.get("steam_account", "")).strip()
 
 
-def player_bed_name_search_conflicts(players, limit=None):
+def player_bed_name_search_conflicts(
+    players: TransferPlayersConfig, limit: int | None = None
+):
     if not isinstance(players, dict):
         players = {}
     raw_players = players.get("players", [])
@@ -112,15 +128,15 @@ def player_bed_name_search_conflicts(players, limit=None):
     if limit is not None:
         raw_players = raw_players[: int(limit)]
 
-    names = []
+    names: list[str] = []
     for player in raw_players:
         if not isinstance(player, dict):
             player = {}
         names.append(str(player.get("bed_name", "")).strip())
 
-    conflicts = {}
+    conflicts: dict[int, list[str]] = {}
     for index, name in enumerate(names):
-        matches = []
+        matches: list[str] = []
         if not name:
             conflicts[index] = ["empty name"]
             continue
@@ -134,7 +150,7 @@ def player_bed_name_search_conflicts(players, limit=None):
     return conflicts
 
 
-def player_account_count(players):
+def player_account_count(players: TransferPlayersConfig | object):
     if not isinstance(players, dict):
         return 0
     raw_players = players.get("players", [])
@@ -143,18 +159,20 @@ def player_account_count(players):
     return min(len(raw_players), MAX_TRANSFER_PLAYER_ROWS)
 
 
-def runtime_account_count(players):
+def runtime_account_count(players: TransferPlayersConfig | object):
     return min(player_account_count(players), MAX_TRANSFER_RUNTIME_ACCOUNTS)
 
 
-def suggested_loop_count(dedi_count, account_count):
+def suggested_loop_count(dedi_count: int, account_count: int):
     account_count = int(account_count)
     if account_count <= 0:
         raise ValueError("account_count must be at least 1.")
     return int(math.ceil((int(dedi_count) * 6) / account_count))
 
 
-def load_transfer_settings(path=TRANSFER_SETTINGS_PATH, create_missing=True):
+def load_transfer_settings(
+    path: str | Path = TRANSFER_SETTINGS_PATH, create_missing: bool = True
+):
     path = Path(path)
     if not path.exists():
         settings = default_transfer_settings()
@@ -162,20 +180,25 @@ def load_transfer_settings(path=TRANSFER_SETTINGS_PATH, create_missing=True):
             save_transfer_settings(settings, path)
         return settings
     with path.open("r", encoding="utf-8") as file:
-        data = json.load(file)
+        data = cast(object, json.load(file))
     settings = normalize_transfer_settings(data)
-    if create_missing and any(key not in data for key in DEFAULT_TRANSFER_SETTINGS):
+    if create_missing and (
+        not isinstance(data, dict)
+        or any(key not in data for key in DEFAULT_TRANSFER_SETTINGS)
+    ):
         _write_json(settings, path)
     return settings
 
 
-def save_transfer_settings(data, path=TRANSFER_SETTINGS_PATH):
+def save_transfer_settings(data: object, path: str | Path = TRANSFER_SETTINGS_PATH):
     normalized = normalize_transfer_settings(data)
     _write_json(normalized, path)
     return normalized
 
 
-def load_transfer_dedis(path=TRANSFER_DEDIS_PATH, create_missing=True):
+def load_transfer_dedis(
+    path: str | Path = TRANSFER_DEDIS_PATH, create_missing: bool = True
+):
     path = Path(path)
     if not path.exists():
         dedis = default_transfer_dedis()
@@ -183,10 +206,11 @@ def load_transfer_dedis(path=TRANSFER_DEDIS_PATH, create_missing=True):
             save_transfer_dedis(dedis, path)
         return dedis
     with path.open("r", encoding="utf-8") as file:
-        return normalize_transfer_dedis(json.load(file))
+        data = cast(object, json.load(file))
+    return normalize_transfer_dedis(data)
 
 
-def save_transfer_dedis(data, path=TRANSFER_DEDIS_PATH):
+def save_transfer_dedis(data: object, path: str | Path = TRANSFER_DEDIS_PATH):
     normalized = normalize_transfer_dedis(data)
     _write_json(normalized, path)
     return normalized
@@ -196,12 +220,14 @@ def load_transfer_ui_coords():
     return normalize_transfer_ui_coords(default_transfer_ui_coords())
 
 
-def save_transfer_ui_coords(data):
+def save_transfer_ui_coords(data: object):
     return normalize_transfer_ui_coords(data)
 
 
 def load_transfer_players(
-    path=TRANSFER_PLAYERS_PATH, account_count=None, create_missing=True
+    path: str | Path = TRANSFER_PLAYERS_PATH,
+    account_count: int | None = None,
+    create_missing: bool = True,
 ):
     path = Path(path)
     if not path.exists():
@@ -211,12 +237,16 @@ def load_transfer_players(
             save_transfer_players(players, path, account_count)
         return players
     with path.open("r", encoding="utf-8") as file:
-        data = json.load(file)
+        data = cast(object, json.load(file))
     count = player_account_count(data) if account_count is None else account_count
     return normalize_transfer_players(data, count)
 
 
-def save_transfer_players(data, path=TRANSFER_PLAYERS_PATH, account_count=None):
+def save_transfer_players(
+    data: object,
+    path: str | Path = TRANSFER_PLAYERS_PATH,
+    account_count: int | None = None,
+):
     if account_count is None:
         account_count = player_account_count(data)
     normalized = normalize_transfer_players(data, account_count)
@@ -224,8 +254,7 @@ def save_transfer_players(data, path=TRANSFER_PLAYERS_PATH, account_count=None):
     return normalized
 
 
-def load_transfer_runtime_config(create_missing=True):
-    legacy_transmitter_teleport = _legacy_transmitter_teleport(TRANSFER_SETTINGS_PATH)
+def load_transfer_runtime_config(create_missing: bool = True):
     settings = load_transfer_settings(
         TRANSFER_SETTINGS_PATH, create_missing=create_missing
     )
@@ -235,11 +264,8 @@ def load_transfer_runtime_config(create_missing=True):
         else _old_account_count_hint(TRANSFER_SETTINGS_PATH)
     )
     dedis = load_transfer_dedis(TRANSFER_DEDIS_PATH, create_missing=create_missing)
-    if legacy_transmitter_teleport:
-        dedis = _migrate_legacy_transmitter_teleport(dedis, legacy_transmitter_teleport)
-        if create_missing:
-            save_transfer_dedis(dedis, TRANSFER_DEDIS_PATH)
-    return {
+
+    v: TransferRuntimeConfig = {
         "settings": settings,
         "dedis": dedis,
         "ui_coords": load_transfer_ui_coords(),
@@ -250,12 +276,39 @@ def load_transfer_runtime_config(create_missing=True):
         ),
     }
 
+    return v
 
-def normalize_transfer_settings(data):
+
+def normalize_transfer_runtime_config(data: object):
+    if not isinstance(data, dict):
+        data = {}
+    config: TransferRuntimeConfig = {
+        "settings": normalize_transfer_settings(data.get("settings", {})),
+        "dedis": normalize_transfer_dedis(data.get("dedis", {})),
+        "ui_coords": normalize_transfer_ui_coords(data.get("ui_coords", {})),
+        "players": normalize_transfer_players(
+            data.get("players", {}),
+            player_account_count(data.get("players", {})),
+        ),
+    }
+    steam_accounts = _normalize_steam_accounts(data.get("steam_accounts", []))
+    if steam_accounts:
+        config["steam_accounts"] = steam_accounts
+    if "start_account" in data:
+        try:
+            config["start_account"] = _int_min(
+                data["start_account"], "start_account", 1
+            )
+        except ValueError:
+            config["start_account"] = 1
+    return config
+
+
+def normalize_transfer_settings(data: object):
     if not isinstance(data, dict):
         data = {}
     normalized = default_transfer_settings()
-    normalized.update({key: data[key] for key in normalized if key in data})
+    normalized.update({key: data[key] for key in normalized if key in data})  # type: ignore
     normalized["ping"] = _int_min(normalized["ping"], "ping", 0)
     normalized["resource_station_yaw"] = _float_value(
         normalized["resource_station_yaw"], "resource_station_yaw"
@@ -285,10 +338,10 @@ def normalize_transfer_settings(data):
     normalized["ark_launch_attempts"] = _int_min(
         normalized["ark_launch_attempts"], "ark_launch_attempts", 1
     )
-    return normalized
+    return cast(TransferSettings, normalized)
 
 
-def normalize_transfer_players(data, account_count=1):
+def normalize_transfer_players(data: object, account_count: int = 1):
     if not isinstance(data, dict):
         data = {}
     raw_players = data.get("players", [])
@@ -308,28 +361,33 @@ def normalize_transfer_players(data, account_count=1):
             bed_name = generated[index]
         steam_account = str(raw.get("steam_account", "")).strip()
         players.append({"bed_name": bed_name, "steam_account": steam_account})
-    return {"players": players}
+    v: TransferPlayersConfig = {"players": players}
+    return v
 
 
-def normalize_transfer_dedis(data):
+def normalize_transfer_dedis(data: object):
+    # TransferDedisConfig
     if not isinstance(data, dict):
         data = {}
     if "resource" in data or "destination" in data:
-        dedis = {
+        dedis: TransferDedisConfig = {
             "resource": _normalize_dedi_route(data.get("resource", {})),
             "destination": _normalize_dedi_route(data.get("destination", {})),
         }
         _sync_dedi_route_lengths(dedis)
         return dedis
     route = _normalize_dedi_route(data)
-    return {
+
+    v: TransferDedisConfig = {
         "resource": copy.deepcopy(route),
         "destination": copy.deepcopy(route),
     }
 
+    return v
+
 
 def calculate_same_structure_destination_dedis(
-    dedis: dict,
+    dedis: object,
     resource_station_yaw: float,
     destination_station_yaw: float,
     target_side: str = "destination",
@@ -362,7 +420,8 @@ def calculate_same_structure_destination_dedis(
     return calculated
 
 
-def _normalize_dedi_route(data):
+def _normalize_dedi_route(data: object):
+    # TransferDediRoute
     if not isinstance(data, dict):
         data = {}
     teleport = str(data.get("teleport", "")).strip()
@@ -371,14 +430,16 @@ def _normalize_dedi_route(data):
     if not isinstance(raw_items, list):
         raw_items = []
     items = [_normalize_dedi_item(item) for item in raw_items]
-    return {
+
+    v: TransferDediRoute = {
         "teleport": teleport,
         "transmitter_teleport": transmitter_teleport,
         "items": items,
     }
+    return v
 
 
-def _sync_dedi_route_lengths(dedis):
+def _sync_dedi_route_lengths(dedis: TransferDedisConfig):
     resource_items = dedis["resource"]["items"]
     destination_items = dedis["destination"]["items"]
     target_count = max(len(resource_items), len(destination_items))
@@ -387,17 +448,18 @@ def _sync_dedi_route_lengths(dedis):
             items.append(default_transfer_dedi_item())
 
 
-def normalize_transfer_ui_coords(data):
+def normalize_transfer_ui_coords(data: object):
     if not isinstance(data, dict):
         data = {}
     normalized = default_transfer_ui_coords()
     steam = data.get("steam", {})
+    n_steam = normalized["steam"]
     if isinstance(steam, dict):
-        _deep_update(normalized["steam"], steam)
-    return normalized
+        n_steam.update(steam)
+    return cast(TransferUiCoords, normalized)
 
 
-def transfer_dedi_route(dedis, side):
+def transfer_dedi_route(dedis: TransferDedisConfig | object, side: str):
     if not isinstance(dedis, dict):
         dedis = {}
     route = dedis.get(side, {})
@@ -408,30 +470,42 @@ def transfer_dedi_route(dedis, side):
     return _normalize_dedi_route(route)
 
 
-def active_transfer_dedis(dedis, side=None):
+def active_transfer_dedis(dedis: TransferDedisConfig | object, side: str | None = None):
+    def_items: list[DediStorageState] = []
+
     if side is not None:
-        return list(transfer_dedi_route(dedis, side).get("items", []))
-    if isinstance(dedis, dict) and ("resource" in dedis or "destination" in dedis):
-        return list(transfer_dedi_route(dedis, "resource").get("items", []))
-    return list(dedis.get("items", []))
+        return transfer_dedi_route(dedis, side).get("items", def_items)
+
+    if not isinstance(dedis, dict):
+        return def_items
+
+    if "resource" in dedis or "destination" in dedis:
+        return transfer_dedi_route(dedis, "resource").get("items", def_items)
+
+    items = dedis.get("items")
+
+    if not isinstance(items, list):
+        return def_items
+
+    return cast(list[DediStorageState], items)
 
 
 def missing_runtime_inputs(
-    settings,
-    dedis,
-    ui_coords_or_players=None,
-    players=None,
-    steam_accounts=None,
-    start_account=1,
+    settings: TransferSettings | object,
+    dedis: TransferDedisConfig | object,
+    ui_coords_or_players: object = None,
+    players: TransferPlayersConfig | object = None,
+    steam_accounts: list[SteamAccountState] | object = None,
+    start_account: int = 1,
 ):
     if players is None and _looks_like_players(ui_coords_or_players):
         players = ui_coords_or_players
     missing = []
-    if settings.get("resource_server") == "0":
+    if settings.get("resource_server") == "0":  # type: ignore
         missing.append("settings.resource_server")
-    if settings.get("destination_server") == "0":
+    if settings.get("destination_server") == "0":  # type: ignore
         missing.append("settings.destination_server")
-    if settings.get("resource_server") == settings.get("destination_server"):
+    if settings.get("resource_server") == settings.get("destination_server"):  # type: ignore
         missing.append("settings.destination_server must differ from resource_server")
     if player_account_count(players) < 1:
         missing.append("players must include at least one player")
@@ -462,7 +536,11 @@ def _looks_like_players(value):
     return isinstance(value, dict) and "players" in value
 
 
-def steam_account_assignment_issues(players=None, steam_accounts=None, start_account=1):
+def steam_account_assignment_issues(
+    players: TransferPlayersConfig | object = None,
+    steam_accounts: list[SteamAccountState] | object = None,
+    start_account: int = 1,
+):
     try:
         start_account = int(start_account)
     except (TypeError, ValueError):
@@ -498,7 +576,7 @@ def steam_account_assignment_issues(players=None, steam_accounts=None, start_acc
     return issues
 
 
-def _normalize_dedi_item(item):
+def _normalize_dedi_item(item: object) -> DediStorageState:
     if not isinstance(item, dict):
         item = {}
     location = item.get("location", {})
@@ -513,7 +591,7 @@ def _normalize_dedi_item(item):
     }
 
 
-def _steam_account_names(steam_accounts):
+def _steam_account_names(steam_accounts: list[SteamAccountState] | object):
     if not isinstance(steam_accounts, list):
         return set()
     names = set()
@@ -526,7 +604,7 @@ def _steam_account_names(steam_accounts):
     return names
 
 
-def _most_recent_steam_account(steam_accounts):
+def _most_recent_steam_account(steam_accounts: list[SteamAccountState] | object):
     if not isinstance(steam_accounts, list):
         return ""
     for account in steam_accounts:
@@ -537,28 +615,20 @@ def _most_recent_steam_account(steam_accounts):
     return ""
 
 
-def _write_json(data, path):
+def _write_json(data: object, path: str | Path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as file:
         json.dump(data, file, indent=2)
 
 
-def _deep_update(target, source):
-    for key, value in source.items():
-        if isinstance(value, dict) and isinstance(target.get(key), dict):
-            _deep_update(target[key], value)
-        else:
-            target[key] = value
-
-
-def _old_account_count_hint(path):
+def _old_account_count_hint(path: str | Path):
     path = Path(path)
     if not path.exists():
         return 1
     try:
         with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
+            data = cast(object, json.load(file))
     except (OSError, json.JSONDecodeError):
         return 1
     if not isinstance(data, dict) or "account_count" not in data:
@@ -571,29 +641,27 @@ def _old_account_count_hint(path):
         return 1
 
 
-def _legacy_transmitter_teleport(path: object):
-    path = Path(path)
-    if not path.exists():
-        return ""
-    try:
-        with path.open("r", encoding="utf-8") as file:
-            data = json.load(file)
-    except (OSError, json.JSONDecodeError):
-        return ""
-    if not isinstance(data, dict):
-        return ""
-    return str(data.get("transmitter_teleport", "")).strip()
+def _normalize_steam_accounts(data: object) -> list[SteamAccountState]:
+    if not isinstance(data, list):
+        return []
+    accounts = []
+    for account in data:
+        if not isinstance(account, dict):
+            continue
+        account_name = str(account.get("account_name", "")).strip()
+        if not account_name:
+            continue
+        accounts.append(
+            {
+                "account_name": account_name,
+                "most_recent": bool(account.get("most_recent", False)),
+                "timestamp": _numeric_timestamp(account.get("timestamp", 0)),
+            }
+        )
+    return accounts
 
 
-def _migrate_legacy_transmitter_teleport(dedis: dict, transmitter_teleport: str):
-    dedis = normalize_transfer_dedis(dedis)
-    for side in ("resource", "destination"):
-        if not dedis[side].get("transmitter_teleport"):
-            dedis[side]["transmitter_teleport"] = transmitter_teleport
-    return dedis
-
-
-def _has_numeric_prefix_collision(candidate, existing_names):
+def _has_numeric_prefix_collision(candidate: str, existing_names: list[str]):
     for existing in existing_names:
         if not candidate.startswith(existing):
             continue
@@ -603,9 +671,9 @@ def _has_numeric_prefix_collision(candidate, existing_names):
     return False
 
 
-def _float_value(value, name):
+def _float_value(value: object, name: str):
     try:
-        return float(value)
+        return float(value)  # type: ignore
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a number.") from exc
 
@@ -613,24 +681,24 @@ def _float_value(value, name):
 def _transfer_start_mode(value: object):
     value = str(value).strip().lower()
     if value in {"default", "destinate"}:
-        return value
+        return cast(TransferStartMode, value)
     return "default"
 
 
-def _positive_float(value, name):
+def _positive_float(value: object, name: str):
     value = _float_value(value, name)
     if value <= 0:
         raise ValueError(f"{name} must be greater than 0.")
     return value
 
 
-def _int_min(value, name, minimum):
+def _int_min(value: object, name: str, minimum: int):
     if isinstance(value, bool):
         raise ValueError(f"{name} must be an integer.")
     if isinstance(value, float) and not value.is_integer():
         raise ValueError(f"{name} must be an integer.")
     try:
-        value = int(value)
+        value = int(value)  # type: ignore
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be an integer.") from exc
     if value < minimum:
@@ -638,14 +706,24 @@ def _int_min(value, name, minimum):
     return value
 
 
-def _int_range(value, name, minimum, maximum):
+def _int_range(value: object, name: str, minimum: int, maximum: int):
     value = _int_min(value, name, minimum)
     if value > maximum:
         raise ValueError(f"{name} must be at most {maximum}.")
     return value
 
 
-def _server_number(value, name):
+def _numeric_timestamp(value: object):
+    try:
+        return int(value)  # type: ignore
+    except (TypeError, ValueError):
+        try:
+            return float(value)  # type: ignore
+        except (TypeError, ValueError):
+            return 0
+
+
+def _server_number(value: object, name: str):
     value = str(value).strip()
     if not value or not value.isdigit():
         raise ValueError(f"{name} must be a number.")

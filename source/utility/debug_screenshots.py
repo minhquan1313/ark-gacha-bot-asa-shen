@@ -6,6 +6,7 @@ import shutil
 import time
 from dataclasses import dataclass
 from heapq import heappop, heappush
+from multiprocessing.context import SpawnProcess
 from pathlib import Path
 from queue import Empty
 
@@ -33,11 +34,11 @@ _run_timestamp = time.strftime("%Y%m%d_%H%M%S")
 
 @dataclass
 class _WorkerState:
-    request_queue: object
-    process: object
+    request_queue: multiprocessing.Queue
+    process: SpawnProcess
 
 
-def capture_for(category, active=False, delay=0.5):
+def capture_for(category: str, active=False, delay=0.5):
     if not active or not IS_DEBUG_ON:
         return _noop_capture
 
@@ -88,7 +89,7 @@ def cleanup_debug_screenshots_on_program_start():
 
 
 def _noop_capture(*_args, **_kwargs):
-    return None
+    pass
 
 
 def _request_capture(category, label, delay):
