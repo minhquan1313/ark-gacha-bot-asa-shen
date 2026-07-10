@@ -42,6 +42,23 @@ def assign_steam_accounts(players, names=None):
     return players
 
 
+def valid_transfer_dedis():
+    return normalize_transfer_dedis(
+        {
+            "resource": {
+                "teleport": "RESOURCE",
+                "transmitter_teleport": "RESOURCE_TX",
+                "items": [{"location": {"yaw": 1, "pitch": 2}}],
+            },
+            "destination": {
+                "teleport": "DEST",
+                "transmitter_teleport": "DEST_TX",
+                "items": [{"location": {"yaw": 3, "pitch": 4}}],
+            },
+        }
+    )
+
+
 class TransferHelperConfigTests(unittest.TestCase):
     def test_missing_settings_file_creates_loadable_defaults(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -56,6 +73,7 @@ class TransferHelperConfigTests(unittest.TestCase):
             self.assertEqual(settings["ark_window_ready_timeout"], 120)
             self.assertEqual(settings["ark_launch_attempts"], 10)
             self.assertEqual(settings["steam_restart_interval"], 30)
+            self.assertNotIn("transmitter_teleport", settings)
             self.assertNotIn("account_count", settings)
             self.assertNotIn("transfer_retry_delay", settings)
 
@@ -71,6 +89,8 @@ class TransferHelperConfigTests(unittest.TestCase):
             normalize_transfer_settings({"ark_window_ready_timeout": 0})
         with self.assertRaisesRegex(ValueError, "steam_restart_interval"):
             normalize_transfer_settings({"steam_restart_interval": 0})
+        with self.assertRaisesRegex(ValueError, "ping"):
+            normalize_transfer_settings({"ping": 125.5})
         self.assertEqual(
             normalize_transfer_settings({"transfer_start_mode": "nope"})[
                 "transfer_start_mode"
@@ -284,6 +304,7 @@ class TransferHelperConfigTests(unittest.TestCase):
         )
 
         self.assertEqual(config["resource"]["teleport"], "TRANSFERDEDI")
+        self.assertEqual(config["resource"]["transmitter_teleport"], "")
         self.assertEqual(config["resource"]["items"][0]["location"]["yaw"], 12.5)
         self.assertNotIn("enabled", config["resource"]["items"][0])
         self.assertTrue(config["resource"]["items"][0]["crouched"])
@@ -304,6 +325,7 @@ class TransferHelperConfigTests(unittest.TestCase):
 
         self.assertEqual(config["resource"], config["destination"])
         self.assertEqual(config["resource"]["teleport"], "TRANSFERDEDI")
+        self.assertEqual(config["resource"]["transmitter_teleport"], "")
         self.assertEqual(config["resource"]["items"][0]["location"]["pitch"], -4.0)
 
     def test_same_structure_calculation_applies_station_relative_yaw(self):
@@ -357,6 +379,61 @@ class TransferHelperConfigTests(unittest.TestCase):
             {"yaw": -140.0, "pitch": -5.0},
         )
 
+    def test_same_structure_calculation_applies_station_relative_yaw_to_resource(self):
+        dedis = normalize_transfer_dedis(
+            {
+                "resource": {
+                    "teleport": "RESOURCE",
+                    "items": [
+                        {
+                            "location": {"yaw": 0, "pitch": 0},
+                            "crouched": False,
+                        }
+                    ],
+                },
+                "destination": {
+                    "teleport": "DEST",
+                    "items": [
+                        {
+                            "location": {"yaw": 60, "pitch": 10},
+                            "crouched": True,
+                        }
+                    ],
+                },
+            }
+        )
+
+        calculated = calculate_same_structure_destination_dedis(
+            dedis, 10, 20, target_side="resource"
+        )
+        resource = calculated["resource"]["items"][0]
+
+        self.assertEqual(resource["location"], {"yaw": 50.0, "pitch": 10.0})
+        self.assertTrue(resource["crouched"])
+
+    def test_same_structure_calculation_wraps_resource_yaw(self):
+        dedis = normalize_transfer_dedis(
+            {
+                "resource": {
+                    "teleport": "RESOURCE",
+                    "items": [{"location": {"yaw": 0, "pitch": 0}}],
+                },
+                "destination": {
+                    "teleport": "DEST",
+                    "items": [{"location": {"yaw": 170, "pitch": -5}}],
+                },
+            }
+        )
+
+        calculated = calculate_same_structure_destination_dedis(
+            dedis, 30, -20, target_side="resource"
+        )
+
+        self.assertEqual(
+            calculated["resource"]["items"][0]["location"],
+            {"yaw": -140.0, "pitch": -5.0},
+        )
+
     def test_runtime_config_keeps_station_yaws_in_settings(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -402,6 +479,52 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertNotIn("station_yaw", config["dedis"]["resource"])
         self.assertNotIn("station_yaw", config["dedis"]["destination"])
 
+    def test_runtime_config_migrates_legacy_shared_transmitter_to_dedis(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            settings_path = root / "settings.json"
+            dedis_path = root / "dedis.json"
+            players_path = root / "players.json"
+            settings_path.write_text(
+                '{"transmitter_teleport": "LEGACY_TX"}',
+                encoding="utf-8",
+            )
+            dedis_path.write_text(
+                '{"resource": {"teleport": "R", "items": []},'
+                ' "destination": {"teleport": "D", "items": []}}',
+                encoding="utf-8",
+            )
+            players_path.write_text(
+                '{"players": [{"bed_name": "A"}]}',
+                encoding="utf-8",
+            )
+            import source.launcher.config.transfer_helper_config as config_module
+
+            old_paths = (
+                config_module.TRANSFER_SETTINGS_PATH,
+                config_module.TRANSFER_DEDIS_PATH,
+                config_module.TRANSFER_PLAYERS_PATH,
+            )
+            config_module.TRANSFER_SETTINGS_PATH = settings_path
+            config_module.TRANSFER_DEDIS_PATH = dedis_path
+            config_module.TRANSFER_PLAYERS_PATH = players_path
+            try:
+                config = config_module.load_transfer_runtime_config()
+            finally:
+                (
+                    config_module.TRANSFER_SETTINGS_PATH,
+                    config_module.TRANSFER_DEDIS_PATH,
+                    config_module.TRANSFER_PLAYERS_PATH,
+                ) = old_paths
+
+        self.assertNotIn("transmitter_teleport", config["settings"])
+        self.assertEqual(
+            config["dedis"]["resource"]["transmitter_teleport"], "LEGACY_TX"
+        )
+        self.assertEqual(
+            config["dedis"]["destination"]["transmitter_teleport"], "LEGACY_TX"
+        )
+
     def test_missing_dedis_file_creates_default_route(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "dedis.json"
@@ -409,6 +532,12 @@ class TransferHelperConfigTests(unittest.TestCase):
             dedis = load_transfer_dedis(path)
 
             self.assertTrue(path.exists())
+            self.assertEqual(
+                dedis["resource"]["transmitter_teleport"], "TRANSFER_TTRANS"
+            )
+            self.assertEqual(
+                dedis["destination"]["transmitter_teleport"], "TRANSFER_TTRANS"
+            )
             self.assertEqual(len(dedis["resource"]["items"]), 0)
             self.assertEqual(len(dedis["destination"]["items"]), 0)
 
@@ -440,15 +569,39 @@ class TransferHelperConfigTests(unittest.TestCase):
             "players[1].steam_account must match Steam MostRecent account", issues
         )
 
+    def test_steam_account_assignment_allows_non_first_start_account(self):
+        players = assign_steam_accounts(
+            normalize_transfer_players({}, 3), ["beta", "gamma", "alpha"]
+        )
+
+        issues = steam_account_assignment_issues(
+            players, STEAM_ACCOUNTS, start_account=3
+        )
+
+        self.assertNotIn(
+            "players[1].steam_account must match Steam MostRecent account", issues
+        )
+
+    def test_non_first_start_account_keeps_other_steam_validation(self):
+        players = assign_steam_accounts(
+            normalize_transfer_players({}, 3), ["beta", "beta", ""]
+        )
+
+        issues = steam_account_assignment_issues(
+            players, STEAM_ACCOUNTS, start_account=2
+        )
+
+        self.assertIn("players[2].steam_account duplicates player 1", issues)
+        self.assertIn("players[3].steam_account is required", issues)
+
     def test_optional_steam_launch_dialog_inputs_do_not_block_validation(self):
         settings = normalize_transfer_settings(
             {
                 "resource_server": "1111",
                 "destination_server": "2222",
-                "transmitter_teleport": "TX",
             }
         )
-        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        dedis = valid_transfer_dedis()
         coords = default_transfer_ui_coords()
         players = assign_steam_accounts(normalize_transfer_players({}, 2))
 
@@ -480,16 +633,20 @@ class TransferHelperConfigTests(unittest.TestCase):
             {
                 "resource_server": "1111",
                 "destination_server": "2222",
-                "transmitter_teleport": "TX",
             }
         )
         dedis = normalize_transfer_dedis(
             {
                 "resource": {
                     "teleport": "RESOURCE",
+                    "transmitter_teleport": "RESOURCE_TX",
                     "items": [{"location": {"yaw": 1, "pitch": 2}}],
                 },
-                "destination": {"teleport": "", "items": []},
+                "destination": {
+                    "teleport": "",
+                    "transmitter_teleport": "DEST_TX",
+                    "items": [],
+                },
             }
         )
         coords = default_transfer_ui_coords()
@@ -501,12 +658,11 @@ class TransferHelperConfigTests(unittest.TestCase):
         self.assertNotIn("dedis.destination.items must include at least one dedi", missing)
         self.assertEqual(dedis["destination"]["items"][0]["location"]["yaw"], 0.0)
 
-    def test_legacy_transfer_dedi_overrides_are_discarded_and_not_validated(self):
+    def test_missing_transmitter_teleports_are_validated_per_route(self):
         settings = normalize_transfer_settings(
             {
                 "resource_server": "1111",
                 "destination_server": "2222",
-                "transmitter_teleport": "TX",
             }
         )
         dedis = normalize_transfer_dedis(
@@ -521,6 +677,21 @@ class TransferHelperConfigTests(unittest.TestCase):
                 },
             }
         )
+        players = normalize_transfer_players({}, 1)
+
+        missing = missing_runtime_inputs(settings, dedis, players)
+
+        self.assertIn("dedis.resource.transmitter_teleport", missing)
+        self.assertIn("dedis.destination.transmitter_teleport", missing)
+
+    def test_legacy_transfer_dedi_overrides_are_discarded_and_not_validated(self):
+        settings = normalize_transfer_settings(
+            {
+                "resource_server": "1111",
+                "destination_server": "2222",
+            }
+        )
+        dedis = valid_transfer_dedis()
         coords = normalize_transfer_ui_coords(
             {
                 "transfer": {
@@ -544,10 +715,9 @@ class TransferHelperConfigTests(unittest.TestCase):
             {
                 "resource_server": "1111",
                 "destination_server": "2222",
-                "transmitter_teleport": "TX",
             }
         )
-        dedis = normalize_transfer_dedis({"teleport": "DEDI"})
+        dedis = valid_transfer_dedis()
         coords = default_transfer_ui_coords()
 
         missing = missing_runtime_inputs(settings, dedis, coords, {"players": []})

@@ -1,9 +1,7 @@
 import time
 
-import settings
 from source.ASA import config
-from source.ASA.player import player_state
-from source.ASA.stations.custom_stations import station_metadata
+from source.ASA.player import player_inventory, player_state
 from source.ASA.strucutres import inventory, teleporter
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, windows
@@ -13,6 +11,7 @@ buttons = {
     "back_x": 1800,
     "back_y": 66,
 }
+was_excess_amount = False
 
 
 def get_pixel_loc(location):
@@ -27,7 +26,7 @@ def is_open_ready():
     return is_open() and template.check_template("trans_inv_ready", 0.7)
 
 
-def ensure_active(metadata: station_metadata):
+def ensure_active():
     """This function to make sure the transmitter is ON, so if it's not, turn it on and reopen inv"""
     if not inventory.is_open():
         return False
@@ -39,9 +38,9 @@ def ensure_active(metadata: station_metadata):
     inventory.turn_on()
 
     inventory.close()
-    time.sleep(1 * settings.lag_offset)
+    time.sleep(1)
 
-    open_raw(metadata)
+    open_raw()
 
     return True
 
@@ -58,7 +57,7 @@ def close():
         windows.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
 
         if not template.template_await_false(is_open, 2):
-            return time.sleep(0.3 * settings.lag_offset)
+            return time.sleep(0.3)
 
         if attempts >= config.inventory_close_attempts:
             logs.logger.error(f"Unable to close Transmitter after {attempts} attempts")
@@ -67,13 +66,13 @@ def close():
             break
 
 
-def recover_if_problem(metadata: station_metadata):
+def recover_if_problem():
     player_state.check_state()
-    teleporter.teleport_not_default(metadata)
+    teleporter.teleport_not_default(teleporter._last_teleporter_name)
     utils.zero_center()
 
 
-def open_raw(metadata: station_metadata):
+def open_raw():
     # Open inventory
     dl = utils_simple.get_default_clock()
     while not dl():
@@ -82,14 +81,17 @@ def open_raw(metadata: station_metadata):
         if inventory.is_open():
             return
         else:
-            recover_if_problem(metadata)
+            recover_if_problem()
 
 
-def open(metadata: station_metadata):
+def open():
+    """
+    Open and ensure it's turned on
+    """
     # Open inventory
-    open_raw(metadata)
+    open_raw()
 
-    ensure_active(metadata)
+    ensure_active()
 
     if not is_open():
         logs.logger.error(
@@ -112,11 +114,61 @@ def open(metadata: station_metadata):
         )
 
 
-def open_and_transfer(metadata: station_metadata, server_number=0):
+def is_item_has_timer():
+    # First stage should be already opened and powered
+    if not is_open_ready() or not inventory.is_open():
+        return False
+
+    item_with_timer = template.capture_for_compare("capture_item_player_second_slot")
+    inventory.close()
+
+    player_inventory.open()
+    # item_without_timer = template.capture_for_compare("capture_item_player_second_slot")
+    # score = template.compare_captures(item_with_timer, item_without_timer)
+
+    is_still_timer = template.capture_compare_changed(
+        "capture_item_player_second_slot", item_with_timer
+    )
+
+    # is_still_timer = score > 0.02
+    logs.logger.debug(f"{'Still have timer' if is_still_timer else 'Not have timer'}")
+
+    inventory.close()
+
+    return is_still_timer
+
+
+def open_and_check_timer():
+    attempt_inv = 0
+    # OPEN TRANS INV
+    while not is_open() and not player_state.uploaded:
+        attempt_inv += 1
+
+        open()
+
+        if not is_open():
+            player_state.check_state()
+            time.sleep(0.5)
+
+        if attempt_inv >= config.inventory_open_attempts:
+            logs.logger.critical(
+                f"Can't open transmitter inventory after {attempt_inv} attempts"
+            )
+            break
+    if not is_open():
+        return False
+
+    still = is_item_has_timer()
+    return still
+
+
+def open_and_transfer(server_number=0):
     """
     When this is done, it should be ready at the bed spawning screen
     """
 
+    global was_excess_amount
+    was_excess_amount = False
     player_state.uploaded = False
 
     attempt = 0
@@ -132,11 +184,11 @@ def open_and_transfer(metadata: station_metadata, server_number=0):
             logs.logger.debug(
                 f"Open transmitter inventory {attempt_inv}/{config.inventory_open_attempts}"
             )
-            open(metadata)
+            open()
 
             if not is_open():
                 player_state.check_state()
-                time.sleep(0.5 * settings.lag_offset)
+                time.sleep(0.5)
 
             if attempt_inv >= config.inventory_open_attempts:
                 logs.logger.critical(
@@ -164,5 +216,7 @@ def open_and_transfer(metadata: station_metadata, server_number=0):
             if not player_state.uploaded:
                 player_state.check_state()
                 utils.zero_center()
+            if was_excess_amount:
+                return False
 
-        time.sleep(1 * settings.lag_offset)
+        time.sleep(1)

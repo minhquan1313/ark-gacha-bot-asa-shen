@@ -6,6 +6,7 @@ from source.ASA import config
 from source.ASA.player import console, player_state
 from source.launcher.utils import deposit_helper_capture
 from source.logs import gachalogs as logs
+from source.utility import utils_simple
 
 from . import local_player, windows
 
@@ -120,7 +121,7 @@ def ctrl_a():  # hotkey for sending ctrl a
     ctypes.windll.user32.SendMessageW(hwnd, WM_KEYUP, 0x11, 0)
 
 
-def close_ark_with_console_exit() -> bool:
+def close_ark_with_console_exit():
     """Try closing a visible ARK window through the in-game console."""
 
     for attempt in range(1, config.console_open_attempts + 1):
@@ -139,11 +140,13 @@ def close_ark_with_console_exit() -> bool:
         except Exception as e:
             logs.logger.warning(f"ARK exit command failed: {e}")
 
-        time.sleep(5)
-
-    hwnd = windows.ark_hwnd()
-    if not hwnd or not ctypes.windll.user32.IsWindowVisible(hwnd):
-        return True
+    dl = utils_simple.get_default_clock(5)
+    while not dl():
+        hwnd = windows.ark_hwnd()
+        if not hwnd or not ctypes.windll.user32.IsWindowVisible(hwnd):
+            return True
+        else:
+            time.sleep(0.2)
 
     logs.logger.warning("ARK did not close gracefully; forcing shutdown")
     return False
@@ -153,63 +156,75 @@ def close_ark_with_console_exit() -> bool:
 FUNCTIONS FOR MOUSE MOVEMENT
 """
 
-current_yaw = 0
-current_pitch = 0
-player_pitch_minimum = -80
-player_pitch_max = 87
+current_yaw = 0.0
+current_pitch = 0.0
+player_pitch_minimum = -80.0
+player_pitch_max = 87.0
+was_initialized = False
 _CCC_NOT_PROVIDED = object()
 
 
-def normalize_yaw(yaw):
+def normalize_yaw(yaw: float):
     yaw = (yaw % 360 + 360) % 360
     if yaw > 180:
         yaw -= 360
     return yaw
 
 
-def set_yaw(yaw):
+def set_yaw(yaw, ccc_data=_CCC_NOT_PROVIDED):
     """
-    Trigger CCC
+    Trigger CCC if ccc not provided
     """
 
     global current_yaw
-    global current_pitch
-    ccc_data = console.console_ccc()
+
+    if ccc_data is _CCC_NOT_PROVIDED or isinstance(ccc_data, object):
+        ccc_data = get_yaw_pitch_as_ccc_data()
     if ccc_data is None:
-        logs.logger.warning("CCC unavailable; setting yaw from cached angle")
-    else:
-        try:
-            current_yaw = float(ccc_data[3])
-            current_pitch = float(ccc_data[4])
-            logs.logger.debug(f"setting yaw as {current_yaw}")
-        except (IndexError, TypeError, ValueError) as e:
-            logs.logger.error(f"error processing ccc yaw and pitch: {e}")
+        logs.logger.warning("CCC unavailable; unable to zero pitch")
+        return False
 
     try:  # had an issue where this was a string for some reason
         target = float(yaw)
-        current = float(current_yaw)
-
+        current = float(ccc_data[3])
         diff = ((target - current) + 180) % 360 - 180
         if diff < 0:
             turn_left(-diff)
         else:
             turn_right(diff)
         current_yaw = normalize_yaw(target)
+        return True
     except Exception as e:
         logs.logger.error(f"error processing data into floats: {e}")
+    return False
 
 
-def set_pitch(pitch):
+def set_pitch(pitch: float, ccc_data=_CCC_NOT_PROVIDED):
     """
-    Won't trigger CCC
+    Trigger CCC if ccc not provided
     """
     global current_pitch
-    change = current_pitch - pitch
-    if change < 0:
-        turn_up(-change)
-    else:
-        turn_down(change)
-    current_pitch = pitch
+
+    if ccc_data is _CCC_NOT_PROVIDED or isinstance(ccc_data, object):
+        ccc_data = get_yaw_pitch_as_ccc_data()
+    if ccc_data is None:
+        logs.logger.warning("CCC unavailable; unable to zero pitch")
+        return False
+
+    try:  # had an issue where this was a string for some reason
+        target = float(pitch)
+        current = float(ccc_data[4])
+
+        change = current - target
+        if change < 0:
+            turn_up(-change)
+        else:
+            turn_down(change)
+        current_pitch = pitch
+        return True
+    except Exception as e:
+        logs.logger.error(f"error processing data into floats: {e}")
+    return False
 
 
 def yaw_zero(ccc_data=_CCC_NOT_PROVIDED):
@@ -222,16 +237,12 @@ def yaw_zero(ccc_data=_CCC_NOT_PROVIDED):
     global current_yaw
 
     if ccc_data is _CCC_NOT_PROVIDED:
-        ccc_data = console.console_ccc()
+        ccc_data = get_yaw_pitch_as_ccc_data()
     if ccc_data is None:
         logs.logger.warning("CCC unavailable; unable to zero yaw")
         return False
     try:
-        if float(ccc_data[3]) > 0:
-            turn_left(float(ccc_data[3]))
-        else:
-            turn_right(-float(ccc_data[3]))
-        current_yaw = 0
+        set_yaw(0, ccc_data)
         return True
     except (IndexError, TypeError, ValueError) as e:
         logs.logger.error(f"error processing ccc_data[3]: {e}")
@@ -248,16 +259,13 @@ def pitch_zero(ccc_data=_CCC_NOT_PROVIDED):
     global current_pitch
 
     if ccc_data is _CCC_NOT_PROVIDED:
-        ccc_data = console.console_ccc()
+        ccc_data = get_yaw_pitch_as_ccc_data()
     if ccc_data is None:
         logs.logger.warning("CCC unavailable; unable to zero pitch")
         return False
     try:
-        if float(ccc_data[4]) > 0:
-            turn_down(float(ccc_data[4]))
-        else:
-            turn_up(-float(ccc_data[4]))
-        current_pitch = 0
+        set_pitch(0, ccc_data)
+
         return True
     except (IndexError, TypeError, ValueError) as e:
         logs.logger.error(f"error processing ccc_data[4]: {e}")
@@ -281,7 +289,7 @@ def zero_opposite_no_ccc():
     turn_to(settings.station_yaw + 180, 0)
 
 
-def zero_opposite(target_yaw: float = None, target_pitch: float = None):
+def zero_opposite(target_yaw: float | None = None, target_pitch: float | None = None):
     """
     Trigger CCC
 
@@ -299,37 +307,21 @@ def zero_opposite(target_yaw: float = None, target_pitch: float = None):
     if target_pitch is None:
         target_pitch = 0
 
-    ccc_data = console.console_ccc()
+    ccc_data = get_yaw_pitch_as_ccc_data()
     if ccc_data is None:
-        logs.logger.warning("CCC unavailable; setting yaw from cached angle")
-    else:
-        try:
-            current_yaw = float(ccc_data[3])
-            current_pitch = float(ccc_data[4])
-            logs.logger.debug(f"setting yaw as {current_yaw}")
-        except (IndexError, TypeError, ValueError) as e:
-            logs.logger.error(f"error processing ccc yaw and pitch: {e}")
+        logs.logger.warning("CCC unavailable; unable to zero pitch")
+        return False
 
     try:
-        if target_pitch == 0:
-            pitch_zero(ccc_data)
-        else:
-            set_pitch(target_pitch)
+        set_pitch(target_pitch, ccc_data)
 
         target = float(target_yaw)
-        current = float(current_yaw)
-
-        diff = ((target - current) + 180) % 360 - 180
-        if diff < 0:
-            turn_left(-diff)
-        else:
-            turn_right(diff)
-        current_yaw = normalize_yaw(target)
+        set_yaw(target, ccc_data)
     except Exception as e:
         logs.logger.error(f"error processing data into floats: {e}")
 
 
-def zero_center(target_yaw: float = None, target_pitch: float = None):
+def zero_center(target_yaw: float | None = None, target_pitch: float | None = None):
     """
     Trigger CCC
 
@@ -347,67 +339,58 @@ def zero_center(target_yaw: float = None, target_pitch: float = None):
     if target_pitch is None:
         target_pitch = 0
 
-    ccc_data = console.console_ccc()
+    ccc_data = get_yaw_pitch_as_ccc_data()
     if ccc_data is None:
-        logs.logger.warning("CCC unavailable; setting yaw from cached angle")
-    else:
-        try:
-            current_yaw = float(ccc_data[3])
-            current_pitch = float(ccc_data[4])
-            logs.logger.debug(f"setting yaw as {current_yaw}")
-        except (IndexError, TypeError, ValueError) as e:
-            logs.logger.error(f"error processing ccc yaw and pitch: {e}")
+        logs.logger.warning("CCC unavailable; unable to zero pitch")
+        return False
 
     try:
-        if target_pitch == 0:
-            pitch_zero(ccc_data)
-        else:
-            set_pitch(target_pitch)
+        set_pitch(target_pitch, ccc_data)
 
         target = float(target_yaw)
-        current = float(current_yaw)
-
-        diff = ((target - current) + 180) % 360 - 180
-        if diff < 0:
-            turn_left(-diff)
-        else:
-            turn_right(diff)
-        current_yaw = normalize_yaw(target)
+        set_yaw(target, ccc_data)
     except Exception as e:
         logs.logger.error(f"error processing data into floats: {e}")
 
 
-def zero():
+def get_yaw_pitch(use_cache=True):
     """
     Trigger CCC
     """
-
-    logs.logger.debug("setting view angles back to 0")
     global current_yaw
     global current_pitch
     ccc_data = console.console_ccc()
+    # print(
+    #     "🚀 ~ utils.py:363 ~ get_yaw_pitch ~ ccc_data:",
+    #     ccc_data,
+    #     type(ccc_data).__name__,
+    # )
+
     if ccc_data is None:
-        logs.logger.warning("CCC unavailable; unable to zero view angles")
-        return False
+        if use_cache:
+            logs.logger.warning("CCC unavailable; setting yaw from cached angle")
+        else:
+            return None
+    else:
+        try:
+            current_yaw = float(ccc_data[3])
+            current_pitch = float(ccc_data[4])
+        except (IndexError, TypeError, ValueError) as e:
+            logs.logger.error(f"error processing ccc yaw and pitch: {e}")
+    return current_yaw, current_pitch  # yaw , pitch
 
-    yaw_zeroed = yaw_zero(ccc_data)
-    pitch_zeroed = pitch_zero(ccc_data)
-    return yaw_zeroed and pitch_zeroed
 
-
-def get_yaw_pitch():
+def get_yaw_pitch_as_ccc_data():
     """
     Trigger CCC
     """
+    data = get_yaw_pitch()
 
-    global current_pitch
-    global current_yaw
-    ccc_data = console.console_ccc()
-    if ccc_data is None:
-        raise RuntimeError("CCC unavailable; unable to read yaw and pitch")
-    current_yaw = float(ccc_data[3])
-    current_pitch = float(ccc_data[4])
-    return ccc_data[3], ccc_data[4]  # yaw , pitch
+    if data is None:
+        return None
+
+    y, p = data
+    return (0, 0, 0, y, p)  # yaw , pitch
 
 
 def turn_right(degrees):
@@ -419,6 +402,11 @@ def turn_right(degrees):
     """
 
     global current_yaw
+    global was_initialized
+    if not was_initialized:
+        get_yaw_pitch()
+        was_initialized = True
+
     windows.turn(degrees, 0)
     current_yaw = float(current_yaw)
     current_yaw = normalize_yaw(current_yaw + degrees)
@@ -433,6 +421,11 @@ def turn_left(degrees):
     """
 
     global current_yaw
+    global was_initialized
+    if not was_initialized:
+        get_yaw_pitch()
+        was_initialized = True
+
     windows.turn(-degrees, 0)
     current_yaw = float(current_yaw)
     current_yaw = normalize_yaw(current_yaw + (-degrees))
@@ -447,8 +440,13 @@ def turn_down(degrees):
     """
 
     global current_pitch
+    global was_initialized
+    if not was_initialized:
+        get_yaw_pitch()
+        was_initialized = True
+
     current_pitch = float(current_pitch)
-    allowed = min(abs(player_pitch_minimum - current_pitch), degrees)
+    allowed = int(min(abs(player_pitch_minimum - current_pitch), degrees))
     windows.turn(0, allowed)
     current_pitch -= allowed
 
@@ -462,13 +460,18 @@ def turn_up(degrees):
     """
 
     global current_pitch
+    global was_initialized
+    if not was_initialized:
+        get_yaw_pitch()
+        was_initialized = True
+
     current_pitch = float(current_pitch)
-    allowed = min(abs(player_pitch_max - current_pitch), degrees)
+    allowed = int(min(abs(player_pitch_max - current_pitch), degrees))
     windows.turn(0, -allowed)
     current_pitch += allowed
 
 
-def turn_to(yaw, pitch):
+def turn_to(yaw: float, pitch: float):
     """
     Won't trigger CCC
 

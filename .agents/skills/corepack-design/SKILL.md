@@ -8,6 +8,14 @@ description: "Project UI design reference for creating, redesigning, reviewing, 
 > Goal: use the _nostalgic gamer installer_ feeling as visual inspiration for a modern app UI.
 > This is not a clone of any specific installer, logo, or crack/repack brand. Keep the vibe, avoid copyrighted branding and piracy wording.
 
+Latest project direction:
+
+- Treat `.vscode/templateImages/corepack` as vibe references, not exact UI targets.
+- Lead with cover art or PNG/JPG imagery behind tool and action surfaces.
+- Put text and actions on top of a dark readability overlay instead of wrapping everything in heavy cards.
+- Keep the 2013 CorePack / Windows Phone installer soul: cinematic image, compact tiles, bold text, fast utility.
+- Modernize with softer small-to-medium rounded corners, calmer spacing, and fewer visible borders.
+
 ---
 
 ## 1. Core Feeling
@@ -176,11 +184,10 @@ Use cyan as the main identity color. Use yellow sparingly for attention, not as 
 
 Common feel:
 
-- Thin glowing strokes.
-- 1px or 2px borders.
-- Slight bevels.
-- Inner shadow.
-- Corners can be sharp or mildly rounded.
+- Thin glowing strokes only where they communicate grouping, focus, warning, or a real boundary.
+- 1px borders are enough for normal panels.
+- Prefer overlays, spacing, and image contrast over stacked borders.
+- Corners should be softly rounded for the modern adaptation, while still compact and technical.
 
 Recommended:
 
@@ -196,10 +203,12 @@ Avoid modern huge `border-radius: 32px`. This style likes sharper shapes.
 Good radius range:
 
 ```css
---radius-small: 4px;
---radius-medium: 8px;
+--radius-small: 6px;
+--radius-medium: 9px;
 --radius-large: 12px;
 ```
+
+Avoid borders as decoration on every helper row, nested panel, and action group. If the UI starts looking like boxes inside boxes, remove borders first and keep only active/action/warning outlines.
 
 ---
 
@@ -430,12 +439,18 @@ Avoid emoji-style icons inside the app UI. Use clean vector icons.
 
 Panels should feel like old custom installer surfaces:
 
-- Dark translucent surface.
-- Thin cyan border.
-- Internal separators.
-- Header strip.
+- Dark translucent surface over image or shell background.
+- Minimal border, often no border if spacing and background already separate the content.
+- Internal separators only for dense forms or logs.
+- Header strip only when the panel needs a label for repeated structured data.
 - Small labels.
 - Compact data rows.
+
+Cards should be used sparingly:
+
+- Good: one card per tool cover, modal, repeated route row, or important grouped form.
+- Bad: card inside card inside card, bordered helper row inside bordered panel inside bordered settings shell.
+- For tools, prefer a cover tile: background image, dark gradient overlay, title and button on top.
 
 Example data card:
 
@@ -623,14 +638,14 @@ Use this when redesigning the app.
   --text-muted: #8ea3b8;
   --text-dim: #5f7285;
 
-  --border-soft: rgba(120, 220, 255, 0.18);
-  --border-active: rgba(0, 216, 255, 0.55);
+  --border-soft: rgba(0, 216, 255, 0.21);
+  --border-active: rgba(0, 216, 255, 0.53);
 
   --shadow-cyan: 0 0 18px rgba(0, 216, 255, 0.22);
   --shadow-panel: 0 16px 50px rgba(0, 0, 0, 0.45);
 
-  --radius-small: 4px;
-  --radius-medium: 8px;
+  --radius-small: 6px;
+  --radius-medium: 9px;
   --radius-large: 12px;
 
   --font-display: 'Orbitron', 'Rajdhani', 'Oxanium', sans-serif;

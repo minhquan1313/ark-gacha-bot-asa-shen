@@ -40,13 +40,13 @@ class TemplateCatalog:
     error_paths: dict[str, Path] = field(default_factory=dict)
 
 
-def normalize_yaw(yaw: float) -> float:
+def normalize_yaw(yaw: float):
     """Wrap a yaw value into the [-180, 180) range."""
     normalized = (float(yaw) + 180.0) % 360.0 - 180.0
     return round(normalized, 12)
 
 
-def convert_deposit_yaw(data: dict, station_yaw: float, exporting: bool) -> dict:
+def convert_deposit_yaw(data: dict, station_yaw: float, exporting: bool):
     """Convert deposit route yaws between absolute and station-relative values."""
     converted = copy.deepcopy(normalize_deposit_config(data))
     adjustment = -float(station_yaw) if exporting else float(station_yaw)
@@ -59,7 +59,7 @@ def convert_deposit_yaw(data: dict, station_yaw: float, exporting: bool) -> dict
     return converted
 
 
-def _adjust_item_yaws(items: list[dict], adjustment: float) -> None:
+def _adjust_item_yaws(items: list[dict], adjustment: float):
     """Apply a yaw adjustment to route objects in place."""
     for item in items:
         item["location"]["yaw"] = normalize_yaw(
@@ -67,7 +67,7 @@ def _adjust_item_yaws(items: list[dict], adjustment: float) -> None:
         )
 
 
-def safe_template_filename(name: str) -> str:
+def safe_template_filename(name: str):
     """Derive a Windows-safe JSON filename while preserving the display name."""
     raw_name = str(name).strip()
     if raw_name.lower().endswith(".json"):
@@ -81,7 +81,7 @@ def safe_template_filename(name: str) -> str:
     return f"{safe}.json"
 
 
-def normalize_template_id(filename: str) -> str:
+def normalize_template_id(filename: str):
     """Normalize an existing template basename while preserving valid characters."""
     template_id = Path(str(filename)).name.strip()
     if not template_id:
@@ -91,7 +91,7 @@ def normalize_template_id(filename: str) -> str:
     return template_id
 
 
-def normalize_template(document: object) -> tuple[dict, list[str]]:
+def normalize_template(document: object):
     """Validate and normalize a versioned template document."""
     if not isinstance(document, dict):
         raise ValueError("Template must be a JSON object.")
@@ -118,7 +118,7 @@ def normalize_template(document: object) -> tuple[dict, list[str]]:
     )
 
 
-def _normalize_v1(raw_data: object) -> tuple[dict, list[str]]:
+def _normalize_v1(raw_data: object):
     """Normalize the version 1 main-bot template payload."""
     if not isinstance(raw_data, dict):
         raise ValueError("Template data must be a JSON object.")
@@ -146,7 +146,7 @@ def _normalize_v1(raw_data: object) -> tuple[dict, list[str]]:
     }, warnings
 
 
-def _normalize_setting_value(key: str, value: object) -> object:
+def _normalize_setting_value(key: str, value: object):
     """Normalize one required template setting using its current runtime type."""
     if key not in DEFAULT_SETTINGS:
         raise ValueError(f"Unknown template setting: {key}.")
@@ -158,12 +158,9 @@ def _normalize_setting_value(key: str, value: object) -> object:
             raise ValueError(f"Template setting {key} must be true or false.")
         return value
     if isinstance(default, int):
-        if isinstance(value, bool):
+        if isinstance(value, bool) or not isinstance(value, int):
             raise ValueError(f"Template setting {key} must be an integer.")
-        try:
-            return int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"Template setting {key} must be an integer.") from exc
+        return value
     if isinstance(default, float):
         if isinstance(value, bool):
             raise ValueError(f"Template setting {key} must be a number.")
@@ -180,7 +177,7 @@ def build_template(
     dedis: dict,
     gacha: list[dict],
     pego: list[dict],
-) -> dict:
+):
     """Build a normalized v1 snapshot from current effective configuration."""
     document = {
         "name": str(name),
@@ -196,13 +193,13 @@ def build_template(
     return normalize_template(document)[0]
 
 
-def read_template(path: str | Path) -> tuple[dict, list[str]]:
+def read_template(path: str | Path):
     """Read and validate one template JSON file."""
     with Path(path).open("r", encoding="utf-8") as file:
         return normalize_template(json.load(file))
 
 
-def scan_templates(directory: str | Path = TEMPLATE_DIRECTORY) -> TemplateCatalog:
+def scan_templates(directory: str | Path = TEMPLATE_DIRECTORY):
     """Scan a template directory without allowing one bad file to hide others."""
     directory = Path(directory)
     templates: dict[str, dict] = {}
@@ -235,7 +232,7 @@ def write_template(
     template_id: str,
     directory: str | Path = TEMPLATE_DIRECTORY,
     replaced_path: str | Path | None = None,
-) -> Path:
+):
     """Atomically write a normalized template and remove a replaced old path."""
     normalized, _warnings = normalize_template(template)
     directory = Path(directory)
@@ -252,7 +249,7 @@ def write_template(
     return destination
 
 
-def next_unique_template_filename(template_id: str, catalog: TemplateCatalog) -> str:
+def next_unique_template_filename(template_id: str, catalog: TemplateCatalog):
     """Append underscores until a template filename is unique."""
     candidate = safe_template_filename(template_id)
     used_filenames = {
@@ -264,9 +261,7 @@ def next_unique_template_filename(template_id: str, catalog: TemplateCatalog) ->
     return candidate
 
 
-def resolve_template_reference(
-    reference: str, catalog: TemplateCatalog
-) -> tuple[str | None, str]:
+def resolve_template_reference(reference: str, catalog: TemplateCatalog):
     """Resolve filename IDs and legacy stem/name references to a stable ID."""
     reference = str(reference)
     if not reference:
@@ -297,9 +292,7 @@ def resolve_template_reference(
     return None, f'Template "{reference}" cannot be found.'
 
 
-def migrate_template_references(
-    settings: dict, catalog: TemplateCatalog
-) -> tuple[dict, dict[str, str]]:
+def migrate_template_references(settings: dict, catalog: TemplateCatalog):
     """Migrate legacy template assignments to complete filename IDs."""
     migrated = copy.deepcopy(settings)
     errors: dict[str, str] = {}

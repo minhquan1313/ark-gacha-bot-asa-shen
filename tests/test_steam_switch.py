@@ -112,7 +112,7 @@ class SteamSwitchTests(unittest.TestCase):
             patch.object(steam_switch, "steam_accounts", accounts),
             patch.object(steam_switch, "ark_game_setup", ark_setup),
             patch.object(
-                steam_switch, "_close_ark_with_console_exit", return_value=True
+                steam_switch.utils, "close_ark_with_console_exit", return_value=True
             ) as graceful_close,
             patch.object(
                 steam_switch,
@@ -140,11 +140,53 @@ class SteamSwitchTests(unittest.TestCase):
         self.assertIn("Launching Steam (attempt 3).", statuses)
         self.assertEqual(statuses[-1], "Steam is visible and maximized for beta.")
 
+    def test_instant_switch_retries_without_touching_ark(self) -> None:
+        players = {"players": [{"bed_name": "Bed1", "steam_account": "beta"}]}
+        accounts = SimpleNamespace(
+            select_auto_login_account=Mock(),
+            close_steam=Mock(),
+            launch_steam=Mock(),
+        )
+        ark_setup = SimpleNamespace(kill_running_ark=Mock())
+        statuses = []
+
+        with (
+            patch.object(steam_switch, "steam_accounts", accounts),
+            patch.object(steam_switch, "ark_game_setup", ark_setup),
+            patch.object(
+                steam_switch.utils, "close_ark_with_console_exit"
+            ) as graceful_close,
+            patch.object(
+                steam_switch,
+                "_wait_for_steam_window",
+                side_effect=[False, True],
+            ),
+            patch.object(steam_switch.time, "sleep"),
+        ):
+            result = steam_switch.switch_steam_account(
+                1,
+                "alpha",
+                players,
+                default_transfer_ui_coords(),
+                statuses.append,
+                close_ark=False,
+                loginusers=Path("loginusers.vdf"),
+                steam_restart_interval=30,
+            )
+
+        self.assertEqual(result, "beta")
+        accounts.select_auto_login_account.assert_called_once()
+        self.assertEqual(accounts.launch_steam.call_count, 2)
+        self.assertEqual(accounts.close_steam.call_count, 2)
+        graceful_close.assert_not_called()
+        ark_setup.kill_running_ark.assert_not_called()
+        self.assertNotIn("Closing ARK before restarting Steam.", statuses)
+
     def test_same_account_remains_noop_without_force_restart(self) -> None:
         players = {"players": [{"bed_name": "Bed1", "steam_account": "alpha"}]}
         with (
             patch.object(
-                steam_switch, "_close_ark_with_console_exit"
+                steam_switch.utils, "close_ark_with_console_exit"
             ) as graceful_close,
             patch.object(steam_switch.ark_game_setup, "kill_running_ark") as kill,
         ):
@@ -177,8 +219,8 @@ class SteamSwitchTests(unittest.TestCase):
             patch.object(steam_switch, "steam_accounts", accounts),
             patch.object(steam_switch, "ark_game_setup", ark_setup),
             patch.object(
-                steam_switch,
-                "_close_ark_with_console_exit",
+                steam_switch.utils,
+                "close_ark_with_console_exit",
                 side_effect=lambda: events.append("graceful_close"),
             ),
             patch.object(steam_switch, "_wait_for_steam_window", return_value=True),

@@ -22,12 +22,12 @@ from source.launcher.utils.deposit_helper_capture import (
 class PositionRenderGuide(DepositHelperGuide):
     PAGES = [
         (
-            "POSITION / RENDER HELPER",
+            "Position / Render Helper",
             "Capture the current horizontal view for each render setting. Replace this placeholder guide with your preferred setup steps later.",
             "welcome",
         ),
         (
-            "CAPTURE AND VIEW",
+            "Capture And View",
             "Capture stores the current yaw only. View applies the saved yaw with pitch zero. Press Alt + N to return to the helper.",
             "dashboard",
         ),
@@ -38,9 +38,9 @@ class PositionRenderHelper(BaseHelperWindow):
     def __init__(self, owner):
         super().__init__(
             owner,
-            "POSITION / RENDER HELPER",
+            "Position Helper",
             430,
-            260,
+            0,
             route_kind="position_render",
             route_index=None,
             position="top_right",
@@ -66,7 +66,7 @@ class PositionRenderHelper(BaseHelperWindow):
         return timer
 
     def _build_ui(self):
-        guide = self._button("?", "Open guide book")
+        guide = self._titlebar_button("?", "Open guide book")
         guide.clicked.connect(self.show_guide)
         self.add_header_action(guide)
 
@@ -85,9 +85,12 @@ class PositionRenderHelper(BaseHelperWindow):
         label.setObjectName("HelperRowSummary")
         value = QLabel(str(self.owner.settings.get(key, 0.0)))
         value.setObjectName("HelperStatus")
-        capture = self._button("C", f"Capture current yaw for {key}")
+        setattr(self, f"{key}_value_label", value)
+        capture = self._helper_action_button(
+            "icon.capture_target", f"Capture current yaw for {key}"
+        )
         capture.clicked.connect(lambda checked=False, name=key: self.capture(name))
-        view = self._button("V", f"View saved yaw for {key}")
+        view = self._helper_action_button("icon.view_eye", f"View saved yaw for {key}")
         view.clicked.connect(lambda checked=False, name=key: self.view(name))
         layout.addWidget(label, 1)
         layout.addWidget(value)
@@ -110,7 +113,9 @@ class PositionRenderHelper(BaseHelperWindow):
             if field is not None:
                 field.setText(str(yaw))
             self.owner.persist_settings_from_visible_fields(show_log=False)
-            self.owner._render_settings_group("STATIONS")
+            value_label = getattr(self, f"{key}_value_label", None)
+            if value_label is not None:
+                value_label.setText(f"{yaw:.2f}")
             self.status.setText(f"Saved {key}: {yaw:.2f}.")
         except Exception as exc:
             self.status.setText(f"Capture failed: {exc}")

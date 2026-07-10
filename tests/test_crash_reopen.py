@@ -27,7 +27,6 @@ psutil_module = _module(
     AccessDenied=type("AccessDenied", (Exception,), {}),
     process_iter=Mock(return_value=[]),
 )
-pyautogui_module = _module("pyautogui", click=Mock())
 win32process_module = _module(
     "win32process", GetWindowThreadProcessId=Mock(return_value=(0, 0))
 )
@@ -42,6 +41,8 @@ ark_setup_module = _module(
     launch_ark_through_steam=Mock(),
 )
 system_module = _module("source.launcher.utils.system", validate_ark_window=Mock())
+launcher_module = _module("source.launcher", ark_game_setup=ark_setup_module)
+launcher_utils_module = _module("source.launcher.utils", system=system_module)
 capture_module = _module(
     "source.launcher.utils.deposit_helper_capture", focus_game_window=Mock()
 )
@@ -52,10 +53,11 @@ with patch.dict(
     sys.modules,
     {
         "psutil": psutil_module,
-        "pyautogui": pyautogui_module,
         "win32process": win32process_module,
         "source.join_sim.source.logs.logger": logger_module,
+        "source.launcher": launcher_module,
         "source.launcher.ark_game_setup": ark_setup_module,
+        "source.launcher.utils": launcher_utils_module,
         "source.launcher.utils.system": system_module,
         "source.launcher.utils.deposit_helper_capture": capture_module,
         "source.utility.windows": windows_module,
@@ -76,7 +78,55 @@ class FakeClock:
 
 
 class CrashReopenTests(unittest.TestCase):
-    def test_wait_for_usable_window_validates_focuses_and_clicks_center(self):
+    def setUp(self) -> None:
+        crash.crash_process = None
+        psutil_module.process_iter.reset_mock(return_value=True, side_effect=True)
+        psutil_module.process_iter.return_value = []
+        windows_module.ark_hwnd.reset_mock(return_value=True, side_effect=True)
+        windows_module.ark_hwnd.return_value = 0
+        logger_module.logger.critical.reset_mock(return_value=True, side_effect=True)
+        logger_module.logger.warning.reset_mock(return_value=True, side_effect=True)
+
+    def test_detect_crash_returns_true_for_crash_report_client(self):
+        crash_client = _Process()
+        crash_client.info = {"name": "CrashReportClient.exe", "exe": None}
+        psutil_module.process_iter.return_value = [crash_client]
+
+        self.assertTrue(crash.detect_crash())
+
+        self.assertIs(crash.crash_process, crash_client)
+        windows_module.ark_hwnd.assert_not_called()
+        logger_module.logger.critical.assert_called_once_with(
+            "Crash detected", stack_info=True
+        )
+
+    def test_detect_crash_returns_true_when_ark_window_is_missing(self):
+        psutil_module.process_iter.return_value = []
+        windows_module.ark_hwnd.return_value = 0
+
+        self.assertTrue(crash.detect_crash())
+
+        logger_module.logger.critical.assert_called_once_with(
+            "ARK window was not found; treating as crashed"
+        )
+
+    def test_detect_crash_returns_false_when_ark_window_exists(self):
+        psutil_module.process_iter.return_value = []
+        windows_module.ark_hwnd.return_value = 123
+
+        self.assertFalse(crash.detect_crash())
+
+    def test_detect_crash_returns_true_when_ark_window_check_fails(self):
+        psutil_module.process_iter.return_value = []
+        windows_module.ark_hwnd.side_effect = RuntimeError("window lookup failed")
+
+        self.assertTrue(crash.detect_crash())
+
+        logger_module.logger.critical.assert_called_once_with(
+            "Unable to detect ARK window: window lookup failed"
+        )
+
+    def test_wait_for_usable_window_validates_and_focuses(self):
         clock = FakeClock()
         with (
             patch.object(crash.time, "monotonic", side_effect=clock.now),
@@ -84,12 +134,10 @@ class CrashReopenTests(unittest.TestCase):
             patch.object(crash, "_process_running", return_value=True),
             patch.object(crash.system, "validate_ark_window", return_value=(1920, 1080)),
             patch.object(crash, "focus_game_window") as focus,
-            patch.object(crash.pyautogui, "click") as click,
         ):
             crash._wait_for_usable_ark_window(10)
 
         focus.assert_called_once_with(center_cursor_when_switching=True)
-        click.assert_called_once_with(960, 540)
 
     def test_reopen_retries_full_sequence_until_window_is_usable(self):
         events = []

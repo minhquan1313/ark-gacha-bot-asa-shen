@@ -1,7 +1,6 @@
 import time
-from typing import Literal
+from typing import Literal, cast
 
-import settings
 from source.ASA import config
 
 """
@@ -31,7 +30,7 @@ def grid_loc_gen(
 
     max_items = col * row if col is not None and row is not None else None
 
-    def gen(index: int = 0) -> tuple[int, int]:
+    def gen(index: int = 0):
         """
         Return the column and row for an item index.
 
@@ -54,7 +53,7 @@ def grid_loc_gen(
             raise IndexError("index must not be negative")
 
         if max_items is not None and index >= max_items:
-            return -1, -1
+            return cast(tuple[int, int], (-1, -1))
 
         if col is not None and row is None:
             current_row, current_col = divmod(index, col)
@@ -63,6 +62,9 @@ def grid_loc_gen(
         if row is not None and col is None:
             current_col, current_row = divmod(index, row)
             return current_col, current_row
+
+        if col is None or row is None:
+            raise ValueError("Both col and row are required for two-direction grids")
 
         if direction == "x":
             current_row, current_col = divmod(index, col)
@@ -88,20 +90,20 @@ def clock_tracker():
 class TimedOutCounter:
     """Track whether a configurable timeout duration has elapsed."""
 
-    def __init__(self, limit_seconds: float = 3) -> None:
+    def __init__(self, limit_seconds: float = 3):
         self.limit_seconds = limit_seconds
         self.reset()
 
-    def __call__(self) -> bool:
+    def __call__(self):
         """Return True when the timeout duration has elapsed."""
         return time.monotonic() >= self._timeout
 
-    def reset(self) -> None:
+    def reset(self):
         """Restart the timeout countdown using the current duration."""
         self._timeout = time.monotonic() + self.limit_seconds
 
 
-def timed_out_counter(limit_seconds: float = 3) -> TimedOutCounter:
+def timed_out_counter(limit_seconds: float = 3):
     """Create a resettable timeout checker."""
     return TimedOutCounter(limit_seconds)
 
@@ -109,7 +111,10 @@ def timed_out_counter(limit_seconds: float = 3) -> TimedOutCounter:
 def get_default_clock(
     deadline: float = config.timeout_deadline,
     multiplier: float = 1,
-) -> TimedOutCounter:
-    """Create the default timeout checker with lag compensation applied."""
-    effective_multiplier = max(settings.lag_offset, multiplier)
-    return timed_out_counter(deadline * effective_multiplier)
+):
+    """Create the default timeout checker."""
+    return timed_out_counter(deadline * multiplier)
+
+
+def get_default_timeout_value():
+    return config.timeout_deadline

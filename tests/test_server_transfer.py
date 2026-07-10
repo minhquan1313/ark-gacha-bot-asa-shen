@@ -21,7 +21,6 @@ console_module = _module("source.ASA.player.console")
 player_inventory_module = _module("source.ASA.player.player_inventory")
 player_state_module = _module("source.ASA.player.player_state")
 tribelog_module = _module("source.ASA.player.tribelog")
-custom_stations_module = _module("source.ASA.stations.custom_stations")
 bed_module = _module("source.ASA.strucutres.bed")
 teleporter_module = _module("source.ASA.strucutres.teleporter")
 render_module = _module("source.gacha_bot.render", render_flag=False)
@@ -74,7 +73,6 @@ with patch.dict(
         "source.ASA.player.player_inventory": player_inventory_module,
         "source.ASA.player.player_state": player_state_module,
         "source.ASA.player.tribelog": tribelog_module,
-        "source.ASA.stations.custom_stations": custom_stations_module,
         "source.ASA.strucutres.bed": bed_module,
         "source.ASA.strucutres.teleporter": teleporter_module,
         "source.gacha_bot.render": render_module,
@@ -115,10 +113,9 @@ from source.launcher.config.transfer_helper_config import default_transfer_ui_co
 def ready_config():
     return {
         "settings": {
-            "lag_offset": 1,
+            "ping": 1,
             "resource_station_yaw": 0,
             "destination_station_yaw": 0,
-            "transmitter_teleport": "TX",
             "resource_server": "1111",
             "destination_server": "2222",
             "loop_count": 1,
@@ -126,8 +123,16 @@ def ready_config():
             "transfer_retry_delay": 0,
         },
         "dedis": {
-            "resource": {"teleport": "RESOURCE", "items": [{"location": {}}]},
-            "destination": {"teleport": "DEST", "items": [{"location": {}}]},
+            "resource": {
+                "teleport": "RESOURCE",
+                "transmitter_teleport": "RESOURCE_TX",
+                "items": [{"location": {}}],
+            },
+            "destination": {
+                "teleport": "DEST",
+                "transmitter_teleport": "DEST_TX",
+                "items": [{"location": {}}],
+            },
         },
         "ui_coords": default_transfer_ui_coords(),
         "players": {"players": [{"bed_name": "Bed1", "steam_account": "alpha"}]},
@@ -198,6 +203,12 @@ class ServerTransferRunnerTests(unittest.TestCase):
         ]
         self.assertIn("2222", transferred_servers)
         self.assertIn("1111", transferred_servers)
+        transfer_sides = [
+            call_args.args[6]
+            for call_args in dependencies.transfer_to_server.call_args_list
+        ]
+        self.assertIn("resource", transfer_sides)
+        self.assertIn("destination", transfer_sides)
         dependencies.go_back_to_bed.assert_called_once_with("Bed1")
         dependencies.spawn_bed.assert_any_call("Bed1")
         dependencies.switch_steam_account.assert_not_called()
@@ -310,6 +321,103 @@ class ServerTransferRunnerTests(unittest.TestCase):
             snapshots[0]["running"][0]["name"], "Acc 1 L1 - Ensure ARK Ready"
         )
 
+    def test_default_mode_start_account_skips_first_pass_accounts(self):
+        config = ready_config()
+        config["start_account"] = 3
+        config["players"]["players"].extend(
+            [
+                {"bed_name": "Bed2", "steam_account": "beta"},
+                {"bed_name": "Bed3", "steam_account": "gamma"},
+            ]
+        )
+        config["steam_accounts"] = [
+            {"account_name": "alpha", "most_recent": False, "timestamp": 1},
+            {"account_name": "beta", "most_recent": False, "timestamp": 2},
+            {"account_name": "gamma", "most_recent": True, "timestamp": 3},
+        ]
+        snapshots = []
+
+        with runtime_dependencies() as dependencies:
+            self.assertTrue(run_transfer_helper(config, task_callback=snapshots.append))
+
+        self.assertEqual(
+            [call_args.args[3] for call_args in dependencies.withdraw_from_transfer_dedis.call_args_list],
+            [3],
+        )
+        self.assertEqual(
+            [call_args.args[3] for call_args in dependencies.deposit_to_transfer_dedis.call_args_list],
+            [3],
+        )
+        self.assertEqual(
+            [call_args.args[0] for call_args in dependencies.switch_steam_account.call_args_list],
+            [3, 3, 1],
+        )
+        self.assertEqual(
+            snapshots[0]["running"][0]["name"], "Acc 3 - Switch Steam - gamma"
+        )
+
+    def test_default_mode_start_account_only_skips_first_loop(self):
+        config = ready_config()
+        config["start_account"] = 3
+        config["settings"]["loop_count"] = 2
+        config["players"]["players"].extend(
+            [
+                {"bed_name": "Bed2", "steam_account": "beta"},
+                {"bed_name": "Bed3", "steam_account": "gamma"},
+            ]
+        )
+        config["steam_accounts"] = [
+            {"account_name": "alpha", "most_recent": False, "timestamp": 1},
+            {"account_name": "beta", "most_recent": False, "timestamp": 2},
+            {"account_name": "gamma", "most_recent": True, "timestamp": 3},
+        ]
+
+        with runtime_dependencies() as dependencies:
+            self.assertTrue(run_transfer_helper(config))
+
+        self.assertEqual(
+            [call_args.args[3] for call_args in dependencies.withdraw_from_transfer_dedis.call_args_list],
+            [3, 3],
+        )
+        self.assertEqual(
+            [call_args.args[3] for call_args in dependencies.deposit_to_transfer_dedis.call_args_list],
+            [3, 1, 2, 3],
+        )
+
+    def test_destinate_mode_start_account_skips_first_loop_accounts(self):
+        config = ready_config()
+        config["start_account"] = 3
+        config["settings"]["transfer_start_mode"] = "destinate"
+        config["players"]["players"].extend(
+            [
+                {"bed_name": "Bed2", "steam_account": "beta"},
+                {"bed_name": "Bed3", "steam_account": "gamma"},
+            ]
+        )
+        config["steam_accounts"] = [
+            {"account_name": "alpha", "most_recent": False, "timestamp": 1},
+            {"account_name": "beta", "most_recent": False, "timestamp": 2},
+            {"account_name": "gamma", "most_recent": True, "timestamp": 3},
+        ]
+        snapshots = []
+
+        with runtime_dependencies() as dependencies:
+            self.assertTrue(run_transfer_helper(config, task_callback=snapshots.append))
+
+        dependencies.verify_tribelog.assert_not_called()
+        dependencies.withdraw_from_transfer_dedis.assert_not_called()
+        self.assertEqual(
+            [call_args.args[3] for call_args in dependencies.deposit_to_transfer_dedis.call_args_list],
+            [3],
+        )
+        self.assertEqual(
+            [call_args.args[4] for call_args in dependencies.transfer_to_server.call_args_list],
+            [3, 3],
+        )
+        self.assertEqual(
+            snapshots[0]["running"][0]["name"], "Acc 3 L1 - Switch Steam - gamma"
+        )
+
     def test_task_snapshots_track_dependency_actions_and_next_three(self):
         config = ready_config()
         config["settings"]["loop_count"] = 2
@@ -368,10 +476,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
             for snapshot in snapshots
             if snapshot["running"]
         ]
-        self.assertEqual(
-            published_tasks,
-            server_transfer._transfer_task_plan(config["settings"], config["players"], 2),
-        )
+        self.assertIn("Acc 1 - Join Resource - 1111", published_tasks)
         self.assertIn("Acc 1 L1 - Going back to Tekpod", published_tasks)
         self.assertIn("Acc 1 L1 - Enter Tekpod", published_tasks)
         self.assertIn("Acc 1 L2 - Enter Tekpod", published_tasks)
@@ -398,7 +503,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
         )
         self.assertEqual(
             verify_snapshot["active"][0]["name"],
-            "Acc 1 - Wait Resource Structures",
+            "Acc 1 - Check Player State",
         )
 
     def test_task_snapshots_discard_skipped_account_actions(self):
@@ -435,12 +540,8 @@ class ServerTransferRunnerTests(unittest.TestCase):
         )
 
     def test_join_failure_returns_false_without_killing_ark(self):
-        with (
-            runtime_dependencies(join_server=Mock(return_value=False)),
-            patch.object(server_transfer, "kill_ark") as kill_ark,
-        ):
+        with runtime_dependencies(join_server=Mock(return_value=False)):
             self.assertFalse(run_transfer_helper(ready_config()))
-        kill_ark.assert_not_called()
 
     def test_steam_has_failure_skips_templates_when_steam_window_is_not_visible(self):
         steam = default_transfer_ui_coords()["steam"]
@@ -717,29 +818,21 @@ class ServerTransferRunnerTests(unittest.TestCase):
         self.assertEqual(run_auto_join.call_args.args[0], "5147")
 
     def test_check_transfer_player_state_uses_normal_teleporter_flow(self):
-        buff_checker = SimpleNamespace(check_buffs=Mock(return_value=2))
-        buffs = SimpleNamespace(check_buffs=Mock(return_value=buff_checker))
-        render = SimpleNamespace(
-            render_flag=False, enter_tekpod=Mock(), leave_tekpod=Mock()
-        )
-        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        player_state = SimpleNamespace(check_state=Mock())
         config = ready_config()
+        runtime_settings = SimpleNamespace()
 
         with (
-            patch.object(server_transfer, "buffs", buffs),
-            patch.object(server_transfer, "teleporter", teleporter),
-            patch.object(server_transfer, "render", render),
-            patch("source.gacha_bot.server_transfer.check_transfer_disconnected"),
-            patch("source.gacha_bot.server_transfer.reset_transfer_state"),
-            patch.object(server_transfer.time, "sleep"),
+            patch.object(server_transfer, "global_settings", runtime_settings),
+            patch.object(server_transfer, "player_state", player_state),
         ):
             check_transfer_player_state(
                 config["settings"], config["players"], 1, "1111"
             )
 
-        teleporter.teleport_not_default.assert_called_once_with(
-            "Bed1", fallback_bed_name="Bed1"
-        )
+        self.assertEqual(runtime_settings.server_number, "1111")
+        self.assertEqual(runtime_settings.bed_spawn, "Bed1")
+        player_state.check_state.assert_called_once_with()
 
     def test_multi_account_flow_groups_withdraws_before_destination_phase(self):
         config = ready_config()
@@ -784,20 +877,13 @@ class ServerTransferRunnerTests(unittest.TestCase):
         config = ready_config()
         config["dedis"]["resource"]["items"] *= 2
         runtime_settings = SimpleNamespace()
-        metadata = SimpleNamespace(name="RESOURCE", yaw=12)
-        custom_stations = SimpleNamespace(
-            get_station_metadata=Mock(return_value=metadata)
-        )
         teleporter = SimpleNamespace(teleport_not_default=Mock())
-        player_state = SimpleNamespace(human=SimpleNamespace(reset_crouch=Mock()))
-        utils = SimpleNamespace(turn_to=Mock(), set_yaw=Mock())
+        utils = SimpleNamespace(zero_center=Mock())
         dedi = ModuleType("source.utility.structures.dedi.dedi")
         dedi.open_withdraw_all = Mock(return_value=True)
         with (
             patch.object(server_transfer, "global_settings", runtime_settings),
-            patch.object(server_transfer, "custom_stations", custom_stations),
             patch.object(server_transfer, "teleporter", teleporter),
-            patch.object(server_transfer, "player_state", player_state),
             patch.object(server_transfer, "utils", utils),
             patch.object(server_transfer, "dedi", dedi),
         ):
@@ -806,31 +892,31 @@ class ServerTransferRunnerTests(unittest.TestCase):
             )
 
         self.assertTrue(result)
-        self.assertEqual(runtime_settings.lag_offset, 1.0)
+        self.assertEqual(runtime_settings.ping, 1)
         self.assertEqual(runtime_settings.station_yaw, 0.0)
         self.assertEqual(runtime_settings.bed_spawn, "Bed1")
         teleporter.teleport_not_default.assert_called_once_with(
-            metadata, fallback_bed_name="Bed1"
+            "RESOURCE", fallback_bed_name="Bed1"
         )
-        player_state.human.reset_crouch.assert_called_once_with()
-        utils.turn_to.assert_called_once_with(12, 0)
+        utils.zero_center.assert_called_once_with()
         self.assertEqual(dedi.open_withdraw_all.call_count, 2)
+        for call_args in dedi.open_withdraw_all.call_args_list:
+            self.assertEqual(call_args.args[0], "RESOURCE")
 
     def test_destination_dedi_sweep_delegates_and_sets_account_runtime_settings(self):
         config = ready_config()
-        config["settings"]["lag_offset"] = 1.5
+        config["settings"]["ping"] = 150
         config["settings"]["destination_station_yaw"] = 45
         config["dedis"]["destination"]["items"] *= 2
         runtime_settings = SimpleNamespace()
-        metadata = SimpleNamespace(name="DEST", yaw=45)
-        custom_stations = SimpleNamespace(
-            get_station_metadata=Mock(return_value=metadata)
-        )
+        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        utils = SimpleNamespace(zero_center=Mock())
         dedi = ModuleType("source.utility.structures.dedi.dedi")
         dedi.open_deposit_all = Mock(return_value=True)
         with (
             patch.object(server_transfer, "global_settings", runtime_settings),
-            patch.object(server_transfer, "custom_stations", custom_stations),
+            patch.object(server_transfer, "teleporter", teleporter),
+            patch.object(server_transfer, "utils", utils),
             patch.object(server_transfer, "dedi", dedi),
         ):
             result = deposit_to_transfer_dedis(
@@ -838,31 +924,28 @@ class ServerTransferRunnerTests(unittest.TestCase):
             )
 
         self.assertTrue(result)
-        self.assertEqual(runtime_settings.lag_offset, 1.5)
+        self.assertEqual(runtime_settings.ping, 150)
         self.assertEqual(runtime_settings.station_yaw, 45.0)
         self.assertEqual(runtime_settings.bed_spawn, "Bed1")
+        teleporter.teleport_not_default.assert_called_once_with(
+            "DEST", fallback_bed_name="Bed1"
+        )
+        utils.zero_center.assert_called_once_with()
         self.assertEqual(dedi.open_deposit_all.call_count, 2)
         for call_args in dedi.open_deposit_all.call_args_list:
-            self.assertIs(call_args.args[0], metadata)
+            self.assertEqual(call_args.args[0], "DEST")
 
     def test_failed_dedi_operation_stops_remaining_resource_sweep(self):
         config = ready_config()
         config["dedis"]["resource"]["items"] *= 3
         runtime_settings = SimpleNamespace()
-        metadata = SimpleNamespace(name="RESOURCE", yaw=0)
-        custom_stations = SimpleNamespace(
-            get_station_metadata=Mock(return_value=metadata)
-        )
         teleporter = SimpleNamespace(teleport_not_default=Mock())
-        player_state = SimpleNamespace(human=SimpleNamespace(reset_crouch=Mock()))
-        utils = SimpleNamespace(turn_to=Mock(), set_yaw=Mock())
+        utils = SimpleNamespace(zero_center=Mock())
         dedi = ModuleType("source.utility.structures.dedi.dedi")
         dedi.open_withdraw_all = Mock(side_effect=[True, False, True])
         with (
             patch.object(server_transfer, "global_settings", runtime_settings),
-            patch.object(server_transfer, "custom_stations", custom_stations),
             patch.object(server_transfer, "teleporter", teleporter),
-            patch.object(server_transfer, "player_state", player_state),
             patch.object(server_transfer, "utils", utils),
             patch.object(server_transfer, "dedi", dedi),
         ):
@@ -872,7 +955,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
 
         self.assertFalse(result)
         self.assertEqual(dedi.open_withdraw_all.call_count, 2)
-        utils.set_yaw.assert_not_called()
+        utils.zero_center.assert_called_once_with()
 
     def test_switch_steam_account_uses_assigned_account_name(self):
         players = {
@@ -895,6 +978,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
                     "ark_game_setup": SimpleNamespace(kill_running_ark=kill),
                     "steam_accounts": steam_accounts,
                     "_wait_for_steam_window": Mock(return_value=True),
+                    "utils": SimpleNamespace(close_ark_with_console_exit=Mock()),
                 },
             ),
             patch.object(switch_steam_account.__globals__["time"], "sleep"),
@@ -927,6 +1011,7 @@ class ServerTransferRunnerTests(unittest.TestCase):
                     "ark_game_setup": SimpleNamespace(kill_running_ark=kill),
                     "steam_accounts": steam_accounts,
                     "_wait_for_steam_window": Mock(return_value=True),
+                    "utils": SimpleNamespace(close_ark_with_console_exit=Mock()),
                 },
             ),
             patch.object(switch_steam_account.__globals__["time"], "sleep"),
@@ -960,26 +1045,13 @@ class ServerTransferRunnerTests(unittest.TestCase):
         self.assertEqual(result, "alpha")
         kill.assert_not_called()
 
-    def test_kill_ark_uses_shared_graceful_close(self):
-        with patch.object(
-            server_transfer.utils,
-            "close_ark_with_console_exit",
-            return_value=True,
-            create=True,
-        ) as close_ark:
-            self.assertTrue(server_transfer.kill_ark(Mock()))
-
-        close_ark.assert_called_once_with()
-
     def test_transfer_to_server_uses_transmitter_helper_after_teleport_and_yaw(self):
         config = ready_config()
         status = []
         teleporter = SimpleNamespace(teleport_not_default=Mock())
-        utils = SimpleNamespace(set_yaw=Mock())
+        utils = SimpleNamespace(zero_center=Mock())
         transmitter = SimpleNamespace(open_and_transfer=Mock(return_value=True))
-        custom_stations = SimpleNamespace(get_station_metadata=Mock(return_value="TX"))
         with (
-            patch.object(server_transfer, "custom_stations", custom_stations),
             patch.object(server_transfer, "teleporter", teleporter),
             patch.object(server_transfer, "utils", utils),
             patch.object(server_transfer, "transmitter", transmitter),
@@ -988,28 +1060,53 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 transfer_to_server(
                     "2222",
                     config["settings"],
-                    config["ui_coords"],
                     status.append,
                     config["players"],
                     1,
+                    config["dedis"],
+                    "resource",
                 )
             )
 
         teleporter.teleport_not_default.assert_called_once_with(
-            "TX", fallback_bed_name="Bed1"
+            "RESOURCE_TX", fallback_bed_name="Bed1"
         )
-        utils.set_yaw.assert_called_once_with(0.0)
-        transmitter.open_and_transfer.assert_called_once_with("TX", "2222")
+        transmitter.open_and_transfer.assert_called_once_with("RESOURCE_TX", "2222")
         self.assertEqual(status[-1], "Transfer to server 2222 requested.")
+
+    def test_transfer_to_server_uses_legacy_settings_transmitter_fallback(self):
+        config = ready_config()
+        config["settings"]["transmitter_teleport"] = "LEGACY_TX"
+        config["dedis"]["resource"]["transmitter_teleport"] = ""
+        teleporter = SimpleNamespace(teleport_not_default=Mock())
+        utils = SimpleNamespace(zero_center=Mock())
+        transmitter = SimpleNamespace(open_and_transfer=Mock(return_value=True))
+        with (
+            patch.object(server_transfer, "teleporter", teleporter),
+            patch.object(server_transfer, "utils", utils),
+            patch.object(server_transfer, "transmitter", transmitter),
+        ):
+            self.assertTrue(
+                transfer_to_server(
+                    "2222",
+                    config["settings"],
+                    players=config["players"],
+                    account=1,
+                    dedis=config["dedis"],
+                    transmitter_side="resource",
+                )
+            )
+
+        teleporter.teleport_not_default.assert_called_once_with(
+            "LEGACY_TX", fallback_bed_name="Bed1"
+        )
 
     def test_transfer_to_server_recovers_after_failed_transmitter_attempt(self):
         config = ready_config()
         teleporter = SimpleNamespace(teleport_not_default=Mock())
-        utils = SimpleNamespace(set_yaw=Mock())
+        utils = SimpleNamespace(zero_center=Mock())
         transmitter = SimpleNamespace(open_and_transfer=Mock(side_effect=[False, True]))
-        custom_stations = SimpleNamespace(get_station_metadata=Mock(return_value="TX"))
         with (
-            patch.object(server_transfer, "custom_stations", custom_stations),
             patch.object(server_transfer, "teleporter", teleporter),
             patch.object(server_transfer, "utils", utils),
             patch.object(server_transfer, "transmitter", transmitter),
@@ -1022,15 +1119,21 @@ class ServerTransferRunnerTests(unittest.TestCase):
                 transfer_to_server(
                     "2222",
                     config["settings"],
-                    config["ui_coords"],
                     players=config["players"],
                     account=1,
+                    dedis=config["dedis"],
+                    transmitter_side="resource",
                 )
             )
 
         self.assertEqual(transmitter.open_and_transfer.call_count, 2)
         check_state.assert_called_once_with(
-            config["settings"], config["players"], 1, "2222"
+            config["settings"],
+            config["players"],
+            1,
+            "2222",
+            config["dedis"],
+            "resource",
         )
 
 

@@ -105,6 +105,19 @@ class LauncherLogTests(unittest.TestCase):
 
         self.launcher._sync_runner_overlay.assert_called_once_with()
 
+    def test_queue_snapshot_during_runner_loading_does_not_render_old_logs(self):
+        self.launcher.runner_loading = True
+        self.launcher._render_logs = Mock()
+        snapshot = {
+            "running": [{"name": "gacha"}],
+            "active": [],
+            "waiting": [],
+        }
+
+        self.append_snapshot(snapshot)
+
+        self.launcher._render_logs.assert_not_called()
+
     def test_live_log_refreshes_runner_overlay_immediately(self):
         self.launcher._sync_runner_overlay = Mock()
 
@@ -135,6 +148,7 @@ class LauncherLogTests(unittest.TestCase):
 
         SettingsGUI.append_log(launcher, "[INFO] live log message\n")
 
+        launcher._render_logs.assert_not_called()
         overlay.refresh_loading.assert_not_called()
         launcher._show_runner_overlay.assert_not_called()
 
@@ -583,11 +597,27 @@ class LauncherStartProgramTests(unittest.TestCase):
 
         self.assertTrue(launcher.runner_loading)
         self.assertTrue(launcher.runner_launch_pending)
+        self.assertEqual(launcher.runner_log_start_index, len(launcher.log_lines))
         launcher._show_runner_overlay.assert_called_once_with()
         launcher._update_start_stop_button.assert_called_once_with()
         single_shot.assert_called_once_with(120, launcher._launch_program_process)
         launcher.close_external_helpers.assert_not_called()
         popen.assert_not_called()
+
+    def test_runner_overlay_logs_start_from_current_runner_launch(self) -> None:
+        launcher = SimpleNamespace(
+            log_lines=[
+                "[INFO] old launcher log\n",
+                "[DEBUG] 09:03:45 - DEBUG - open - inventory opened",
+                "[INFO] current runner log\n",
+            ],
+            runner_log_start_index=2,
+        )
+
+        self.assertEqual(
+            SettingsGUI._runner_overlay_log_lines(launcher),
+            ["[INFO] current runner log\n"],
+        )
 
     def test_deferred_launch_starts_wrapper_process(self):
         launcher = self.make_launcher()
@@ -694,8 +724,15 @@ class LauncherStartProgramTests(unittest.TestCase):
             runner_loading=False,
             runner_overlay=None,
             queue_snapshot={"running": [{"name": "gacha"}]},
-            log_lines=["[DEBUG] 09:03:45 - DEBUG - open - inventory opened"],
+            log_lines=[
+                "[INFO] old launcher log\n",
+                "[DEBUG] 09:03:45 - DEBUG - open - inventory opened",
+            ],
+            runner_log_start_index=1,
             is_program_running=Mock(return_value=True),
+        )
+        launcher._runner_overlay_log_lines = MethodType(
+            SettingsGUI._runner_overlay_log_lines, launcher
         )
         overlay = Mock()
 
@@ -704,7 +741,7 @@ class LauncherStartProgramTests(unittest.TestCase):
 
         self.assertIs(launcher.runner_overlay, overlay)
         overlay.refresh.assert_called_once_with(
-            launcher.queue_snapshot, launcher.log_lines
+            launcher.queue_snapshot, launcher.log_lines[1:]
         )
         overlay.show.assert_called_once_with()
         overlay.raise_.assert_called_once_with()
@@ -759,6 +796,7 @@ class LauncherStartProgramTests(unittest.TestCase):
             is_program_running=Mock(return_value=True),
             _show_runner_overlay=Mock(),
             append_log=Mock(),
+            _render_logs=Mock(),
         )
         self.attach_runner_ready_methods(launcher)
 
@@ -771,6 +809,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         events.assert_called_once_with()
         stdin.write.assert_called_once_with("__RUNNER_OVERLAY_READY__\n")
         stdin.flush.assert_called_once_with()
+        launcher._render_logs.assert_called_once_with()
 
     def test_runner_ready_waits_for_queue_state_before_ack(self) -> None:
         stdin = Mock()
@@ -785,6 +824,7 @@ class LauncherStartProgramTests(unittest.TestCase):
             is_program_running=Mock(return_value=True),
             _show_runner_overlay=Mock(),
             append_log=Mock(),
+            _render_logs=Mock(),
         )
         self.attach_runner_ready_methods(launcher)
 
@@ -811,6 +851,7 @@ class LauncherStartProgramTests(unittest.TestCase):
             _show_runner_overlay=Mock(),
             _sync_runner_overlay=Mock(),
             append_log=Mock(),
+            _render_logs=Mock(),
         )
         self.attach_runner_ready_methods(launcher)
 
@@ -822,6 +863,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         self.assertFalse(launcher.runner_loading)
         launcher._show_runner_overlay.assert_called_once_with()
         stdin.write.assert_called_once_with("__RUNNER_OVERLAY_READY__\n")
+        launcher._render_logs.assert_called_once_with()
 
     def test_runner_ready_does_not_ack_stopped_process(self) -> None:
         stdin = Mock()
@@ -836,6 +878,7 @@ class LauncherStartProgramTests(unittest.TestCase):
             is_program_running=Mock(return_value=False),
             _show_runner_overlay=Mock(),
             append_log=Mock(),
+            _render_logs=Mock(),
         )
         self.attach_runner_ready_methods(launcher)
 

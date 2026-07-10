@@ -250,6 +250,9 @@ def load_gacha_module():
     utility.local_player = types.SimpleNamespace()
     utility.screen = types.SimpleNamespace()
     utility.template = template
+    utility.utils_simple = types.SimpleNamespace(
+        get_default_clock=Mock(return_value=Mock(return_value=False))
+    )
     utility.utils = types.SimpleNamespace(
         get_default_clock=Mock(return_value=Mock(return_value=False)),
         move_mouse=Mock(),
@@ -257,6 +260,7 @@ def load_gacha_module():
         set_yaw=Mock(),
         turn_left=Mock(),
         turn_right=Mock(),
+        zero_center=Mock(),
         zero=Mock(),
     )
     utility.variables = types.SimpleNamespace(get_pixel_loc=Mock(return_value=0))
@@ -274,16 +278,13 @@ def load_gacha_module():
 
     modules = {
         "settings": types.SimpleNamespace(
-            berry_type="mejoberry", lag_offset=1
+            berry_type="mejoberry", ping=1
         ),
         "source.logs.gachalogs": types.SimpleNamespace(logger=Mock()),
         "source.utility": utility,
         "source.utility.debug_screenshots": debug,
         "source.ASA.strucutres": structures,
         "source.ASA.player": player,
-        "source.ASA.stations": types.SimpleNamespace(
-            custom_stations=types.SimpleNamespace()
-        ),
         "source.gacha_bot.config": types.SimpleNamespace(gacha_attempts=3),
         "source.gacha_bot.structures": gacha_structures,
         "source.gacha_bot.structures.crop_plots": crop_plots,
@@ -307,17 +308,26 @@ def load_pego_module():
         search_in_object=Mock(),
         transfer_all_from=Mock(),
     )
-    player_inventory = types.SimpleNamespace(drop_all_inv=Mock())
+    player_inventory = types.SimpleNamespace(
+        drop_all_inv=Mock(), is_can_drop=Mock(return_value=False)
+    )
     utility = types.ModuleType("source.utility")
     utility.debug_screenshots = debug
     utility.local_player = types.SimpleNamespace()
     utility.screen = types.SimpleNamespace()
-    utility.template = types.SimpleNamespace()
+    utility.template = types.SimpleNamespace(
+        check_template=Mock(return_value=True),
+        template_await_true=Mock(return_value=True),
+    )
+    utility.utils_simple = types.SimpleNamespace(
+        get_default_clock=Mock(return_value=Mock(return_value=False))
+    )
     utility.utils = types.SimpleNamespace(
         current_pitch=15,
         set_yaw=Mock(),
         turn_down=Mock(),
         turn_up=Mock(),
+        zero_center=Mock(),
         zero=Mock(),
     )
     utility.variables = types.SimpleNamespace()
@@ -331,14 +341,11 @@ def load_pego_module():
     player.player_state = types.SimpleNamespace()
 
     modules = {
-        "settings": types.SimpleNamespace(lag_offset=1),
+        "settings": types.SimpleNamespace(ping=1),
         "source.logs.gachalogs": types.SimpleNamespace(logger=Mock()),
         "source.utility": utility,
         "source.utility.debug_screenshots": debug,
         "source.ASA.strucutres": structures,
-        "source.ASA.stations": types.SimpleNamespace(
-            custom_stations=types.SimpleNamespace()
-        ),
         "source.ASA.player": player,
         "source.gacha_bot.config": types.SimpleNamespace(pego_attempts=3),
     }
@@ -356,34 +363,30 @@ class DebugCapturePointTests(unittest.TestCase):
     def test_gacha_nocrop_captures_seed_deposit(self):
         gacha, captures, template, _inventory = load_gacha_module()
         template.template_await_true.side_effect = [False, True]
-        metadata = types.SimpleNamespace(name="gacha1", side="left", yaw=0)
 
-        gacha.drop_off_nocrop(metadata)
+        gacha.drop_off_nocrop("gacha1", "left")
 
         captures["gacha_seed_deposit"].assert_called_once_with("gacha1_left")
 
     def test_gacha_nocrop_captures_overcap_before_drop(self):
         gacha, captures, template, _inventory = load_gacha_module()
         template.template_await_true.side_effect = [True, True, True]
-        metadata = types.SimpleNamespace(name="gacha1", side="right", yaw=0)
 
-        gacha.drop_off_nocrop(metadata)
+        gacha.drop_off_nocrop("gacha1", "right")
 
         captures["gacha_overcap_before_drop"].assert_called_once_with("gacha1_right")
 
     def test_gacha_drop_off_nocrop_captures_seed_deposit(self):
         gacha, captures, _template, _inventory = load_gacha_module()
-        metadata = types.SimpleNamespace(name="gacha2", side="right", yaw=0)
 
-        gacha.drop_off_nocrop(metadata)
+        gacha.drop_off_nocrop("gacha2", "right")
 
         captures["gacha_seed_deposit"].assert_called_once_with("gacha2_right")
 
     def test_pego_pickup_captures_crystal_withdraw(self):
         pego, captures, inventory = load_pego_module()
-        metadata = types.SimpleNamespace(name="pego1", yaw=0)
 
-        pego.pego_pickup(metadata)
+        pego.pego_pickup("pego1")
 
         captures["pego_crystal_withdraw"].assert_called_once_with("pego1")
         inventory.close.assert_called_once_with()

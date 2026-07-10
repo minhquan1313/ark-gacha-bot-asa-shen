@@ -87,7 +87,7 @@ def cleanup_debug_screenshots_on_program_start():
         _warn(f"Unable to cleanup debug screenshots: {exc}")
 
 
-def _noop_capture():
+def _noop_capture(*_args, **_kwargs):
     return None
 
 

@@ -1,0 +1,364 @@
+{
+  "name": "aa",
+  "type": "template_setting",
+  "version": 1,
+  "data": {
+    "settings": {
+      "ping": 100,
+      "iguanadon": "GACHAIGUA",
+      "bed_spawn": "GACHARENDER",
+      "berry_station": "GACHABERRYSTATION",
+      "berry_type": "mejo",
+      "time_to_reberry": 40,
+      "server_number": "5147",
+      "auto_start_program": false,
+      "singleplayer": false,
+      "external_berry": false,
+      "iguanadon_seed_throw_amount": 0,
+      "gacha_feed_delay": 6600,
+      "allow_focus_ark_window": true,
+      "focus_ark_window_interval": 5.0,
+      "helper_inactive_opacity": 0.3,
+      "launcher_width": 1200,
+      "launcher_height": 800
+    },
+    "dedis": {
+      "depositCrystalData": [
+        {
+          "teleport": "GACHADEDI1",
+          "check_on_every_dedi": 6,
+          "dedi": {
+            "items": [
+              {
+                "location": {
+                  "yaw": 156.07,
+                  "pitch": -28.56
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 155.72,
+                  "pitch": -12.81
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 154.84,
+                  "pitch": 12.22
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -172.79,
+                  "pitch": 12.04
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -172.79,
+                  "pitch": -15.08
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -171.91,
+                  "pitch": -37.65
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -131.32,
+                  "pitch": -44.65
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -132.72,
+                  "pitch": -24.01
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -132.72,
+                  "pitch": 12.22
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -78.82,
+                  "pitch": 17.29
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -78.3,
+                  "pitch": -26.11
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -78.65,
+                  "pitch": -55.68
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -24.93,
+                  "pitch": -46.23
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -26.5,
+                  "pitch": -16.66
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -24.93,
+                  "pitch": 12.39
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 16.89,
+                  "pitch": 13.79
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 18.12,
+                  "pitch": -9.13
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 17.42,
+                  "pitch": -34.68
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 51.89,
+                  "pitch": -34.68
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 49.09,
+                  "pitch": -13.33
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 48.74,
+                  "pitch": 12.04
+                },
+                "crouched": false
+              }
+            ]
+          },
+          "vault": {
+            "items": []
+          }
+        },
+        {
+          "teleport": "GACHADEDI2",
+          "check_on_every_dedi": 6,
+          "dedi": {
+            "items": []
+          },
+          "vault": {
+            "items": [
+              {
+                "location": {
+                  "yaw": 179.4,
+                  "pitch": -19.81
+                },
+                "crouched": false,
+                "items": ["riot"]
+              },
+              {
+                "location": {
+                  "yaw": -144.03,
+                  "pitch": -19.46
+                },
+                "crouched": false,
+                "items": ["riot"]
+              },
+              {
+                "location": {
+                  "yaw": -81.04,
+                  "pitch": -25.93
+                },
+                "crouched": false,
+                "items": ["riot"]
+              },
+              {
+                "location": {
+                  "yaw": -7.37,
+                  "pitch": -24.36
+                },
+                "crouched": false,
+                "items": ["riot"]
+              },
+              {
+                "location": {
+                  "yaw": 26.23,
+                  "pitch": -22.61
+                },
+                "crouched": false,
+                "items": ["assault", "tree", "gate"]
+              }
+            ]
+          }
+        }
+      ],
+      "depositGrindableData": [
+        {
+          "teleport": "GACHAGRIND1",
+          "check_on_every_dedi": 6,
+          "grinder": {
+            "active": true,
+            "location": {
+              "yaw": 22.84,
+              "pitch": -18.06
+            },
+            "crouched": false
+          },
+          "dedi": {
+            "items": [
+              {
+                "location": {
+                  "yaw": -84.07,
+                  "pitch": 22.36
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -58.52,
+                  "pitch": 21.31
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -58.17,
+                  "pitch": -24.71
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -93.35,
+                  "pitch": -26.63
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -46.45,
+                  "pitch": -31.35
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -99.47,
+                  "pitch": -34.15
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -146.54,
+                  "pitch": -18.76
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": -177.34,
+                  "pitch": -19.98
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": 150.29,
+                  "pitch": -18.23
+                },
+                "crouched": true
+              },
+              {
+                "location": {
+                  "yaw": 150.29,
+                  "pitch": -12.63
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -176.46,
+                  "pitch": -16.31
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -147.07,
+                  "pitch": -15.78
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -148.29,
+                  "pitch": 13.44
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": -175.41,
+                  "pitch": 12.92
+                },
+                "crouched": false
+              },
+              {
+                "location": {
+                  "yaw": 148.37,
+                  "pitch": 11.52
+                },
+                "crouched": false
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "gacha": [],
+    "pego": []
+  }
+}

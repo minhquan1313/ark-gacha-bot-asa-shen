@@ -153,8 +153,64 @@ class HelperRunnerReadyTests(unittest.TestCase):
             ),
         )
         self.assertTrue(call.kwargs["force_restart"])
+        self.assertTrue(call.kwargs["close_ark"])
         self.assertEqual(call.kwargs["loginusers"], loginusers.resolve())
         self.assertEqual(call.kwargs["steam_restart_interval"], 45)
+        self.assertEqual(
+            output.getvalue().splitlines(),
+            [
+                helper_runner.READY_MESSAGE,
+                "__HELPER_RESULT__ Steam restarted for beta.",
+            ],
+        )
+
+    def test_switch_steam_instant_passes_close_ark_false(self) -> None:
+        runtime = types.ModuleType("source.launcher.utils.steam_switch")
+        runtime.switch_steam_account = Mock(return_value="beta")
+        accounts = [
+            {"account_name": "alpha", "most_recent": True},
+            {"account_name": "beta", "most_recent": False},
+        ]
+        output = io.StringIO()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            loginusers = root / "config" / "loginusers.vdf"
+            loginusers.parent.mkdir()
+            loginusers.touch()
+            with (
+                patch.dict(sys.modules, {runtime.__name__: runtime}),
+                patch.object(
+                    steam_accounts_module, "load_steam_accounts", return_value=accounts
+                ),
+                patch.object(
+                    steam_accounts_module,
+                    "most_recent_account_name",
+                    return_value="alpha",
+                ),
+                patch.object(
+                    transfer_helper_config,
+                    "load_transfer_settings",
+                    return_value={"steam_restart_interval": 45},
+                ),
+                patch.object(
+                    transfer_helper_config,
+                    "load_transfer_ui_coords",
+                    return_value={"steam": {"restart_delay": 8}},
+                ),
+                redirect_stdout(output),
+            ):
+                result = helper_runner.run_switch_steam(
+                    types.SimpleNamespace(
+                        account="beta",
+                        loginusers=str(loginusers),
+                        instant=True,
+                    )
+                )
+
+        self.assertEqual(result, 0)
+        call = runtime.switch_steam_account.call_args
+        self.assertFalse(call.kwargs["close_ark"])
         self.assertEqual(
             output.getvalue().splitlines(),
             [

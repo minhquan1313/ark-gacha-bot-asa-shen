@@ -1,9 +1,3 @@
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
-
 from PySide6.QtCore import QTimer
 
 from source.launcher import ark_game_setup
@@ -41,7 +35,7 @@ class SettingsStateGuiMixin:
         self._set_start_game_enabled(True)
         self._update_start_game_button_visibility()
 
-    def _set_start_game_enabled(self, enabled: bool) -> None:
+    def _set_start_game_enabled(self, enabled: bool):
         """Update and broadcast the shared START GAME enabled state."""
         button = getattr(self, "start_game_button", None)
         if button is not None:
@@ -173,7 +167,7 @@ class SettingsStateGuiMixin:
             self.append_log("[SUCCESS] Settings saved automatically.\n")
         return True
 
-    def _collect_settings(self) -> dict:
+    def _collect_settings(self):
         data = {}
         for key, default_value in DEFAULT_SETTINGS.items():
             value = self.form_values.get(key, default_value)
@@ -209,7 +203,7 @@ class SettingsStateGuiMixin:
             return float(raw_value)
         return raw_value
 
-    def confirm_reset(self) -> None:
+    def confirm_reset(self):
         if not self.confirm(
             "Apply Default Template",
             f"Apply {DEFAULT_TEMPLATE_FILENAME} to every template-enabled settings group? Station yaw will be preserved.",

@@ -1,12 +1,6 @@
 import os
 import sys
 
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
-
 from PySide6.QtCore import QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -23,12 +17,14 @@ from PySide6.QtWidgets import (
 from source.launcher.components.widgets import (
     AnimatedButton,
     TitleBar,
+    sync_rounded_window_mask,
 )
 from source.launcher.config.constants import (
     APP_TITLE,
     ASSETS,
     BREAKPOINT_NARROW_WIDTH,
     ENABLE_NATIVE_CUSTOM_CHROME,
+    UI_METRICS,
     WINDOW_RESIZE_BORDER_PX,
 )
 from source.launcher.styles import launcher_style_sheet
@@ -56,6 +52,7 @@ RUNNER_READY_MESSAGE = "__RUNNER_READY__"
 class WindowGuiMixin:
     def _build_ui(self):
         self.setStyleSheet(launcher_style_sheet())
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         root = QWidget()
         root.setObjectName("AppRoot")
         self.setCentralWidget(root)
@@ -93,6 +90,9 @@ class WindowGuiMixin:
             self.stack.addWidget(page)
 
         self._apply_responsive_layout()
+        sync_status = getattr(self, "_sync_ark_status_labels", None)
+        if callable(sync_status):
+            sync_status()
 
     def _build_sidebar(self):
         sidebar = QFrame()
@@ -104,17 +104,20 @@ class WindowGuiMixin:
 
         logo = QLabel()
         self.sidebar_logo = logo
-        logo.setAlignment(Qt.AlignCenter)
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if os.path.exists(ASSETS["logo"]):
             logo.setPixmap(
                 QPixmap(ASSETS["logo"]).scaled(
-                    88, 88, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    88,
+                    88,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
                 )
             )
         brand = QLabel(APP_TITLE)
         self.sidebar_brand = brand
         brand.setObjectName("SidebarBrand")
-        brand.setAlignment(Qt.AlignCenter)
+        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         layout.addWidget(logo)
         layout.addWidget(brand)
@@ -150,13 +153,11 @@ class WindowGuiMixin:
             layout.addWidget(button)
 
         layout.addStretch()
-        music = AnimatedButton("MUSIC: OFF", "secondary")
-        music.setObjectName("MusicButton")
-        layout.addWidget(music)
         build = QLabel("BUILD 1.0.0")
         build.setObjectName("SidebarMeta")
         status = QLabel("STATUS: READY  +")
         status.setObjectName("SidebarReady")
+        self.sidebar_ready = status
         layout.addWidget(build)
         layout.addWidget(status)
         return sidebar
@@ -196,12 +197,14 @@ class WindowGuiMixin:
             self.setGeometry(screen.availableGeometry())
         self.is_custom_maximized = True
         self.title_bar.sync_maximize_icon()
+        self._sync_rounded_mask()
 
     def restore_custom_window(self):
         if self.normal_geometry:
             self.setGeometry(self.normal_geometry)
         self.is_custom_maximized = False
         self.title_bar.sync_maximize_icon()
+        self._sync_rounded_mask()
 
     def start_drag_from_custom_maximized(self, global_pos, title_x_ratio):
         if not self.is_custom_maximized:
@@ -219,7 +222,15 @@ class WindowGuiMixin:
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._apply_responsive_layout()
+        self._sync_rounded_mask()
         QTimer.singleShot(0, self._sync_dashboard_actions_width)
+
+    def _sync_rounded_mask(self):
+        sync_rounded_window_mask(
+            self,
+            UI_METRICS["window_radius"],
+            enabled=not getattr(self, "is_custom_maximized", False),
+        )
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -356,7 +367,10 @@ class WindowGuiMixin:
             if os.path.exists(ASSETS["logo"]):
                 self.sidebar_logo.setPixmap(
                     QPixmap(ASSETS["logo"]).scaled(
-                        size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                        size,
+                        size,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
                     )
                 )
 

@@ -19,6 +19,8 @@ class SettingsStoreTests(unittest.TestCase):
     def test_gacha_feed_delay_default_is_preserved(self):
         settings = _normalize_settings({})
 
+        self.assertEqual(settings["ping"], 100)
+        self.assertIsInstance(DEFAULT_SETTINGS["ping"], int)
         self.assertEqual(settings["gacha_feed_delay"], 6600)
         self.assertIsInstance(DEFAULT_SETTINGS["gacha_feed_delay"], int)
         self.assertEqual(settings["time_to_reberry"], 30)
@@ -80,10 +82,17 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertEqual(settings["launcher_width"], 1200)
         self.assertEqual(settings["launcher_height"], 800)
 
-    def test_template_references_default_to_manual_and_are_preserved(self):
-        settings = _normalize_settings({"lag_offset_template": "Template A"})
+    def test_ping_is_normalized_as_integer(self):
+        settings = _normalize_settings({"ping": "125"})
 
-        self.assertEqual(settings["lag_offset_template"], "Template A")
+        self.assertEqual(settings["ping"], 125)
+        with self.assertRaisesRegex(ValueError, "ping must be an integer"):
+            _normalize_settings({"ping": 125.5})
+
+    def test_template_references_default_to_manual_and_are_preserved(self):
+        settings = _normalize_settings({"ping_template": "Template A"})
+
+        self.assertEqual(settings["ping_template"], "Template A")
         self.assertEqual(settings["dedis_template"], "")
         self.assertIn("time_to_reberry_template", TEMPLATE_REFERENCE_DEFAULTS)
         self.assertTrue(set(TEMPLATE_REFERENCE_DEFAULTS) <= set(settings))
@@ -142,6 +151,7 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertEqual(setting_label("external_berry"), "Troughs away?")
         self.assertEqual(setting_label("time_to_reberry"), "Time to reberry")
         self.assertEqual(setting_label("launcher_width"), "Launcher startup width")
+        self.assertEqual(setting_label("ping"), "Server ping")
         self.assertEqual(setting_label("unmapped_example"), "Unmapped example")
 
     def test_requested_setting_tooltips_are_exposed(self):
@@ -149,7 +159,7 @@ class SettingsStoreTests(unittest.TestCase):
         self.assertIn("Single player mode", setting_tooltip("singleplayer"))
         self.assertIn("SnowOwl pells", setting_tooltip("iguanadon_seed_throw_amount"))
         self.assertIn("Seconds", setting_tooltip("time_to_reberry"))
-        self.assertEqual(setting_tooltip("lag_offset"), "")
+        self.assertEqual(setting_tooltip("ping"), "")
 
 
 if __name__ == "__main__":

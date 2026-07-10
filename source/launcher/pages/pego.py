@@ -6,7 +6,6 @@ from source.launcher.pages.common import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -21,7 +20,7 @@ from source.launcher.pages.common import (
 
 
 class PegoPagesMixin:
-    def _render_pego_group(self) -> None:
+    def _render_pego_group(self):
         self._ensure_pego_config()
         self._ensure_gacha_config()
 
@@ -68,7 +67,7 @@ class PegoPagesMixin:
         for index, entry in enumerate(self.pego_config):
             content_layout.addWidget(self._pego_card(index, entry))
         add = self._button("ADD PEGO", "secondary")
-        add.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         add.clicked.connect(self.add_pego)
         content_layout.addWidget(add)
         content_layout.addStretch()
@@ -115,7 +114,7 @@ class PegoPagesMixin:
         layout.addLayout(row)
         return card
 
-    def _pego_calculator_panel(self) -> QFrame:
+    def _pego_calculator_panel(self):
         panel = QFrame()
         panel.setObjectName("HelperRow")
         layout = QVBoxLayout(panel)
@@ -163,7 +162,7 @@ class PegoPagesMixin:
 
     def _pego_calculator_field(
         self, layout: QHBoxLayout, label_text: str, value: object
-    ) -> QLineEdit:
+    ):
         group = QVBoxLayout()
         label = QLabel(label_text)
         label.setObjectName("FormLabel")
@@ -173,7 +172,7 @@ class PegoPagesMixin:
         layout.addLayout(group)
         return field
 
-    def _pego_calculator_fields(self) -> list[QLineEdit]:
+    def _pego_calculator_fields(self):
         return [
             self.pego_calc_target_field,
             self.pego_calc_pego_count_field,
@@ -231,7 +230,7 @@ class PegoPagesMixin:
         self.save_pego_config()
         self._render_settings_group("PEGO")
 
-    def update_pego_delay_recommendation(self, show_error: bool = True) -> int | None:
+    def update_pego_delay_recommendation(self, show_error: bool = True):
         try:
             delay = self._pego_delay_recommendation()
         except ValueError as exc:
@@ -243,7 +242,7 @@ class PegoPagesMixin:
         self.pego_calc_result_label.setText(f"recommended delay: {delay}s")
         return delay
 
-    def apply_pego_delay_recommendation(self) -> None:
+    def apply_pego_delay_recommendation(self):
         delay = self.update_pego_delay_recommendation()
         if delay is None:
             return
@@ -253,7 +252,7 @@ class PegoPagesMixin:
         self.save_pego_config()
         self._render_settings_group("PEGO")
 
-    def reset_pego_delay_calculator(self) -> None:
+    def reset_pego_delay_calculator(self):
         self._ensure_pego_config()
         self._ensure_gacha_config()
         defaults = [
@@ -267,7 +266,7 @@ class PegoPagesMixin:
             field.setText(str(value))
         self.update_pego_delay_recommendation(show_error=False)
 
-    def _pego_delay_recommendation(self) -> int:
+    def _pego_delay_recommendation(self):
         return calculate_pego_delay(
             self.pego_calc_target_field.text(),
             self.pego_calc_pego_count_field.text(),
@@ -276,7 +275,7 @@ class PegoPagesMixin:
             self.pego_calc_station_seconds_field.text(),
         )
 
-    def _toggle_pego_calculator(self, body: QWidget, button: QWidget) -> None:
+    def _toggle_pego_calculator(self, body: QWidget, button: QWidget):
         visible = body.isHidden()
         body.setVisible(visible)
         button.setText("v CALCULATOR" if visible else "> CALCULATOR")

@@ -2,11 +2,12 @@ import ctypes
 from ctypes import wintypes
 
 from source.launcher.config.constants import GAME_WINDOW_TITLE
+from source.launcher.utils.system import find_window_handle
 from source.utility import local_player, screen
 
 
 def find_window_by_title(title):
-    return ctypes.windll.user32.FindWindowW(None, title)
+    return find_window_handle(title, contains=title == GAME_WINDOW_TITLE)
 
 
 INPUT_MOUSE = 0

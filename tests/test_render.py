@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_render_module():
-    settings = types.SimpleNamespace(lag_offset=1, station_yaw=-78.57)
+    settings = types.SimpleNamespace(ping=1, station_yaw=-78.57)
     pyautogui = types.SimpleNamespace(keyDown=Mock(), keyUp=Mock())
     buffs = types.SimpleNamespace(
         check_buffs=Mock(
@@ -27,8 +27,6 @@ def load_render_module():
     player.buffs = buffs
     player.player_inventory = player_inventory
     player.player_state = player_state
-    stations = types.ModuleType("source.ASA.stations")
-    stations.custom_stations = types.SimpleNamespace()
     structures = types.ModuleType("source.ASA.strucutres")
     structures.inventory = types.SimpleNamespace()
     structures.teleporter = types.SimpleNamespace(teleport_not_default=Mock())
@@ -58,7 +56,6 @@ def load_render_module():
         "settings": settings,
         "source.gacha_bot.config": types.SimpleNamespace(render_attempts=3),
         "source.ASA.player": player,
-        "source.ASA.stations": stations,
         "source.ASA.strucutres": structures,
         "source.logs.gachalogs": logs,
         "source.utility": utility,

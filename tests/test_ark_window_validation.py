@@ -13,7 +13,35 @@ from source.launcher.utils.deposit_helper_capture import focus_game_window
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.gui import SettingsGUI
 from source.launcher.utils import system
-from source.launcher.utils.system import focus_window_if_needed, validate_ark_window
+from source.launcher.utils.system import (
+    find_window_handle,
+    find_window_size,
+    focus_window_if_needed,
+    validate_ark_window,
+)
+
+
+def _user32_with_windows(windows):
+    user32 = Mock()
+    titles = {hwnd: title for hwnd, title, _visible in windows}
+    visible = {hwnd: is_visible for hwnd, _title, is_visible in windows}
+    user32.FindWindowW.return_value = 0
+    user32.IsWindowVisible.side_effect = lambda hwnd: visible.get(hwnd, False)
+    user32.GetWindowTextLengthW.side_effect = lambda hwnd: len(titles.get(hwnd, ""))
+
+    def get_window_text(hwnd, buffer, _max_count):
+        buffer.value = titles.get(hwnd, "")
+        return len(buffer.value)
+
+    def enum_windows(callback, lparam):
+        for hwnd, _title, _visible in windows:
+            if not callback(hwnd, lparam):
+                break
+        return True
+
+    user32.GetWindowTextW.side_effect = get_window_text
+    user32.EnumWindows.side_effect = enum_windows
+    return user32
 
 
 class ArkWindowValidationTests(unittest.TestCase):
@@ -30,6 +58,48 @@ class ArkWindowValidationTests(unittest.TestCase):
     def test_rejects_unsupported_resolution(self, _find_window_size):
         with self.assertRaisesRegex(RuntimeError, "2560x1440"):
             validate_ark_window()
+
+    def test_find_window_size_accepts_ark_title_containing_configured_title(self):
+        user32 = _user32_with_windows(
+            [
+                (111, "Other Window", True),
+                (222, "ARK: ArkAscended - Build 123", True),
+            ]
+        )
+
+        def set_window_rect(_hwnd, rect_pointer):
+            rect_pointer._obj.left = 100
+            rect_pointer._obj.top = 200
+            rect_pointer._obj.right = 2020
+            rect_pointer._obj.bottom = 1280
+            return True
+
+        user32.GetWindowRect.side_effect = set_window_rect
+        windll = types.SimpleNamespace(user32=user32)
+
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertEqual(find_window_size("ArkAscended"), (1920, 1080))
+
+        user32.GetWindowRect.assert_called_once()
+
+    def test_find_window_handle_ignores_non_matching_ark_titles(self):
+        user32 = _user32_with_windows([(111, "Other Window", True)])
+        windll = types.SimpleNamespace(user32=user32)
+
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertEqual(find_window_handle("ArkAscended", contains=True), 0)
+
+    def test_find_window_handle_keeps_non_ark_titles_exact_by_default(self):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 321
+        user32.EnumWindows = Mock()
+        windll = types.SimpleNamespace(user32=user32)
+
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertEqual(find_window_handle("Steam"), 321)
+
+        user32.FindWindowW.assert_called_once_with(None, "Steam")
+        user32.EnumWindows.assert_not_called()
 
     @patch(
         "source.launcher.utils.deposit_helper_capture.system.validate_ark_window",
@@ -48,6 +118,27 @@ class ArkWindowValidationTests(unittest.TestCase):
             self.assertFalse(focus_window_if_needed("ArkAscended"))
 
         user32.GetForegroundWindow.assert_not_called()
+
+    def test_focus_window_if_needed_accepts_ark_title_containing_configured_title(self):
+        user32 = _user32_with_windows(
+            [
+                (111, "Other Window", True),
+                (222, "ARK: ArkAscended - Build 123", True),
+            ]
+        )
+        user32.GetForegroundWindow.side_effect = [456, 222]
+        user32.GetWindowThreadProcessId.return_value = 789
+        user32.AttachThreadInput.return_value = True
+        user32.SetForegroundWindow.return_value = True
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
+
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertTrue(focus_window_if_needed("ArkAscended"))
+
+        user32.BringWindowToTop.assert_called_once_with(222)
+        user32.SetForegroundWindow.assert_called_once_with(222)
 
     def test_focus_window_if_needed_centers_cursor_before_switching_to_ark(self):
         user32 = Mock()

@@ -1,7 +1,6 @@
 import time
 from collections.abc import Callable
 
-import settings
 from source.ASA import config as asa_config
 from source.ASA.player import player_inventory
 from source.ASA.strucutres import inventory
@@ -11,7 +10,7 @@ from source.utility import template
 POLL_INTERVAL = 0.02
 
 
-def _open_crop_plot_inventory() -> None:
+def _open_crop_plot_inventory():
     attempts = 0
     while not template.check_template("inventory", 0.7):
         attempts += 1
@@ -25,10 +24,10 @@ def _open_crop_plot_inventory() -> None:
         if attempts >= asa_config.inventory_open_attempts:
             logs.logger.error("unable to open up the crop plot inventory")
             break
-        time.sleep(0.3 * settings.lag_offset)
+        time.sleep(0.3)
 
 
-def _close_crop_plot_inventory() -> None:
+def _close_crop_plot_inventory():
     attempts = 0
     while template.check_template("inventory", 0.7):
         attempts += 1
@@ -44,14 +43,27 @@ def _close_crop_plot_inventory() -> None:
             break
 
 
+def is_still_fece():
+    return (
+        template.check_template_no_bounds("item_snow_owl_pellet", 0.7)
+        or template.check_template_no_bounds("item_fertilizer", 0.7)
+        or template.check_template_no_bounds("item_fertilizer_fece", 0.7)
+    )
+
+
+def wait_for_no_fece_in_crop():
+    with template.temporary_overwrite_regions(inventory.inv_regions):
+        template.template_await_false(is_still_fece, 5)
+
+
 def run_fertilizer_refresh(
     status_callback: Callable[[str], object] | None = None,
-) -> None:
-    def set_status(message: str) -> None:
+):
+    def set_status(message: str):
         if status_callback is not None:
             status_callback(message)
 
-    def wait_for_prompt_to_clear() -> None:
+    def wait_for_prompt_to_clear():
         set_status("Aim away from the crop plot to continue...")
         while template.check_template_no_bounds("crop_plot_prompt", 0.9):
             time.sleep(POLL_INTERVAL)
@@ -76,6 +88,9 @@ def run_fertilizer_refresh(
 
         set_status("Refreshing fertilizer...")
         inventory.transfer_all_from()
+
+        wait_for_no_fece_in_crop()
+
         player_inventory.transfer_all_inventory()
 
         set_status("Closing crop plot inventory...")

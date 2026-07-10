@@ -1,20 +1,17 @@
 import time
 
 import psutil
+import pyautogui
 import win32process
 
+from source.join_sim.source import main
 from source.join_sim.source.logs import logger as logs
 from source.launcher import ark_game_setup
 from source.launcher.utils import system
 from source.launcher.utils.deposit_helper_capture import focus_game_window
-from source.utility import utils_simple, windows
+from source.utility import template, utils_simple, windows
 
-appid = "2399830"
 crash_process: psutil.Process | None = None
-REOPEN_RETRY_DELAY_SECONDS = 10
-ARK_WINDOW_READY_TIMEOUT_SECONDS = 120
-ARK_WINDOW_POLL_SECONDS = 1
-ARK_FOCUS_DELAY_SECONDS = 3
 
 
 def detect_crash():
@@ -24,6 +21,13 @@ def detect_crash():
             crash_process = proc
             logs.logger.critical("Crash detected", stack_info=True)
             return True
+    try:
+        if not windows.ark_hwnd():
+            logs.logger.critical("ARK window was not found; treating as crashed")
+            return True
+    except Exception as exc:
+        logs.logger.critical(f"Unable to detect ARK window: {exc}")
+        return True
     return False
 
 
@@ -59,40 +63,46 @@ def _process_running(process_name):
     return False
 
 
-def _wait_for_usable_ark_window(timeout_seconds: float) -> None:
+def _wait_for_usable_ark_window():
     """Wait until ARK has a valid window, then focus it and skip the intro."""
-    dl = utils_simple.get_default_clock(timeout_seconds)
+    dl = utils_simple.get_default_clock()
     last_error: RuntimeError | None = None
 
     while not dl():
         if _process_running(ark_game_setup.ARK_PROCESS_NAME):
             try:
                 _window_size = system.validate_ark_window()
-                time.sleep(ARK_FOCUS_DELAY_SECONDS)
+                time.sleep(3)
                 focus_game_window(center_cursor_when_switching=True)
                 return
             except RuntimeError as exc:
                 last_error = exc
                 logs.logger.warning(f"ARK window is not ready: {exc}")
-        time.sleep(ARK_WINDOW_POLL_SECONDS)
+        time.sleep(1)
 
     if last_error is not None:
         raise RuntimeError(f"ARK window did not become usable: {last_error}")
     raise RuntimeError("ARK process did not produce a usable window.")
 
 
-def re_open_game() -> None:
+def re_open_game():
     """Restart ARK until its window can be validated and focused."""
     attempt = 1
 
     while True:
         close_game()
         ark_game_setup.kill_running_ark()
-        time.sleep(REOPEN_RETRY_DELAY_SECONDS)
-
+        time.sleep(1)
         try:
-            ark_game_setup.launch_ark_through_steam()
-            _wait_for_usable_ark_window(ARK_WINDOW_READY_TIMEOUT_SECONDS)
+            ark_game_setup.prepare_and_launch_game()
+            _wait_for_usable_ark_window()
+
+            # Make sure when it restart the game, it will be at the main menu screen
+            dl = utils_simple.get_default_clock(30)
+            while not main.is_menu() and not dl():
+                focus_game_window()
+                pyautogui.click(2, 2)
+                template.template_await_true(main.is_menu, 0.5)
             return
         except Exception as exc:
             message = f"ARK reopen attempt {attempt} failed: {exc}"

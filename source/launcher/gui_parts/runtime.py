@@ -1,19 +1,19 @@
+import contextlib
 import ctypes
 import subprocess
 import sys
 import threading
 import time
 
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
-import contextlib
-
+import psutil
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
+from source.launcher.config.constants import (
+    COLORS,
+    GAME_WINDOW_TITLE,
+    SUPPORTED_GAME_RESOLUTIONS,
+)
 from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.utils.deposit_helper_capture import (
     register_shift_alt_n_hotkey,
@@ -26,6 +26,7 @@ from source.launcher.utils.native_window import (
 from source.launcher.utils.process_control import terminate_process_tree
 from source.launcher.utils.system import (
     calculate_cpu_percent,
+    find_window_size,
     get_cpu_times,
     get_memory_usage_gb,
 )
@@ -85,7 +86,7 @@ class RuntimeGuiMixin:
             target_text = "STOP PROGRAM"
             target_variant = "danger"
         else:
-            target_text = "START PROGRAM"
+            target_text = "START GBOT"
             target_variant = "primary"
 
         if self.start_stop_button.text() != target_text:
@@ -114,6 +115,7 @@ class RuntimeGuiMixin:
             self.runner_loading = True
             self.runner_launch_pending = True
             self.runner_ready_pending = False
+            self.runner_log_start_index = len(self.log_lines)
             self._show_runner_overlay()
             self._update_start_stop_button()
             QTimer.singleShot(RUNNER_LAUNCH_DELAY_MS, self._launch_program_process)
@@ -188,7 +190,11 @@ class RuntimeGuiMixin:
         if self.process.poll() is not None:
             self._finalize_program_stop()
             return
-        if self.program_stopping and time.time() >= self.stop_deadline:
+        if (
+            self.program_stopping
+            and self.stop_deadline is not None
+            and time.time() >= self.stop_deadline
+        ):
             self.append_log("[WARN] Program did not stop in 5 seconds; killing it.\n")
             self.process.kill()
 
@@ -210,7 +216,7 @@ class RuntimeGuiMixin:
         self._update_start_stop_button()
         self._hide_runner_overlay()
 
-    def _show_runner_overlay(self) -> None:
+    def _show_runner_overlay(self):
         if (
             not self.is_program_running() and not self.runner_loading
         ) or self.program_stopping:
@@ -227,7 +233,7 @@ class RuntimeGuiMixin:
             if self.runner_loading:
                 overlay.refresh_loading()
             else:
-                overlay.refresh(self.queue_snapshot, self.log_lines)
+                overlay.refresh(self.queue_snapshot, self._runner_overlay_log_lines())
             overlay.show()
             overlay.raise_()
         except RuntimeError:
@@ -250,6 +256,13 @@ class RuntimeGuiMixin:
             self._show_runner_overlay()
         else:
             self._hide_runner_overlay()
+
+    def _runner_overlay_log_lines(self):
+        """Return only log lines emitted after the current runner launch started."""
+        start_index = getattr(self, "runner_log_start_index", 0)
+        if start_index < 0 or start_index > len(self.log_lines):
+            start_index = 0
+        return self.log_lines[start_index:]
 
     def read_output(self, process):
         if not process or not process.stdout:
@@ -283,14 +296,14 @@ class RuntimeGuiMixin:
         if not self.shutdown_started:
             self.log_bridge.line.emit(line)
 
-    def _on_runner_ready(self) -> None:
+    def _on_runner_ready(self):
         """Reveal live runner state after the bot completes startup preparation."""
         if not self.runner_loading or not self.is_program_running():
             return
         self.runner_ready_pending = True
         self._reveal_runner_overlay_if_ready()
 
-    def _reveal_runner_overlay_if_ready(self) -> None:
+    def _reveal_runner_overlay_if_ready(self):
         """Show the populated overlay and release the bot once task state exists."""
         snapshot = getattr(self, "queue_snapshot", {})
         has_tasks = any(snapshot.get(key) for key in ("running", "active", "waiting"))
@@ -315,6 +328,8 @@ class RuntimeGuiMixin:
             stdin.flush()
         except (BrokenPipeError, OSError, ValueError):
             self.append_log("[ERROR] Unable to confirm runner overlay readiness.\n")
+            return
+        self._render_logs()
 
     def _tick(self):
         if self.shutdown_started:
@@ -325,6 +340,7 @@ class RuntimeGuiMixin:
             self._render_logs()
         self._update_start_stop_button()
         self._update_start_game_button_visibility()
+        self._sync_ark_status_labels()
         if hasattr(self, "server_value"):
             server_number = self.form_values.get(
                 "server_number", self.settings.get("server_number", "0")
@@ -379,3 +395,30 @@ class RuntimeGuiMixin:
             self.runner_value.setText("RUNNING" if running else "STOPPED")
             self.activity_value.setText(self.last_activity)
             self.clock_value.setText(time.strftime("%I:%M:%S %p"))
+
+    def _sync_ark_status_labels(self):
+        try:
+            game_size = find_window_size(GAME_WINDOW_TITLE)
+        except Exception:
+            game_size = None
+        if game_size is None:
+            chrome_text = "ARK NOT FOUND"
+            sidebar_text = "STATUS: WAITING"
+            color = COLORS["yellow"]
+        elif game_size not in SUPPORTED_GAME_RESOLUTIONS:
+            chrome_text = "ARK SIZE WARN"
+            sidebar_text = "STATUS: CHECK"
+            color = COLORS["yellow"]
+        else:
+            chrome_text = "SYSTEM READY"
+            sidebar_text = "STATUS: READY  +"
+            color = COLORS["green"]
+
+        title_status = getattr(getattr(self, "title_bar", None), "status_label", None)
+        if title_status is not None:
+            title_status.setText(chrome_text)
+            title_status.setStyleSheet(f"color: {color};")
+        sidebar_ready = getattr(self, "sidebar_ready", None)
+        if sidebar_ready is not None:
+            sidebar_ready.setText(sidebar_text)
+            sidebar_ready.setStyleSheet(f"color: {color};")

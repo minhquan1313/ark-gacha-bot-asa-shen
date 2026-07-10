@@ -14,7 +14,7 @@ def _module(name: str, **attributes: object) -> types.ModuleType:
     return module
 
 
-settings = _module("settings", lag_offset=0)
+settings = _module("settings", ping=0)
 asa_config = _module(
     "source.ASA.config",
     inventory_open_attempts=3,

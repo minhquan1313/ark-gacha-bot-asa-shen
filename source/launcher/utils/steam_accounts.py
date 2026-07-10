@@ -3,7 +3,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from source.launcher.ark_game_setup import ARK_STEAM_URL, find_running_steam_dir
+from source.launcher.ark_game_setup import ARK_STEAM_ID, find_running_steam_dir
 
 
 @dataclass(frozen=True)
@@ -15,26 +15,26 @@ class SteamAccount:
     allow_auto_login: str
 
 
-def loginusers_path(steam_dir: Path | None = None) -> Path:
+def loginusers_path(steam_dir: Path | None = None):
     """Return the loginusers.vdf path for the running Steam installation."""
     root = Path(steam_dir) if steam_dir is not None else find_running_steam_dir()
     return root / "config" / "loginusers.vdf"
 
 
-def load_loginusers(path: Path | None = None) -> tuple[str, list[SteamAccount]]:
+def load_loginusers(path: Path | None = None):
     """Load loginusers.vdf and return its raw text plus parsed account records."""
     vdf_path = Path(path) if path is not None else loginusers_path()
     text = vdf_path.read_text(encoding="utf-8", errors="replace")
     return text, parse_loginusers(text)
 
 
-def load_steam_accounts(path: Path | None = None) -> list[dict[str, object]]:
+def load_steam_accounts(path: Path | None = None):
     """Return parsed Steam accounts sorted for helper display."""
     _text, accounts = load_loginusers(path)
     return [account_to_dict(account) for account in sorted_steam_accounts(accounts)]
 
 
-def parse_loginusers(vdf_text: str) -> list[SteamAccount]:
+def parse_loginusers(vdf_text: str):
     """Parse Steam loginusers.vdf account blocks used by the transfer helper."""
     accounts: list[SteamAccount] = []
     for steam_id, block, _start, _end in _iter_account_blocks(vdf_text):
@@ -53,7 +53,7 @@ def parse_loginusers(vdf_text: str) -> list[SteamAccount]:
     return accounts
 
 
-def sorted_steam_accounts(accounts: list[SteamAccount]) -> list[SteamAccount]:
+def sorted_steam_accounts(accounts: list[SteamAccount]):
     """Sort accounts by most-recent status, then by newest timestamp."""
     return sorted(
         accounts, key=lambda account: (not account.most_recent, -account.timestamp)
@@ -62,7 +62,7 @@ def sorted_steam_accounts(accounts: list[SteamAccount]) -> list[SteamAccount]:
 
 def most_recent_account_name(
     accounts: list[dict[str, object]] | list[SteamAccount],
-) -> str:
+):
     """Return the AccountName marked MostRecent, or an empty string."""
     for account in accounts:
         if isinstance(account, SteamAccount):
@@ -74,7 +74,7 @@ def most_recent_account_name(
     return ""
 
 
-def account_to_dict(account: SteamAccount) -> dict[str, object]:
+def account_to_dict(account: SteamAccount):
     return {
         "steam_id": account.steam_id,
         "account_name": account.account_name,
@@ -84,7 +84,7 @@ def account_to_dict(account: SteamAccount) -> dict[str, object]:
     }
 
 
-def update_allow_auto_login(vdf_text: str, account_name: str) -> str:
+def update_allow_auto_login(vdf_text: str, account_name: str):
     """Set AllowAutoLogin to 1 only inside the selected AccountName block."""
     for _steam_id, block, start, end in _iter_account_blocks(vdf_text):
         if _block_value(block, "AccountName") != account_name:
@@ -94,7 +94,7 @@ def update_allow_auto_login(vdf_text: str, account_name: str) -> str:
     raise ValueError(f"Steam account was not found in loginusers.vdf: {account_name}")
 
 
-def select_auto_login_account(account_name: str, path: Path | None = None) -> Path:
+def select_auto_login_account(account_name: str, path: Path | None = None):
     """Persist Steam auto-login settings for the requested account."""
     vdf_path = Path(path) if path is not None else loginusers_path()
     text = vdf_path.read_text(encoding="utf-8", errors="replace")
@@ -132,19 +132,17 @@ def select_auto_login_account(account_name: str, path: Path | None = None) -> Pa
     return vdf_path
 
 
-def close_steam() -> None:
+def close_steam():
     """Force close Steam before relaunching with the selected auto-login user."""
     subprocess.run(["taskkill", "/F", "/IM", "steam.exe"], check=False)
 
 
-def launch_steam() -> None:
+def launch_steam():
     """Open the registered Steam client without resolving its executable path."""
-    subprocess.Popen(["cmd", "/c", "start", "", "steam://open/main"])
-
-
-def launch_ark_with_steam() -> None:
-    """Launch ARK through Steam using the configured auto-login user."""
-    subprocess.Popen(["cmd", "/c", "start", "", ARK_STEAM_URL])
+    # subprocess.Popen(["cmd", "/c", "start", "", "steam://open/main"])
+    subprocess.Popen(
+        ["cmd", "/c", "start", "", f"steam://nav/games/details/{ARK_STEAM_ID}"]
+    )
 
 
 def _iter_account_blocks(vdf_text: str):
@@ -161,7 +159,7 @@ def _iter_account_blocks(vdf_text: str):
         )
 
 
-def _matching_brace(text: str, opening_index: int) -> int | None:
+def _matching_brace(text: str, opening_index: int):
     depth = 0
     in_string = False
     escaped = False
@@ -186,14 +184,14 @@ def _matching_brace(text: str, opening_index: int) -> int | None:
     return None
 
 
-def _block_value(block: str, key: str) -> str:
+def _block_value(block: str, key: str):
     match = re.search(rf'"{re.escape(key)}"\s+"((?:\\.|[^"\\])*)"', block)
     if not match:
         return ""
     return match.group(1).replace(r"\\", "\\")
 
 
-def _set_block_value(block: str, key: str, value: str) -> str:
+def _set_block_value(block: str, key: str, value: str):
     pattern = re.compile(rf'("{re.escape(key)}"\s+")((?:\\.|[^"\\])*)(")')
     if pattern.search(block):
         return pattern.sub(rf"\g<1>{value}\g<3>", block, count=1)
@@ -201,7 +199,7 @@ def _set_block_value(block: str, key: str, value: str) -> str:
     return block.rstrip() + insert + block[len(block.rstrip()) :]
 
 
-def _int_or_zero(value: str) -> int:
+def _int_or_zero(value: str):
     try:
         return int(value)
     except (TypeError, ValueError):

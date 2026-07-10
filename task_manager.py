@@ -26,22 +26,25 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-TaskItem = tuple[float, int, int, stations.base_task]
+# next exe time, list count, priority, the task
+WaitingTaskItem = tuple[float, int, int, stations.base_task]
+# priority, next exe time, list count, the task
+ActiveTaskItem = tuple[int, float, int, stations.base_task]
 
 
 class priority_queue_exc:
     def __init__(self):
-        self.queue: list[TaskItem] = []
+        self.queue: list[WaitingTaskItem] = []
 
     def add(self, task: stations.base_task, priority: int, execution_time: float):
         heapq.heappush(self.queue, (execution_time, len(self.queue), priority, task))
 
-    def pop(self) -> TaskItem:
+    def pop(self):
         if not self.is_empty():
             return heapq.heappop(self.queue)
         return None
 
-    def peek(self) -> TaskItem:
+    def peek(self):
         if not self.is_empty():
             return self.queue[0]
         return None
@@ -52,17 +55,17 @@ class priority_queue_exc:
 
 class priority_queue_prio:
     def __init__(self):
-        self.queue: list[TaskItem] = []
+        self.queue: list[ActiveTaskItem] = []
 
     def add(self, task: stations.base_task, priority: int, execution_time: float):
         heapq.heappush(self.queue, (priority, execution_time, len(self.queue), task))
 
-    def pop(self) -> TaskItem:
+    def pop(self):
         if not self.is_empty():
             return heapq.heappop(self.queue)
         return None
 
-    def peek(self) -> TaskItem:
+    def peek(self):
         if not self.is_empty():
             return self.queue[0]
         return None
@@ -127,6 +130,8 @@ class task_scheduler(metaclass=SingletonMeta):
     def move_ready_tasks_to_active_queue(self, current_time):
         while not self.waiting_queue.is_empty():
             task_tuple = self.waiting_queue.peek()
+            if task_tuple is None:
+                break
             exec_time, _, priority, task = task_tuple
 
             if exec_time <= current_time:
@@ -140,7 +145,9 @@ class task_scheduler(metaclass=SingletonMeta):
     def execute_task(self, current_time):
 
         task_tuple = self.active_queue.pop()
-        exec_time, priority, _, task = task_tuple
+        if task_tuple is None:
+            return
+        priority, exec_time, _, task = task_tuple
 
         if exec_time <= current_time:
             if task.name != self.prev_task_name:
@@ -180,7 +187,7 @@ def load_resolution_data(file_path):
         return []
 
 
-def prepare() -> task_scheduler:
+def prepare():
     """Load configured tasks and publish their initial queue without running them."""
     global scheduler
     scheduler = task_scheduler()
@@ -206,7 +213,7 @@ def prepare() -> task_scheduler:
     return scheduler
 
 
-def run() -> None:
+def run():
     """Start the scheduler loop after task preparation is complete."""
     global scheduler
     global started
@@ -217,7 +224,7 @@ def run() -> None:
     scheduler.run()
 
 
-def main() -> None:
+def main():
     """Prepare configured tasks and start the scheduler loop."""
     prepare()
     run()

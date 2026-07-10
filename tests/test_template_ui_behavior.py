@@ -61,7 +61,7 @@ class TemplateUiBehaviorTests(unittest.TestCase):
 
     def test_server_template_updates_only_server_values_and_references(self) -> None:
         template, _warnings = normalize_template(template_document("Template A"))
-        template["data"]["settings"]["lag_offset"] = 2.5
+        template["data"]["settings"]["ping"] = 250
         template["data"]["settings"]["server_number"] = "777"
         catalog = TemplateCatalog(
             templates={"Template_A.json": template}, paths={}, errors={}
@@ -74,9 +74,9 @@ class TemplateUiBehaviorTests(unittest.TestCase):
             result = launcher.change_template_group("SERVER", "Template_A.json")
 
         self.assertTrue(result)
-        self.assertEqual(launcher.settings["lag_offset"], 2.5)
+        self.assertEqual(launcher.settings["ping"], 250)
         self.assertEqual(launcher.settings["server_number"], "777")
-        self.assertEqual(launcher.settings["lag_offset_template"], "Template_A.json")
+        self.assertEqual(launcher.settings["ping_template"], "Template_A.json")
         self.assertEqual(launcher.settings["singleplayer_template"], "Template_A.json")
         self.assertEqual(launcher.settings["auto_start_program_template"], "")
         self.assertEqual(launcher.settings["iguanadon_template"], "")
@@ -86,8 +86,8 @@ class TemplateUiBehaviorTests(unittest.TestCase):
 
     def test_switching_to_manual_retains_last_applied_values(self) -> None:
         launcher = self.launcher(TemplateCatalog({}, {}, {}))
-        launcher.settings["lag_offset"] = 2.5
-        launcher.settings["lag_offset_template"] = "Template_A.json"
+        launcher.settings["ping"] = 250
+        launcher.settings["ping_template"] = "Template_A.json"
         launcher.form_values = launcher.settings.copy()
 
         with patch(
@@ -96,8 +96,8 @@ class TemplateUiBehaviorTests(unittest.TestCase):
             result = launcher.change_template_group("SERVER", "")
 
         self.assertTrue(result)
-        self.assertEqual(launcher.settings["lag_offset"], 2.5)
-        self.assertEqual(launcher.settings["lag_offset_template"], "")
+        self.assertEqual(launcher.settings["ping"], 250)
+        self.assertEqual(launcher.settings["ping_template"], "")
 
     def test_missing_template_reference_is_preserved_as_warning_state(self) -> None:
         catalog = TemplateCatalog(
@@ -105,7 +105,7 @@ class TemplateUiBehaviorTests(unittest.TestCase):
         )
         launcher = self.launcher(catalog)
         for key in (
-            "lag_offset_template",
+            "ping_template",
             "server_number_template",
             "singleplayer_template",
         ):
@@ -117,7 +117,7 @@ class TemplateUiBehaviorTests(unittest.TestCase):
             state,
             ("missing", "Gone.json", "Unsupported template version: 2."),
         )
-        self.assertEqual(launcher.form_values["lag_offset_template"], "Gone.json")
+        self.assertEqual(launcher.form_values["ping_template"], "Gone.json")
         self.assertEqual(launcher.form_values["singleplayer_template"], "Gone.json")
 
     def test_startup_sync_reapplies_valid_references_and_skips_missing(self) -> None:
@@ -127,7 +127,7 @@ class TemplateUiBehaviorTests(unittest.TestCase):
         )
         launcher = self.launcher(catalog)
         for key in (
-            "lag_offset_template",
+            "ping_template",
             "server_number_template",
             "singleplayer_template",
         ):

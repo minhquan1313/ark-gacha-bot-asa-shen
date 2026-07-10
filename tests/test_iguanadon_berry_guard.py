@@ -13,23 +13,39 @@ ROOT = Path(__file__).resolve().parents[1]
 def load_iguanadon_module(external_berry=False):
     inventory = types.SimpleNamespace(
         close=Mock(),
+        detect_lag_long_process=Mock(),
         is_open=Mock(return_value=True),
         open=Mock(),
+        popcorn=Mock(),
         search_in_object=Mock(),
         transfer_all_from=Mock(),
+        was_server_lag_last_open=False,
     )
+    inventory.detect_lag_long_process.return_value.__enter__ = Mock()
+    inventory.detect_lag_long_process.return_value.__exit__ = Mock(return_value=False)
     template = types.SimpleNamespace(
-        check_template=Mock(),
+        check_template=Mock(return_value=True),
         template_await_true=Mock(return_value=True),
     )
-    utils = types.SimpleNamespace(press_key=Mock(), turn_down=Mock(), turn_up=Mock())
+    utils = types.SimpleNamespace(
+        press_key=Mock(),
+        turn_down=Mock(),
+        turn_up=Mock(),
+        zero=Mock(),
+        zero_center=Mock(),
+    )
     logs = types.ModuleType("source.logs.gachalogs")
     logs.logger = Mock()
+    logs_package = types.ModuleType("source.logs")
+    logs_package.gachalogs = logs
     utility = types.ModuleType("source.utility")
     utility.local_player = types.SimpleNamespace()
     utility.screen = types.SimpleNamespace()
     utility.template = template
     utility.utils = utils
+    utility.utils_simple = types.SimpleNamespace(
+        get_default_clock=Mock(return_value=Mock(return_value=False))
+    )
     utility.variables = types.SimpleNamespace()
     utility.windows = types.SimpleNamespace()
     captures = {}
@@ -46,12 +62,11 @@ def load_iguanadon_module(external_berry=False):
     structures = types.ModuleType("source.ASA.strucutres")
     structures.inventory = inventory
     structures.teleporter = teleporter
-    stations = types.ModuleType("source.ASA.stations")
-    stations.custom_stations = types.SimpleNamespace()
     player_inventory = types.SimpleNamespace(
         close=Mock(),
         drop_all_inv=Mock(),
         implant_eat=Mock(),
+        is_can_drop=Mock(return_value=False),
         search_in_inventory=Mock(),
         transfer_all_inventory=Mock(),
     )
@@ -61,13 +76,26 @@ def load_iguanadon_module(external_berry=False):
     player.player_state = player_state
     modules = {
         "settings": types.SimpleNamespace(
-            berry_type="mejoberry", external_berry=external_berry, lag_offset=1
+            berry_type="mejoberry",
+            external_berry=external_berry,
+            iguanadon_seed_throw_amount=0,
+            ping=1,
         ),
+        "source.gacha_bot": types.SimpleNamespace(
+            stations=types.SimpleNamespace(did_collect_tek_troughs=False)
+        ),
+        "source.gacha_bot.config": types.SimpleNamespace(
+            iguanadon_attempts=3,
+            tek_trough_attempts=3,
+        ),
+        "source.gacha_bot.stations": types.SimpleNamespace(
+            did_collect_tek_troughs=False
+        ),
+        "source.logs": logs_package,
         "source.logs.gachalogs": logs,
         "source.utility": utility,
         "source.utility.debug_screenshots": debug_screenshots,
         "source.ASA.strucutres": structures,
-        "source.ASA.stations": stations,
         "source.ASA.player": player,
     }
     spec = importlib.util.spec_from_file_location(
@@ -98,17 +126,6 @@ def load_stations_module():
     structures.bed = types.SimpleNamespace()
     structures.inventory = types.SimpleNamespace()
     structures.teleporter = teleporter
-    metadata = {}
-
-    def get_station_metadata(name):
-        metadata.setdefault(name, types.SimpleNamespace(name=name))
-        return metadata[name]
-
-    custom_stations = types.SimpleNamespace(
-        get_station_metadata=Mock(side_effect=get_station_metadata)
-    )
-    asa_stations = types.ModuleType("source.ASA.stations")
-    asa_stations.custom_stations = custom_stations
     player = types.ModuleType("source.ASA.player")
     player.console = types.SimpleNamespace()
     player.player_inventory = types.SimpleNamespace()
@@ -143,7 +160,6 @@ def load_stations_module():
         "source.logs.gachalogs": logs,
         "source.utility": utility,
         "source.ASA.strucutres": structures,
-        "source.ASA.stations": asa_stations,
         "source.ASA.player": player,
         "source.gacha_bot": bot_modules,
         "source.gacha_bot.config": bot_modules.config,
@@ -159,7 +175,7 @@ def load_stations_module():
     module = importlib.util.module_from_spec(spec)
     with patch.dict(sys.modules, modules):
         spec.loader.exec_module(module)
-    return module, teleporter, iguanadon, metadata
+    return module, teleporter, iguanadon
 
 
 class BerryCollectionGuardTests(unittest.TestCase):
@@ -175,7 +191,7 @@ class BerryCollectionGuardTests(unittest.TestCase):
             self.player_state,
             self.logger,
         ) = load_iguanadon_module()
-        self.metadata = types.SimpleNamespace(name="BERRIES", yaw=12)
+        self.teleporter_name = "BERRIES"
 
     def tearDown(self):
         config.tek_trough_attempts = self.original_attempts
@@ -183,39 +199,48 @@ class BerryCollectionGuardTests(unittest.TestCase):
     def test_valid_first_trough_transfers_then_collects_second_without_revalidation(
         self,
     ):
-        self.iguanadon.berry_station(self.metadata)
+        self.iguanadon.berry_station(self.teleporter_name)
 
         self.assertEqual(self.inventory.open.call_count, 2)
         self.assertEqual(self.inventory.transfer_all_from.call_count, 2)
         self.assertEqual(self.inventory.close.call_count, 2)
-        self.template.template_await_true.assert_called_once_with(
-            self.template.check_template, 1, "tek_trough", 0.7
+        self.assertEqual(self.template.check_template.call_count, 2)
+        self.assertEqual(
+            self.utils.turn_down.call_args_list,
+            [call(0), call(50)],
         )
-        self.utils.turn_down.assert_called_once_with(50)
-        self.utils.turn_up.assert_called_once_with(50)
 
     def test_wrong_first_inventory_closes_teleports_and_retries_without_withdrawing(
         self,
     ):
-        self.template.template_await_true.side_effect = [False, True]
+        self.template.check_template.side_effect = [False, True]
 
-        self.iguanadon._collect_first_trough(self.metadata)
+        self.iguanadon.berry_collection(self.teleporter_name, 0)
 
         self.assertEqual(self.inventory.transfer_all_from.call_count, 1)
-        self.assertEqual(self.inventory.close.call_count, 2)
-        self.teleporter.teleport_not_default.assert_called_once_with(self.metadata)
+        self.assertEqual(self.inventory.close.call_count, 1)
+        self.teleporter.teleport_not_default.assert_called_once_with(
+            self.teleporter_name
+        )
         self.player_inventory.implant_eat.assert_not_called()
 
     def test_three_wrong_opens_suicide_respawn_and_restart_collection(self):
-        self.template.template_await_true.side_effect = [False, False, False, True]
+        deadline = Mock(side_effect=[False, True, False, True])
+        deadline.reset = Mock()
+        self.iguanadon.utils_simple.get_default_clock.return_value = deadline
+        self.template.check_template.side_effect = [False, False, False, True]
 
-        self.iguanadon._collect_first_trough(self.metadata)
+        self.iguanadon.berry_collection(self.teleporter_name, 0)
 
         self.assertEqual(self.inventory.transfer_all_from.call_count, 1)
-        self.assertEqual(self.inventory.close.call_count, 4)
+        self.assertEqual(self.inventory.close.call_count, 1)
         self.assertEqual(
             self.teleporter.teleport_not_default.call_args_list,
-            [call(self.metadata), call(self.metadata), call(self.metadata)],
+            [
+                call(self.teleporter_name),
+                call(self.teleporter_name),
+                call(self.teleporter_name),
+            ],
         )
         self.player_inventory.implant_eat.assert_called_once_with()
         self.player_state.check_state.assert_called_once_with()
@@ -232,14 +257,16 @@ class BerryCollectionGuardTests(unittest.TestCase):
             _,
             _,
         ) = load_iguanadon_module(external_berry=True)
-        template.template_await_true.side_effect = [False, True]
+        template.check_template.side_effect = [False, True]
 
-        iguanadon._collect_first_trough(self.metadata)
+        iguanadon.berry_collection(self.teleporter_name, 0)
 
-        teleporter.teleport_not_default.assert_called_once_with(self.metadata)
+        teleporter.teleport_not_default.assert_called_once_with(self.teleporter_name)
         iguanadon.time.sleep.assert_any_call(20)
 
     def test_seed_capture_happens_after_withdrawing_seeds(self):
+        self.iguanadon.g_teleporter_name = "IGUANADON"
+
         self.iguanadon.seed(2)
 
         self.iguanadon.debug_captures[
@@ -247,74 +274,42 @@ class BerryCollectionGuardTests(unittest.TestCase):
         ].assert_called_once_with("seed_2")
         self.assertGreaterEqual(self.inventory.close.call_count, 1)
 
-    def test_seed_two_measures_reopen_time_before_cleanup_drop(self):
-        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock(
-            return_value=1.0
-        )
+    def test_seed_requires_initialized_teleport_name(self):
+        self.iguanadon.g_teleporter_name = None
+
+        with self.assertRaisesRegex(RuntimeError, "teleport name is not initialized"):
+            self.iguanadon.seed(2)
+
+    def test_seed_two_cleanup_drop_when_troughs_collected_and_inventory_can_drop(self):
+        self.iguanadon.g_teleporter_name = "IGUANADON"
+        self.iguanadon.stations.did_collect_tek_troughs = True
+        self.player_inventory.is_can_drop.return_value = True
 
         self.iguanadon.seed(2)
 
-        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait.assert_called_once_with()
         self.player_inventory.drop_all_inv.assert_called_once_with()
 
-    def test_seed_two_does_not_refresh_when_remote_wait_is_at_threshold(self):
-        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock(
-            return_value=self.iguanadon.IGUANODON_REMOTE_LAG_THRESHOLD_SECONDS
-        )
-        self.iguanadon._refresh_iguanodon_berry_transfer_after_lag = Mock()
-
-        self.iguanadon.seed(2)
-
-        self.iguanadon._refresh_iguanodon_berry_transfer_after_lag.assert_not_called()
-        self.logger.warning.assert_not_called()
-
-    def test_seed_two_refreshes_berries_once_when_remote_wait_is_slow(self):
-        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock(
-            return_value=3.1
-        )
-
-        self.iguanadon.seed(2)
-
-        self.assertEqual(self.inventory.transfer_all_from.call_count, 3)
-        self.assertEqual(self.player_inventory.transfer_all_inventory.call_count, 2)
-        self.logger.warning.assert_called_once()
-
-    def test_seed_two_cleanup_drop_happens_after_lag_refresh(self):
-        actions = []
-        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock(
-            return_value=3.1
-        )
-        self.iguanadon._refresh_iguanodon_berry_transfer_after_lag = Mock(
-            side_effect=lambda: actions.append("refresh")
-        )
-        self.player_inventory.drop_all_inv.side_effect = lambda: actions.append("drop")
-
-        self.iguanadon.seed(2)
-
-        self.assertEqual(actions, ["refresh", "drop"])
-
     def test_seed_one_does_not_run_lag_guard_or_cleanup_drop(self):
-        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait = Mock()
+        self.iguanadon.g_teleporter_name = "IGUANADON"
 
         self.iguanadon.seed(1)
 
-        self.iguanadon._reopen_iguanodon_inventory_and_measure_wait.assert_not_called()
         self.player_inventory.drop_all_inv.assert_not_called()
 
 
 class BerryStationTaskGuardTests(unittest.TestCase):
-    def test_station_passes_berry_metadata_to_collection(self):
-        stations, teleporter, iguanadon, metadata = load_stations_module()
+    def test_station_passes_berry_name_to_collection(self):
+        stations, teleporter, iguanadon = load_stations_module()
 
         stations.gacha_station("gacha1", "GACHA1", "left").execute()
 
-        iguanadon.berry_station.assert_called_once_with(metadata["BERRIES"])
+        iguanadon.berry_station.assert_called_once_with("BERRIES")
         self.assertEqual(
-            teleporter.teleport_not_default.call_args_list[0], call(metadata["BERRIES"])
+            teleporter.teleport_not_default.call_args_list[0], call("BERRIES")
         )
 
     def test_normal_gacha_requeue_delay_uses_setting(self):
-        stations, _, _, _ = load_stations_module()
+        stations, _, _ = load_stations_module()
 
         self.assertEqual(
             stations.gacha_station("gacha1", "GACHA1", "left").get_requeue_delay(),
@@ -322,12 +317,12 @@ class BerryStationTaskGuardTests(unittest.TestCase):
         )
 
     def test_pego_uses_dedi_routes_for_crystal_deposit(self):
-        stations, teleporter, _, metadata = load_stations_module()
+        stations, teleporter, _ = load_stations_module()
         stations.template.check_template.return_value = True
 
         stations.pego_station("pego1", "PEGO", 100).execute()
 
-        teleporter.teleport_not_default.assert_called_once_with(metadata["PEGO"])
+        teleporter.teleport_not_default.assert_called_once_with("PEGO")
         stations.deposit.deposit_all.assert_called_once_with(None)
 
 

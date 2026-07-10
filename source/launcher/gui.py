@@ -1,12 +1,6 @@
 import os
 import threading
 
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
-
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
@@ -55,7 +49,7 @@ class SettingsGUI(
         if os.path.exists(ASSETS["logo"]):
             self.setWindowIcon(QIcon(ASSETS["logo"]))
             QApplication.setWindowIcon(QIcon(ASSETS["logo"]))
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Window)
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setMinimumSize(*PHONE_MINIMUM_SIZE)
         self.settings = load_settings()
         self.resize(
@@ -87,6 +81,7 @@ class SettingsGUI(
         self.output_reader_stop = threading.Event()
         self.output_reader_thread = None
         self.log_file_position = 0
+        self.runner_log_start_index = 0
         self.active_count = 0
         self.waiting_count = 0
         self.start_time = None

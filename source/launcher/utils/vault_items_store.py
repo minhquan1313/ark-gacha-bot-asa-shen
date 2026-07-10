@@ -1,11 +1,15 @@
 import json
 from pathlib import Path
 
+from source.utility.types import DepositConfig
+
 VAULT_ITEMS_FILE = Path("json_files/vault_items.json")
 DEFAULT_VAULT_ITEMS = ["riot", "assault", "gate", "tree"]
 
 
-def load_vault_items(deposit_config=None, path=VAULT_ITEMS_FILE):
+def load_vault_items(
+    deposit_config: DepositConfig | None = None, path: str | Path = VAULT_ITEMS_FILE
+):
     path = Path(path)
     items = []
     if path.exists():
@@ -31,7 +35,11 @@ def save_vault_items(items, path=VAULT_ITEMS_FILE):
     return values
 
 
-def add_vault_item(item, deposit_config=None, path=VAULT_ITEMS_FILE):
+def add_vault_item(
+    item: object,
+    deposit_config: DepositConfig | None = None,
+    path: str | Path = VAULT_ITEMS_FILE,
+):
     value = str(item).strip()
     if not value:
         return load_vault_items(deposit_config, path)
@@ -40,14 +48,11 @@ def add_vault_item(item, deposit_config=None, path=VAULT_ITEMS_FILE):
     return save_vault_items(items, path)
 
 
-def _deposit_config_items(deposit_config):
+def _deposit_config_items(deposit_config: DepositConfig | None):
     if not isinstance(deposit_config, dict):
         return []
     values = []
-    for route in deposit_config.get("depositCrystalData", []):
-        vault = route.get("vault", {}) if isinstance(route, dict) else {}
-        for vault_item in vault.get("items", []):
-            if not isinstance(vault_item, dict):
-                continue
-            values.extend(vault_item.get("items", []))
+    for route in deposit_config["depositCrystalData"]:
+        for vault_item in route["vault"]["items"]:
+            values.extend(vault_item["items"])
     return [str(item).strip() for item in values if str(item).strip()]

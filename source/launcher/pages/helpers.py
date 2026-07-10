@@ -108,7 +108,7 @@ class HelperPagesMixin:
         helper.activateWindow()
         self.deposit_helper = helper
 
-    def open_switch_steam_helper(self) -> None:
+    def open_switch_steam_helper(self):
         if not self._can_open_setup_helper():
             return
         helper = self.find_deposit_helper("switch_steam", None)

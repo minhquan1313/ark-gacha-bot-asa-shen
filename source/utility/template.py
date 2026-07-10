@@ -1,14 +1,16 @@
 import json
 import time
-from typing import Literal
+from contextlib import contextmanager
 
 import cv2
 import numpy as np
+from cv2.typing import MatLike
 
 from source.logs import gachalogs as logs
 from source.utility import screen
+from source.utility.types import RoiRegion, RoiRegionKey
 
-roi_regions = {
+roi_regions: dict[RoiRegionKey, RoiRegion] = {
     "bed_radical": {"start_x": 840, "start_y": 258, "width": 188, "height": 188},
     "beds_title": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
     "beds_title_respawn": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
@@ -61,7 +63,19 @@ roi_regions = {
     "first_slot": {"start_x": 165, "start_y": 228, "width": 98, "height": 98},
     "player_stats": {"start_x": 840, "start_y": 180, "width": 225, "height": 675},
     "show_buff": {"start_x": 900, "start_y": 862, "width": 150, "height": 38},
-    "snow_owl_pellet": {"start_x": 150, "start_y": 112, "width": 450, "height": 450},
+    "item_snow_owl_pellet": {
+        "start_x": 150,
+        "start_y": 112,
+        "width": 600,
+        "height": 600,
+    },
+    "item_fertilizer": {"start_x": 150, "start_y": 112, "width": 600, "height": 600},
+    "item_fertilizer_fece": {
+        "start_x": 150,
+        "start_y": 112,
+        "width": 600,
+        "height": 600,
+    },
     "orange": {"start_x": 528, "start_y": 217, "width": 1, "height": 1},
     "transfer_orange": {"start_x": 220, "start_y": 320, "width": 1, "height": 1},
     "chem_bench": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
@@ -89,6 +103,12 @@ roi_regions = {
         "start_y": 300,
         "width": 560,
         "height": 200,
+    },
+    "transmitter_server_excess": {
+        "start_x": 340,
+        "start_y": 0,
+        "width": 1200,
+        "height": 60,
     },
     "transmitter_server_fail_connection": {
         "start_x": 674,
@@ -150,30 +170,82 @@ roi_regions = {
         "width": 120,
         "height": 55,
     },
+    "dedi_deposit_clear": {
+        "start_x": 735,
+        "start_y": 780,
+        "width": 450,
+        "height": 150,
+    },
+    "capture_item_player_second_slot": {
+        "start_x": 270,
+        "start_y": 240,
+        "width": 87,
+        "height": 87,
+    },
 }
 
 # Use this to overwrite the bounds of opencv2.
 # Playground https://pseudopencv.site/utilities/hsvcolormask/
-template_l_bounds_overwrite = {
-    #
-    "inventory_player_drop": [0, 30, 150],
-    "inventory_player_transfer_all": [0, 30, 150],
-    "server_trans_uploaded": [40, 30, 200],
+template_l_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
+    # saturation to 0 so the white underline will still be tracked
+    "beds_title_respawn": (0, 0, 200),
+    "inventory_player_drop": (0, 30, 150),
+    "inventory_player_transfer_all": (0, 30, 150),
+    "server_trans_uploaded": (40, 30, 180),
+    "item_snow_owl_pellet": (0, 30, 0),
+    "item_fertilizer": (0, 30, 0),
+    "item_fertilizer_fece": (0, 30, 0),
+    "transmitter_inv": (0, 0, 200),
 }
-template_u_bounds_overwrite = {
-    "server_trans_uploaded": [70, 30, 200],
+template_u_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
+    "server_trans_uploaded": (70, 255, 255),
+    "item_snow_owl_pellet": (60, 255, 255),
+    "item_fertilizer": (60, 255, 255),
+    "item_fertilizer_fece": (60, 255, 255),
 }
+default_template_bounds = [(0, 30, 200), (255, 255, 255)]
+default_template_no_bounds = [(0, 0, 0), (255, 255, 255)]
 
 # Use this to overwrite what template image will be used to compare.
 # This help reduce duplicate template images, but they serve only 1 template but different location
-template_image_overwrite = {
+template_image_overwrite: dict[RoiRegionKey, RoiRegionKey] = {
     #
     "search_object_inv": "search_player_inv",
     "search_death_screen": "search",
 }
 
 IS_DEBUG = False
-DEBUG_ITEM = "search_player_inv"
+DEBUG_ITEM = None
+
+_roi_overwrite = None
+
+
+@contextmanager
+def temporary_overwrite_regions(
+    roi: RoiRegion | None = None,
+    item: RoiRegionKey | None = None,
+):
+    """
+    Leaving item to None to overwrite all
+    """
+
+    global _roi_overwrite
+
+    original_region = None
+
+    if item and roi:
+        original_region = roi_regions[item].copy()
+
+        roi_regions[item] = roi
+
+    if roi is not None:
+        _roi_overwrite = roi
+    try:
+        yield
+    finally:
+        if item and original_region:
+            roi_regions[item] = original_region
+        _roi_overwrite = None
 
 
 def get_region_roi(region):
@@ -182,7 +254,7 @@ def get_region_roi(region):
     )
 
 
-def template_await_true(func, sleep_amount: float, *args) -> bool:
+def template_await_true(func, sleep_amount: float, *args):
     count = 0
     while not bool(func(*args)):
         if count >= sleep_amount * 20:
@@ -192,7 +264,7 @@ def template_await_true(func, sleep_amount: float, *args) -> bool:
     return bool(func(*args))
 
 
-def template_await_false(func, sleep_amount: float, *args) -> bool:
+def template_await_false(func, sleep_amount: float, *args):
     count = 0
     while bool(func(*args)):
         if count >= sleep_amount * 20:
@@ -202,34 +274,113 @@ def template_await_false(func, sleep_amount: float, *args) -> bool:
     return bool(func(*args))
 
 
-def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[False]:
-    region = roi_regions[item]
+def _masked_gray_capture(
+    item: RoiRegionKey,
+    roi: MatLike,
+    lower_boundary=None,
+    upper_boundary=None,
+):
+    lower_boundary = np.array(
+        template_l_bounds_overwrite.get(item, default_template_bounds[0])
+        if lower_boundary is None
+        else lower_boundary
+    )
+    upper_boundary = np.array(
+        template_u_bounds_overwrite.get(item, default_template_bounds[1])
+        if upper_boundary is None
+        else upper_boundary
+    )
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
+    masked_template = cv2.bitwise_and(roi, roi, mask=mask)
+    return cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+
+
+def capture_for_compare(item: RoiRegionKey):
+    """Capture a masked grayscale ROI for later image-diff comparison.
+
+    Example:
+    ```python
+    before = capture_compare_region("item_fertilizer")
+    ```
+    """
+
+    region = roi_regions[item] if _roi_overwrite is None else _roi_overwrite
+    return _masked_gray_capture(
+        item,
+        get_region_roi(region),
+        default_template_no_bounds[0],
+        default_template_no_bounds[1],
+    )
+
+
+def compare_captures(
+    before: np.ndarray,
+    after: np.ndarray,
+):
+    """Return a normalized image-diff score or threshold comparison.
+
+    Bigger score = more different. Score < 0.02 = not much changed
+
+    Example:
+    ```python
+    score = compare_captures(before, after)
+    changed = compare_captures(before, after, 0.05)
+    ```
+    """
+
+    if before.shape != after.shape:
+        raise ValueError("Capture images must have the same shape.")
+    diff = cv2.absdiff(before, after)
+    score = float(np.mean(diff) / 255.0)
+    return score
+
+
+def capture_compare_changed(item: RoiRegionKey, before: MatLike, threshold=0.02):
+    """Capture an item ROI and report whether it still in a threshold.
+
+    Example:
+    ```python
+    changed = capture_compare_changed("item_fertilizer", before)
+    -> True if changed
+
+    changed = capture_compare_changed("item_fertilizer", before, 0.05)
+    -> True if the % changing is more than 0.05
+    ```
+    """
+
+    after = capture_for_compare(item)
+    score = compare_captures(before, after)
+    logs.logger.template(f"{item} diff score:{score} threshold:{threshold}")
+    return compare_captures(before, after) > threshold
+
+
+def check_template(item: RoiRegionKey, threshold: float):
+    global default_template_bounds
+    region = roi_regions[item] if _roi_overwrite is None else _roi_overwrite
     roi = get_region_roi(region)
 
-    l_bound = template_l_bounds_overwrite.get(item, [0, 30, 200])
-    u_bound = template_u_bounds_overwrite.get(item, [255, 255, 255])
+    l_bound = template_l_bounds_overwrite.get(item, default_template_bounds[0])
+    u_bound = template_u_bounds_overwrite.get(item, default_template_bounds[1])
 
     # Playground https://pseudopencv.site/utilities/hsvcolormask/
     lower_boundary = np.array(l_bound)
     upper_boundary = np.array(u_bound)
 
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(roi, roi, mask=mask)
-    gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+    gray_roi = _masked_gray_capture(item, roi, lower_boundary, upper_boundary)
 
     image_path = template_image_overwrite.get(item, item)
     image = cv2.imread(f"assets/icons1080/{image_path}.png")
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(image, image, mask=mask)
-    image = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+    if image is None:
+        raise FileNotFoundError(f"Image assets/icons1080/{image_path}.png not found")
+
+    image = _masked_gray_capture(item, image, lower_boundary, upper_boundary)
 
     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    if IS_DEBUG and item == DEBUG_ITEM:
+    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM):
         import winsound
         from pathlib import Path
 
@@ -266,40 +417,34 @@ def check_template(item: str, threshold: float) -> tuple[int, int] | Literal[Fal
         logs.logger.template(f"{item} found:{max_val}")
 
         template_h, template_w = image.shape[:2]
-        center_x = region["start_x"] + max_loc[0] + template_w // 2
-        center_y = region["start_y"] + max_loc[1] + template_h // 2
+        center_x = int(region["start_x"] + max_loc[0] + template_w // 2)
+        center_y = int(region["start_y"] + max_loc[1] + template_h // 2)
         return center_x, center_y
     logs.logger.template(f"{item} not found:{max_val} threshold:{threshold}")
     return False
 
 
-def check_template_no_bounds(
-    item: str, threshold: float
-) -> tuple[int, int] | Literal[False]:
-    region = roi_regions[item]
+def check_template_no_bounds(item: RoiRegionKey, threshold: float):
+    region = roi_regions[item] if _roi_overwrite is None else _roi_overwrite
     roi = get_region_roi(region)
 
     # Playground https://pseudopencv.site/utilities/hsvcolormask/
-    lower_boundary = np.array([0, 0, 0])
-    upper_boundary = np.array([255, 255, 255])
+    lower_boundary = np.array(default_template_no_bounds[0])
+    upper_boundary = np.array(default_template_no_bounds[1])
 
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(roi, roi, mask=mask)
-    gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+    gray_roi = _masked_gray_capture(item, roi, lower_boundary, upper_boundary)
 
     image_path = template_image_overwrite.get(item, item)
     image = cv2.imread(f"assets/icons1080/{image_path}.png")
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(image, image, mask=mask)
-    image = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+    if image is None:
+        raise RuntimeError(f"Image assets/icons1080/{image_path}.png not found")
+    image = _masked_gray_capture(item, image, lower_boundary, upper_boundary)
 
     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    if IS_DEBUG and item == DEBUG_ITEM:
+    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM):
         import winsound
         from pathlib import Path
 
@@ -335,97 +480,97 @@ def check_template_no_bounds(
         logs.logger.template(f"{item} found:{max_val}")
 
         template_h, template_w = image.shape[:2]
-        center_x = region["start_x"] + max_loc[0] + template_w // 2
-        center_y = region["start_y"] + max_loc[1] + template_h // 2
+        center_x = int(region["start_x"] + max_loc[0] + template_w // 2)
+        center_y = int(region["start_y"] + max_loc[1] + template_h // 2)
         return center_x, center_y
     logs.logger.template(f"{item} not found:{max_val} threshold:{threshold}")
     return False
 
 
-def return_location(
-    item: str, threshold: float
-):  # assumes that the check for the item on the screen has already been done
-    region = roi_regions[item]
-    roi = get_region_roi(region)
+# def return_location(
+#     item: str, threshold: float
+# ):  # assumes that the check for the item on the screen has already been done
+#     region = roi_regions[item]
+#     roi = get_region_roi(region)
 
-    lower_boundary = np.array([0, 0, 0])
-    upper_boundary = np.array([255, 255, 255])
+#     lower_boundary = np.array([0, 0, 0])
+#     upper_boundary = np.array([255, 255, 255])
 
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(roi, roi, mask=mask)
-    gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+#     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+#     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
+#     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
+#     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons1080/{item}.png")
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(image, image, mask=mask)
-    image = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+#     image = cv2.imread(f"assets/icons1080/{item}.png")
+#     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+#     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
+#     masked_template = cv2.bitwise_and(image, image, mask=mask)
+#     image = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+#     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
+#     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
-    if max_val > threshold:
-        logs.logger.template(f"{item} found:{max_val} at:{max_loc}")
-        return max_loc
-    logs.logger.template(f"{item} not found:{max_val} threshold:{threshold}")
-    return 0
-
-
-def teleport_icon(threshold: float) -> bool:
-    region = roi_regions["teleporter_icon"]
-    roi = get_region_roi(region)
-
-    lower_boundary = np.array([0, 0, 150])
-    upper_boundary = np.array([255, 255, 255])
-
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(roi, roi, mask=mask)
-    gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
-
-    image = cv2.imread("assets/icons1080/teleporter_icon.png")
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(image, image, mask=mask)
-    image = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
-
-    res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
-
-    if max_val > threshold:
-        logs.logger.template(f"teleporter_icon found:{max_val}")
-        return True
-    logs.logger.template(f"teleporter_icon not found:{max_val} threshold:{threshold}")
-    return False
+#     if max_val > threshold:
+#         logs.logger.template(f"{item} found:{max_val} at:{max_loc}")
+#         return max_loc
+#     logs.logger.template(f"{item} not found:{max_val} threshold:{threshold}")
+#     return 0
 
 
-def inventory_first_slot(item: str, threshold: float) -> bool:
-    region = roi_regions["first_slot"]
-    roi = get_region_roi(region)
+# def teleport_icon(threshold: float) -> bool:
+#     region = roi_regions["teleporter_icon"]
+#     roi = get_region_roi(region)
 
-    lower_boundary = np.array([0, 0, 0])
-    upper_boundary = np.array([255, 255, 255])
+#     lower_boundary = np.array([0, 0, 150])
+#     upper_boundary = np.array([255, 255, 255])
 
-    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(roi, roi, mask=mask)
-    gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+#     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+#     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
+#     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
+#     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    image = cv2.imread(f"assets/icons1080/{item}.png")
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
-    masked_template = cv2.bitwise_and(image, image, mask=mask)
-    image = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+#     image = cv2.imread("assets/icons1080/teleporter_icon.png")
+#     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+#     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
+#     masked_template = cv2.bitwise_and(image, image, mask=mask)
+#     image = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
-    res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+#     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
+#     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
-    if max_val > threshold:
-        logs.logger.template(f"{item} found:{max_val}")
-        return True
-    logs.logger.template(f"{item} not found:{max_val} threshold:{threshold}")
-    return False
+#     if max_val > threshold:
+#         logs.logger.template(f"teleporter_icon found:{max_val}")
+#         return True
+#     logs.logger.template(f"teleporter_icon not found:{max_val} threshold:{threshold}")
+#     return False
+
+
+# def inventory_first_slot(item: str, threshold: float) -> bool:
+#     region = roi_regions["first_slot"]
+#     roi = get_region_roi(region)
+
+#     lower_boundary = np.array([0, 0, 0])
+#     upper_boundary = np.array([255, 255, 255])
+
+#     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+#     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
+#     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
+#     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+
+#     image = cv2.imread(f"assets/icons1080/{item}.png")
+#     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+#     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
+#     masked_template = cv2.bitwise_and(image, image, mask=mask)
+#     image = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
+
+#     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
+#     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+
+#     if max_val > threshold:
+#         logs.logger.template(f"{item} found:{max_val}")
+#         return True
+#     logs.logger.template(f"{item} not found:{max_val} threshold:{threshold}")
+#     return False
 
 
 def check_buffs(buff, threshold):
@@ -441,6 +586,11 @@ def check_buffs(buff, threshold):
     gray_roi = cv2.cvtColor(masked_template, cv2.COLOR_BGR2GRAY)
 
     image = cv2.imread(f"assets/icons1080/{buff}.png")
+    if image is None:
+        raise FileNotFoundError(
+            f"Template image not found: assets/icons1080/{buff}.png"
+        )
+
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(image, image, mask=mask)
@@ -468,7 +618,9 @@ def check_teleporter_orange():
     logs.logger.template(
         f"check orange {np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)}"
     )
-    return np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)
+    return bool(
+        np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)
+    )
 
 
 def check_transfer_server_orange():

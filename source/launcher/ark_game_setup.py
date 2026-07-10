@@ -6,16 +6,14 @@ import subprocess
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
+import psutil
 
 RESTORE_STATE_PATH = Path("json_files/ark_start_game_restore.json")
 CONFIG_BACKUP_PATH = Path("json_files/GameUserSettings.ini.backup")
 ARK_PROCESS_NAME = "ArkAscended.exe"
-ARK_STEAM_URL = "steam://rungameid/2399830"
+
+ARK_STEAM_ID = "2399830"
+ARK_STEAM_URL = f"steam://rungameid/{ARK_STEAM_ID}"
 ARK_INSTALL_DIR_NAME = "ARK Survival Ascended"
 GAME_SETTINGS_RELATIVE_PATH = Path(
     "ShooterGame/Saved/Config/Windows/GameUserSettings.ini"
@@ -25,6 +23,7 @@ GAME_INPUT_RELATIVE_PATH = Path("ShooterGame/Saved/Config/Windows/Input.ini")
 TARGET_GAME_SETTINGS = {
     "ResolutionSizeX": "1920",
     "ResolutionSizeY": "1080",
+    "FullscreenMode": "1",
     "FoliageInteractionQuantityLimit": "0.500000",
     "GraphicsQuality": "5",
     "bEnableFootstepParticles": "False",

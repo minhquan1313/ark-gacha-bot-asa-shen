@@ -1,14 +1,34 @@
 import time
 from typing import Literal
 
-import settings
 from source.ASA import config
 from source.ASA.player import player_state
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, variables, windows
+from source.utility.types import RoiRegion
 
 resets = 0  # resets happen when char cannot tp therefore it is a major issue
 inv_slots = {"x": 222, "y": 280, "distance": 93}
+g_last_check_can_transfer: bool = False
+g_last_check_can_drop: bool = False
+
+inv_regions: RoiRegion = {
+    #
+    "start_x": 176,
+    "start_y": 236,
+    "width": 600,
+    "height": 600,
+}
+
+buttons = {
+    "filter_player_inventory": (240, 860),
+    "filter_all": (240, 825),
+    "filter_resource": (240, 725),
+}
+
+
+def get_pixel_loc(location):
+    return buttons.get(location, (0, 0))
 
 
 def is_open():
@@ -20,11 +40,20 @@ def is_clear_search():
 
 
 def is_can_drop():
-    return template.check_template("inventory_player_drop", 0.8)
+    global g_last_check_can_drop
+
+    g_last_check_can_drop = v = bool(
+        template.check_template("inventory_player_drop", 0.8)
+    )
+    return v
 
 
 def is_can_transfer_all():
-    return template.check_template("inventory_player_transfer_all", 0.8)
+    global g_last_check_can_transfer
+    g_last_check_can_transfer = v = bool(
+        template.check_template("inventory_player_transfer_all", 0.8)
+    )
+    return v
 
 
 def wait_clear_search(timeout=1):
@@ -41,14 +70,14 @@ def open():
         utils.press_key("ShowMyInventory")
         if template.template_await_true(is_open, 3):
             logs.logger.debug("inventory opened")
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.2)
             return
 
         # check state of the char before redoing
         if attempts >= config.inventory_open_attempts:
             logs.logger.error("unable to open up the players inventory")
             break
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
 
 
 def close():
@@ -63,7 +92,7 @@ def close():
             variables.get_pixel_loc("close_inv_y"),
         )
         if not template.template_await_false(is_open, 2):
-            return time.sleep(0.3 * settings.lag_offset)
+            return time.sleep(0.3)
 
         if attempts >= config.inventory_close_attempts:
             logs.logger.error(
@@ -82,20 +111,20 @@ def search_in_inventory(item: str):
             variables.get_pixel_loc("transfer_all_y"),
         )
         utils.ctrl_a()
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         utils.write(item)
-        time.sleep(0.3 * settings.lag_offset)
+        time.sleep(0.3)
 
 
 def drop_all_inv():
     if is_open():
         logs.logger.debug("dropping all items from our inventory ")
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         windows.click(
             variables.get_pixel_loc("drop_all_x"),
             variables.get_pixel_loc("transfer_all_y"),
         )
-        time.sleep(0.1 * settings.lag_offset)
+        time.sleep(0.1)
 
 
 def transfer_all_inventory():
@@ -105,51 +134,88 @@ def transfer_all_inventory():
             variables.get_pixel_loc("transfer_all_inventory_x"),
             variables.get_pixel_loc("transfer_all_y"),
         )
-        time.sleep(0.1 * settings.lag_offset)
+        time.sleep(0.1)
 
 
-def transfer_first_inventory():
+def change_filter(type: Literal["all", "resource"] = "all"):
+    if is_open():
+        logs.logger.debug("changing filter from our inventory into structure")
+
+        windows.click(
+            *get_pixel_loc("filter_player_inventory"),
+        )
+        time.sleep(0.1)
+        coords = get_pixel_loc(f"filter_{type}")
+        windows.click(
+            *coords,
+        )
+        time.sleep(0.1)
+
+
+def transfer_first_inventory(slot=2):
     """Transfer the first item in player inv, 2nd item mean the first one, because the 1st slot is always player implant"""
 
     if is_open():
         logs.logger.debug("transfering first item from our inventory into structure")
-        windows.click(
-            variables.get_pixel_loc("inv_slot_player_2nd_x"),
-            variables.get_pixel_loc("inv_slot_player_first_row_y"),
-        )
-        time.sleep(0.05)
-        windows.click(
-            variables.get_pixel_loc("inv_slot_player_2nd_x"),
-            variables.get_pixel_loc("inv_slot_player_first_row_y"),
-        )
-        time.sleep(0.5 * settings.lag_offset)
+
+        if slot == 2:
+            for _ in range(2):
+                windows.click(
+                    variables.get_pixel_loc("inv_slot_player_2nd_x"),
+                    variables.get_pixel_loc("inv_slot_player_first_row_y"),
+                )
+                time.sleep(0.05)
+        else:
+            _slot = max(1, slot)
+            inv_default_grid = 6
+            loc_gen = utils_simple.grid_loc_gen(col=inv_default_grid)
+
+            c, r = loc_gen(_slot)
+            x = inv_slots["x"] + (inv_slots["distance"] * c)
+            y = inv_slots["y"] + (inv_slots["distance"] * r)
+
+            for _ in range(2):
+                windows.click(x, y)
+                time.sleep(0.05)
+        time.sleep(0.5)
 
 
 def popcorn(
-    count=0, direction: Literal["left", "down"] = "left", *, transfer_instead=False
+    count=0,
+    direction: Literal["to right", "to bottom", "to left", "to top"] = "to right",
+    *,
+    transfer_instead=False,
 ):
-    loc_gen = (
-        utils_simple.grid_loc_gen(row=6)
-        if direction == "down"
-        else utils_simple.grid_loc_gen(col=6)
-    )
+    """Drop or transfer items from inventory slots in the selected direction."""
+    inv_default_grid = 6
+
+    loc_gen = utils_simple.grid_loc_gen(row=inv_default_grid)
+
+    if direction in ("to right", "to left"):
+        loc_gen = utils_simple.grid_loc_gen(col=inv_default_grid)
 
     if is_open() and count >= 1:
         for i in range(count):
             c, r = loc_gen(i)
 
-            time.sleep(0.05 * settings.lag_offset)
+            if direction == "to left":
+                c = inv_default_grid - 1 - c
+            elif direction == "to top":
+                r = inv_default_grid - 1 - r
+
+            time.sleep(0.05)
 
             x = inv_slots["x"] + (inv_slots["distance"] * c)
-            # Y pos = startY + distanceBetweenSlots * i
             y = inv_slots["y"] + (inv_slots["distance"] * r)
-            windows.move_mouse(x, y)
 
+            if not is_open():
+                return
+
+            windows.move_mouse(x, y)
             windows.click(x, y)
-            time.sleep(0.05 * settings.lag_offset)
+            time.sleep(0.05)
 
             utils.press_key("DropItem" if not transfer_instead else "TransferItem")
-        time.sleep(0.1 * settings.lag_offset)
 
 
 def implant_eat():
@@ -177,7 +243,7 @@ def implant_eat():
 
         open()
 
-        time.sleep(0.5 * settings.lag_offset)
+        time.sleep(0.5)
 
         windows.move_mouse(
             variables.get_pixel_loc("implant_eat_x"),

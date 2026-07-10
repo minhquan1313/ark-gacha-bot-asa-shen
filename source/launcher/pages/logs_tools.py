@@ -9,7 +9,9 @@ from source.launcher.pages.common import (
     QHBoxLayout,
     QLabel,
     QPixmap,
+    QSizePolicy,
     Qt,
+    ToolCoverCard,
     os,
     utils_simple,
 )
@@ -58,6 +60,7 @@ class LogsToolsPagesMixin:
         filter_row.addWidget(clear)
 
         console, console_layout = self._panel()
+        console.setObjectName("ConsolePanel")
         self.full_log = self._console_widget()
         console_layout.addWidget(self.full_log)
         layout.addWidget(console, 1)
@@ -83,51 +86,34 @@ class LogsToolsPagesMixin:
         # tools_grid.setColumnStretch(0, 1)
         # tools_grid.setColumnStretch(1, 1)
 
-        auto_join_card, auto_join_layout = self._panel("AUTO JOIN SERVER")
-        auto_join_description = QLabel(
+        auto_join_card = self._tool_cover_card(
+            "Auto Join Server",
             "Enter a server number and retry the existing join flow until the "
-            "character is detected back in-server."
+            "character is detected back in-server.",
+            ASSETS["welcome"],
+            self.open_auto_join_server_helper,
         )
-        auto_join_description.setObjectName("MutedCopy")
-        auto_join_description.setWordWrap(True)
-        open_auto_join = self._button("OPEN TOOL", "primary")
-        open_auto_join.clicked.connect(self.open_auto_join_server_helper)
-        auto_join_layout.addWidget(auto_join_description)
-        auto_join_layout.addWidget(open_auto_join)
-
-        transfer_card, transfer_layout = self._panel("SERVER TRANSFER HELPER")
-        transfer_description = QLabel(
-            "Move resources between two servers across multiple Steam accounts."
+        transfer_card = self._tool_cover_card(
+            "Server Transfer Helper",
+            "Move resources between two servers across multiple Steam accounts.",
+            "assets/templateHammer/GachaBot - Transfer Base.jpg",
+            self.open_server_transfer_helper,
         )
-        transfer_description.setObjectName("MutedCopy")
-        transfer_description.setWordWrap(True)
-        open_transfer = self._button("OPEN TOOL", "primary")
-        open_transfer.clicked.connect(self.open_server_transfer_helper)
-        transfer_layout.addWidget(transfer_description)
-        transfer_layout.addWidget(open_transfer)
-
-        fertilizer_card, card_layout = self._panel("CROP PLOT FERTILIZER REFRESH")
-        description = QLabel("Refresh crop plot fertilizer with one quick helper.")
-        description.setObjectName("MutedCopy")
-        description.setWordWrap(True)
-        open_tool = self._button("OPEN TOOL", "primary")
-        open_tool.clicked.connect(self.open_fertilizer_refresh_helper)
-        card_layout.addWidget(description)
-        card_layout.addWidget(open_tool)
-
-        switch_card, switch_layout = self._panel("SWITCH STEAM")
-        switch_description = QLabel(
+        fertilizer_card = self._tool_cover_card(
+            "Crop Plot Fertilizer Refresh",
+            "Refresh crop plot fertilizer with one quick helper.",
+            ASSETS["dashboard"],
+            self.open_fertilizer_refresh_helper,
+        )
+        switch_card = self._tool_cover_card(
+            "Switch Steam",
             "Restart Steam with any saved account, or switch accounts before "
-            "launching ARK."
+            "launching ARK.",
+            "assets/templateHammer/GachaBot - Render V3.jpg",
+            self.open_switch_steam_helper,
         )
-        switch_description.setObjectName("MutedCopy")
-        switch_description.setWordWrap(True)
-        open_switch = self._button("OPEN TOOL", "primary")
-        open_switch.clicked.connect(self.open_switch_steam_helper)
-        switch_layout.addWidget(switch_description)
-        switch_layout.addWidget(open_switch)
 
-        loc_gen = utils_simple.grid_loc_gen(col=3)
+        loc_gen = utils_simple.grid_loc_gen(col=2)
         helpers = [auto_join_card, fertilizer_card, transfer_card, switch_card]
         for index, helper in enumerate(helpers):
             col, row = loc_gen(index)
@@ -136,6 +122,21 @@ class LogsToolsPagesMixin:
         layout.addLayout(tools_grid)
         layout.addStretch()
         return page
+
+    def _tool_cover_card(self, title, description, image_path, handler):
+        card = ToolCoverCard(image_path)
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        card_layout = QHBoxLayout(card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(10)
+        copy = QLabel(f"{title}\n{description}")
+        copy.setObjectName("ToolCoverCopy")
+        copy.setWordWrap(True)
+        open_tool = self._button("OPEN TOOL", "primary")
+        open_tool.clicked.connect(handler)
+        card_layout.addWidget(copy, 1, alignment=Qt.AlignmentFlag.AlignBottom)
+        card_layout.addWidget(open_tool, alignment=Qt.AlignmentFlag.AlignBottom)
+        return card
 
     def _console_widget(self):
         console = ClickableTextEdit()
@@ -152,12 +153,12 @@ class LogsToolsPagesMixin:
         card.setMaximumWidth(420)
         icon = QLabel("[CLOUD]")
         icon.setObjectName("UpdateIcon")
-        icon.setAlignment(Qt.AlignCenter)
+        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         current = QLabel("CURRENT VERSION\nv1.0.0")
-        current.setAlignment(Qt.AlignCenter)
+        current.setAlignment(Qt.AlignmentFlag.AlignCenter)
         latest = QLabel("LATEST VERSION\nv1.1.0\nUpdate available!")
         latest.setObjectName("UpdateLatest")
-        latest.setAlignment(Qt.AlignCenter)
+        latest.setAlignment(Qt.AlignmentFlag.AlignCenter)
         changelog, changelog_layout = self._panel("CHANGELOG")
         changelog_layout.addWidget(QLabel("- Added new queue management"))
         changelog_layout.addWidget(QLabel("- Improved stability and performance"))
@@ -178,7 +179,7 @@ class LogsToolsPagesMixin:
         card_layout.addWidget(latest)
         card_layout.addWidget(changelog)
         card_layout.addLayout(row)
-        layout.addWidget(card, alignment=Qt.AlignCenter)
+        layout.addWidget(card, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addStretch()
         return page
 
@@ -189,18 +190,21 @@ class LogsToolsPagesMixin:
         card, card_layout = self._panel()
         card.setMaximumWidth(420)
         logo = QLabel()
-        logo.setAlignment(Qt.AlignCenter)
+        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if os.path.exists(ASSETS["logo"]):
             logo.setPixmap(
                 QPixmap(ASSETS["logo"]).scaled(
-                    110, 110, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    110,
+                    110,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
                 )
             )
         title = QLabel(f"{APP_TITLE}\n{APP_VERSION}")
         title.setObjectName("AboutTitle")
-        title.setAlignment(Qt.AlignCenter)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         author = QLabel('DEVELOPED BY\nShen\n\n"Code. Automate. Dominate."')
-        author.setAlignment(Qt.AlignCenter)
+        author.setAlignment(Qt.AlignmentFlag.AlignCenter)
         connect = QHBoxLayout()
         for text in ["GITHUB", "WEBSITE"]:
             button = self._button(text, "secondary")
@@ -212,12 +216,12 @@ class LogsToolsPagesMixin:
             connect.addWidget(button)
         thanks = QLabel(f"SPECIAL THANKS TO\nYou, for using {APP_NAME}")
         thanks.setObjectName("MutedCopy")
-        thanks.setAlignment(Qt.AlignCenter)
+        thanks.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(logo)
         card_layout.addWidget(title)
         card_layout.addWidget(author)
         card_layout.addLayout(connect)
         card_layout.addWidget(thanks)
-        layout.addWidget(card, alignment=Qt.AlignCenter)
+        layout.addWidget(card, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addStretch()
         return page

@@ -8,7 +8,7 @@ import json
 with open("json_files/settings.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
-lag_offset: float = data["lag_offset"]
+ping: int = int(data["ping"])
 station_yaw: float = data["station_yaw"]
 bed_spawn: str = data["bed_spawn"]
 server_number: str = data["server_number"]
@@ -26,6 +26,11 @@ focus_ark_window_interval: float = float(data.get("focus_ark_window_interval", 5
 helper_inactive_opacity: float = max(
     0.1, min(1.0, float(data.get("helper_inactive_opacity", 0.3)))
 )
+
+# -=-=-= OTHER RUNTIME
+station_pushout_yaw: float | None = None
+wait_structure_load: float = 30
+wait_reconnect: float = 60
 
 
 if __name__ == "__main__":

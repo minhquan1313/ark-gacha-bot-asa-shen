@@ -1,38 +1,33 @@
 import time
 
+import pyautogui
+
 import settings
 from source.ASA import config
-from source.ASA.player import console, player_state
-from source.ASA.strucutres import bed
+from source.ASA.player import console, player_inventory, player_state
+from source.ASA.strucutres import bed, teleporter
+from source.gacha_bot import render
+from source.join_sim.source import main
 from source.join_sim.source.menus import success
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, windows
 from source.utility.structures.transmitter import transmitter
 
 buttons = {
-    "transfer_to_another_server_button_x": 960,
-    "transfer_to_another_server_button_y": 790,
-    "server_search_x": 1500,
-    "server_search_y": 180,
-    "first_server_x": 400,
-    "first_server_y": 320,
-    "join_button_x": 1640,
-    "join_button_y": 890,
-    "back_menu_x": 230,
-    "back_menu_y": 895,
-    "refresh_x": 994,
-    "refresh_y": 896,
-    "transfer_not_ready_cancel_x": 1070,
-    "transfer_not_ready_cancel_y": 730,
-    "failure_connection_accept_x": 849,
-    "failure_connection_accept_y": 731,
-    "failure_attempting_accept_x": 815,
-    "failure_attempting_accept_y": 732,
+    "transfer_to_another_server_button": (960, 790),
+    "server_search": (1500, 180),
+    "first_server": (400, 320),
+    "join_button": (1640, 890),
+    "back_menu": (230, 895),
+    "refresh": (994, 896),
+    "transfer_not_ready_cancel": (1070, 730),
+    "failure_connection_accept": (849, 731),
+    "failure_attempting_accept": (815, 732),
 }
 
 
 def get_pixel_loc(location):
-    return buttons.get(location)
+    return buttons.get(location, (0, 0))
 
 
 def is_open():
@@ -44,15 +39,14 @@ def open():
         return
 
     windows.click(
-        get_pixel_loc("transfer_to_another_server_button_x"),
-        get_pixel_loc("transfer_to_another_server_button_y"),
+        *get_pixel_loc("transfer_to_another_server_button"),
     )
 
     if not template.template_await_true(is_open, 3):
         logs.logger.error("Can't open transmitter server menu")
         return
 
-    time.sleep(0.5 * settings.lag_offset)
+    time.sleep(0.5)
 
 
 def close():
@@ -62,9 +56,13 @@ def close():
         logs.logger.debug(
             f"Trying to close Transmitter menu inventory {attempts} / {config.inventory_close_attempts}"
         )
-        windows.click(get_pixel_loc("back_menu_x"), get_pixel_loc("back_menu_y"))
+        windows.click(*get_pixel_loc("back_menu"))
+        time.sleep(0.2)
+
+        has_failure()
+
         if not template.template_await_false(is_open, 2):
-            return time.sleep(0.3 * settings.lag_offset)
+            return time.sleep(0.3)
 
         if attempts >= config.inventory_close_attempts:
             logs.logger.error(
@@ -90,7 +88,7 @@ def is_server_list_loaded():
 
 
 def is_server_join_success():
-    return template.check_template("server_trans_uploaded", 0.8)
+    return template.check_template("server_trans_uploaded", 0.9)
 
 
 def is_join_button_visible():
@@ -105,19 +103,18 @@ def wait_server_list_loaded(delay=10):
 
 def refresh():
     if is_open():
-        windows.click(get_pixel_loc("refresh_x"), get_pixel_loc("refresh_y"))
+        windows.click(*get_pixel_loc("refresh"))
 
 
 def join_server():
     if is_open():
-        windows.click(get_pixel_loc("join_button_x"), get_pixel_loc("join_button_y"))
+        windows.click(*get_pixel_loc("join_button"))
 
 
 def cancel_transfer():
     if is_open():
         windows.click(
-            get_pixel_loc("transfer_not_ready_cancel_x"),
-            get_pixel_loc("transfer_not_ready_cancel_y"),
+            *get_pixel_loc("transfer_not_ready_cancel"),
         )
 
 
@@ -125,12 +122,10 @@ def search_bar_search(server: str):
     if not is_open():
         return False
 
-    windows.move_mouse(
-        get_pixel_loc("server_search_x"), get_pixel_loc("server_search_y")
-    )
+    windows.move_mouse(*get_pixel_loc("server_search"))
 
-    windows.click(get_pixel_loc("server_search_x"), get_pixel_loc("server_search_y"))
-    windows.click(get_pixel_loc("server_search_x"), get_pixel_loc("server_search_y"))
+    windows.click(*get_pixel_loc("server_search"))
+    windows.click(*get_pixel_loc("server_search"))
     time.sleep(0.2)
 
     utils.ctrl_a()
@@ -142,6 +137,14 @@ def search_bar_search(server: str):
 
 def failure_is_connection_failed():
     return template.check_template_no_bounds("transmitter_server_fail_connection", 0.7)
+
+
+def failure_excess_amount():
+    transmitter.was_excess_amount = template.check_template(
+        "transmitter_server_excess", 0.8
+    )
+    # transmitter.was_excess_amount = False
+    return transmitter.was_excess_amount
 
 
 def failure_is_not_ready():
@@ -160,16 +163,14 @@ def has_failure():
                 "Server connection timeout but player still not uploaded"
             )
             windows.click(
-                get_pixel_loc("failure_connection_accept_x"),
-                get_pixel_loc("failure_connection_accept_y"),
+                *get_pixel_loc("failure_connection_accept"),
             )
             time.sleep(1)
         else:
             logs.logger.warning("Server connection timeout but player UPLOADED")
             # After accepting, game may open main menu auto, so just wait so just in case
             windows.click(
-                get_pixel_loc("failure_connection_accept_x"),
-                get_pixel_loc("failure_connection_accept_y"),
+                *get_pixel_loc("failure_connection_accept"),
             )
 
             time.sleep(
@@ -183,8 +184,7 @@ def has_failure():
     if failure_is_attempting():
         logs.logger.warning("Pressing back when player is uploading")
         windows.click(
-            get_pixel_loc("failure_attempting_accept_x"),
-            get_pixel_loc("failure_attempting_accept_y"),
+            *get_pixel_loc("failure_attempting_accept"),
         )
         time.sleep(1)
 
@@ -192,6 +192,48 @@ def has_failure():
         logs.logger.warning("Timer not ready")
         cancel_transfer()
         time.sleep(1)
+
+
+def transfer_timer_handle():
+    should_go_tek_pod = utils_simple.get_default_clock(30)
+    sleep_tek_pod_for = 10
+    while failure_is_not_ready():
+        # Timer not ready
+        time.sleep(1)
+        cancel_transfer()
+        time.sleep(0.2)
+
+        if should_go_tek_pod():
+            eslapsed = utils_simple.clock_tracker()
+
+            cancel_transfer()
+            time.sleep(0.2)
+            close()
+            current_tele = teleporter._last_teleporter_name
+            teleporter.teleport_not_default(settings.bed_spawn)
+            render.enter_tekpod(allow_eat_implant=False)
+            player_inventory.open()
+
+            time.sleep(max(5, sleep_tek_pod_for - eslapsed()))
+
+            player_state.check_state()
+            teleporter.teleport_not_default(current_tele)
+
+            return False
+
+        windows.click(*get_pixel_loc("first_server"))
+        time.sleep(0.2)
+        windows.click(*get_pixel_loc("join_button"))
+        time.sleep(0.2)
+
+        if player_state.check_disconnected():
+            return False
+
+    return True
+
+
+def sign_of_uploaded():
+    return bed.is_open_respawn() or main.is_menu()
 
 
 def do_join_server(server: str):
@@ -220,7 +262,7 @@ def do_join_server(server: str):
 
     wait_server_list_loaded(1)
 
-    windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
+    windows.click(*get_pixel_loc("first_server"))
 
     if not template.template_await_true(template.check_transfer_server_orange, 1):
         logs.logger.warning(
@@ -229,55 +271,66 @@ def do_join_server(server: str):
         return False
     else:
         logs.logger.debug("Orange detected, ready for transfer")
+        time.sleep(0.1)
 
         if template.template_await_true(is_join_button_visible, 1):
-            windows.click(
-                get_pixel_loc("join_button_x"), get_pixel_loc("join_button_y")
-            )
+            time.sleep(0.1)
+            windows.click(*get_pixel_loc("join_button"))
             time.sleep(0.2)
 
-            while failure_is_not_ready():
-                # Timer not ready
-                cancel_transfer()
-                time.sleep(1)
-
-                windows.click(
-                    get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y")
-                )
-                time.sleep(0.2)
-                windows.click(
-                    get_pixel_loc("join_button_x"), get_pixel_loc("join_button_y")
-                )
-                time.sleep(1)
-
-                if player_state.check_disconnected():
-                    return False
+            if not transfer_timer_handle():
+                return False
 
             dl = utils_simple.get_default_clock(60)
             while is_open():
                 if dl():
                     close()
-                    time.sleep(0.2)
-
                     break
 
-                if template.template_await_true(is_server_join_success, 5):
-                    player_state.uploaded = True
+                player_state.uploaded = False
+
+                dl2 = utils_simple.get_default_clock(5)
+                clicked = 1  # Don't change, as previous we already clicked it once, so it should start as 1
+                max_click = 2
+                while not dl2():
+                    if template.template_await_true(is_server_join_success, 0.8):
+                        player_state.uploaded = True
+                        break
+
+                    if failure_excess_amount():
+                        close()
+                        return False
+
+                    if clicked < max_click:
+                        clicked += 1
+                        windows.click(
+                            *get_pixel_loc("first_server"),
+                        )
+                        time.sleep(0.1)
+
+                        windows.click(
+                            *get_pixel_loc("join_button"),
+                        )
+
+                if player_state.uploaded:
                     logs.logger.warning("Detected Survival UPLOADED")
 
                     time.sleep(2)
 
                     if is_open():
                         search_bar_search("Joining...")
+                        pyautogui.click(2, 2)
 
-                    if template.template_await_true(bed.is_open, 30):  # noqa: SIM103
+                    if template.template_await_true(sign_of_uploaded, 30):  # noqa: SIM103
                         # Return False intentionally to trigger one additional verification cycle.
-                        return False
+                        return False if bed.is_open_respawn() else True  # noqa: SIM211
                     else:
                         # Return True to exit when the upload succeeded but the destination server never loaded.
                         console.console_exit_mainmenu()
+                        template.template_await_true(sign_of_uploaded, 10)
+                        time.sleep(0.5)
                         return True
-                elif bed.is_open():
+                elif sign_of_uploaded():
                     logs.logger.warning("Detected Survival UPLOADED")
                     player_state.uploaded = True
                     return True
@@ -285,16 +338,13 @@ def do_join_server(server: str):
                     has_failure()
 
                     if is_open():
-                        time.sleep(0.2)
                         windows.click(
-                            get_pixel_loc("first_server_x"),
-                            get_pixel_loc("first_server_y"),
+                            *get_pixel_loc("first_server"),
                         )
-                        time.sleep(0.2)
+                        time.sleep(0.1)
 
                         windows.click(
-                            get_pixel_loc("join_button_x"),
-                            get_pixel_loc("join_button_y"),
+                            *get_pixel_loc("join_button"),
                         )
                     else:
                         break

@@ -64,8 +64,19 @@ class SwitchSteamHelperTests(unittest.TestCase):
             self.assertEqual(helper.account_combo.currentData(), "beta")
             self.assertEqual(helper.account_combo.currentText(), "beta (CURRENT)")
             self.assertTrue(helper.switch_button.isEnabled())
+            self.assertTrue(helper.switch_instant_button.isEnabled())
             self.assertTrue(helper.start_game_button.isEnabled())
             self.assertIn("Current Steam account: beta", helper.status.text())
+            actions = helper.content_layout.itemAt(4).layout()
+            self.assertEqual(actions.itemAt(0).widget(), helper.switch_button)
+            self.assertEqual(
+                actions.itemAt(1).widget(),
+                helper.switch_instant_button,
+            )
+            self.assertEqual(
+                actions.itemAt(2).widget(),
+                helper.start_game_button,
+            )
 
             event = QWheelEvent(
                 QPoint(1, 1),
@@ -89,6 +100,7 @@ class SwitchSteamHelperTests(unittest.TestCase):
 
             self.assertEqual(helper.account_combo.currentData(), "alpha")
             self.assertTrue(helper.switch_button.isEnabled())
+            self.assertTrue(helper.switch_instant_button.isEnabled())
             self.assertTrue(helper.start_game_button.isEnabled())
             self.assertIn("beta to alpha", helper.status.text())
         finally:
@@ -99,16 +111,19 @@ class SwitchSteamHelperTests(unittest.TestCase):
         try:
             sync = helper.owner.start_game_enabled_changed.connect.call_args.args[0]
             sync(False)
+            self.assertTrue(helper.switch_instant_button.isEnabled())
             self.assertFalse(helper.start_game_button.isEnabled())
 
             helper.account_combo.setCurrentIndex(1)
             self.assertFalse(helper.start_game_button.isEnabled())
 
             sync(True)
+            self.assertTrue(helper.switch_instant_button.isEnabled())
             self.assertTrue(helper.start_game_button.isEnabled())
 
             helper.switching = True
             sync(True)
+            self.assertFalse(helper.switch_instant_button.isEnabled())
             self.assertFalse(helper.start_game_button.isEnabled())
         finally:
             helper.close()
@@ -152,6 +167,7 @@ class SwitchSteamHelperTests(unittest.TestCase):
             )
             self.assertTrue(helper.status_spinner.timer.isActive())
             self.assertFalse(helper.switch_button.isEnabled())
+            self.assertFalse(helper.switch_instant_button.isEnabled())
             self.assertFalse(helper.account_combo.isEnabled())
 
             helper._on_worker_finished("Steam restarted for alpha.")
@@ -159,8 +175,43 @@ class SwitchSteamHelperTests(unittest.TestCase):
 
             self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertTrue(helper.switch_button.isEnabled())
+            self.assertTrue(helper.switch_instant_button.isEnabled())
             self.assertEqual(helper.current_account, "alpha")
             helper.owner.start_game.assert_called_once_with()
+        finally:
+            helper.close()
+
+    def test_switch_instant_flow_adds_worker_flag(self) -> None:
+        helper = self._helper()
+        try:
+            helper.account_combo.setCurrentIndex(1)
+            with (
+                patch(
+                    "source.launcher.switch_steam_helper.steam_accounts.load_steam_accounts",
+                    return_value=ACCOUNTS,
+                ),
+                patch.object(helper, "_start_worker") as start_worker,
+            ):
+                helper.switch_account_instant()
+
+            start_worker.assert_called_once_with(
+                "switch_steam",
+                "--account",
+                "alpha",
+                "--loginusers",
+                str(Path("C:/Steam/config/loginusers.vdf").resolve()),
+                "--instant",
+            )
+            self.assertFalse(helper.switch_button.isEnabled())
+            self.assertFalse(helper.switch_instant_button.isEnabled())
+            self.assertFalse(helper.start_game_button.isEnabled())
+            self.assertIs(helper._active_button(), helper.switch_instant_button)
+
+            helper._on_worker_finished("Steam restarted for alpha.")
+
+            self.assertTrue(helper.switch_button.isEnabled())
+            self.assertTrue(helper.switch_instant_button.isEnabled())
+            self.assertTrue(helper.start_game_button.isEnabled())
         finally:
             helper.close()
 
@@ -181,6 +232,7 @@ class SwitchSteamHelperTests(unittest.TestCase):
             self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertTrue(helper.account_combo.isEnabled())
             self.assertTrue(helper.switch_button.isEnabled())
+            self.assertTrue(helper.switch_instant_button.isEnabled())
             self.assertEqual(helper.status.text(), "Failed: restart failed")
             self.assertFalse(hasattr(helper.owner, "dialog"))
         finally:

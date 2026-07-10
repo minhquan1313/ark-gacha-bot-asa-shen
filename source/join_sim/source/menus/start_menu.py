@@ -42,7 +42,7 @@ def is_term_and_conditions():
 
 def click_start():
     if not is_open():
-        return
+        return False
     if is_disconnected():
         windows.click(get_pixel_loc("accept_x"), get_pixel_loc("accept_y"))
         recon_utils.window_still_open_no_bounds("accept", 0.7, 1)
@@ -60,3 +60,4 @@ def click_start():
     )  # doesnt effect anything for backup
     windows.click(get_pixel_loc("start_x"), get_pixel_loc("start_y"))
     recon_utils.window_still_open_no_bounds("join_last_session", 0.7, 1)
+    return True

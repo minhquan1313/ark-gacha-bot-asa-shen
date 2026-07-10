@@ -2,9 +2,9 @@ import time
 
 import pyautogui
 
-import settings
 import source.ASA.config
 from source.ASA.player import player_inventory, player_state, tribelog
+from source.ASA.strucutres import teleporter
 from source.gacha_bot import render
 from source.logs import gachalogs as logs
 from source.utility import (
@@ -21,10 +21,22 @@ def is_clear_search_death_screen():
     return template.check_template_no_bounds("search_death_screen", 0.7)
 
 
+def is_open_respawn():
+    # if teleporter is open then we are not in the bed spawn screen
+    return (
+        template.check_template("beds_title_respawn", 0.7) and not teleporter.is_open()
+    )
+
+
 def is_open():
-    return template.check_template("beds_title", 0.7) or template.check_template(
-        "beds_title_respawn", 0.7
-    )  # bed title is found in both death and fast travel screens
+    # bed title is found in both death and fast travel screens and server transfer spawn screen
+    return (
+        (
+            template.check_template("beds_title", 0.7)
+            or template.check_template("beds_title_respawn", 0.7)
+        )
+        and not teleporter.is_open()
+    )  # if teleporter is open then we are not in the bed spawn screen
 
 
 def is_dead():
@@ -43,7 +55,7 @@ def close():
             variables.get_pixel_loc("back_button_tp_y"),
         )
         if not template.template_await_false(is_open, 2):
-            return time.sleep(0.3 * settings.lag_offset)
+            return time.sleep(0.3)
 
         if attempts >= source.ASA.config.teleporter_close_attempts:
             logs.logger.error(
@@ -66,10 +78,17 @@ def spawn_in(bed_name: str):
             break
 
         player_state.check_disconnected()
-        time.sleep(1 * settings.lag_offset)
+        time.sleep(1)
 
     if is_open():
         while True:
+            # Make sure we are still in the bed screen, not from the teleporter screen
+            # Because ARK is laggy and will display the bed title first then update to the teleporter title
+            if not is_open():
+                # Close teleport screen
+                player_state.check_state()
+                return
+
             player_state.check_disconnected()
 
             state = "death screen" if is_dead() else "fast travel screen"
@@ -85,7 +104,7 @@ def spawn_in(bed_name: str):
             utils.ctrl_a()  # CTRL A removes all previous data in the search bar
             utils.write(bed_name)
 
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.2)
             windows.click(
                 variables.get_pixel_loc("first_bed_slot_x"),
                 variables.get_pixel_loc("first_bed_slot_y"),
@@ -109,24 +128,22 @@ def spawn_in(bed_name: str):
             variables.get_pixel_loc("spawn_button_x"),
             variables.get_pixel_loc("spawn_button_y"),
         )
-        time.sleep(0.3 * settings.lag_offset)
+        time.sleep(0.3)
 
         # Click random on the screen to make sure it will spawn player or skip trailers.
 
-        (x1, y1), (x2, y2) = ((1000, 300), (1400, 800))
-        pyautogui.moveTo(x1, y1, duration=0.5)
-        pyautogui.rightClick(x1, y1)
-        pyautogui.press("space")
-        time.sleep(0.2 * settings.lag_offset)
+        locs = ((1000, 300), (1400, 800))
+        for loc in locs:
+            pyautogui.moveTo(*loc, duration=0.5)
+            pyautogui.rightClick(*loc)
+            pyautogui.press("space")
+            time.sleep(0.2)
 
-        pyautogui.moveTo(x2, y2, duration=0.5)
-        pyautogui.rightClick(x2, y2)
-        pyautogui.press("space")
-        time.sleep(0.2 * settings.lag_offset)
-
-        if template.template_await_true(template.white_flash, 2):
+        if template.template_await_true(
+            template.white_flash, 2 if not player_state.uploaded else 15
+        ):
             logs.logger.debug("white flash detected waiting for up too 5 seconds")
-            template.template_await_false(template.white_flash, 5)
+            template.template_await_false(template.white_flash, 10)
 
         time.sleep(10)  # animation spawn in is about 7 seconds
 
@@ -143,18 +160,18 @@ def fast_travel(bed_name: str):
                 "char is on a teleporter going to render bed to fast travel"
             )
             render.fast_travel_to_render()
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.2)
             utils.zero_center()
             utils.turn_down(15)
     else:
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         utils.turn_down(80)
-    time.sleep(0.2 * settings.lag_offset)
+    time.sleep(0.2)
     utils.press_key(local_player.get_input_settings("Use"))
 
     # some reason takes ages to open up the fast travel screen
-    template.template_await_true(is_open, 2 * settings.lag_offset)
-    time.sleep(0.2 * settings.lag_offset)
+    template.template_await_true(is_open, 2)
+    time.sleep(0.2)
     if is_open():
         state = "death screen" if is_dead() else "fast travel screen"
         logs.logger.debug(f"char is in the {state}")
@@ -166,7 +183,7 @@ def fast_travel(bed_name: str):
         )  # search bar y axis is the same for both death/alive
         utils.ctrl_a()  # CTRL A removes all previous data in the search bar
         utils.write(bed_name)
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         windows.click(
             variables.get_pixel_loc("first_bed_slot_x"),
             variables.get_pixel_loc("first_bed_slot_y"),

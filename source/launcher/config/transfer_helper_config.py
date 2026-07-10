@@ -15,11 +15,10 @@ MAX_TRANSFER_PLAYER_ROWS = 99
 DEFAULT_BED_NAME_PREFIX = "BBedPlayer"
 
 DEFAULT_TRANSFER_SETTINGS = {
-    "lag_offset": 1.0,
+    "ping": 100,
     "transfer_start_mode": "default",
     "resource_station_yaw": 0.0,
     "destination_station_yaw": 0.0,
-    "transmitter_teleport": "TRANSFER_TTRANS",
     "resource_server": "0",
     "destination_server": "0",
     "loop_count": 1,
@@ -32,10 +31,12 @@ DEFAULT_TRANSFER_SETTINGS = {
 DEFAULT_TRANSFER_DEDIS = {
     "resource": {
         "teleport": "TRANSFER_DDEDI",
+        "transmitter_teleport": "TRANSFER_TTRANS",
         "items": [],
     },
     "destination": {
         "teleport": "TRANSFER_DDEDI",
+        "transmitter_teleport": "TRANSFER_TTRANS",
         "items": [],
     },
 }
@@ -224,6 +225,7 @@ def save_transfer_players(data, path=TRANSFER_PLAYERS_PATH, account_count=None):
 
 
 def load_transfer_runtime_config(create_missing=True):
+    legacy_transmitter_teleport = _legacy_transmitter_teleport(TRANSFER_SETTINGS_PATH)
     settings = load_transfer_settings(
         TRANSFER_SETTINGS_PATH, create_missing=create_missing
     )
@@ -233,6 +235,10 @@ def load_transfer_runtime_config(create_missing=True):
         else _old_account_count_hint(TRANSFER_SETTINGS_PATH)
     )
     dedis = load_transfer_dedis(TRANSFER_DEDIS_PATH, create_missing=create_missing)
+    if legacy_transmitter_teleport:
+        dedis = _migrate_legacy_transmitter_teleport(dedis, legacy_transmitter_teleport)
+        if create_missing:
+            save_transfer_dedis(dedis, TRANSFER_DEDIS_PATH)
     return {
         "settings": settings,
         "dedis": dedis,
@@ -250,7 +256,7 @@ def normalize_transfer_settings(data):
         data = {}
     normalized = default_transfer_settings()
     normalized.update({key: data[key] for key in normalized if key in data})
-    normalized["lag_offset"] = _positive_float(normalized["lag_offset"], "lag_offset")
+    normalized["ping"] = _int_min(normalized["ping"], "ping", 0)
     normalized["resource_station_yaw"] = _float_value(
         normalized["resource_station_yaw"], "resource_station_yaw"
     )
@@ -260,7 +266,6 @@ def normalize_transfer_settings(data):
     normalized["transfer_start_mode"] = _transfer_start_mode(
         normalized["transfer_start_mode"]
     )
-    normalized["transmitter_teleport"] = str(normalized["transmitter_teleport"]).strip()
     normalized["resource_server"] = _server_number(
         normalized["resource_server"], "resource_server"
     )
@@ -324,25 +329,35 @@ def normalize_transfer_dedis(data):
 
 
 def calculate_same_structure_destination_dedis(
-    dedis: dict, resource_station_yaw: float, destination_station_yaw: float
+    dedis: dict,
+    resource_station_yaw: float,
+    destination_station_yaw: float,
+    target_side: str = "destination",
 ):
-    """Calculate destination dedis from resource dedis for matching outposts.
+    """Calculate dedis from the opposite side for matching outposts.
 
     Example: resource yaw 50 at station yaw 10 becomes destination yaw 60
     when destination station yaw is 20.
     """
+    if target_side not in {"resource", "destination"}:
+        raise ValueError("target_side must be resource or destination.")
     calculated = normalize_transfer_dedis(dedis)
-    adjustment = float(destination_station_yaw) - float(resource_station_yaw)
-    destination_items = calculated["destination"]["items"]
-    for index, resource_item in enumerate(calculated["resource"]["items"]):
-        destination_items[index] = {
+    station_yaws = {
+        "resource": float(resource_station_yaw),
+        "destination": float(destination_station_yaw),
+    }
+    source_side = "resource" if target_side == "destination" else "destination"
+    adjustment = station_yaws[target_side] - station_yaws[source_side]
+    target_items = calculated[target_side]["items"]
+    for index, source_item in enumerate(calculated[source_side]["items"]):
+        target_items[index] = {
             "location": {
                 "yaw": normalize_yaw(
-                    float(resource_item["location"]["yaw"]) + adjustment
+                    float(source_item["location"]["yaw"]) + adjustment
                 ),
-                "pitch": float(resource_item["location"]["pitch"]),
+                "pitch": float(source_item["location"]["pitch"]),
             },
-            "crouched": bool(resource_item.get("crouched", False)),
+            "crouched": bool(source_item.get("crouched", False)),
         }
     return calculated
 
@@ -351,11 +366,16 @@ def _normalize_dedi_route(data):
     if not isinstance(data, dict):
         data = {}
     teleport = str(data.get("teleport", "")).strip()
+    transmitter_teleport = str(data.get("transmitter_teleport", "")).strip()
     raw_items = data.get("items", [])
     if not isinstance(raw_items, list):
         raw_items = []
     items = [_normalize_dedi_item(item) for item in raw_items]
-    return {"teleport": teleport, "items": items}
+    return {
+        "teleport": teleport,
+        "transmitter_teleport": transmitter_teleport,
+        "items": items,
+    }
 
 
 def _sync_dedi_route_lengths(dedis):
@@ -402,12 +422,11 @@ def missing_runtime_inputs(
     ui_coords_or_players=None,
     players=None,
     steam_accounts=None,
+    start_account=1,
 ):
     if players is None and _looks_like_players(ui_coords_or_players):
         players = ui_coords_or_players
     missing = []
-    if not settings.get("transmitter_teleport"):
-        missing.append("settings.transmitter_teleport")
     if settings.get("resource_server") == "0":
         missing.append("settings.resource_server")
     if settings.get("destination_server") == "0":
@@ -416,15 +435,23 @@ def missing_runtime_inputs(
         missing.append("settings.destination_server must differ from resource_server")
     if player_account_count(players) < 1:
         missing.append("players must include at least one player")
-    missing.extend(steam_account_assignment_issues(players, steam_accounts))
+    missing.extend(
+        steam_account_assignment_issues(
+            players, steam_accounts, start_account=start_account
+        )
+    )
     resource_dedis = transfer_dedi_route(dedis, "resource")
     destination_dedis = transfer_dedi_route(dedis, "destination")
     if not resource_dedis.get("teleport"):
         missing.append("dedis.resource.teleport")
+    if not resource_dedis.get("transmitter_teleport"):
+        missing.append("dedis.resource.transmitter_teleport")
     if not active_transfer_dedis(dedis, "resource"):
         missing.append("dedis.resource.items must include at least one dedi")
     if not destination_dedis.get("teleport"):
         missing.append("dedis.destination.teleport")
+    if not destination_dedis.get("transmitter_teleport"):
+        missing.append("dedis.destination.transmitter_teleport")
     if not active_transfer_dedis(dedis, "destination"):
         missing.append("dedis.destination.items must include at least one dedi")
 
@@ -435,7 +462,11 @@ def _looks_like_players(value):
     return isinstance(value, dict) and "players" in value
 
 
-def steam_account_assignment_issues(players=None, steam_accounts=None):
+def steam_account_assignment_issues(players=None, steam_accounts=None, start_account=1):
+    try:
+        start_account = int(start_account)
+    except (TypeError, ValueError):
+        start_account = 1
     if not isinstance(players, dict):
         players = {}
     raw_players = players.get("players", [])
@@ -460,9 +491,9 @@ def steam_account_assignment_issues(players=None, steam_accounts=None):
             )
         else:
             seen[account_name] = index
-        if index == 1 and most_recent and account_name != most_recent:
+        if index == start_account and most_recent and account_name != most_recent:
             issues.append(
-                "players[1].steam_account must match Steam MostRecent account"
+                f"players[{index}].steam_account must match Steam MostRecent account"
             )
     return issues
 
@@ -540,6 +571,28 @@ def _old_account_count_hint(path):
         return 1
 
 
+def _legacy_transmitter_teleport(path: object):
+    path = Path(path)
+    if not path.exists():
+        return ""
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+    except (OSError, json.JSONDecodeError):
+        return ""
+    if not isinstance(data, dict):
+        return ""
+    return str(data.get("transmitter_teleport", "")).strip()
+
+
+def _migrate_legacy_transmitter_teleport(dedis: dict, transmitter_teleport: str):
+    dedis = normalize_transfer_dedis(dedis)
+    for side in ("resource", "destination"):
+        if not dedis[side].get("transmitter_teleport"):
+            dedis[side]["transmitter_teleport"] = transmitter_teleport
+    return dedis
+
+
 def _has_numeric_prefix_collision(candidate, existing_names):
     for existing in existing_names:
         if not candidate.startswith(existing):
@@ -572,6 +625,10 @@ def _positive_float(value, name):
 
 
 def _int_min(value, name, minimum):
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer.")
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError(f"{name} must be an integer.")
     try:
         value = int(value)
     except (TypeError, ValueError) as exc:

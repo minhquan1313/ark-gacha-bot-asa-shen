@@ -1,9 +1,3 @@
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
-
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
@@ -92,7 +86,7 @@ class DialogsGuiMixin:
             return
         dialog = CyberDialog(self, APP_NAME, message, variant)
         dialog.setModal(False)
-        dialog.setAttribute(Qt.WA_DeleteOnClose)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         if not hasattr(self, "_toast_dialogs"):
             self._toast_dialogs = []
         self._toast_dialogs.append(dialog)
@@ -116,5 +110,5 @@ class DialogsGuiMixin:
                 confirm_text=confirm_text,
                 cancel_text="CANCEL",
             ).exec()
-            == QDialog.Accepted
+            == QDialog.DialogCode.Accepted
         )

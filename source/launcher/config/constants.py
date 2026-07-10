@@ -5,7 +5,7 @@ APP_NAME = "Shen GBot"
 APP_TITLE = APP_NAME.upper()
 APP_VERSION = "v1.0.0"
 SUPPORTED_GAME_RESOLUTIONS = ((1920, 1080),)
-GAME_WINDOW_TITLE = "ArkAscended"
+GAME_WINDOW_TITLE = "Ark: Survival Ascended ("
 BUTTON_TRANSITION_MS = 200
 BREAKPOINT_NARROW_WIDTH = 720
 PC_MINIMUM_SIZE = (1180, 680)
@@ -15,7 +15,7 @@ WINDOW_RESIZE_BORDER_PX = 8
 ENABLE_NATIVE_CUSTOM_CHROME = True
 RUNNER_WIDTH = 240
 HELPER_WIDTH = 240
-HELPER_HEIGHT = 100
+HELPER_HEIGHT = 20
 MINIMAL_HELPER_RUNNING_WIDTH = 240
 
 COLORS = {
@@ -32,6 +32,49 @@ COLORS = {
     "muted": "#8EA3B8",
     "dim": "#5F7285",
     "border": "#16465A",
+}
+
+helper_window_opacity = 0.85
+UI_COLORS = {
+    "panel_bg": "rgba(10, 16, 25, 205)",
+    "panel_bg_soft": "rgba(18, 28, 42, 82)",
+    "panel_bg_strong": "rgba(3, 7, 12, 215)",
+    "field_bg": "rgba(5, 10, 16, 190)",
+    "border_soft": "rgba(0, 216, 255, 54)",
+    "border_active": "rgba(0, 216, 255, 135)",
+    "helper_row_bg": "rgba(18, 28, 42, 115)",
+    "helper_details_bg": "rgba(5, 10, 16, 92)",
+    "helper_shell_bg": f"rgba(10, 16, 25, {int(helper_window_opacity * 255)})",
+}
+
+UI_METRICS = {
+    "radius_sm": 6,
+    "radius_md": 9,
+    "radius_lg": 12,
+    "window_radius": 12,
+    "control_height": 32,
+    "combo_height": 32,
+    "switch_height": 32,
+    "icon_button_width": 32,
+    "helper_expand_height": 26,
+    "helper_expand_width": 28,
+    "icon_padding": "2px",
+    "control_padding": "2px 12px",
+    "combo_padding": "2px 30px 2px 12px",
+    "split_button_padding": "2px 34px 2px 12px",
+    "menu_padding": "4px",
+    "menu_item_padding": "8px 18px",
+    "chrome_button_padding": "0px",
+    "panel_padding": 14,
+    "helper_padding": 8,
+    "tool_cover_min_height": 190,
+    "smooth_scroll_ms": 210,
+}
+
+UI_FONTS = {
+    "display": "Segoe UI",
+    "body": "Segoe UI",
+    "mono": "Consolas",
 }
 
 FONT_SIZES = {
@@ -103,12 +146,14 @@ ASSETS = {
     "dashboard": "assets/app/image/dashboard.png",
     "welcome": "assets/app/image/welcome.png",
     "icon.add": "assets/app/icons/add256.png",
+    "icon.capture_target": "assets/app/icons/capture_target.png",
+    "icon.view_eye": "assets/app/icons/view_eye.png",
     "icon.trash_junk": "assets/app/icons/trash_junk256.png",
     "icon.restore_settings": "assets/app/icons/restore_settings256.png",
 }
 
 DEFAULT_SETTINGS = {
-    "lag_offset": 1.0,
+    "ping": 100,
     "iguanadon": "GACHAIGUANADON",
     "bed_spawn": "GACHARENDER",
     "berry_station": "GACHABERRYSTATION",
@@ -139,7 +184,7 @@ TEMPLATE_REFERENCE_DEFAULTS = {
 HIDDEN_SETTINGS = set()
 
 SETTING_LABELS = {
-    "lag_offset": "Lag offset",
+    "ping": "Server ping",
     "server_number": "Server",
     "auto_start_program": "Auto start program",
     "singleplayer": "Singleplayer",
@@ -194,7 +239,7 @@ def setting_tooltip(key):
 SETTINGS_GROUPS = {
     "SERVER": [
         "server_number",
-        "lag_offset",
+        "ping",
         "singleplayer",
     ],
     "STATIONS": [

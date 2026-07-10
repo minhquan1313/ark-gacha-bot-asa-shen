@@ -22,8 +22,8 @@ if errorlevel 1 (
 )
 
 :: Pull updates from Git
-git pull origin main
-git pull
+@REM git pull origin main
+@REM git pull
 
 :: Check if virtual environment exists
 if not exist "venv" (

@@ -3,51 +3,72 @@ import sys
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_deposit_module():
     logger = Mock()
-    inventory = types.SimpleNamespace(close=Mock(), transfer_all_from=Mock())
+    inventory_lag = Mock()
+    inventory_lag.__enter__ = Mock()
+    inventory_lag.__exit__ = Mock(return_value=False)
+    inventory = types.SimpleNamespace(
+        close=Mock(),
+        detect_lag_long_process=Mock(return_value=inventory_lag),
+        is_open=Mock(return_value=True),
+        is_turned_on=Mock(return_value=True),
+        open=Mock(),
+        transfer_all_from=Mock(),
+        turn_on=Mock(),
+        was_server_lag_last_open=False,
+        was_server_lag_last_open_long=False,
+    )
     teleporter = types.SimpleNamespace(teleport_not_default=Mock())
+    player_inventory = types.SimpleNamespace(
+        close=Mock(),
+        drop_all_inv=Mock(),
+        implant_eat=Mock(),
+        is_can_transfer_all=Mock(return_value=True),
+        is_open=Mock(return_value=True),
+        open=Mock(),
+        search_in_inventory=Mock(),
+        transfer_all_inventory=Mock(),
+        wait_clear_search=Mock(),
+        g_last_check_can_transfer=True,
+    )
     player_state = types.SimpleNamespace(
         check_disconnected=Mock(),
         check_state=Mock(),
         human=types.SimpleNamespace(crouched=False, crouch=Mock(), reset_crouch=Mock()),
     )
     template = types.SimpleNamespace(
-        check_template=Mock(),
-        template_await_true=Mock(),
+        check_template=Mock(return_value=True),
+        template_await_true=Mock(return_value=True),
         template_await_false=Mock(),
     )
     utils = types.SimpleNamespace(
-        press_key=Mock(), turn_to=Mock(), zero=Mock(return_value=True)
+        press_key=Mock(),
+        turn_to=Mock(),
+        zero_center=Mock(),
     )
 
     player = types.ModuleType("source.ASA.player")
-    player.player_inventory = types.SimpleNamespace(
-        close=Mock(),
-        implant_eat=Mock(),
-        search_in_inventory=Mock(),
-        transfer_all_inventory=Mock(),
-        wait_clear_search=Mock(),
-    )
+    player.player_inventory = player_inventory
     player.player_state = player_state
-    station_metadata = type("station_metadata", (), {})
-    custom_stations = types.ModuleType("source.ASA.stations.custom_stations")
-    custom_stations.station_metadata = station_metadata
-    stations = types.ModuleType("source.ASA.stations")
-    stations.custom_stations = custom_stations
     structures = types.ModuleType("source.ASA.strucutres")
     structures.inventory = inventory
     structures.teleporter = teleporter
     logs = types.ModuleType("source.logs.gachalogs")
     logs.logger = logger
+    logs_package = types.ModuleType("source.logs")
+    logs_package.gachalogs = logs
     utility = types.ModuleType("source.utility")
     utility.template = template
     utility.utils = utils
+    utility.utils_simple = types.SimpleNamespace(
+        get_default_clock=Mock(return_value=Mock(return_value=False))
+    )
     utility.variables = types.SimpleNamespace(get_pixel_loc=Mock(return_value=0))
     utility.windows = types.SimpleNamespace(click=Mock())
     captures = {}
@@ -69,16 +90,28 @@ def load_deposit_module():
     dedi = types.ModuleType("source.utility.structures.dedi.dedi")
     dedi.capture_name = None
     dedi.open_deposit_all = Mock(return_value=True)
+    dedi.unsafe_fast_deposit_all = Mock(return_value=True)
     dedi_package.dedi = dedi
     utility_types = types.ModuleType("source.utility.types")
+    utility_types.CrystalDepositRoute = dict
+    utility_types.DediStorageContainer = dict
     utility_types.DediStorageState = dict
+    utility_types.DepositConfig = dict
+    utility_types.DepositRouteBase = dict
+    utility_types.GrindableDepositRoute = dict
+    utility_types.GrinderStorageState = dict
+    utility_types.VaultStorageContainer = dict
+    utility_types.VaultStorageState = dict
+    pego = types.ModuleType("source.gacha_bot.pego")
+    pego.is_crystal_hotbar_visible = Mock(return_value=False)
 
     modules = {
-        "settings": types.SimpleNamespace(lag_offset=1),
+        "settings": types.SimpleNamespace(ping=1),
+        "source.gacha_bot.config": types.SimpleNamespace(grinder_attempts=3),
+        "source.gacha_bot.pego": pego,
         "source.ASA.player": player,
-        "source.ASA.stations": stations,
-        "source.ASA.stations.custom_stations": custom_stations,
         "source.ASA.strucutres": structures,
+        "source.logs": logs_package,
         "source.logs.gachalogs": logs,
         "source.utility": utility,
         "source.utility.debug_screenshots": debug_screenshots,
@@ -94,7 +127,7 @@ def load_deposit_module():
     with patch.dict(sys.modules, modules):
         spec.loader.exec_module(module)
     module.debug_captures = captures
-    return module, logger, inventory, teleporter, player_state, template, utils
+    return module, logger, inventory, teleporter, player_inventory, player_state, utils
 
 
 class DediDepositGuardTests(unittest.TestCase):
@@ -104,72 +137,47 @@ class DediDepositGuardTests(unittest.TestCase):
             self.logger,
             self.inventory,
             self.teleporter,
+            self.player_inventory,
             self.player_state,
-            self.template,
             self.utils,
         ) = load_deposit_module()
-        self.route = types.SimpleNamespace(yaw=12)
         self.item = {"location": {"yaw": 34, "pitch": 56}, "crouched": False}
 
-    def test_crystal_dedi_sets_capture_name_and_delegates_to_dedi(self):
+    def test_fast_dedi_sets_capture_name_and_delegates(self):
         route = {"teleport": "CRYSTAL"}
 
-        self.assertTrue(
-            self.deposit._process_crystal_dedi(route, self.route, self.item, 1)
-        )
+        self.assertTrue(self.deposit.process_fast_dedi(route, self.item, 1, "crystal"))
 
         self.assertEqual(
             self.deposit.dedi.capture_name,
             "Crystal dedi 1 on teleport CRYSTAL",
         )
-        self.deposit.dedi.open_deposit_all.assert_called_once_with(
-            self.route, self.item
-        )
+        self.deposit.dedi.unsafe_fast_deposit_all.assert_called_once_with(self.item)
 
-    def test_grindable_dedi_sets_capture_name_and_delegates_to_dedi(self):
-        route = {"teleport": "GRIND"}
+    def test_restore_route_view_uses_default_station_yaw(self):
+        self.deposit._restore_route_view("CRYSTAL")
 
-        self.assertTrue(
-            self.deposit._process_grindable_dedi(route, self.route, self.item, 2)
-        )
+        self.player_state.human.reset_crouch.assert_called_once_with()
+        self.utils.zero_center.assert_called_once_with()
 
-        self.assertEqual(
-            self.deposit.dedi.capture_name,
-            "Grindable dedi 2 on teleport GRIND",
-        )
-        self.deposit.dedi.open_deposit_all.assert_called_once_with(
-            self.route, self.item
-        )
-
-    def test_failed_dedi_delegation_runs_terminal_recovery_once(self):
-        self.deposit.dedi.open_deposit_all.return_value = False
-        self.deposit._recover_after_dedi_failure = Mock()
-        route = {"teleport": "CRYSTAL"}
-
-        self.assertFalse(
-            self.deposit._process_crystal_dedi(route, self.route, self.item, 1)
-        )
-
-        self.deposit._recover_after_dedi_failure.assert_called_once_with(
-            "Crystal dedi 1 on teleport CRYSTAL"
-        )
-
-    def test_crystal_route_ready_capture_happens_before_processing_dedis(self):
-        self.deposit._process_crystal_dedi = Mock(return_value=True)
-        self.deposit._process_vault = Mock()
-        self.deposit._restore_route_view = Mock()
-        route = {"teleport": "CRYSTAL", "dedi": {"items": [self.item]}}
+    def test_route_ready_capture_happens_before_route_processing(self):
+        route = {"teleport": "CRYSTAL", "check_on_every_dedi": 1, "dedi": {"items": []}}
+        self.deposit.process_dedi_list_route = Mock(return_value=True)
 
         self.assertTrue(
-            self.deposit._process_crystal_route(
+            self.deposit._process_crystal_routes(
                 route,
-                current_metadata=types.SimpleNamespace(name="CRYSTAL", yaw=12),
+                current_metadata="CRYSTAL",
                 skip_if_current=True,
             )
         )
 
+        self.teleporter.teleport_not_default.assert_not_called()
         self.deposit.debug_captures["deposit_route_ready"].assert_called_once_with(
             "Crystal route CRYSTAL"
+        )
+        self.deposit.process_dedi_list_route.assert_called_once_with(
+            route, "CRYSTAL", "crystal"
         )
 
     def test_stance_changes_before_final_dedi_aim(self):
@@ -180,120 +188,55 @@ class DediDepositGuardTests(unittest.TestCase):
             ("turn", yaw, pitch)
         )
 
-        self.deposit._turn_to_object(self.route, self.item)
+        self.deposit._turn_to_object(self.item)
 
-        self.assertEqual(
-            order,
-            [
-                "stand",
-                ("turn", 34.0, 56.0),
-            ],
-        )
+        self.assertEqual(order, ["stand", ("turn", 34.0, 56.0)])
 
     def test_grinder_capture_happens_before_inventory_close(self):
         route = {"teleport": "GRIND", "grinder": self.item}
         self.deposit._open_inventory_template = Mock(return_value=True)
-        self.template.check_template.return_value = True
 
-        self.deposit._process_grinder(route, self.route)
+        self.deposit._process_grinder(route, "GRIND")
 
         self.deposit.debug_captures["grinder_after_withdraw"].assert_called_once_with(
             "Grinder on teleport GRIND"
         )
-        self.inventory.close.assert_called_once_with()
+        self.inventory.close.assert_called()
 
     def test_vault_capture_happens_before_inventory_close(self):
         route = {"teleport": "CRYSTAL"}
         vault = {**self.item, "items": ["obsidian"]}
         self.deposit._open_inventory_template = Mock(return_value=True)
-        self.template.template_await_true.return_value = True
 
-        self.deposit._process_vault(route, self.route, vault, 1)
+        self.deposit._process_vault(route, "CRYSTAL", vault, 1)
 
         self.deposit.debug_captures["vault_after_transfer"].assert_called_once_with(
             "Vault 1 on teleport CRYSTAL"
         )
         self.inventory.close.assert_called_once_with()
 
-    def test_grindable_sweep_restores_route_only_after_all_dedis(self):
-        route = {"teleport": "GRIND", "dedi": {"items": [self.item, self.item]}}
-        self.deposit._restore_route_view = Mock()
-
-        self.assertTrue(self.deposit._process_grindable_route(route, self.route))
-
-        self.assertEqual(self.deposit.dedi.open_deposit_all.call_count, 2)
-        self.deposit._restore_route_view.assert_called_once_with(self.route)
-
-    def test_final_failure_reconnects_suicides_and_checks_state(self):
-        self.deposit._recover_after_dedi_failure("dedi")
-
-        self.inventory.close.assert_called_once_with()
-        self.player_state.check_disconnected.assert_called_once_with()
-        self.deposit.player_inventory.implant_eat.assert_called_once_with()
-        self.player_state.check_state.assert_called_once_with()
-        self.logger.critical.assert_called_once()
-
-    def test_failed_crystal_dedi_skips_vaults_remaining_routes_and_grindables(self):
+    def test_process_dedi_list_retries_batch_after_server_lag(self):
+        first_item = {"location": {"yaw": 10, "pitch": 20}, "crouched": False}
+        check_item = {"location": {"yaw": 30, "pitch": 40}, "crouched": False}
         route = {
             "teleport": "CRYSTAL",
-            "dedi": {"items": [self.item, self.item]},
-            "vault": {"items": [{"items": ["riot"]}]},
+            "check_on_every_dedi": 2,
+            "dedi": {"items": [first_item, check_item]},
         }
-        self.deposit._process_crystal_dedi = Mock(return_value=False)
-        self.deposit._process_vault = Mock()
-        self.deposit._restore_route_view = Mock()
+        self.inventory.was_server_lag_last_open_long = True
+        self.deposit.process_fast_dedi = Mock(return_value=True)
 
-        self.assertFalse(
-            self.deposit._process_crystal_route(
-                route,
-                current_metadata=types.SimpleNamespace(name="CRYSTAL", yaw=12),
-                skip_if_current=True,
-            )
+        self.assertTrue(self.deposit.process_dedi_list_route(route, "CRYSTAL"))
+
+        self.deposit.dedi.open_deposit_all.assert_called_once_with("CRYSTAL", check_item)
+        self.deposit.process_fast_dedi.assert_has_calls(
+            [
+                call(route, first_item, 0, "crystal"),
+                call(route, first_item, 0, "crystal"),
+            ]
         )
-
-        self.deposit._process_crystal_dedi.assert_called_once()
-        self.deposit._process_vault.assert_not_called()
-
-        self.deposit.load_deposit_config = Mock(
-            return_value={
-                "depositCrystalData": [route, route],
-                "depositGrindableData": [{"teleport": "GRIND"}],
-            }
-        )
-        self.deposit._process_crystal_route = Mock(return_value=False)
-        self.deposit._process_grindable_routes = Mock()
-
-        self.assertFalse(self.deposit.deposit_all(None))
-        self.deposit._process_crystal_route.assert_called_once()
-        self.deposit._process_grindable_routes.assert_not_called()
-
-    def test_failed_grindable_dedi_skips_remaining_routes_and_drop(self):
-        active_route = {
-            "teleport": "GRIND1",
-            "grinder": {"active": True},
-            "dedi": {"items": []},
-        }
-        later_route = {
-            "teleport": "GRIND2",
-            "grinder": {"active": False},
-            "dedi": {"items": []},
-        }
-        self.deposit._teleport_to_route = Mock(return_value=self.route)
-        self.deposit._restore_route_view = Mock()
-        self.deposit._process_grinder = Mock()
-        self.deposit._sync_post_grinder_route_view = Mock(return_value=True)
-        self.deposit._process_grindable_route = Mock(return_value=False)
-        self.deposit.drop_useless = Mock()
-
-        self.assertFalse(
-            self.deposit._process_grindable_routes([active_route, later_route])
-        )
-
-        self.deposit._teleport_to_route.assert_called_once_with(active_route)
-        self.deposit._process_grindable_route.assert_called_once_with(
-            active_route, self.route
-        )
-        self.deposit.drop_useless.assert_not_called()
+        self.assertEqual(self.deposit.process_fast_dedi.call_count, 2)
+        self.logger.warning.assert_called_once()
 
     def test_empty_grindable_routes_are_skipped(self):
         self.deposit._teleport_to_route = Mock()
@@ -304,67 +247,47 @@ class DediDepositGuardTests(unittest.TestCase):
         self.deposit._teleport_to_route.assert_not_called()
         self.deposit.drop_useless.assert_not_called()
 
-    def test_active_grinder_route_resyncs_once_after_grinder_before_dedis(self):
-        order = []
-        route = {
-            "teleport": "GRIND",
+    def test_active_grindable_route_processes_active_then_rest(self):
+        active_route = {
+            "teleport": "GRIND1",
             "grinder": {"active": True},
+            "check_on_every_dedi": 1,
             "dedi": {"items": []},
         }
-        self.deposit._teleport_to_route = Mock(
-            side_effect=lambda _: order.append("teleport") or self.route
-        )
-        self.deposit._restore_route_view = Mock(
-            side_effect=lambda _: order.append("restore")
-        )
-        self.deposit._process_grinder = Mock(
-            side_effect=lambda *_: order.append("grinder")
-        )
-        self.utils.zero.side_effect = lambda: order.append("zero") or True
-        self.deposit._process_grindable_route = Mock(
-            side_effect=lambda *_: order.append("dedi sweep") or True
-        )
-        self.deposit.drop_useless = Mock(side_effect=lambda: order.append("drop"))
-
-        self.deposit._process_grindable_routes([route])
-
-        self.assertEqual(
-            order,
-            [
-                "teleport",
-                "restore",
-                "grinder",
-                "zero",
-                "restore",
-                "dedi sweep",
-                "drop",
-                "restore",
-            ],
-        )
-        self.utils.zero.assert_called_once_with()
-
-    def test_failed_post_grinder_reset_aborts_before_dedis_and_drop(self):
-        route = {
-            "teleport": "GRIND",
-            "grinder": {"active": True},
+        later_route = {
+            "teleport": "GRIND2",
+            "grinder": {"active": False},
+            "check_on_every_dedi": 1,
             "dedi": {"items": []},
         }
-        self.deposit._teleport_to_route = Mock(return_value=self.route)
-        self.deposit._restore_route_view = Mock()
         self.deposit._process_grinder = Mock()
-        self.utils.zero.return_value = False
-        self.deposit._process_grindable_route = Mock()
+        self.deposit.process_dedi_list_route = Mock(return_value=True)
         self.deposit.drop_useless = Mock()
 
-        self.assertFalse(self.deposit._process_grindable_routes([route]))
+        self.assertTrue(self.deposit._process_grindable_routes([active_route, later_route]))
 
-        self.deposit._process_grindable_route.assert_not_called()
-        self.deposit.drop_useless.assert_not_called()
-        self.assertEqual(self.deposit._restore_route_view.call_count, 1)
-        self.logger.error.assert_called_once()
-        self.assertIn(
-            "aborting grindable deposits", self.logger.error.call_args.args[0]
+        self.assertEqual(
+            self.teleporter.teleport_not_default.call_args_list,
+            [call("GRIND1"), call("GRIND2")],
         )
+        self.assertEqual(self.deposit.process_dedi_list_route.call_count, 2)
+        self.deposit.drop_useless.assert_called_once_with()
+
+    def test_deposit_all_stops_when_first_crystal_route_fails(self):
+        route = {"teleport": "CRYSTAL"}
+        self.deposit.load_deposit_config = Mock(
+            return_value={
+                "depositCrystalData": [route, route],
+                "depositGrindableData": [{"teleport": "GRIND"}],
+            }
+        )
+        self.deposit._process_crystal_routes = Mock(return_value=False)
+        self.deposit._process_grindable_routes = Mock()
+
+        self.assertFalse(self.deposit.deposit_all(None))
+
+        self.deposit._process_crystal_routes.assert_called_once()
+        self.deposit._process_grindable_routes.assert_not_called()
 
 
 if __name__ == "__main__":

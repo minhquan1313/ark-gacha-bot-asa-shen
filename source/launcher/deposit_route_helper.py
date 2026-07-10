@@ -10,7 +10,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QScrollArea,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -21,10 +20,14 @@ from source.launcher.components.custom_pyside_component import NoWheelComboBox
 from source.launcher.components.helper_window import BaseHelperWindow
 from source.launcher.components.widgets import (
     AnimatedButton,
+    ChromeIconButton,
     CyberSwitch,
+    RoundedShellFrame,
+    SmoothScrollArea,
     WrappedStatusLabel,
+    sync_rounded_window_mask,
 )
-from source.launcher.config.constants import ASSETS
+from source.launcher.config.constants import ASSETS, UI_METRICS
 from source.launcher.utils.deposit_helper_capture import (
     capture_ccc_yaw_pitch,
     register_alt_n_hotkey,
@@ -32,6 +35,9 @@ from source.launcher.utils.deposit_helper_capture import (
     view_route_entry,
 )
 from source.launcher.utils.vault_items_store import add_vault_item, load_vault_items
+
+CAPTURE_ACTION_ICON = "icon.capture_target"
+VIEW_ACTION_ICON = "icon.view_eye"
 
 
 class DepositHelperGuide(QDialog):
@@ -64,38 +70,49 @@ class DepositHelperGuide(QDialog):
         self.setStyleSheet(parent.styleSheet())
         self.setWindowTitle("Deposit Helper Guide")
         self.setModal(False)
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.page_index = 0
         self.drag_position = None
         self.mouse_inside = False
 
-        shell = QFrame()
+        shell = RoundedShellFrame()
         shell.setObjectName("DepositHelperWindow")
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.addWidget(shell)
 
-        layout = QVBoxLayout(shell)
-        layout.setContentsMargins(16, 14, 16, 14)
-        layout.setSpacing(10)
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
 
         self.header_frame = QFrame()
         self.header_frame.setObjectName("HelperHeader")
         self.header_frame.installEventFilter(self)
         header = QHBoxLayout(self.header_frame)
-        header.setContentsMargins(0, 0, 0, 0)
+        header.setContentsMargins(8, 0, 0, 0)
+        header.setSpacing(8)
         self.header_title = QLabel("HELPER GUIDE")
         self.header_title.setObjectName("HelperTitle")
         self.header_title.installEventFilter(self)
-        close = AnimatedButton("X", "danger")
-        close.setObjectName("HelperIconButton")
-        close.setFixedHeight(30)
-        close.setMinimumWidth(36)
+        close = ChromeIconButton("close")
+        close.setToolTip("Close guide")
         close.clicked.connect(self.close)
         header.addWidget(self.header_title)
         header.addStretch()
-        header.addWidget(close, alignment=Qt.AlignTop)
-        layout.addWidget(self.header_frame)
+        header.addWidget(close)
+        shell_layout.addWidget(self.header_frame)
+
+        body = QWidget()
+        body.setObjectName("HelperBody")
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(16, 10, 16, 14)
+        layout.setSpacing(10)
+        shell_layout.addWidget(body, 1)
 
         self.stack = QStackedWidget()
         for title_text, body_text, asset_key in self.PAGES:
@@ -118,6 +135,7 @@ class DepositHelperGuide(QDialog):
         self._sync_page_controls()
 
         self.resize(420, 420)
+        sync_rounded_window_mask(self, UI_METRICS["window_radius"])
 
     def _guide_page(self, title_text, body_text, asset_key):
         page = QWidget()
@@ -128,14 +146,19 @@ class DepositHelperGuide(QDialog):
 
         image = QLabel()
         image.setObjectName("HelperGuideImage")
-        image.setAlignment(Qt.AlignCenter)
+        image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         image.setMinimumHeight(150)
         pixmap = QPixmap(ASSETS.get(asset_key, ""))
         if pixmap.isNull():
             pixmap = QPixmap(ASSETS["logo"])
         if not pixmap.isNull():
             image.setPixmap(
-                pixmap.scaled(360, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                pixmap.scaled(
+                    360,
+                    160,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
             )
         layout.addWidget(image)
 
@@ -166,7 +189,7 @@ class DepositHelperGuide(QDialog):
 
     def changeEvent(self, event):
         super().changeEvent(event)
-        if event.type() == QEvent.ActivationChange:
+        if event.type() == QEvent.Type.ActivationChange:
             self._sync_parent_opacity()
 
     def enterEvent(self, event):
@@ -184,10 +207,14 @@ class DepositHelperGuide(QDialog):
         self._sync_parent_opacity()
         super().closeEvent(event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        sync_rounded_window_mask(self, UI_METRICS["window_radius"])
+
     def _sync_parent_opacity(self):
         parent = self.parent()
         if parent is not None and hasattr(parent, "sync_window_opacity"):
-            parent.sync_window_opacity()
+            parent.sync_window_opacity()  # type: ignore
 
     def eventFilter(self, watched, event):
         if watched not in (
@@ -195,21 +222,24 @@ class DepositHelperGuide(QDialog):
             getattr(self, "header_title", None),
         ):
             return super().eventFilter(watched, event)
-        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+        if (
+            event.type() == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
             self.drag_position = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
             event.accept()
             return True
         if (
-            event.type() == QEvent.MouseMove
+            event.type() == QEvent.Type.MouseMove
             and self.drag_position is not None
-            and event.buttons() & Qt.LeftButton
+            and event.buttons() & Qt.MouseButton.LeftButton
         ):
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
             return True
-        if event.type() == QEvent.MouseButtonRelease:
+        if event.type() == QEvent.Type.MouseButtonRelease:
             self.drag_position = None
             event.accept()
             return True
@@ -251,13 +281,12 @@ class DepositRouteHelper(BaseHelperWindow):
         return timer
 
     def _build_ui(self):
-        self.header_title.setText(self._title())
-        self.header_title.setWordWrap(True)
-        guide = self._icon_button("?", "Open guide book")
+        self.set_header_title(self._title())
+        guide = self._titlebar_button("?", "Open guide book")
         guide.clicked.connect(self.show_guide)
         self.add_header_action(guide)
 
-        self.scroll = QScrollArea()
+        self.scroll = SmoothScrollArea()
         self.scroll.setObjectName("HelperScroll")
         self.scroll.setWidgetResizable(True)
         self.scroll_content = QWidget()
@@ -275,19 +304,19 @@ class DepositRouteHelper(BaseHelperWindow):
 
     @staticmethod
     def _title_for(owner, route_kind, route_index):
-        prefix = "CRYSTAL" if route_kind == "crystal" else "GRINDABLE"
+        prefix = "Crystal" if route_kind == "crystal" else "Grindable"
         key = (
             "depositCrystalData" if route_kind == "crystal" else "depositGrindableData"
         )
         route = owner.deposit_config[key][route_index]
         teleport = route.get("teleport", "")
-        return f"{prefix} HELPER {route_index + 1}: {teleport or 'NO TELEPORT'}"
+        return f"{prefix}: {teleport or 'NO TELEPORT'}"
 
     def _title(self):
-        prefix = "CRYSTAL" if self.route_kind == "crystal" else "GRINDABLE"
+        prefix = "Crystal" if self.route_kind == "crystal" else "Grindable"
         route = self.route()
         teleport = route.get("teleport", "")
-        return f"{prefix} HELPER {self.route_index + 1}: {teleport or 'NO TELEPORT'}"
+        return f"{prefix}: {teleport or 'NO TELEPORT'}"
 
     def _before_close(self):
         self.guide_timer.stop()
@@ -314,9 +343,13 @@ class DepositRouteHelper(BaseHelperWindow):
         )
         return self.owner.deposit_config[key][self.route_index]
 
-    def refresh_rows(self, focus_target=None):
+    def refresh_rows(self, focus_target=None, preserve_state=True):
+        row_state = self._row_state() if preserve_state else {}
+        scroll_value = self.scroll.verticalScrollBar().value()
         while self.rows_layout.count():
             item = self.rows_layout.takeAt(0)
+            if item is None:
+                continue
             widget = item.widget()
             if widget:
                 widget.deleteLater()
@@ -324,32 +357,57 @@ class DepositRouteHelper(BaseHelperWindow):
 
         route = self.route()
         if self.route_kind == "crystal":
-            self._add_section_label("DEDIS")
+            self._add_section_label("DEDIS", len(route["dedi"]["items"]))
             for index, entry in enumerate(route["dedi"]["items"]):
-                self._add_row("dedi", index, entry, focus_target)
+                self._add_row("dedi", index, entry, focus_target, row_state)
             self._add_combo_row("dedi")
-            self._add_section_label("VAULTS")
+            self._add_section_label("VAULTS", len(route["vault"]["items"]))
             for index, entry in enumerate(route["vault"]["items"]):
-                self._add_row("vault", index, entry, focus_target)
+                self._add_row("vault", index, entry, focus_target, row_state)
             self._add_combo_row("vault")
         else:
-            self._add_section_label("GRINDER")
-            self._add_row("grinder", 0, route["grinder"], focus_target)
-            self._add_section_label("DEDIS")
+            self._add_section_label("GRINDER", 1)
+            self._add_row("grinder", 0, route["grinder"], focus_target, row_state)
+            self._add_section_label("DEDIS", len(route["dedi"]["items"]))
             for index, entry in enumerate(route["dedi"]["items"]):
-                self._add_row("dedi", index, entry, focus_target)
+                self._add_row("dedi", index, entry, focus_target, row_state)
             self._add_combo_row("dedi")
         self.rows_layout.addStretch()
+        if focus_target is None:
+            QTimer.singleShot(
+                0,
+                lambda value=scroll_value: self.scroll.verticalScrollBar().setValue(
+                    value
+                ),
+            )
 
-    def _add_section_label(self, text):
-        label = QLabel(text)
-        label.setObjectName("HelperSectionLabel")
-        self.rows_layout.addWidget(label)
+    def _row_state(self):
+        return {
+            (row.kind, row.index): row.expanded
+            for row in self.row_widgets
+            if row.expanded
+        }
 
-    def _add_row(self, kind, index, entry, focus_target=None):
+    def _add_section_label(self, text, count):
+        wrapper = QWidget()
+        layout = QHBoxLayout(wrapper)
+        layout.setContentsMargins(0, 6, 0, 0)
+        layout.setSpacing(8)
+        label = QLabel(f"{text} - {count}")
+        label.setObjectName("SettingsDividerLabel")
+        line = QFrame()
+        line.setObjectName("SettingsDividerLine")
+        line.setFixedHeight(1)
+        layout.addWidget(label)
+        layout.addWidget(line, 1)
+        self.rows_layout.addWidget(wrapper)
+
+    def _add_row(self, kind, index, entry, focus_target=None, row_state=None):
         row = CollapsibleHelperRow(self, kind, index, entry)
         self.row_widgets.append(row)
         self.rows_layout.addWidget(row)
+        if row_state and row_state.get((kind, index)):
+            row.expand()
         if focus_target == (kind, index):
             self.pending_focus_row = row
             self.row_focus_timer.start(0)
@@ -372,9 +430,9 @@ class DepositRouteHelper(BaseHelperWindow):
         self.rows_layout.addWidget(row)
 
     def add_entry(self, kind):
-        entry, _index = self._append_entry(kind)
+        entry, index = self._append_entry(kind)
         if entry is not None:
-            self.save_and_refresh()
+            self.save_and_refresh((kind, index))
         return entry
 
     def _append_entry(self, kind):
@@ -450,8 +508,22 @@ class DepositRouteHelper(BaseHelperWindow):
             self._set_capture_in_progress(False)
             self.refocus_helper(cursor_position)
         if success:
-            self.refresh_rows(focus_target)
+            row = self._row_for_target(focus_target)
+            if row is not None:
+                row.sync_from_entry()
+                row.expand()
+                self._focus_row(row)
+            else:
+                self.refresh_rows(focus_target)
             self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
+
+    def _row_for_target(self, focus_target):
+        if focus_target is None:
+            return None
+        for row in self.row_widgets:
+            if (row.kind, row.index) == focus_target:
+                return row
+        return None
 
     def view_entry(self, entry):
         if self.capture_in_progress:
@@ -531,12 +603,12 @@ class DepositRouteHelper(BaseHelperWindow):
 
     def add_vault_item_row(self, vault):
         vault["items"].append("")
-        self.save_and_refresh()
+        self.save_and_refresh(self._target_for_entry(vault))
 
     def remove_vault_item_row(self, vault, index):
         if 0 <= index < len(vault["items"]):
             del vault["items"][index]
-        self.save_and_refresh()
+        self.save_and_refresh(self._target_for_entry(vault))
 
     def save(self):
         if self.owner.save_deposit_routes(show_log=False):
@@ -545,9 +617,15 @@ class DepositRouteHelper(BaseHelperWindow):
         self.status.setText("Save failed.")
         return False
 
-    def save_and_refresh(self):
+    def save_and_refresh(self, focus_target=None):
         if self.save():
-            self.refresh_rows()
+            self.refresh_rows(focus_target)
+
+    def _target_for_entry(self, entry):
+        for row in self.row_widgets:
+            if row.entry is entry:
+                return row.kind, row.index
+        return None
 
     def _icon_button(self, text, tooltip, type="secondary"):
         return self._helper_button(text, tooltip, type)
@@ -561,7 +639,8 @@ class CollapsibleHelperRow(QFrame):
         self.index = index
         self.entry = entry
         self.expanded = False
-        self.setFocusPolicy(Qt.StrongFocus)
+        self.float_fields = {}
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setObjectName("HelperRow")
         self._build()
 
@@ -573,21 +652,23 @@ class CollapsibleHelperRow(QFrame):
         top = QHBoxLayout()
         top.setSpacing(6)
         self.expand_button = self.helper._icon_button(">", "Expand or collapse row")
+        self.expand_button.setObjectName("HelperExpandButton")
         self.expand_button.clicked.connect(self.toggle)
         self.summary = QLabel(self._summary_text())
         self.summary.setObjectName("HelperRowSummary")
         self.summary.setWordWrap(True)
-        capture = self.helper._icon_button("C", "Capture yaw and pitch")
+        capture = self.helper._helper_action_button(
+            CAPTURE_ACTION_ICON, "Capture yaw and pitch"
+        )
         capture.clicked.connect(self.capture_row)
-        view = self.helper._icon_button("V", "View saved yaw and pitch in Ark")
+        view = self.helper._helper_action_button(
+            VIEW_ACTION_ICON, "View saved yaw and pitch in Ark"
+        )
         view.clicked.connect(lambda: self.helper.view_entry(self.entry))
-        delete = self.helper._icon_button("-", "Delete row", "danger")
-        delete.clicked.connect(lambda: self.helper.delete_entry(self.kind, self.index))
         top.addWidget(self.expand_button)
         top.addWidget(self.summary, 1)
         top.addWidget(capture)
         top.addWidget(view)
-        top.addWidget(delete)
         self.root.addLayout(top)
 
         self.details = QWidget()
@@ -608,20 +689,19 @@ class CollapsibleHelperRow(QFrame):
         crouched.blockSignals(True)
         crouched.setChecked(bool(self.entry.get("crouched", False)))
         crouched.blockSignals(False)
-        crouched.toggled.connect(
-            lambda checked: self.helper.update_crouched(self.entry, checked)
-        )
+        crouched.toggled.connect(self._update_crouched)
         switches.addWidget(crouched)
         if self.kind == "grinder":
             active = CyberSwitch("ACTIVE")
             active.blockSignals(True)
             active.setChecked(bool(self.entry.get("active", False)))
             active.blockSignals(False)
-            active.toggled.connect(
-                lambda checked: self.helper.update_active(self.entry, checked)
-            )
+            active.toggled.connect(self._update_active)
             switches.addWidget(active)
+        delete = self.helper._icon_button("-", "Delete row", "danger")
+        delete.clicked.connect(lambda: self.helper.delete_entry(self.kind, self.index))
         switches.addStretch()
+        switches.addWidget(delete)
         detail.addLayout(switches)
 
         if self.kind == "vault":
@@ -637,15 +717,12 @@ class CollapsibleHelperRow(QFrame):
         field.setObjectName("SettingField")
         field.setMinimumWidth(86)
         field.editingFinished.connect(
-            lambda entry=self.entry, name=key, editor=field: self.helper.update_float(
-                entry, name, editor
-            )
+            lambda name=key, editor=field: self._update_float_field(name, editor)
         )
         field.returnPressed.connect(
-            lambda entry=self.entry, name=key, editor=field: self.helper.update_float(
-                entry, name, editor
-            )
+            lambda name=key, editor=field: self._update_float_field(name, editor)
         )
+        self.float_fields[key] = field
         layout.addWidget(label)
         layout.addWidget(field)
 
@@ -668,8 +745,9 @@ class CollapsibleHelperRow(QFrame):
                     self.helper.update_vault_item(vault, index, widget)
                 )
             )
-            if combo.lineEdit() is not None:
-                combo.lineEdit().editingFinished.connect(
+            line_edit = combo.lineEdit()
+            if line_edit is not None:
+                line_edit.editingFinished.connect(
                     lambda vault=self.entry, index=item_index, widget=combo: (
                         self.helper.update_vault_item(vault, index, widget)
                     )
@@ -686,7 +764,7 @@ class CollapsibleHelperRow(QFrame):
             layout.addLayout(row)
         add = self.helper._icon_button("+", "Add vault item")
         add.clicked.connect(lambda: self.helper.add_vault_item_row(self.entry))
-        layout.addWidget(add, alignment=Qt.AlignRight)
+        layout.addWidget(add, alignment=Qt.AlignmentFlag.AlignRight)
 
     def toggle(self):
         self.expanded = not self.expanded
@@ -696,6 +774,26 @@ class CollapsibleHelperRow(QFrame):
     def expand(self):
         if not self.expanded:
             self.toggle()
+
+    def sync_from_entry(self):
+        for key, field in self.float_fields.items():
+            field.setText(str(self.entry["location"].get(key, 0.0)))
+        self.refresh_summary()
+
+    def refresh_summary(self):
+        self.summary.setText(self._summary_text())
+
+    def _update_float_field(self, key, field):
+        self.helper.update_float(self.entry, key, field)
+        self.refresh_summary()
+
+    def _update_crouched(self, checked):
+        self.helper.update_crouched(self.entry, checked)
+        self.refresh_summary()
+
+    def _update_active(self, checked):
+        self.helper.update_active(self.entry, checked)
+        self.refresh_summary()
 
     def capture_row(self):
         self.helper.capture_existing(self.kind, self.index)
@@ -722,9 +820,11 @@ class AddCaptureRow(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
-        add = helper._icon_button("+", f"Add blank {kind}")
+        add = helper._icon_button(f"Add {kind.capitalize()}", f"Add blank {kind}")
         add.clicked.connect(lambda checked=False: helper.add_entry(kind))
-        capture = helper._icon_button("C", f"Capture yaw and pitch for a new {kind}")
+        capture = helper._icon_button(
+            "Capture Add", f"Capture yaw and pitch for a new {kind}"
+        )
         capture.clicked.connect(lambda checked=False: helper.capture_new(kind))
         layout.addWidget(add, 1)
         layout.addWidget(capture, 1)

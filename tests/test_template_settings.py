@@ -60,9 +60,16 @@ class TemplateSettingsTests(unittest.TestCase):
 
     def test_missing_required_setting_is_rejected(self) -> None:
         document = template_document()
-        del document["data"]["settings"]["lag_offset"]
+        del document["data"]["settings"]["ping"]
 
-        with self.assertRaisesRegex(ValueError, "missing: lag_offset"):
+        with self.assertRaisesRegex(ValueError, "missing: ping"):
+            normalize_template(document)
+
+    def test_ping_template_value_must_be_integer(self) -> None:
+        document = template_document()
+        document["data"]["settings"]["ping"] = 125.5
+
+        with self.assertRaisesRegex(ValueError, "ping must be an integer"):
             normalize_template(document)
 
     def test_windows_safe_filename_preserves_display_name_separately(self) -> None:
@@ -100,7 +107,7 @@ class TemplateSettingsTests(unittest.TestCase):
 
     def test_build_template_excludes_local_and_assignment_fields(self) -> None:
         settings = DEFAULT_SETTINGS | {
-            "lag_offset_template": "Other",
+            "ping_template": "Other",
             "station_yaw": 45.0,
         }
 
@@ -114,7 +121,7 @@ class TemplateSettingsTests(unittest.TestCase):
 
         template_settings = template["data"]["settings"]
         self.assertNotIn("station_yaw", template_settings)
-        self.assertNotIn("lag_offset_template", template_settings)
+        self.assertNotIn("ping_template", template_settings)
         self.assertEqual(template_settings["iguanadon_seed_throw_amount"], 18)
         self.assertEqual(template_settings["time_to_reberry"], 30)
 
@@ -232,13 +239,13 @@ class TemplateSettingsTests(unittest.TestCase):
             {},
         )
         settings = {
-            "lag_offset_template": "Stable_ID",
+            "ping_template": "Stable_ID",
             "server_number_template": "Friendly Name",
         }
 
         migrated, errors = migrate_template_references(settings, catalog)
 
-        self.assertEqual(migrated["lag_offset_template"], "Stable_ID.json")
+        self.assertEqual(migrated["ping_template"], "Stable_ID.json")
         self.assertEqual(migrated["server_number_template"], "Stable_ID.json")
         self.assertEqual(errors, {})
 

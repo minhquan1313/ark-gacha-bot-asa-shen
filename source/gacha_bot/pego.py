@@ -1,6 +1,5 @@
 import time
 
-import settings
 import source.gacha_bot.config
 from source.ASA.player import player_inventory
 from source.ASA.strucutres import inventory
@@ -17,35 +16,35 @@ def is_crystal_hotbar_visible():
     return template.check_template("crystal_in_hotbar", 0.7)
 
 
-def pego_pickup(metadata):
+def pego_pickup(teleporter_name: str):
     utils.turn_up(15)
-    time.sleep(0.2 * settings.lag_offset)
+    time.sleep(0.2)
 
-    open(metadata)
+    open(teleporter_name)
     if inventory.is_open():  # prevents pego being FLUNG
         if player_inventory.is_can_drop():
             player_inventory.drop_all_inv()
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.2)
 
             # ENSURE
             inventory.close()
-            open(metadata)
+            open(teleporter_name)
             if not inventory.is_open():
                 return
 
         inventory.transfer_all_from()
-        time.sleep(0.2 * settings.lag_offset)
-        capture_pego_crystal_withdraw(metadata.name)
+        time.sleep(0.2)
+        capture_pego_crystal_withdraw(teleporter_name)
         inventory.close()
 
         # ENSURE ALL CRYSTAL IS TRANSFERRED
         # So it won't break the next checking crystals in player hotbar process
-        if not template.template_await_true(is_crystal_hotbar_visible, 1):
-            open(metadata)
+        if not is_crystal_hotbar_visible():
+            open(teleporter_name)
             inventory.close()
 
 
-def open(metadata):
+def open(teleporter_name: str):
     inventory.open()
 
     attempt = 0
@@ -53,14 +52,14 @@ def open(metadata):
     while not inventory.is_open():
         attempt += 1
         logs.logger.debug(
-            f"the pego at {metadata.name} could not be accessed retrying {attempt} / {source.gacha_bot.config.pego_attempts}"
+            f"the pego at {teleporter_name} could not be accessed retrying {attempt} / {source.gacha_bot.config.pego_attempts}"
         )
-        utils.zero_center(metadata.yaw)
+        utils.zero_center()
         utils.turn_up(15)
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         inventory.open()
         if dl():
             logs.logger.error(
-                f"the pego at {metadata.name} could not be accesssed after {attempt} attempts"
+                f"the pego at {teleporter_name} could not be accesssed after {attempt} attempts"
             )
             break

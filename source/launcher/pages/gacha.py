@@ -23,7 +23,7 @@ from source.launcher.pages.common import (
 
 
 class GachaPagesMixin:
-    def _render_gacha_group(self) -> None:
+    def _render_gacha_group(self):
         self._ensure_gacha_config()
         if not hasattr(self, "gacha_group_expanded"):
             self.gacha_group_expanded = {}
@@ -62,8 +62,10 @@ class GachaPagesMixin:
         expand_row.setSpacing(8)
         expand_all = self._button("EXPAND ALL", "secondary")
         collapse_all = self._button("COLLAPSE ALL", "secondary")
-        expand_all.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        collapse_all.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        expand_all.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        collapse_all.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         expand_all.clicked.connect(lambda: self.set_gacha_groups_expanded(True))
         collapse_all.clicked.connect(lambda: self.set_gacha_groups_expanded(False))
         expand_row.addWidget(expand_all)
@@ -75,7 +77,7 @@ class GachaPagesMixin:
         for teleporter, group in groups:
             content_layout.addWidget(self._gacha_group_card(teleporter, group, risky))
         add_group = self._button("ADD GACHA GROUP", "secondary")
-        add_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         add_group.clicked.connect(self.add_gacha_group)
         content_layout.addWidget(add_group)
         content_layout.addStretch()
@@ -150,7 +152,7 @@ class GachaPagesMixin:
 
         if len(group) < 2:
             add = self._button("ADD GACHA", "secondary")
-            add.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            add.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             add.setEnabled(
                 missing_gacha_side([entry for _, entry in group]) is not None
             )
@@ -275,9 +277,7 @@ class GachaPagesMixin:
         self.gacha_config[entry_index]["side"] = field.currentText()
         self.save_gacha_config()
 
-    def update_gacha_group_teleporter(
-        self, old_teleporter: str, field: QLineEdit
-    ) -> None:
+    def update_gacha_group_teleporter(self, old_teleporter: str, field: QLineEdit):
         self._ensure_gacha_config()
         if not hasattr(self, "gacha_group_expanded"):
             self.gacha_group_expanded = {}

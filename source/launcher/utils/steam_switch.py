@@ -20,9 +20,10 @@ def switch_steam_account(
     status_callback: Callable[[str], object] | None = None,
     *,
     force_restart: bool = False,
+    close_ark: bool = True,
     loginusers: Path | None = None,
     steam_restart_interval: int = 30,
-) -> str:
+):
     """Select an account and retry until Steam is visible and maximized."""
 
     target_steam_account = player_steam_account(players, target_account)
@@ -40,11 +41,12 @@ def switch_steam_account(
         emit(f"Restarting Steam with account {target_steam_account}.")
     else:
         emit(f"Switching Steam account to {target_steam_account}.")
-    emit("Closing ARK before restarting Steam.")
+    if close_ark:
+        emit("Closing ARK before restarting Steam.")
 
-    utils.close_ark_with_console_exit()
+        utils.close_ark_with_console_exit()
 
-    ark_game_setup.kill_running_ark()
+        ark_game_setup.kill_running_ark()
 
     if loginusers is None:
         steam_accounts.select_auto_login_account(target_steam_account)
@@ -76,13 +78,14 @@ def switch_steam_account(
             "Steam was not visible and maximized within "
             f"{readiness_seconds} seconds; restarting (attempt {attempt + 1})."
         )
-        ark_game_setup.kill_running_ark()
+        if close_ark:
+            ark_game_setup.kill_running_ark()
         steam_accounts.close_steam()
         time.sleep(float(restart_delay))
         attempt += 1
 
 
-def _wait_for_steam_window(window_title: str, timeout_seconds: int) -> bool:
+def _wait_for_steam_window(window_title: str, timeout_seconds: int):
     """Wait for sign-in to finish before accepting the main Steam window."""
     deadline = time.monotonic() + timeout_seconds
     sign_in_was_visible = False
@@ -95,7 +98,7 @@ def _wait_for_steam_window(window_title: str, timeout_seconds: int) -> bool:
     return False
 
 
-def _is_window_visible(window_title: str) -> bool:
+def _is_window_visible(window_title: str):
     """Return whether an exact-title Windows window exists and is visible."""
     if not hasattr(ctypes, "windll"):
         raise RuntimeError("Steam window checks are only available on Windows.")
@@ -104,7 +107,7 @@ def _is_window_visible(window_title: str) -> bool:
     return bool(hwnd and user32.IsWindowVisible(hwnd))
 
 
-def _show_and_confirm_maximized(window_title: str) -> bool:
+def _show_and_confirm_maximized(window_title: str):
     """Show and maximize Steam, then verify both required window states."""
     if not hasattr(ctypes, "windll"):
         raise RuntimeError("Steam window checks are only available on Windows.")

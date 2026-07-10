@@ -1,6 +1,7 @@
 import ctypes
 import time
 from ctypes import wintypes
+from typing import cast
 
 from source.launcher.config.constants import (
     GAME_WINDOW_TITLE,
@@ -22,8 +23,62 @@ class MemoryStatusEx(ctypes.Structure):
     ]
 
 
+def find_window_handle(window_title: str, contains: bool = False):
+    """Return the first visible window matching a title.
+
+    Example: find_window_handle("ArkAscended", contains=True)
+    """
+    user32 = ctypes.windll.user32
+    if not contains:
+        return cast(int, user32.FindWindowW(None, window_title))
+
+    hwnd: int = user32.FindWindowW(None, window_title)
+    if hwnd:
+        return hwnd
+    if not all(
+        hasattr(user32, name)
+        for name in (
+            "EnumWindows",
+            "GetWindowTextLengthW",
+            "GetWindowTextW",
+            "IsWindowVisible",
+        )
+    ):
+        return 0
+
+    needle = window_title.casefold()
+    matched_hwnd = 0
+
+    enum_windows_proc = ctypes.WINFUNCTYPE(
+        wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
+    )
+
+    def callback(hwnd, _lparam):
+        nonlocal matched_hwnd
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length <= 0:
+            return True
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buffer, length + 1)
+        if needle in buffer.value.casefold():
+            matched_hwnd = hwnd
+            return False
+        return True
+
+    user32.EnumWindows(enum_windows_proc(callback), 0)
+    return matched_hwnd
+
+
+def _should_match_window_title_contains(window_title: str):
+    return window_title == GAME_WINDOW_TITLE
+
+
 def find_window_size(window_title):
-    hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
+    hwnd = find_window_handle(
+        window_title, contains=_should_match_window_title_contains(window_title)
+    )
     if not hwnd:
         return None
 
@@ -36,9 +91,11 @@ def find_window_size(window_title):
 
 def focus_window_if_needed(
     window_title: str, center_cursor_when_switching: bool = False
-) -> bool:
+):
     user32 = ctypes.windll.user32
-    hwnd = user32.FindWindowW(None, window_title)
+    hwnd = find_window_handle(
+        window_title, contains=_should_match_window_title_contains(window_title)
+    )
     if not hwnd:
         return False
     foreground_hwnd = user32.GetForegroundWindow()

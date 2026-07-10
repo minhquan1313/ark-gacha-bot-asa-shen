@@ -1,6 +1,5 @@
 import time
 
-import settings
 import source.ASA.config
 from source.ASA.player import player_inventory
 from source.logs import gachalogs as logs
@@ -25,7 +24,7 @@ class check_buffs:
                 variables.get_pixel_loc("buff_button_x"),
                 variables.get_pixel_loc("buff_button_y"),
             )
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.2)
 
             if attempts >= source.ASA.config.buff_open_attempts:
                 logs.logger.error("bot is unable to open up the buffs menu ")

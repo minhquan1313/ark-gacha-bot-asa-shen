@@ -1,92 +1,173 @@
 {
   "depositCrystalData": [
     {
-      "teleport": "GACHADEDI",
-      "check_on_every_dedi": 6,
+      "teleport": "GACHADEDI1",
+      "check_on_every_dedi": 7,
       "dedi": {
         "items": [
           {
             "location": {
-              "yaw": -102.58,
-              "pitch": 20.0
+              "yaw": 156.07,
+              "pitch": -28.56
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -48.85,
-              "pitch": 18.73
+              "yaw": 155.72,
+              "pitch": -12.81
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -109.97,
-              "pitch": -25.34
+              "yaw": 154.84,
+              "pitch": 12.22
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -43.89,
-              "pitch": -26.56
+              "yaw": -172.79,
+              "pitch": 12.04
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -106.03,
-              "pitch": -32.91
+              "yaw": -172.79,
+              "pitch": -15.08
             },
-            "crouched": true
+            "crouched": false
           },
           {
             "location": {
-              "yaw": -48.3,
-              "pitch": -32.07
+              "yaw": -171.91,
+              "pitch": -37.65
             },
-            "crouched": true
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -131.32,
+              "pitch": -44.65
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -132.72,
+              "pitch": -24.01
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -132.72,
+              "pitch": 12.22
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -78.82,
+              "pitch": 17.29
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -78.3,
+              "pitch": -26.11
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -78.65,
+              "pitch": -55.68
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -24.93,
+              "pitch": -46.23
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -26.5,
+              "pitch": -16.66
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -24.93,
+              "pitch": 12.39
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 16.89,
+              "pitch": 13.79
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 18.12,
+              "pitch": -9.13
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 17.42,
+              "pitch": -34.68
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 51.89,
+              "pitch": -34.68
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 49.09,
+              "pitch": -13.33
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 48.74,
+              "pitch": 12.04
+            },
+            "crouched": false
           }
         ]
       },
       "vault": {
-        "items": [
-          {
-            "location": {
-              "yaw": -177.79,
-              "pitch": -10.64
-            },
-            "crouched": true,
-            "items": [
-              "riot"
-            ]
-          },
-          {
-            "location": {
-              "yaw": 20.6,
-              "pitch": -11.27
-            },
-            "crouched": true,
-            "items": [
-              "assault",
-              "tree",
-              "gate",
-              "riot"
-            ]
-          }
-        ]
+        "items": []
       }
     }
   ],
   "depositGrindableData": [
     {
-      "teleport": "GACHAGRINDABLES",
-      "check_on_every_dedi": 6,
+      "teleport": "GACHAGRIND1",
+      "check_on_every_dedi": 2,
       "grinder": {
         "active": true,
         "location": {
-          "yaw": 18.47,
-          "pitch": -18.82
+          "yaw": 22.84,
+          "pitch": -18.06
         },
         "crouched": false
       },
@@ -94,85 +175,106 @@
         "items": [
           {
             "location": {
-              "yaw": -105.33,
-              "pitch": 21.76
+              "yaw": -84.07,
+              "pitch": 22.36
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -39.71,
-              "pitch": 23.2
+              "yaw": -58.52,
+              "pitch": 21.31
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -41.47,
-              "pitch": -19.39
+              "yaw": -58.17,
+              "pitch": -24.71
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -113.46,
-              "pitch": -22.67
+              "yaw": -93.35,
+              "pitch": -26.63
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": -44.82,
-              "pitch": -38.14
+              "yaw": -46.45,
+              "pitch": -31.35
             },
             "crouched": true
           },
           {
             "location": {
-              "yaw": -114.88,
-              "pitch": -36.29
+              "yaw": -99.47,
+              "pitch": -34.15
             },
             "crouched": true
           },
           {
             "location": {
-              "yaw": -179.43,
-              "pitch": -20.23
+              "yaw": -146.54,
+              "pitch": -18.76
             },
             "crouched": true
           },
           {
             "location": {
-              "yaw": 154.93,
-              "pitch": -17.43
+              "yaw": -177.34,
+              "pitch": -19.98
             },
             "crouched": true
           },
           {
             "location": {
-              "yaw": 153.54,
-              "pitch": 5.03
+              "yaw": 150.29,
+              "pitch": -18.23
             },
             "crouched": true
           },
           {
             "location": {
-              "yaw": -176.02,
-              "pitch": 4.51
-            },
-            "crouched": true
-          },
-          {
-            "location": {
-              "yaw": -175.15,
-              "pitch": 11.25
+              "yaw": 150.29,
+              "pitch": -12.63
             },
             "crouched": false
           },
           {
             "location": {
-              "yaw": 155.45,
-              "pitch": 6.22
+              "yaw": -176.46,
+              "pitch": -16.31
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -147.07,
+              "pitch": -15.78
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -148.29,
+              "pitch": 13.44
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -175.41,
+              "pitch": 12.92
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 148.37,
+              "pitch": 11.52
             },
             "crouched": false
           }

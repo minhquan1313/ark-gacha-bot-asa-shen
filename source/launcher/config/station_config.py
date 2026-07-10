@@ -172,7 +172,7 @@ def calculate_pego_delay(
     gacha_amount: int | float,
     snow_owls_per_gacha: int | float,
     station_seconds: int | float,
-) -> int:
+):
     """Calculate configured PEGO delay needed for the target crystal average."""
     target = _positive_float(target_crystals, "target crystals")
     pegos = _positive_float(pego_amount, "pego amount")
@@ -234,7 +234,7 @@ def _int_value(value, name):
         raise ValueError(f"{name} must be an integer.") from exc
 
 
-def _positive_float(value: object, name: str) -> float:
+def _positive_float(value: object, name: str):
     try:
         result = float(value)
     except (TypeError, ValueError) as exc:
@@ -244,7 +244,7 @@ def _positive_float(value: object, name: str) -> float:
     return result
 
 
-def _non_negative_float(value: object, name: str) -> float:
+def _non_negative_float(value: object, name: str):
     try:
         result = float(value)
     except (TypeError, ValueError) as exc:

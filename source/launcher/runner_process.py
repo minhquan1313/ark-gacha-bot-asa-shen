@@ -11,14 +11,14 @@ RUNNER_OVERLAY_READY_MESSAGE = "__RUNNER_OVERLAY_READY__"
 RUNNER_OVERLAY_ACK_TIMEOUT_SECONDS = 10.0
 
 
-def wait_for_launcher_ack(timeout_seconds: float) -> bool:
+def wait_for_launcher_ack(timeout_seconds: float):
     """Wait for the launcher overlay before allowing bot tasks to run."""
     if sys.stdin is None or sys.stdin.isatty():
         return True
 
     responses: queue.Queue[str] = queue.Queue(maxsize=1)
 
-    def read_ack() -> None:
+    def read_ack():
         try:
             responses.put(sys.stdin.readline().strip())
         except (OSError, ValueError):

@@ -27,10 +27,10 @@ class AutoJoinServerHelper(WorkerHelperWindow):
     worker_ready = Signal()
     worker_finished = Signal(str)
 
-    def __init__(self, owner: object) -> None:
+    def __init__(self, owner: object):
         super().__init__(
             owner,
-            "AUTO JOIN SERVER",
+            "Auto Join Server",
             HELPER_WIDTH,
             HELPER_HEIGHT,
             route_kind="auto_join_server",
@@ -48,7 +48,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.worker_ready.connect(self._on_worker_ready)
         self.worker_finished.connect(self._on_worker_finished)
 
-    def _build_ui(self) -> None:
+    def _build_ui(self):
         self.description = QLabel(
             "Enter a server number and this tool will retry the existing join flow "
             "until the player is back in-server or you stop it."
@@ -89,7 +89,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
             self.server_row_widget,
         )
 
-    def start(self) -> None:
+    def start(self):
         if self.is_running() or self.closing:
             return
         if self.owner.is_program_running() or self.owner.program_stopping:
@@ -133,12 +133,12 @@ class AutoJoinServerHelper(WorkerHelperWindow):
             self._set_running_ui(False)
             self.status.setText(f"Cannot start: {exc}")
 
-    def handle_hotkey(self) -> None:
+    def handle_hotkey(self):
         if self.starting and not self.is_running():
             return
         super().handle_hotkey()
 
-    def stop(self) -> None:
+    def stop(self):
         if not self.is_running():
             return
         self.starting = False
@@ -151,7 +151,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         super().stop()
         self.status.setText("Stopping...")
 
-    def _on_worker_ready(self) -> None:
+    def _on_worker_ready(self):
         if not self.starting or not self.is_running():
             return
         self.starting = False
@@ -161,7 +161,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.start_stop_button.setEnabled(True)
         self.status.setText(f"Starting auto join for server {self.active_server}...")
 
-    def _on_worker_finished(self, message: str) -> None:
+    def _on_worker_finished(self, message: str):
         self.starting = False
         self.status_spinner.stop()
         if self._finish_worker():

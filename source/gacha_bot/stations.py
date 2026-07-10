@@ -4,7 +4,6 @@ from abc import ABC, abstractmethod
 import settings
 import source.gacha_bot.render
 from source.ASA.player import console, player_inventory, player_state, tribelog
-from source.ASA.stations import custom_stations
 from source.ASA.strucutres import teleporter
 from source.gacha_bot import deposit, gacha, iguanadon, pego, render
 from source.logs import gachalogs as logs
@@ -27,12 +26,12 @@ class base_task(ABC):
         pass
 
     @abstractmethod
-    def get_priority_level(self) -> int:
-        pass
+    def get_priority_level(self):
+        return int(0)
 
     @abstractmethod
-    def get_requeue_delay(self) -> int:
-        pass
+    def get_requeue_delay(self):
+        return int(0)
 
     def mark_as_run(self):
         self.has_run_before = True
@@ -54,21 +53,18 @@ class gacha_station(base_task):
         temp = False
         time_between = time.time() - last_berry
 
-        gacha_metadata = custom_stations.get_station_metadata(self.teleporter_name)
-        gacha_metadata.side = self.direction
-
-        berry_metadata = custom_stations.get_station_metadata(settings.berry_station)
-        iguanadon_metadata = custom_stations.get_station_metadata(settings.iguanadon)
         # if time is greater than 4 hours since the last time you went to berry station
         if berry_station or time_between > settings.time_to_reberry:
             # or if berry station is true( when you go to tekpod and drop all ) and the time between has been longer than 36 second since youve last been
-            teleporter.teleport_not_default(berry_metadata)
+            teleporter.teleport_not_default(settings.berry_station)
             if settings.external_berry:
                 logs.logger.debug("sleeping for 20 seconds as external")
-                time.sleep(20)  # letting station spawn in if you have to tp away
+                time.sleep(
+                    settings.wait_structure_load
+                )  # letting station spawn in if you have to tp away
             utils.zero_center()
 
-            iguanadon.berry_station(berry_metadata)
+            iguanadon.berry_station()
             last_berry = time.time()
             berry_station = False
             did_collect_tek_troughs = True
@@ -77,7 +73,7 @@ class gacha_station(base_task):
             did_collect_tek_troughs = False
 
         teleporter.teleport_not_default(
-            iguanadon_metadata
+            settings.iguanadon
         )  # iguanadon is a centeral tp
 
         utils.zero_center()
@@ -86,13 +82,14 @@ class gacha_station(base_task):
                 "reconnecting because of level 1 bug - you chose external berry will sleep for 60 seconds as a way to ensure that we are fully loaded in"
             )
             console.console_write("reconnect")
-            time.sleep(60)  # takes a while for the reonnect to actually go into action
+            # takes a while for the reonnect to actually go into action
+            time.sleep(settings.wait_reconnect)
 
-        iguanadon.iguanadon(iguanadon_metadata)
-        teleporter.teleport_not_default(gacha_metadata)
+        iguanadon.iguanadon()
+        teleporter.teleport_not_default(self.teleporter_name)
 
         utils.zero_center()
-        gacha.drop_off_nocrop(gacha_metadata)
+        gacha.drop_off_nocrop(self.teleporter_name, self.direction)
 
     def get_priority_level(self):
         return 3
@@ -109,11 +106,10 @@ class pego_station(base_task):
         self.delay = delay
 
     def execute(self):
-        player_state.check_state()
-
         # print("Start debugging")
         # while True:
-        #     template.check_template_no_bounds(template.DEBUG_ITEM, 0.7)
+        #     template.IS_DEBUG = True
+        #     bed.is_open_respawn()
         #     time.sleep(0.3)
 
         # utils.zero_center()
@@ -122,13 +118,14 @@ class pego_station(base_task):
         # raise RuntimeError("DONE DEBUG")
         # time.sleep(9999)
 
-        pego_metadata = custom_stations.get_station_metadata(self.teleporter_name)
-        teleporter.teleport_not_default(pego_metadata)
+        player_state.check_state()
+
+        teleporter.teleport_not_default(self.teleporter_name)
         utils.zero_center()
 
-        pego.pego_pickup(pego_metadata)
+        pego.pego_pickup(self.teleporter_name)
         if template.check_template("crystal_in_hotbar", 0.7):
-            deposit.deposit_all(None)
+            deposit.deposit_all()
         else:
             logs.logger.info(
                 "Bot has no crystals in hotbar we are skipping the deposit step"
@@ -207,7 +204,7 @@ class transfer(base_task):
     def __init__(self): ...
     def execute(self): ...
     def get_priority_level(self):
-        return
+        return 0
 
     def get_requeue_delay(self):
         return 0

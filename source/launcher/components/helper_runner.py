@@ -18,17 +18,17 @@ def emit_result(message):
     print(f"{RESULT_PREFIX}{message}", flush=True)
 
 
-def emit_ready() -> None:
+def emit_ready():
     """Tell the launcher that the selected helper finished importing."""
     print(READY_MESSAGE, flush=True)
 
 
-def emit_task_state(snapshot: dict) -> None:
+def emit_task_state(snapshot: dict):
     """Write a structured helper task snapshot to the parent process."""
     print(f"{TASK_STATE_PREFIX}{json.dumps(snapshot)}", flush=True)
 
 
-def run_auto_join_server(args: argparse.Namespace) -> int:
+def run_auto_join_server(args: argparse.Namespace):
     from source.join_sim.source.auto_join import run_auto_join_server
 
     emit_ready()
@@ -37,7 +37,7 @@ def run_auto_join_server(args: argparse.Namespace) -> int:
     return 0 if joined else 1
 
 
-def run_fertilizer_refresh(_args: argparse.Namespace) -> int:
+def run_fertilizer_refresh(_args: argparse.Namespace):
     from source.gacha_bot.fertilizer_refresh import run_fertilizer_refresh
 
     emit_ready()
@@ -46,7 +46,7 @@ def run_fertilizer_refresh(_args: argparse.Namespace) -> int:
     return 0
 
 
-def run_server_transfer(args: argparse.Namespace) -> int:
+def run_server_transfer(args: argparse.Namespace):
     from source.gacha_bot.server_transfer import (
         TransferConfigError,
         run_transfer_helper,
@@ -66,7 +66,7 @@ def run_server_transfer(args: argparse.Namespace) -> int:
     return 0 if completed else 1
 
 
-def run_switch_steam(args: argparse.Namespace) -> int:
+def run_switch_steam(args: argparse.Namespace):
     """Restart Steam with the selected account through the transfer workflow."""
     from source.launcher.config.transfer_helper_config import (
         load_transfer_settings,
@@ -97,6 +97,7 @@ def run_switch_steam(args: argparse.Namespace) -> int:
         ui_coords,
         emit_status,
         force_restart=True,
+        close_ark=not getattr(args, "instant", False),
         loginusers=loginusers,
         steam_restart_interval=settings["steam_restart_interval"],
     )
@@ -104,7 +105,7 @@ def run_switch_steam(args: argparse.Namespace) -> int:
     return 0
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser():
     """Build the subprocess helper command parser."""
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -123,6 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     switch_steam = subparsers.add_parser("switch_steam")
     switch_steam.add_argument("--account", required=True)
     switch_steam.add_argument("--loginusers", required=True)
+    switch_steam.add_argument("--instant", action="store_true")
     switch_steam.set_defaults(func=run_switch_steam)
     return parser
 

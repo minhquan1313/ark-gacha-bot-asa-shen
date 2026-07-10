@@ -1,4 +1,16 @@
+[tool.pyright]
+ignore = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+
+    "venv",
+    "tests",
+
+    "**/launcher/**/*",
+]
+
 [tool.ruff]
 extend-exclude = ["tests"]
 
-lint.extend-select = ["I","SIM","B"]
+lint.extend-select = ["I", "SIM", "B"]

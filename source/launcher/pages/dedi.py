@@ -21,7 +21,7 @@ from source.launcher.pages.common import (
 
 
 class DediPagesMixin:
-    def _render_deposit_routes_group(self) -> None:
+    def _render_deposit_routes_group(self):
         self._ensure_deposit_config()
         if not hasattr(self, "deposit_route_card_expanded"):
             self.deposit_route_card_expanded = {}
@@ -46,8 +46,10 @@ class DediPagesMixin:
         expand_row.setSpacing(8)
         expand_all = self._button("EXPAND ALL", "secondary")
         collapse_all = self._button("COLLAPSE ALL", "secondary")
-        expand_all.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        collapse_all.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        expand_all.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        collapse_all.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         expand_all.clicked.connect(lambda: self.set_storage_routes_expanded(True))
         collapse_all.clicked.connect(lambda: self.set_storage_routes_expanded(False))
         expand_row.addWidget(expand_all)
@@ -63,7 +65,9 @@ class DediPagesMixin:
         for route_index, route in enumerate(crystal_routes):
             content_layout.addWidget(self._crystal_route_card(route, route_index))
         add_crystal = self._button("ADD CRYSTAL ROUTE", "secondary")
-        add_crystal.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add_crystal.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         add_crystal.clicked.connect(self.add_crystal_route)
         content_layout.addWidget(add_crystal)
 
@@ -75,12 +79,14 @@ class DediPagesMixin:
         for route_index, route in enumerate(grindable_routes):
             content_layout.addWidget(self._grindable_route_card(route, route_index))
         add_grindable = self._button("ADD GRINDABLE ROUTE", "secondary")
-        add_grindable.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add_grindable.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         add_grindable.clicked.connect(self.add_grindable_route)
         content_layout.addWidget(add_grindable)
         content_layout.addStretch()
 
-    def _crystal_route_card(self, route: dict, route_index: int) -> QFrame:
+    def _crystal_route_card(self, route: dict, route_index: int):
         dedi_count = len(route["dedi"]["items"])
         vault_count = len(route["vault"]["items"])
         card, layout = self._deposit_route_card(
@@ -107,7 +113,7 @@ class DediPagesMixin:
                 )
             )
         add_dedi = self._button("ADD DEDI", "secondary")
-        add_dedi.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add_dedi.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         add_dedi.clicked.connect(
             lambda checked=False, index=route_index: self.add_crystal_dedi(index)
         )
@@ -124,14 +130,14 @@ class DediPagesMixin:
                 )
             )
         add_vault = self._button("ADD VAULT", "secondary")
-        add_vault.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add_vault.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         add_vault.clicked.connect(
             lambda checked=False, index=route_index: self.add_crystal_vault(index)
         )
         layout.addWidget(add_vault)
         return card
 
-    def _grindable_route_card(self, route: dict, route_index: int) -> QFrame:
+    def _grindable_route_card(self, route: dict, route_index: int):
         dedi_count = len(route["dedi"]["items"])
         card, layout = self._deposit_route_card(
             _counted_title(
@@ -177,7 +183,7 @@ class DediPagesMixin:
                 )
             )
         add_dedi = self._button("ADD DEDI", "secondary")
-        add_dedi.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        add_dedi.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         add_dedi.clicked.connect(
             lambda checked=False, index=route_index: self.add_grindable_dedi(index)
         )
@@ -268,10 +274,15 @@ class DediPagesMixin:
         row.addWidget(label)
         row.addWidget(field, 1)
         layout.addLayout(row)
+        hint = QLabel(
+            "Set this max 2 - if your server ping is more than 200 to help prevent "
+            "resource loss."
+        )
+        hint.setObjectName("MutedCopy")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
 
-    def _add_deposit_subheading(
-        self, layout: QVBoxLayout, text: str, count: int
-    ) -> None:
+    def _add_deposit_subheading(self, layout: QVBoxLayout, text: str, count: int):
         label = QLabel(_counted_title(text, count))
         label.setObjectName("FormLabel")
         layout.addWidget(label)

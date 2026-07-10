@@ -1,10 +1,22 @@
 import json
 from pathlib import Path
+from typing import cast
+
+from source.utility.types import (
+    CrystalDepositRoute,
+    DediStorageState,
+    DepositConfig,
+    GrindableDepositRoute,
+    GrinderStorageState,
+    VaultStorageState,
+)
 
 DEDI_CONFIG_PATH = Path("json_files/dedis.json")
 
 
-def default_deposit_config(crystal_teleport="", grindable_teleport=""):
+def default_deposit_config(
+    crystal_teleport: str = "", grindable_teleport: str = ""
+) -> DepositConfig:
     return {
         "depositCrystalData": [
             {
@@ -29,7 +41,7 @@ def default_deposit_config(crystal_teleport="", grindable_teleport=""):
     }
 
 
-def default_crystal_route():
+def default_crystal_route() -> CrystalDepositRoute:
     return {
         "teleport": "",
         "check_on_every_dedi": 6,
@@ -38,7 +50,7 @@ def default_crystal_route():
     }
 
 
-def default_grindable_route():
+def default_grindable_route() -> GrindableDepositRoute:
     return {
         "teleport": "",
         "check_on_every_dedi": 6,
@@ -51,15 +63,15 @@ def default_grindable_route():
     }
 
 
-def default_dedi_item():
+def default_dedi_item() -> DediStorageState:
     return {"location": {"yaw": 0.0, "pitch": 0.0}, "crouched": False}
 
 
-def default_vault_item():
+def default_vault_item() -> VaultStorageState:
     return {"location": {"yaw": 0.0, "pitch": 0.0}, "crouched": False, "items": []}
 
 
-def normalize_deposit_config(data):
+def normalize_deposit_config(data: object) -> DepositConfig:
     if not isinstance(data, dict):
         raise ValueError("Deposit route config must be a JSON object.")
 
@@ -81,12 +93,12 @@ def normalize_deposit_config(data):
 
 
 def load_deposit_config(
-    path=DEDI_CONFIG_PATH,
-    crystal_teleport="",
-    grindable_teleport="",
-    create_missing=True,
-    raise_on_missing=False,
-):
+    path: str | Path = DEDI_CONFIG_PATH,
+    crystal_teleport: str = "",
+    grindable_teleport: str = "",
+    create_missing: bool = True,
+    raise_on_missing: bool = False,
+) -> DepositConfig:
     path = Path(path)
     if not path.exists():
         config = default_deposit_config(crystal_teleport, grindable_teleport)
@@ -99,10 +111,13 @@ def load_deposit_config(
         return config
 
     with path.open("r", encoding="utf-8") as file:
-        return normalize_deposit_config(json.load(file))
+        raw_data = cast(object, json.load(file))
+        return normalize_deposit_config(raw_data)
 
 
-def save_deposit_config(data, path=DEDI_CONFIG_PATH):
+def save_deposit_config(
+    data: object, path: str | Path = DEDI_CONFIG_PATH
+) -> DepositConfig:
     path = Path(path)
     normalized = normalize_deposit_config(data)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -111,7 +126,7 @@ def save_deposit_config(data, path=DEDI_CONFIG_PATH):
     return normalized
 
 
-def _normalize_crystal_route(route):
+def _normalize_crystal_route(route: object) -> CrystalDepositRoute:
     if not isinstance(route, dict):
         route = {}
     return {
@@ -124,7 +139,7 @@ def _normalize_crystal_route(route):
     }
 
 
-def _normalize_grindable_route(route):
+def _normalize_grindable_route(route: object) -> GrindableDepositRoute:
     if not isinstance(route, dict):
         route = {}
     return {
@@ -137,7 +152,7 @@ def _normalize_grindable_route(route):
     }
 
 
-def _normalize_object_items(container):
+def _normalize_object_items(container: object) -> list[DediStorageState]:
     if not isinstance(container, dict):
         return []
     items = container.get("items", [])
@@ -146,7 +161,7 @@ def _normalize_object_items(container):
     return [_normalize_object(item) for item in items]
 
 
-def _normalize_vault_items(container):
+def _normalize_vault_items(container: object) -> list[VaultStorageState]:
     if not isinstance(container, dict):
         return []
     items = container.get("items", [])
@@ -155,19 +170,18 @@ def _normalize_vault_items(container):
     return [_normalize_vault(item) for item in items]
 
 
-def _normalize_grinder(item):
+def _normalize_grinder(item: object) -> GrinderStorageState:
     if not isinstance(item, dict):
         item = {}
     normalized = _normalize_object(item)
-    normalized["active"] = bool(item.get("active", False))
     return {
-        "active": normalized["active"],
+        "active": bool(item.get("active", False)),
         "location": normalized["location"],
         "crouched": normalized["crouched"],
     }
 
 
-def _normalize_object(item):
+def _normalize_object(item: object) -> DediStorageState:
     if not isinstance(item, dict):
         item = {}
     location = item.get("location", {})
@@ -182,25 +196,32 @@ def _normalize_object(item):
     }
 
 
-def _normalize_vault(item):
+def _normalize_vault(item: object):
     normalized = _normalize_object(item)
     raw_items = item.get("items", []) if isinstance(item, dict) else []
     if not isinstance(raw_items, list):
         raw_items = []
-    normalized["items"] = [
-        str(value).strip() for value in raw_items if str(value).strip()
-    ]
-    return normalized
+
+    vault_normalize: VaultStorageState = {
+        **normalized,
+        "items": [
+            #
+            str(value).strip()
+            for value in raw_items
+            if str(value).strip()
+        ],
+    }
+    return vault_normalize
 
 
-def _float_value(value, name):
+def _float_value(value: any, name: str):  # type: ignore
     try:
         return float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a float number.") from exc
 
 
-def _positive_int_value(value: object, name: str):
+def _positive_int_value(value: any, name: str):  # type: ignore
     try:
         normalized = int(value)
     except (TypeError, ValueError) as exc:

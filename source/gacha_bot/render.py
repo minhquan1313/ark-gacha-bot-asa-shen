@@ -24,6 +24,13 @@ def is_open():
     return template.check_template_no_bounds("bed_radical", 0.6)
 
 
+def _input_key_char(input_name: str):
+    key_code = utils.keymap_return(local_player.get_input_settings(input_name))
+    if key_code is None:
+        raise KeyError(f"Input key is not mapped: {input_name}")
+    return chr(key_code)
+
+
 def enter_tekpod(allow_eat_implant=True):
     global render_flag
     attempts = 0
@@ -32,6 +39,7 @@ def enter_tekpod(allow_eat_implant=True):
     while not render_flag:
         attempts += 1
 
+        # When fail
         if attempts > source.gacha_bot.config.render_attempts:
             attempts = 0
             player_state.check_state()
@@ -53,47 +61,40 @@ def enter_tekpod(allow_eat_implant=True):
                 dl.reset()
                 utils.zero_center()
 
-            time.sleep(0.3 * settings.lag_offset)
+            time.sleep(0.3)
 
         player_state.human.reset_crouch()
 
         utils.zero_center_no_ccc()
         utils.turn_down(15)
-        time.sleep(0.3 * settings.lag_offset)
+        time.sleep(0.3)
 
-        pyautogui.keyDown(
-            chr(utils.keymap_return(local_player.get_input_settings("Use")))
-        )
+        use_key = _input_key_char("Use")
+        pyautogui.keyDown(use_key)
 
         if not template.template_await_true(
             template.check_template_no_bounds, 1, "bed_radical", 0.6
         ):
-            pyautogui.keyUp(
-                chr(utils.keymap_return(local_player.get_input_settings("Use")))
-            )
-            time.sleep(0.5 * settings.lag_offset)
+            pyautogui.keyUp(use_key)
+            time.sleep(0.5)
             utils.press_key(local_player.get_input_settings("Run"))
 
             utils.zero_center()
             utils.turn_down(15)
-            time.sleep(0.3 * settings.lag_offset)
-            pyautogui.keyDown(
-                chr(utils.keymap_return(local_player.get_input_settings("Use")))
-            )
-            time.sleep(0.5 * settings.lag_offset)
+            time.sleep(0.3)
+            pyautogui.keyDown(use_key)
+            time.sleep(0.5)
 
         if template.template_await_true(
             template.check_template_no_bounds, 1, "bed_radical", 0.6
         ):
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.2)
             windows.move_mouse(
                 variables.get_pixel_loc("radical_laydown_x"),
                 variables.get_pixel_loc("radical_laydown_y"),
             )
-            time.sleep(0.5 * settings.lag_offset)
-            pyautogui.keyUp(
-                chr(utils.keymap_return(local_player.get_input_settings("Use")))
-            )
+            time.sleep(0.5)
+            pyautogui.keyUp(use_key)
             time.sleep(1)
         buff = buffs.check_buffs()
         if buff.check_buffs() == 1:
@@ -122,16 +123,17 @@ def leave_tekpod():
     player_state.check_disconnected()
     player_state.reset_state()
 
-    time.sleep(0.2 * settings.lag_offset)
+    time.sleep(0.2)
     utils.press_key(local_player.get_input_settings("Use"))
-    time.sleep(1 * settings.lag_offset)
+    time.sleep(1)
 
     buff = buffs.check_buffs()
+    # Still in tekpod, likely due to high ping or server lag/save
     if buff.check_buffs() == 1:
         utils.zero_opposite()
 
         utils.press_key(local_player.get_input_settings("Use"))
-        time.sleep(1 * settings.lag_offset)
+        time.sleep(1)
 
         dl = utils_simple.get_default_clock()
         while buff.check_buffs() == 1 and not dl():
@@ -145,6 +147,15 @@ def leave_tekpod():
     player_state.check_disconnected()
     player_state.reset_state()
     render_flag = False
+
+    if settings.station_pushout_yaw is None:
+        utils.get_yaw_pitch()
+        settings.station_pushout_yaw = float(utils.current_yaw)
+        utils.was_initialized = True
+    else:
+        y = settings.station_pushout_yaw
+        utils.current_yaw = y
+        utils.current_pitch = 0
 
 
 def fast_travel_to_render():

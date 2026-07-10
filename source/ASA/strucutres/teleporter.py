@@ -2,11 +2,12 @@ import time
 
 import settings
 import source.ASA.config
-import source.ASA.stations.custom_stations
 from source.ASA.player import player_state
 from source.ASA.strucutres import bed
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, variables, windows
+
+_last_teleporter_name: str = ""
 
 
 def is_open():
@@ -19,24 +20,29 @@ def open():
     """
     attempts = 0
     dl = utils_simple.get_default_clock()
-    while not is_open():
+
+    while not is_open() and not dl():
         attempts += 1
         logs.logger.debug(
             f"trying to open teleporter {attempts} / {source.ASA.config.teleporter_open_attempts}"
         )
-        utils.press_key("Use")
 
-        if not template.template_await_true(is_open, 3):
+        dl2 = utils_simple.get_default_clock(3)
+        while not dl2() and not is_open():
+            utils.press_key("Use")
+            if template.template_await_true(is_open, 0.3):
+                break
+
+        if not is_open():
             logs.logger.warning("teleporter didnt open retrying now")
             # check state of char which should close out of any windows we are in or rejoin the game
             player_state.check_state()
 
-            utils.zero_center()
-            look_down_teleport_raw()
-            time.sleep(0.2 * settings.lag_offset)
+            look_down_teleport_safe()
+            time.sleep(0.2)
         else:
             logs.logger.debug("teleporter opened")
-            return
+            return True
 
         if dl():
             logs.logger.error(
@@ -44,12 +50,12 @@ def open():
             )
             bed.spawn_in(settings.bed_spawn)
             time.sleep(20)
-
             utils.zero_center()  # reseting the chars pitch/yaw
             look_down_teleport_raw()
-            time.sleep(0.2 * settings.lag_offset)
-
+            time.sleep(0.2)
             dl.reset()
+
+    return False
 
 
 def close():
@@ -65,7 +71,7 @@ def close():
         )
 
         if not template.template_await_false(is_open, 2):
-            return time.sleep(0.3 * settings.lag_offset)
+            return time.sleep(0.3)
 
         if attempts >= source.ASA.config.teleporter_close_attempts:
             logs.logger.error(
@@ -74,62 +80,42 @@ def close():
             break
 
 
+def look_down_teleport_safe():
+    utils.set_pitch(-80)
+    time.sleep(0.2)
+
+
 def look_down_teleport_raw():
     utils.turn_down(180)
 
 
 def look_down_teleport():
-    time.sleep(0.2 * settings.lag_offset)
     look_down_teleport_raw()
-    time.sleep(0.2 * settings.lag_offset)
+    time.sleep(0.2)
 
 
-def teleport_not_default(
-    arg: source.ASA.stations.custom_stations.station_metadata | str,
-    fallback_bed_name=None,
-):
+def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
+    global _last_teleporter_name
+    _last_teleporter_name = teleporter_name
+
     fallback_bed_name = fallback_bed_name or settings.bed_spawn
     if not player_state.human.on_tp:
         look_down_teleport()
         bed.fast_travel(fallback_bed_name)
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
 
-    if isinstance(arg, source.ASA.stations.custom_stations.station_metadata):
-        stationdata = arg
-    else:
-        stationdata = source.ASA.stations.custom_stations.get_station_metadata(arg)
+    if not is_open():
+        look_down_teleport()
+        open()
 
-    teleporter_name = stationdata.name
-    look_down_teleport()
-
-    open()
     if is_open():
         player_state.human.is_on_tp()
 
         dl = utils_simple.get_default_clock()
         while True:
-            # ENSURE TP IS OPEN AND SERVER LOADED PROCESS
-            windows.click(
-                variables.get_pixel_loc("first_bed_slot_x"),
-                variables.get_pixel_loc("first_bed_slot_y"),
-            )
-            if template.template_await_true(template.check_teleporter_orange, 3):
-                # Server list loaded
-                time.sleep(0.1 * settings.lag_offset)
-                break
-            else:
-                logs.logger.warning(
-                    "orange pixel for teleporter ready not found - list not loaded"
-                )
-                player_state.check_disconnected()
-
-            time.sleep(
-                0.3 * settings.lag_offset
-            )  # preventing the orange text from the starting teleport screen messing things up
-
             if dl():
                 player_state.reset_state()
-                time.sleep(0.3 * settings.lag_offset)
+                time.sleep(0.3)
 
                 bed.spawn_in(fallback_bed_name)
 
@@ -140,6 +126,31 @@ def teleport_not_default(
                     return
 
                 dl.reset()
+
+            # ENSURE TP IS OPEN AND SERVER LOADED PROCESS
+            dl2 = utils_simple.get_default_clock(3)
+            detected = False
+            while not dl2():
+                windows.click(
+                    variables.get_pixel_loc("first_bed_slot_x"),
+                    variables.get_pixel_loc("first_bed_slot_y"),
+                )
+                if template.template_await_true(template.check_teleporter_orange, 0.3):
+                    # Server list loaded
+                    detected = True
+                    break
+                else:
+                    logs.logger.warning(
+                        "orange pixel for teleporter ready not found - list not loaded"
+                    )
+                    player_state.check_disconnected()
+
+            if detected:
+                break
+
+            time.sleep(
+                0.3
+            )  # preventing the orange text from the starting teleport screen messing things up
 
         counter = 0
         while template.check_template_no_bounds("search", 0.7):
@@ -152,7 +163,7 @@ def teleport_not_default(
 
             utils.ctrl_a()
             utils.write(teleporter_name)
-            time.sleep(0.5 * settings.lag_offset)
+            time.sleep(0.5)
             if counter >= 3:
                 logs.logger.error("search still detected likely did type anything")
                 break
@@ -179,7 +190,7 @@ def teleport_not_default(
                 variables.get_pixel_loc("first_bed_slot_x"),
                 variables.get_pixel_loc("first_bed_slot_y"),
             )
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.2)
             windows.click(
                 variables.get_pixel_loc("spawn_button_x"),
                 variables.get_pixel_loc("spawn_button_y"),
@@ -192,7 +203,7 @@ def teleport_not_default(
             # Extra step to ensure we are teleported(not sitting at the old teleport due to server lag/save)
             open()
             close()
-            time.sleep(0.5 * settings.lag_offset)
+            time.sleep(0.5)
             # DONE
         if (
             settings.singleplayer

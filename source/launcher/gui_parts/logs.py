@@ -4,12 +4,6 @@ import threading
 import time
 from collections import deque
 
-try:
-    import psutil
-except ImportError:
-    psutil = None
-
-
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 
@@ -111,7 +105,8 @@ class LogsGuiMixin:
             except json.JSONDecodeError:
                 return
             self._update_queue_snapshot(snapshot)
-            self._render_logs()
+            if not getattr(self, "runner_loading", False):
+                self._render_logs()
             return
         if "Added task" in text and "[QUEUE]" not in text:
             text = f"[QUEUE] {text}"
@@ -134,7 +129,8 @@ class LogsGuiMixin:
             self.waiting_count += 1
         if "[SUCCESS]" in text:
             self.active_count = max(self.active_count, 1)
-        self._render_logs()
+        if not getattr(self, "runner_loading", False):
+            self._render_logs()
         self._sync_runner_overlay()
 
     def _render_logs(self):
@@ -253,6 +249,7 @@ class LogsGuiMixin:
         self.active_count = 0
         self.waiting_count = 0
         self.log_file_position = 0
+        self.runner_log_start_index = 0
         self._render_logs()
         try:
             with open(GACHA_LOG_FILE, "w", encoding="utf-8") as f:
@@ -260,7 +257,7 @@ class LogsGuiMixin:
         except Exception as exc:
             self.append_log(f"[ERROR] Unable to clear log file: {exc}\n")
 
-    def open_logs(self) -> None:
+    def open_logs(self):
         """Open the launcher log file with the operating system's default app."""
         log_url = QUrl.fromLocalFile(os.path.abspath(GACHA_LOG_FILE))
         if not QDesktopServices.openUrl(log_url):

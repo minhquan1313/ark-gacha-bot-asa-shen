@@ -18,3 +18,5 @@ def mod_menu_join():
         logs.logger.debug("mod menu click")
         windows.click(get_pixel_loc("mod_join_x"), get_pixel_loc("mod_join_y"))
         recon_utils.window_still_open_no_bounds("req_mods", 0.7, 1)
+        return True
+    return False

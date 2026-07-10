@@ -4,7 +4,7 @@
   "version": 1,
   "data": {
     "settings": {
-      "lag_offset": 1.0,
+      "ping": 100,
       "iguanadon": "GACHAIGUANADON",
       "bed_spawn": "GACHARENDER",
       "berry_station": "GACHABERRYSTATION",

@@ -6,11 +6,30 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import QEvent, Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
-from source.launcher.components.widgets import AnimatedButton
-from source.launcher.config.constants import MINIMAL_HELPER_RUNNING_WIDTH
+from source.launcher.components.widgets import (
+    AnimatedButton,
+    ChromeIconButton,
+    RoundedShellFrame,
+    sync_rounded_window_mask,
+)
+from source.launcher.config.constants import (
+    ASSETS,
+    HELPER_HEIGHT,
+    MINIMAL_HELPER_RUNNING_WIDTH,
+    TITLE_BAR_HEIGHT,
+    UI_METRICS,
+)
 from source.launcher.utils.deposit_helper_capture import (
     register_alt_n_hotkey,
     unregister_hotkey,
@@ -62,9 +81,12 @@ class BaseHelperWindow(QWidget):
         self.setStyleSheet(owner.styleSheet())
         self.setWindowTitle(title)
         self.setWindowFlags(
-            Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+            Qt.WindowType.Window
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
         )
-        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.resize(width, height)
         self.setFixedWidth(width)
         self.setMinimumHeight(height)
@@ -74,42 +96,84 @@ class BaseHelperWindow(QWidget):
     def _build_shell(self, title):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        shell = QFrame()
+        shell = RoundedShellFrame()
         shell.setObjectName("DepositHelperWindow")
         root.addWidget(shell)
 
-        self.content_layout = QVBoxLayout(shell)
-        self.content_layout.setContentsMargins(8, 8, 8, 8)
-        self.content_layout.setSpacing(8)
+        shell_layout = QVBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
 
         self.header_frame = QFrame()
         self.header_frame.setObjectName("HelperHeader")
         self.header_frame.installEventFilter(self)
         self.header_layout = QHBoxLayout(self.header_frame)
-        self.header_layout.setContentsMargins(0, 0, 0, 0)
-        self.header_layout.setSpacing(8)
+        self.header_layout.setContentsMargins(8, 0, 0, 0)
+        self.header_layout.setSpacing(0)
         self.header_title = QLabel(title)
         self.header_title.setObjectName("HelperTitle")
+        self.header_title.setWordWrap(False)
+        self.header_title.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self.header_title.installEventFilter(self)
-        self.header_layout.addWidget(self.header_title)
-        self.header_layout.addStretch()
+        self._header_title_full_text = title
+        self.header_layout.addWidget(self.header_title, 1)
 
-        self.close_button = self._helper_button("X", "Close helper", "danger")
+        self.close_button = ChromeIconButton("close")
+        self.close_button.setToolTip("Close helper")
         self.close_button.clicked.connect(self.close)
         self.header_layout.addWidget(self.close_button)
-        self.content_layout.addWidget(self.header_frame)
+        shell_layout.addWidget(self.header_frame)
+
+        body = QWidget()
+        body.setObjectName("HelperBody")
+        self.content_layout = QVBoxLayout(body)
+        padding = UI_METRICS["helper_padding"]
+        self.content_layout.setContentsMargins(padding, 0, padding, padding)
+        self.content_layout.setSpacing(8)
+        shell_layout.addWidget(body)
 
         self.hotkey_label = QLabel(self.hotkey_hint)
         self.hotkey_label.setObjectName("HelperHint")
         self.content_layout.addWidget(self.hotkey_label)
+        self._sync_header_title()
 
     def add_header_action(self, button):
         self.header_layout.insertWidget(self.header_layout.count() - 1, button)
+
+    def set_header_title(self, title):
+        self._header_title_full_text = title
+        self.setWindowTitle(title)
+        self._sync_header_title()
+
+    def _sync_header_title(self):
+        title = getattr(self, "_header_title_full_text", "")
+        width = max(40, self.header_title.width())
+        self.header_title.setToolTip(title)
+        self.header_title.setText(
+            self.header_title.fontMetrics().elidedText(
+                title, Qt.TextElideMode.ElideRight, width
+            )
+        )
+
+    def _titlebar_button(self, text, tooltip):
+        button = AnimatedButton(text, "chrome")
+        button.setObjectName("ChromeIconButton")
+        button.setFixedSize(46, TITLE_BAR_HEIGHT - 1)
+        button.setToolTip(tooltip)
+        return button
 
     def _helper_button(self, text, tooltip, variant="secondary"):
         button = AnimatedButton(text, variant)
         button.setObjectName("HelperIconButton")
         button.setToolTip(tooltip)
+        return button
+
+    def _helper_action_button(self, icon_key, tooltip, variant="secondary"):
+        button = self._helper_button("", tooltip, variant)
+        button.setIcon(QIcon(ASSETS[icon_key]))
+        button.setIconSize(QSize(24, 24))
         return button
 
     def _register_hotkey(self):
@@ -200,6 +264,15 @@ class BaseHelperWindow(QWidget):
         if not getattr(self, "running_ui_active", False):
             self._apply_idle_geometry()
             self._position_helper(self.position)
+        self._sync_rounded_mask()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._sync_header_title()
+        self._sync_rounded_mask()
+
+    def _sync_rounded_mask(self):
+        sync_rounded_window_mask(self, UI_METRICS["window_radius"])
 
     def _position_middle_right(self):
         screen = self.screen() or self.owner.screen()
@@ -239,7 +312,7 @@ class BaseHelperWindow(QWidget):
 
     def changeEvent(self, event):
         super().changeEvent(event)
-        if event.type() == QEvent.ActivationChange:
+        if event.type() == QEvent.Type.ActivationChange:
             self.sync_window_opacity()
 
     def enterEvent(self, event):
@@ -257,21 +330,24 @@ class BaseHelperWindow(QWidget):
         header_title = getattr(self, "header_title", None)
         if watched not in (header_frame, header_title):
             return super().eventFilter(watched, event)
-        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+        if (
+            event.type() == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
             self.drag_position = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
             event.accept()
             return True
         if (
-            event.type() == QEvent.MouseMove
+            event.type() == QEvent.Type.MouseMove
             and self.drag_position is not None
-            and event.buttons() & Qt.LeftButton
+            and event.buttons() & Qt.MouseButton.LeftButton
         ):
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
             return True
-        if event.type() == QEvent.MouseButtonRelease:
+        if event.type() == QEvent.Type.MouseButtonRelease:
             self.drag_position = None
             event.accept()
             return True
@@ -372,7 +448,7 @@ class WorkerHelperWindow(BaseHelperWindow):
             self._log_worker_debug_output(message)
             self._emit_worker_finished(message)
 
-    def _handle_worker_output(self, line: str) -> None:
+    def _handle_worker_output(self, line: str):
         if line == HELPER_READY_MESSAGE:
             self._emit_worker_ready()
             return
@@ -386,7 +462,7 @@ class WorkerHelperWindow(BaseHelperWindow):
             self.worker_debug_lines.append(line)
             self._emit_status(line)
 
-    def _log_worker_debug_output(self, result_message: str) -> None:
+    def _log_worker_debug_output(self, result_message: str):
         """Write unstructured worker output as one traceback-style log entry."""
         if not result_message.startswith("Failed:") or not self.worker_debug_lines:
             return
@@ -403,7 +479,7 @@ class WorkerHelperWindow(BaseHelperWindow):
         elif hasattr(self, "status"):
             self.status.setText(message)
 
-    def _emit_worker_ready(self) -> None:
+    def _emit_worker_ready(self):
         """Forward worker readiness through a Qt signal when supported."""
         signal = getattr(self, "worker_ready", None)
         if signal is not None:
@@ -435,7 +511,7 @@ class WorkerHelperWindow(BaseHelperWindow):
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215)
             self.setFixedWidth(MINIMAL_HELPER_RUNNING_WIDTH)
-            compact_height = self._height_for_width(MINIMAL_HELPER_RUNNING_WIDTH)
+            compact_height = self._height_for_width(HELPER_HEIGHT)
             self.setFixedHeight(compact_height)
             self.resize(MINIMAL_HELPER_RUNNING_WIDTH, compact_height)
         else:

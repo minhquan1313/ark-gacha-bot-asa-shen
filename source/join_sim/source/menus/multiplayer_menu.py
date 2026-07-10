@@ -1,6 +1,7 @@
 import time
 
 from source.join_sim.source.logs import logger as logs
+from source.join_sim.source.menus import failure
 from source.join_sim.source.utility import recon_utils
 from source.utility import utils, utils_simple, windows
 
@@ -47,9 +48,15 @@ def is_server_list_loaded():
 
 
 def wait_server_list_loaded(delay=10):
-    return recon_utils.template_await_true(
-        recon_utils.check_template_no_bounds, delay, "server_list_loaded", 0.7
-    )
+    dl = utils_simple.get_default_clock(delay)
+    while not dl():
+        if is_server_list_loaded():
+            return True
+        if not is_open():
+            return False
+
+        time.sleep(0.05)
+    return False
 
 
 def mod_menu():
@@ -92,21 +99,36 @@ def join_server(server: str):
 
     logs.logger.debug("joining server")
 
-    dl = utils_simple.get_default_clock()
+    failure.has_failure(False)
+
+    dl = utils_simple.get_default_clock(10)
     while is_open() and not is_server_list_loaded() and not dl():
         if not wait_server_list_loaded(1):
             refresh()
-    if not is_server_list_loaded():
+
+        failure.has_failure(False)
+
+    if not is_server_list_loaded() and clear_search():
         return False
 
-    dl = utils_simple.get_default_clock(10)
-    while is_open() and clear_search() and not dl():
+    failure.has_failure(False)
+
+    dl.reset()
+    while is_open() and not dl():
         search_bar_search(server)
         wait_clear_search(1)
+        if not clear_search():
+            break
+
+        failure.has_failure(False)
+
     if clear_search():
         return False
 
-    wait_server_list_loaded(1)
+    wait_server_list_loaded()
+
+    if not is_open() or failure.has_failure(False):
+        return False
 
     windows.click(get_pixel_loc("first_server_x"), get_pixel_loc("first_server_y"))
     time.sleep(0.3)

@@ -1,46 +1,40 @@
-import time
 from collections.abc import Callable
 
 from source.join_sim.source import main as join_main
 from source.join_sim.source.crash import crash
 from source.join_sim.source.server_number import normalize_server_number
 from source.launcher.utils import deposit_helper_capture
+from source.utility import utils_simple
 
-REOPEN_INTERVAL_SECONDS = 15 * 60
-REOPEN_PAUSE_SECONDS = 5
+REOPEN_INTERVAL_SECONDS = 15 * 60  # 15 mins
 
 
 def run_auto_join_server(
     server: object,
     status_callback: Callable[[str], object] | None = None,
-) -> bool:
+):
     server = normalize_server_number(server)
 
-    def emit(message: str) -> None:
+    def emit(message: str):
         if status_callback is not None:
             status_callback(message)
 
-    last_reopen = time.monotonic()
+    dl = utils_simple.get_default_clock(REOPEN_INTERVAL_SECONDS)
     emit(f"Starting auto join for server {server}...")
 
     while True:
-        deposit_helper_capture.focus_game_window(center_cursor_when_switching=True)
-
         if crash.detect_crash():
             emit("Crash detected. Reopening game...")
             crash.re_open_game()
-            last_reopen = time.monotonic()
-            time.sleep(REOPEN_PAUSE_SECONDS)
+            dl.reset()
             continue
 
-        if (
-            join_main.is_menu()
-            and time.monotonic() - last_reopen >= REOPEN_INTERVAL_SECONDS
-        ):
+        deposit_helper_capture.focus_game_window()
+
+        if join_main.is_menu() and dl():
             emit("Still in menu. Reopening game before retrying...")
             crash.re_open_game()
-            last_reopen = time.monotonic()
-            time.sleep(REOPEN_PAUSE_SECONDS)
+            dl.reset()
             continue
 
         emit(f"Trying to join server {server}...")

@@ -2,13 +2,23 @@ import time
 from contextlib import contextmanager
 from typing import Literal
 
-import settings
 import source.ASA.config
+from source.ASA.config import LAGGED_DETECT
 from source.ASA.player import player_state
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, variables, windows
+from source.utility.types import RoiRegion
 
 inv_slots = {"x": 1245, "y": 280, "distance": 93}
+
+inv_regions: RoiRegion = {
+    #
+    "start_x": 1202,
+    "start_y": 236,
+    "width": 600,
+    "height": 600,
+}
+
 
 """
 Remember to set this back to false after the long process is done
@@ -16,6 +26,7 @@ Otherwise, was_server_lag_last_open will always false if it was once false
 """
 _detect_lag_for_long_process = False
 was_server_lag_last_open = False
+was_server_lag_last_open_long = False
 
 
 def is_open():
@@ -42,28 +53,49 @@ def turn_on():
         logs.logger.warning("Transmitter is off, trying to turn it on now...")
 
         windows.click(*coords)
-        time.sleep(0.5 * settings.lag_offset)
+        time.sleep(0.5)
 
 
 def wait_clear_search(timeout=1):
     return template.template_await_true(is_clear_search, timeout)
 
 
+# @contextmanager
+# def detect_lag_long_process2(func):
+#     global _detect_lag_for_long_process
+#     global was_server_lag_last_open_long
+
+#     was_server_lag_last_open_long = False
+#     _detect_lag_for_long_process = True
+
+#     is_lagged = utils_simple.get_default_clock(LAGGED_DETECT)
+#     func()
+
+#     try:
+#         yield is_lagged()
+#     finally:
+#         _detect_lag_for_long_process = False
+
+
 @contextmanager
 def detect_lag_long_process():
     global _detect_lag_for_long_process
+    global was_server_lag_last_open_long
 
+    was_server_lag_last_open_long = False
     _detect_lag_for_long_process = True
+
     try:
         yield
     finally:
         _detect_lag_for_long_process = False
 
 
-def open():
+def open(crouch_if_problem=True):
     global was_server_lag_last_open
     global _detect_lag_for_long_process
-    is_lagged = utils_simple.get_default_clock(3)
+    global was_server_lag_last_open_long
+    is_lagged = utils_simple.get_default_clock(LAGGED_DETECT)
 
     attempts = 0
     while not is_open():
@@ -71,8 +103,14 @@ def open():
         logs.logger.debug(
             f"trying to open strucuture inventory {attempts} / {source.ASA.config.inventory_open_attempts}"
         )
-        utils.press_key("AccessInventory")
-        if template.template_await_true(is_open, 3):
+        dl2 = utils_simple.get_default_clock(3)
+        while not dl2() and not is_open():
+            # Repeatedly press key to make sure the server receives the input
+            utils.press_key("AccessInventory")
+            if template.template_await_true(is_open, 0.3):
+                break
+
+        if is_open():
             logs.logger.debug("inventory opened")
             is_still_loading = template.template_await_false(
                 template.check_template, 3, "waiting_inv", 0.8
@@ -84,23 +122,25 @@ def open():
                     player_state.check_disconnected()
                 if is_open() and not is_ready():
                     close()
-            time.sleep(0.2 * settings.lag_offset)
+            time.sleep(0.2)
 
-            if not _detect_lag_for_long_process or not was_server_lag_last_open:
-                was_server_lag_last_open = is_lagged()
+            was_server_lag_last_open = is_lagged()
+
+            if _detect_lag_for_long_process and not was_server_lag_last_open_long:
+                was_server_lag_last_open_long = was_server_lag_last_open
 
             return  # DONE
 
         # check state of the char before redoing
         else:
-            player_state.check_state()
+            player_state.check_state(crouch_if_problem)
 
         was_server_lag_last_open = True
 
         if attempts >= source.ASA.config.inventory_open_attempts:
             logs.logger.error("unable to open up the objects inventory")
             break
-        time.sleep(0.3 * settings.lag_offset)
+        time.sleep(0.3)
 
 
 def close():
@@ -115,7 +155,7 @@ def close():
             variables.get_pixel_loc("close_inv_y"),
         )
         if not template.template_await_false(is_open, 2):
-            return time.sleep(0.3 * settings.lag_offset)
+            return time.sleep(0.3)
 
         if attempts >= source.ASA.config.inventory_close_attempts:
             logs.logger.error(
@@ -130,61 +170,72 @@ def close():
 def search_in_object(item: str):
     if is_open():
         logs.logger.debug(f"searching in structure/dino for {item}")
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         windows.click(
             variables.get_pixel_loc("search_object_x"),
             variables.get_pixel_loc("transfer_all_y"),
         )
         utils.ctrl_a()
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         utils.write(item)
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
 
 
 def drop_all_obj():
     if is_open():
         logs.logger.debug("dropping all items from object")
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         windows.click(
             variables.get_pixel_loc("drop_all_obj_x"),
             variables.get_pixel_loc("transfer_all_y"),
         )
-        time.sleep(0.1 * settings.lag_offset)
+        time.sleep(0.1)
 
 
 def transfer_all_from():
     if is_open():
         logs.logger.debug("transfering all from object")
-        time.sleep(0.2 * settings.lag_offset)
+        time.sleep(0.2)
         windows.click(
             variables.get_pixel_loc("transfer_all_from_x"),
             variables.get_pixel_loc("transfer_all_y"),
         )
-        time.sleep(0.1 * settings.lag_offset)
+        time.sleep(0.1)
 
 
 def popcorn(
-    count=0, direction: Literal["left", "down"] = "left", *, transfer_instead=False
+    count=0,
+    direction: Literal["to right", "to bottom", "to left", "to top"] = "to right",
+    *,
+    transfer_instead=False,
 ):
-    loc_gen = (
-        utils_simple.grid_loc_gen(row=6)
-        if direction == "down"
-        else utils_simple.grid_loc_gen(col=6)
-    )
+    """Drop or transfer items from inventory slots in the selected direction."""
+    inv_default_grid = 6
+
+    loc_gen = utils_simple.grid_loc_gen(row=inv_default_grid)
+
+    if direction in ("to right", "to left"):
+        loc_gen = utils_simple.grid_loc_gen(col=inv_default_grid)
 
     if is_open() and count >= 1:
         for i in range(count):
             c, r = loc_gen(i)
 
-            time.sleep(0.05 * settings.lag_offset)
+            if direction == "to left":
+                c = inv_default_grid - 1 - c
+            elif direction == "to top":
+                r = inv_default_grid - 1 - r
+
+            time.sleep(0.05)
 
             x = inv_slots["x"] + (inv_slots["distance"] * c)
-            # Y pos = startY + distanceBetweenSlots * i
             y = inv_slots["y"] + (inv_slots["distance"] * r)
-            windows.move_mouse(x, y)
 
+            if not is_open():
+                return
+
+            windows.move_mouse(x, y)
             windows.click(x, y)
-            time.sleep(0.05 * settings.lag_offset)
+            time.sleep(0.05)
 
             utils.press_key("DropItem" if not transfer_instead else "TransferItem")
-        time.sleep(0.1 * settings.lag_offset)

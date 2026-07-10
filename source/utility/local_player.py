@@ -20,7 +20,10 @@ def get_base_path():
     global ark_path
     try:
         if ark_path is None:
-            base_path = path("ArkAscended.exe").parents[3]
+            ark_exe_path = path("ArkAscended.exe")
+            if ark_exe_path is None:
+                raise FileNotFoundError("ArkAscended.exe process was not found")
+            base_path = ark_exe_path.parents[3]
             ark_path = base_path
         return ark_path
     except Exception as e:
@@ -47,16 +50,23 @@ def get_user_settings(setting_name):
                 return value
 
 
+def required_user_setting(setting_name: str):
+    value = get_user_settings(setting_name)
+    if value is None:
+        raise KeyError(f"User setting not found: {setting_name}")
+    return value
+
+
 def get_look_lr_sens():
-    return float(get_user_settings("LookLeftRightSensitivity"))
+    return float(required_user_setting("LookLeftRightSensitivity"))
 
 
 def get_look_ud_sens():
-    return float(get_user_settings("LookUpDownSensitivity"))
+    return float(required_user_setting("LookUpDownSensitivity"))
 
 
 def get_fov():
-    return float(get_user_settings("FOVMultiplier"))
+    return float(required_user_setting("FOVMultiplier"))
 
 
 def get_input_settings(input_name):

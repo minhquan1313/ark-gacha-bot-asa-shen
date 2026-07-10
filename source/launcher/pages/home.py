@@ -1,3 +1,5 @@
+from typing import cast
+
 from source.launcher.pages.common import (
     APP_NAME,
     APP_TITLE,
@@ -53,16 +55,19 @@ class HomePagesMixin:
         left.addWidget(copy)
         left.addWidget(checklist)
         left.addWidget(checkbox)
-        left.addWidget(start, alignment=Qt.AlignRight)
+        left.addWidget(start, alignment=Qt.AlignmentFlag.AlignRight)
         left.addStretch()
 
         art = QLabel()
         art.setObjectName("HeroArt")
-        art.setAlignment(Qt.AlignCenter)
+        art.setAlignment(Qt.AlignmentFlag.AlignCenter)
         if os.path.exists(ASSETS["welcome"]):
             art.setPixmap(
                 QPixmap(ASSETS["welcome"]).scaled(
-                    430, 430, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    430,
+                    430,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
                 )
             )
         row.addWidget(art, 1)
@@ -78,7 +83,10 @@ class HomePagesMixin:
         stats.setSpacing(dashboard_gutter)
         layout.addLayout(stats)
         self.server_value = self._stat_card(stats, 0, "SERVER NUMBER", "ID")
-        self.dashboard_server_card = stats.itemAtPosition(0, 0).widget()
+        server_card_item = stats.itemAtPosition(0, 0)
+        if server_card_item is None:
+            raise RuntimeError("Dashboard server card was not created")
+        self.dashboard_server_card = server_card_item.widget()
         self.active_value = self._stat_card(stats, 1, "ACTIVE QUEUE", "TASKS")
         self.waiting_value = self._stat_card(stats, 2, "WAITING QUEUE", "TASKS")
         self.uptime_value = self._stat_card(stats, 3, "UPTIME", "HH:MM:SS")
@@ -89,14 +97,15 @@ class HomePagesMixin:
 
         actions, action_layout = self._panel("QUICK ACTIONS")
         self.dashboard_actions_card = actions
-        self.start_stop_button = self._button("START PROGRAM", "primary")
+        self.start_stop_button = self._button("START GBOT", "primary")
         self.start_stop_button.setToolTip("Hotkey: Shift + Alt + N")
         self.start_stop_button.clicked.connect(self.toggle_program)
         action_layout.addWidget(self.start_stop_button)
 
-        start_game_row = QHBoxLayout()
+        # start_game_row = QHBoxLayout()
+        start_game_row = QVBoxLayout()
         start_game_row.setSpacing(8)
-        self.start_game_button = self._button("START GAME", "secondary")
+        self.start_game_button = self._button("ARK ASCENDED", "secondary")
         self.start_game_button.setToolTip(
             "Set display to 1920x1080 and start ARK through Steam."
         )
@@ -115,7 +124,9 @@ class HomePagesMixin:
         self.restore_game_settings_button.clicked.connect(
             getattr(self, "restore_game_settings", lambda: None)
         )
-        self.restore_game_settings_button.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.restore_game_settings_button.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
         self.restore_game_settings_button.customContextMenuRequested.connect(
             lambda _pos: getattr(self, "clear_game_restore_settings", lambda: None)()
         )
@@ -141,32 +152,52 @@ class HomePagesMixin:
         middle.addWidget(actions)
 
         console, console_layout = self._panel("LIVE CONSOLE (LATEST)")
+        console.setObjectName("ConsolePanel")
+        console_layout.setContentsMargins(16, 12, 16, 16)
         self.dashboard_log = self._console_widget()
-        console_layout.addWidget(self.dashboard_log)
+        console_overlay = QFrame()
+        console_overlay.setObjectName("ConsoleOverlay")
+        overlay_layout = QGridLayout(console_overlay)
+        overlay_layout.setContentsMargins(0, 0, 0, 0)
+        overlay_layout.setSpacing(0)
+        overlay_layout.addWidget(self.dashboard_log, 0, 0)
         open_logs = self._button("OPEN FULL LOGS", "secondary")
         open_logs.clicked.connect(lambda: self.show_page("logs"))
-        console_layout.addWidget(open_logs, alignment=Qt.AlignRight)
+        overlay_layout.addWidget(
+            open_logs,
+            0,
+            0,
+            alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom,
+        )
+        console_layout.addWidget(console_overlay, 1)
         middle.addWidget(console, 1)
 
         footer = QGridLayout()
         footer.setSpacing(8)
         layout.addLayout(footer)
-        self.memory_value, self.memory_meter = self._footer_stat(
-            footer, 0, "MEMORY USAGE", True, COLORS["green"]
+        self.memory_value, self.memory_meter = cast(
+            tuple[QLabel, MeterBar],
+            self._footer_stat(footer, 0, "MEMORY USAGE", True, COLORS["green"]),
         )
-        self.cpu_value, self.cpu_meter = self._footer_stat(
-            footer, 1, "CPU USAGE", True, COLORS["cyan"]
+        self.cpu_value, self.cpu_meter = cast(
+            tuple[QLabel, MeterBar],
+            self._footer_stat(footer, 1, "CPU USAGE", True, COLORS["cyan"]),
         )
-        self.runner_value = self._footer_stat(footer, 2, "RUNNER")
-        self.activity_value = self._footer_stat(footer, 3, "LAST ACTIVITY")
-        self.clock_value = self._footer_stat(footer, 4, "SYSTEM TIME")
+        self.runner_value = cast(QLabel, self._footer_stat(footer, 2, "RUNNER"))
+        self.activity_value = cast(
+            QLabel, self._footer_stat(footer, 3, "LAST ACTIVITY")
+        )
+        self.clock_value = cast(QLabel, self._footer_stat(footer, 4, "SYSTEM TIME"))
         getattr(self, "_update_start_stop_button", lambda: None)()
         getattr(self, "_update_auto_start_switch", lambda: None)()
         QTimer.singleShot(0, self._sync_dashboard_actions_width)
         return page
 
     def _sync_dashboard_actions_width(self):
-        if hasattr(self, "dashboard_actions_card"):
+        if (
+            hasattr(self, "dashboard_actions_card")
+            and self.dashboard_server_card is not None
+        ):
             self.dashboard_actions_card.setFixedWidth(
                 self.dashboard_server_card.width()
             )
@@ -179,9 +210,9 @@ class HomePagesMixin:
         value.setObjectName("StatValue")
         sub = QLabel(sublabel)
         sub.setObjectName("StatSubLabel")
-        panel_layout.addWidget(title, alignment=Qt.AlignCenter)
-        panel_layout.addWidget(value, alignment=Qt.AlignCenter)
-        panel_layout.addWidget(sub, alignment=Qt.AlignCenter)
+        panel_layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignCenter)
+        panel_layout.addWidget(value, alignment=Qt.AlignmentFlag.AlignCenter)
+        panel_layout.addWidget(sub, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(panel, 0, column)
         return value
 

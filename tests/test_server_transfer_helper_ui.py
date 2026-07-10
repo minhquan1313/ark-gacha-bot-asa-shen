@@ -1,5 +1,6 @@
 import os
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -90,10 +91,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             "source.launcher.server_transfer_helper.load_transfer_runtime_config",
             return_value={
                 "settings": {
-                    "lag_offset": 1,
+                    "ping": 1,
                     "resource_station_yaw": 0,
                     "destination_station_yaw": 0,
-                    "transmitter_teleport": "",
                     "resource_server": "0",
                     "destination_server": "0",
                     "loop_count": 1,
@@ -102,13 +102,26 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 },
                 "players": {"players": [{"bed_name": "Player1"}]},
                 "dedis": {
-                    "teleport": "",
-                    "items": [
-                        {
-                            "location": {"yaw": 0, "pitch": 0},
-                            "crouched": False,
-                        }
-                    ],
+                    "resource": {
+                        "teleport": "",
+                        "transmitter_teleport": "",
+                        "items": [
+                            {
+                                "location": {"yaw": 0, "pitch": 0},
+                                "crouched": False,
+                            }
+                        ],
+                    },
+                    "destination": {
+                        "teleport": "",
+                        "transmitter_teleport": "",
+                        "items": [
+                            {
+                                "location": {"yaw": 0, "pitch": 0},
+                                "crouched": False,
+                            }
+                        ],
+                    },
                 },
                 "ui_coords": {},
             },
@@ -125,9 +138,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertFalse(helper.running_widget.isHidden())
             self.assertIsNotNone(overlay)
             self.assertEqual(overlay.width(), RUNNER_WIDTH)
-            self.assertEqual(overlay.header_title.text(), "TRANSFER GBOT")
+            self.assertEqual(overlay.header_title.text(), "Transfer GBot")
             self.assertLessEqual(
-                overlay.header_title.fontMetrics().horizontalAdvance("TRANSFER GBOT"),
+                overlay.header_title.fontMetrics().horizontalAdvance("Transfer GBot"),
                 overlay.header_title.width(),
             )
             self.assertFalse(overlay.isHidden())
@@ -257,6 +270,35 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         finally:
             helper.close()
 
+    def test_transfer_worker_finish_refreshes_current_steam_warnings(self) -> None:
+        initial_accounts = [
+            {"account_name": "steam1", "most_recent": True, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": False, "timestamp": 10},
+        ]
+        switched_accounts = [
+            {"account_name": "steam1", "most_recent": False, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": True, "timestamp": 10},
+        ]
+        helper = self._transfer_helper(account_count=2, steam_accounts=initial_accounts)
+        worker = Mock()
+        worker.poll.return_value = 1
+        worker.stdout = None
+
+        try:
+            helper._set_running_ui(True)
+            helper.worker_process = worker
+            with patch(
+                "source.launcher.server_transfer_helper.load_steam_accounts",
+                return_value=switched_accounts,
+            ):
+                helper._on_worker_finished("Stopped.")
+
+            self.assertIn("#ff4d6d", helper.player_rows[0]["frame"].styleSheet())
+            self.assertIn("Relog Steam", helper.player_rows[0]["frame"].toolTip())
+            self.assertTrue(helper.player_rows[1]["switch"].isHidden())
+        finally:
+            helper.close()
+
     def test_player_rows_follow_saved_players_with_editable_names(self):
         helper = self._transfer_helper(account_count=12)
 
@@ -367,38 +409,48 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 button.text() for button in helper.findChildren(AnimatedButton)
             ]
             titles = [
-                label.text() for label in helper.findChildren(QLabel, "PanelTitle")
+                label.text()
+                for label in helper.findChildren(QLabel, "SettingsDividerLabel")
             ]
-            panels = helper.findChildren(QFrame, "Panel")
+            panels = helper.findChildren(QFrame, "HelperPanel")
             resource_panel = next(
                 panel
                 for panel in panels
                 if any(
-                    label.text() == "RESOURCE"
-                    for label in panel.findChildren(QLabel, "PanelTitle")
+                    label.text() == "Resource"
+                    for label in panel.findChildren(QLabel, "SettingsDividerLabel")
                 )
             )
             destination_panel = next(
                 panel
                 for panel in panels
                 if any(
-                    label.text() == "DESTINATE"
-                    for label in panel.findChildren(QLabel, "PanelTitle")
+                    label.text() == "Destinate"
+                    for label in panel.findChildren(QLabel, "SettingsDividerLabel")
                 )
             )
 
             self.assertNotIn("EXPAND ALL", button_texts)
             self.assertNotIn("COLLAPSE ALL", button_texts)
-            self.assertIn("RESOURCE", titles)
-            self.assertIn("DESTINATE", titles)
-            self.assertNotIn("RESOURCE DEDIS", titles)
-            self.assertNotIn("DESTINATION DEDIS", titles)
+            self.assertIn("Resource", titles)
+            self.assertIn("Destinate", titles)
+            self.assertNotIn("Resource Dedis", titles)
+            self.assertNotIn("Destination Dedis", titles)
+            self.assertNotIn("transmitter_teleport", helper.setting_fields)
             self.assertIn(
                 helper.setting_fields["resource_server"],
                 resource_panel.findChildren(QWidget),
             )
             self.assertIn(
                 helper.setting_fields["destination_server"],
+                destination_panel.findChildren(QWidget),
+            )
+            self.assertIn(
+                helper.resource_transmitter_teleport,
+                resource_panel.findChildren(QWidget),
+            )
+            self.assertIn(
+                helper.destination_transmitter_teleport,
                 destination_panel.findChildren(QWidget),
             )
             self.assertEqual(len(helper.resource_dedi_rows), 1)
@@ -674,6 +726,231 @@ class ServerTransferHelperUiTests(unittest.TestCase):
 
                 self.assertIn("#ff4d6d", helper.player_rows[0]["frame"].styleSheet())
                 self.assertIn("Relog Steam", helper.player_rows[0]["frame"].toolTip())
+                self.assertFalse(helper.player_rows[0]["switch"].isHidden())
+            finally:
+                helper.close()
+
+    def test_player_switch_buttons_show_for_non_current_steam_accounts(self):
+        helper = self._transfer_helper(account_count=3)
+
+        try:
+            self.assertTrue(helper.player_rows[0]["switch"].isHidden())
+            self.assertFalse(helper.player_rows[1]["switch"].isHidden())
+            self.assertFalse(helper.player_rows[2]["switch"].isHidden())
+        finally:
+            helper.close()
+
+    def test_player_switch_button_hides_for_empty_steam_account(self):
+        helper = self._transfer_helper(account_count=2)
+
+        try:
+            helper.player_rows[1]["steam"].setCurrentText("")
+            helper._sync_player_search_warnings()
+
+            self.assertTrue(helper.player_rows[1]["switch"].isHidden())
+        finally:
+            helper.close()
+
+    def test_player_two_switch_starts_worker_for_player_two_steam(self):
+        helper = self._transfer_helper(account_count=2)
+
+        try:
+            with (
+                patch(
+                    "source.launcher.server_transfer_helper.loginusers_path",
+                    return_value=Path("C:/Steam/config/loginusers.vdf"),
+                ),
+                patch.object(helper, "_start_worker") as start_worker,
+            ):
+                helper.player_rows[1]["switch"].click()
+
+            start_worker.assert_called_once_with(
+                "switch_steam",
+                "--account",
+                "steam2",
+                "--loginusers",
+                str(Path("C:/Steam/config/loginusers.vdf").resolve()),
+            )
+            self.assertTrue(helper.switching_player_steam)
+            self.assertFalse(helper.player_rows[1]["switch"].isEnabled())
+            self.assertFalse(helper.start_stop_button.isEnabled())
+        finally:
+            helper._restore_after_player_steam_switch()
+            helper.close()
+
+    def test_player_switch_success_refreshes_accounts_and_starts_game(self):
+        initial_accounts = [
+            {"account_name": "steam1", "most_recent": True, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": False, "timestamp": 10},
+        ]
+        switched_accounts = [
+            {"account_name": "steam1", "most_recent": False, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": True, "timestamp": 10},
+        ]
+        helper = self._transfer_helper(
+            account_count=2,
+            steam_accounts=initial_accounts,
+        )
+        worker = Mock()
+        worker.poll.return_value = 0
+        worker.stdout = None
+        helper.worker_process = worker
+        helper.switching_player_steam = True
+        helper.pending_switch_account = "steam2"
+        helper.pending_switch_row = helper.player_rows[1]
+
+        try:
+            with (
+                patch(
+                    "source.launcher.server_transfer_helper.load_steam_accounts",
+                    return_value=switched_accounts,
+                ) as load_accounts,
+                patch(
+                    "source.launcher.server_transfer_helper.QTimer.singleShot"
+                ) as single_shot,
+            ):
+                helper._on_worker_finished("Steam restarted for steam2.")
+
+            load_accounts.assert_called()
+            self.assertEqual(helper.config["steam_accounts"], switched_accounts)
+            self.assertTrue(helper.player_rows[1]["switch"].isHidden())
+            self.assertFalse(helper.player_rows[0]["switch"].isHidden())
+            single_shot.assert_called_once_with(0, helper.owner.start_game)
+        finally:
+            helper.close()
+
+    def test_start_reloads_steam_accounts_before_player_one_validation(self):
+        initial_accounts = [
+            {"account_name": "steam1", "most_recent": True, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": False, "timestamp": 10},
+            {"account_name": "steam3", "most_recent": False, "timestamp": 5},
+        ]
+        stale_accounts = [
+            {"account_name": "steam1", "most_recent": False, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": False, "timestamp": 10},
+            {"account_name": "steam3", "most_recent": True, "timestamp": 5},
+        ]
+        with patch(
+            "source.launcher.server_transfer_helper.load_steam_accounts",
+            return_value=stale_accounts,
+        ):
+            helper = self._transfer_helper(
+                account_count=3,
+                steam_accounts=initial_accounts,
+                keep_steam_accounts_patch=False,
+            )
+
+            try:
+                written_configs = []
+
+                def write_config(config):
+                    written_configs.append(config)
+                    return "runtime.json"
+
+                with (
+                    patch.object(
+                        helper, "_confirm_start_from_current_player", return_value=True
+                    ) as confirm,
+                    patch(
+                        "source.launcher.server_transfer_helper.missing_runtime_inputs",
+                        return_value=[],
+                    ),
+                    patch("source.launcher.server_transfer_helper.focus_game_window"),
+                    patch.object(
+                        helper, "_write_runtime_config", side_effect=write_config
+                    ),
+                    patch.object(helper, "_start_worker") as start_worker,
+                ):
+                    helper.start()
+
+                confirm.assert_called_once_with(3)
+                self.assertEqual(written_configs[0]["start_account"], 3)
+                self.assertNotIn("start_account", helper.config)
+                start_worker.assert_called_once_with(
+                    "server_transfer", "--config", "runtime.json"
+                )
+                self.assertTrue(helper.starting)
+                self.assertIn("#ff4d6d", helper.player_rows[0]["frame"].styleSheet())
+                self.assertIn("Relog Steam", helper.player_rows[0]["frame"].toolTip())
+            finally:
+                helper.close()
+
+    def test_start_from_current_player_cancel_does_not_start_worker(self):
+        initial_accounts = [
+            {"account_name": "steam1", "most_recent": True, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": False, "timestamp": 10},
+            {"account_name": "steam3", "most_recent": False, "timestamp": 5},
+        ]
+        current_accounts = [
+            {"account_name": "steam1", "most_recent": False, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": False, "timestamp": 10},
+            {"account_name": "steam3", "most_recent": True, "timestamp": 5},
+        ]
+        with patch(
+            "source.launcher.server_transfer_helper.load_steam_accounts",
+            return_value=current_accounts,
+        ):
+            helper = self._transfer_helper(
+                account_count=3,
+                steam_accounts=initial_accounts,
+                keep_steam_accounts_patch=False,
+            )
+
+            try:
+                with (
+                    patch.object(
+                        helper,
+                        "_confirm_start_from_current_player",
+                        return_value=False,
+                    ) as confirm,
+                    patch(
+                        "source.launcher.server_transfer_helper.missing_runtime_inputs",
+                        return_value=[],
+                    ),
+                    patch.object(helper, "_write_runtime_config") as write_config,
+                    patch.object(helper, "_start_worker") as start_worker,
+                ):
+                    helper.start()
+
+                confirm.assert_called_once_with(3)
+                self.assertEqual(helper.status.text(), "Start canceled.")
+                write_config.assert_not_called()
+                start_worker.assert_not_called()
+            finally:
+                helper.close()
+
+    def test_start_blocks_when_current_steam_is_not_configured_player(self):
+        initial_accounts = [
+            {"account_name": "steam1", "most_recent": True, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": False, "timestamp": 10},
+        ]
+        current_accounts = [
+            {"account_name": "steam1", "most_recent": False, "timestamp": 20},
+            {"account_name": "steam2", "most_recent": False, "timestamp": 10},
+            {"account_name": "steamX", "most_recent": True, "timestamp": 30},
+        ]
+        with patch(
+            "source.launcher.server_transfer_helper.load_steam_accounts",
+            return_value=current_accounts,
+        ):
+            helper = self._transfer_helper(
+                account_count=2,
+                steam_accounts=initial_accounts,
+                keep_steam_accounts_patch=False,
+            )
+
+            try:
+                with (
+                    patch.object(helper, "_confirm_start_from_current_player") as confirm,
+                    patch.object(helper, "_start_worker") as start_worker,
+                ):
+                    helper.start()
+
+                self.assertEqual(
+                    helper.status.text(), "Player Steam accounts are not ready."
+                )
+                confirm.assert_not_called()
+                start_worker.assert_not_called()
             finally:
                 helper.close()
 
@@ -882,6 +1159,28 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             finally:
                 helper.close()
 
+    def test_transmitter_fields_persist_to_dedis_json_independently(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_dedis",
+            side_effect=lambda data: data,
+        ) as save_dedis:
+            helper = self._transfer_helper(account_count=1)
+
+            try:
+                helper.resource_transmitter_teleport.setText("RESOURCE_TX")
+                helper.destination_transmitter_teleport.setText("DEST_TX")
+                helper._persist_dedis()
+
+                saved = save_dedis.call_args.args[0]
+                self.assertEqual(
+                    saved["resource"]["transmitter_teleport"], "RESOURCE_TX"
+                )
+                self.assertEqual(
+                    saved["destination"]["transmitter_teleport"], "DEST_TX"
+                )
+            finally:
+                helper.close()
+
     def test_destination_dedi_edit_persists_independently(self):
         with patch(
             "source.launcher.server_transfer_helper.save_transfer_dedis",
@@ -908,20 +1207,38 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             finally:
                 helper.close()
 
-    def test_destination_same_structure_calculate_button_is_available(self):
+    def test_same_structure_calculate_buttons_are_available_above_transmitter(self):
         helper = self._transfer_helper(account_count=1)
 
         try:
-            button = helper.destination_same_structure_calculate
+            resource_button = helper.resource_same_structure_calculate
+            destination_button = helper.destination_same_structure_calculate
 
-            self.assertEqual(button.text(), "CAL")
+            self.assertEqual(resource_button.text(), "Sync")
+            self.assertEqual(destination_button.text(), "Sync")
             self.assertEqual(
-                button.toolTip(),
+                resource_button.toolTip(),
+                server_transfer_helper_module.SAME_STRUCTURE_TOOLTIP,
+            )
+            self.assertEqual(
+                destination_button.toolTip(),
+                server_transfer_helper_module.SAME_STRUCTURE_TOOLTIP,
+            )
+            self.assertEqual(
+                helper.resource_same_structure_description.text(),
                 server_transfer_helper_module.SAME_STRUCTURE_TOOLTIP,
             )
             self.assertEqual(
                 helper.destination_same_structure_description.text(),
                 server_transfer_helper_module.SAME_STRUCTURE_TOOLTIP,
+            )
+            self.assertLess(
+                self._body_layout_index(resource_button),
+                self._labeled_row_index(resource_button, "Transmitter"),
+            )
+            self.assertLess(
+                self._body_layout_index(destination_button),
+                self._labeled_row_index(destination_button, "Transmitter"),
             )
         finally:
             helper.close()
@@ -939,6 +1256,10 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 helper.dedi_rows[0]["yaw"].setText("50")
                 helper.dedi_rows[0]["pitch"].setText("10")
                 helper.dedi_rows[0]["crouched"].setChecked(True)
+                helper.resource_transmitter_teleport.setText("RESOURCE_TRANS")
+                helper.destination_transmitter_teleport.setText("DEST_OLD")
+                helper.resource_dedi_teleport.setText("RESOURCE_TELEPORT")
+                helper.destination_dedi_teleport.setText("DEST_TELEPORT")
                 helper.destination_dedi_rows[0]["yaw"].setText("0")
                 helper.destination_dedi_rows[0]["pitch"].setText("0")
                 save_dedis.reset_mock()
@@ -950,6 +1271,12 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 self.assertEqual(destination["pitch"].text(), "10.0")
                 self.assertTrue(destination["crouched"].isChecked())
                 self.assertEqual(
+                    helper.destination_transmitter_teleport.text(), "RESOURCE_TRANS"
+                )
+                self.assertEqual(
+                    helper.destination_dedi_teleport.text(), "DEST_TELEPORT"
+                )
+                self.assertEqual(
                     destination["summary"].text(),
                     "Yaw 60.0 | Pitch 10.0 | Crouch on",
                 )
@@ -959,6 +1286,12 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                         "location": {"yaw": "60.0", "pitch": "10.0"},
                         "crouched": True,
                     },
+                )
+                self.assertEqual(
+                    save_dedis.call_args.args[0]["destination"][
+                        "transmitter_teleport"
+                    ],
+                    "RESOURCE_TRANS",
                 )
                 self.assertEqual(
                     helper.status.text(),
@@ -973,6 +1306,63 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                         "location"
                     ]["yaw"],
                     "88",
+                )
+            finally:
+                helper.close()
+
+    def test_resource_same_structure_calculate_updates_and_saves_rows(self):
+        with patch(
+            "source.launcher.server_transfer_helper.save_transfer_dedis",
+            side_effect=lambda data: data,
+        ) as save_dedis:
+            helper = self._transfer_helper(account_count=1)
+
+            try:
+                helper.setting_fields["resource_station_yaw"].setText("10")
+                helper.setting_fields["destination_station_yaw"].setText("20")
+                helper.destination_dedi_rows[0]["yaw"].setText("60")
+                helper.destination_dedi_rows[0]["pitch"].setText("-5")
+                helper.destination_dedi_rows[0]["crouched"].setChecked(True)
+                helper.destination_transmitter_teleport.setText("DEST_TRANS")
+                helper.resource_transmitter_teleport.setText("RESOURCE_OLD")
+                helper.destination_dedi_teleport.setText("DEST_TELEPORT")
+                helper.resource_dedi_teleport.setText("RESOURCE_TELEPORT")
+                helper.dedi_rows[0]["yaw"].setText("0")
+                helper.dedi_rows[0]["pitch"].setText("0")
+                save_dedis.reset_mock()
+
+                helper.resource_same_structure_calculate.click()
+
+                resource = helper.resource_dedi_rows[0]
+                self.assertEqual(resource["yaw"].text(), "50.0")
+                self.assertEqual(resource["pitch"].text(), "-5.0")
+                self.assertTrue(resource["crouched"].isChecked())
+                self.assertEqual(
+                    helper.resource_transmitter_teleport.text(), "DEST_TRANS"
+                )
+                self.assertEqual(
+                    helper.resource_dedi_teleport.text(), "RESOURCE_TELEPORT"
+                )
+                self.assertEqual(
+                    resource["summary"].text(),
+                    "Yaw 50.0 | Pitch -5.0 | Crouch on",
+                )
+                self.assertEqual(
+                    save_dedis.call_args.args[0]["resource"]["items"][0],
+                    {
+                        "location": {"yaw": "50.0", "pitch": "-5.0"},
+                        "crouched": True,
+                    },
+                )
+                self.assertEqual(
+                    save_dedis.call_args.args[0]["resource"][
+                        "transmitter_teleport"
+                    ],
+                    "DEST_TRANS",
+                )
+                self.assertEqual(
+                    helper.status.text(),
+                    "Resource dedis calculated from destination structure.",
                 )
             finally:
                 helper.close()
@@ -1048,6 +1438,21 @@ class ServerTransferHelperUiTests(unittest.TestCase):
 
         self.assertGreaterEqual(label.minimumHeight(), 0)
 
+    def _body_layout_index(self, widget):
+        return widget.parentWidget().layout().indexOf(widget)
+
+    def _labeled_row_index(self, widget, label_text):
+        layout = widget.parentWidget().layout()
+        for index in range(layout.count()):
+            child_layout = layout.itemAt(index).layout()
+            if child_layout is None:
+                continue
+            for child_index in range(child_layout.count()):
+                child = child_layout.itemAt(child_index).widget()
+                if isinstance(child, QLabel) and child.text() == label_text:
+                    return index
+        self.fail(f"{label_text} row not found.")
+
     def _worker_owner(self):
         return SimpleNamespace(
             styleSheet=Mock(return_value=""),
@@ -1059,9 +1464,17 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             require_ark_window=Mock(return_value=True),
             last_ark_window_error="",
             dialog=Mock(),
+            start_game=Mock(),
         )
 
-    def _transfer_helper(self, account_count=1, player_names=None, dedi_items=None):
+    def _transfer_helper(
+        self,
+        account_count=1,
+        player_names=None,
+        dedi_items=None,
+        steam_accounts=None,
+        keep_steam_accounts_patch=True,
+    ):
         owner = self._worker_owner()
         if player_names is None:
             player_names = [
@@ -1085,45 +1498,68 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                     "crouched": False,
                 }
             ]
-        steam_accounts = [
-            {"account_name": f"steam{i}", "most_recent": i == 1, "timestamp": 20 - i}
-            for i in range(1, 13)
-        ]
-        with (
-            patch(
-                "source.launcher.server_transfer_helper.load_transfer_runtime_config",
-                return_value={
-                    "settings": {
-                        "lag_offset": 1,
-                        "resource_station_yaw": 0,
-                        "destination_station_yaw": 0,
-                        "transmitter_teleport": "",
-                        "resource_server": "0",
-                        "destination_server": "0",
-                        "loop_count": 1,
-                        "structure_load_delay": 10,
-                        "transfer_retry_delay": 5,
-                        "steam_restart_interval": 30,
-                    },
-                    "players": {
-                        "players": [
-                            {"bed_name": name, "steam_account": f"steam{index + 1}"}
-                            for index, name in enumerate(player_names[:account_count])
-                        ]
-                    },
-                    "dedis": {
-                        "teleport": "",
-                        "items": dedi_items,
-                    },
-                    "ui_coords": {},
+        if steam_accounts is None:
+            steam_accounts = [
+                {
+                    "account_name": f"steam{i}",
+                    "most_recent": i == 1,
+                    "timestamp": 20 - i,
+                }
+                for i in range(1, 13)
+            ]
+        steam_accounts_patch = patch(
+            "source.launcher.server_transfer_helper.load_steam_accounts",
+            return_value=steam_accounts,
+        )
+        if keep_steam_accounts_patch:
+            steam_accounts_patch.start()
+            self.addCleanup(steam_accounts_patch.stop)
+        config = {
+            "settings": {
+                "ping": 1,
+                "resource_station_yaw": 0,
+                "destination_station_yaw": 0,
+                "resource_server": "0",
+                "destination_server": "0",
+                "loop_count": 1,
+                "structure_load_delay": 10,
+                "transfer_retry_delay": 5,
+                "steam_restart_interval": 30,
+            },
+            "players": {
+                "players": [
+                    {"bed_name": name, "steam_account": f"steam{index + 1}"}
+                    for index, name in enumerate(player_names[:account_count])
+                ]
+            },
+            "dedis": {
+                "resource": {
+                    "teleport": "",
+                    "transmitter_teleport": "",
+                    "items": dedi_items,
                 },
-            ),
-            patch(
-                "source.launcher.server_transfer_helper.load_steam_accounts",
-                return_value=steam_accounts,
-            ),
+                "destination": {
+                    "teleport": "",
+                    "transmitter_teleport": "",
+                    "items": [
+                        {
+                            "location": dict(item.get("location", {})),
+                            "crouched": bool(item.get("crouched", False)),
+                        }
+                        for item in dedi_items
+                    ],
+                },
+            },
+            "ui_coords": {},
+        }
+        with patch(
+            "source.launcher.server_transfer_helper.load_transfer_runtime_config",
+            return_value=config,
         ):
-            return ServerTransferHelper(owner)
+            if keep_steam_accounts_patch:
+                return ServerTransferHelper(owner)
+            with steam_accounts_patch:
+                return ServerTransferHelper(owner)
 
     def test_transfer_settings_include_steam_restart_interval(self) -> None:
         helper = self._transfer_helper(account_count=1)

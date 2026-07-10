@@ -3,6 +3,7 @@ import time
 import pyautogui
 
 from source.join_sim.source.logs import logger as logs
+from source.join_sim.source.menus import multiplayer_menu
 from source.join_sim.source.utility import recon_utils
 from source.utility import windows
 
@@ -31,7 +32,9 @@ def get_pixel_loc(location):
 
 
 def is_server_full():
-    return recon_utils.check_template_no_bounds("server_full", 0.7)
+    return recon_utils.check_template_no_bounds(
+        "server_full", 0.7
+    ) or recon_utils.check_template_no_bounds("server_full_2", 0.7)
 
 
 def is_red_fail():
@@ -39,27 +42,50 @@ def is_red_fail():
 
 
 def no_sessions():
+    # If server is island, it might always give true
+    # so use this with caution
     return recon_utils.check_template_no_bounds("no_session", 0.7)
 
 
-def has_failure():
+def click_go_back():
+    pyautogui.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
+    time.sleep(0.5)
+
+
+def has_failure(should_go_back=True):
+    any_failed = False
     if is_server_full():
-        logs.logger.debug("server full")
+        logs.logger.debug("Server full")
+
         windows.click(get_pixel_loc("cancel_x"), get_pixel_loc("cancel_y"))
         recon_utils.window_still_open_no_bounds("server_full", 0.7, 2)
-        time.sleep(1)
-        windows.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
+        time.sleep(0.3)
+
+        if should_go_back:
+            click_go_back()
+        any_failed = True
 
     if is_red_fail():
-        logs.logger.debug("red fail")
-        time.sleep(1)
+        logs.logger.debug("Red fail")
+
         pyautogui.click(get_pixel_loc("red_okay_x"), get_pixel_loc("red_okay_y"))
         recon_utils.window_still_open_no_bounds("red_fail", 0.7, 2)
-        time.sleep(1)
-        pyautogui.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
+        time.sleep(0.3)
 
-    if no_sessions():
-        logs.logger.debug("no sessions found")
+        if should_go_back:
+            click_go_back()
+        any_failed = True
+
+    # if no_sessions():
+    #     logs.logger.debug("no sessions found")
+
+    #     time.sleep(1)
+    #     click_go_back()
+    #     any_failed = True
+    #     should_go_back = False
+
+    if should_go_back and multiplayer_menu.is_open():
         time.sleep(1)
-        pyautogui.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
-        time.sleep(1)
+        click_go_back()
+
+    return any_failed

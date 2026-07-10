@@ -21,10 +21,10 @@ class SwitchSteamHelper(WorkerHelperWindow):
     worker_ready = Signal()
     worker_finished = Signal(str)
 
-    def __init__(self, owner: object) -> None:
+    def __init__(self, owner: object):
         super().__init__(
             owner,
-            "SWITCH STEAM",
+            "Switch Steam",
             HELPER_WIDTH,
             HELPER_HEIGHT,
             route_kind="switch_steam",
@@ -50,11 +50,11 @@ class SwitchSteamHelper(WorkerHelperWindow):
         self.worker_finished.connect(self._on_worker_finished)
         self._load_initial_accounts()
 
-    def _build_ui(self) -> None:
-        """Build the compact account selector and two action controls."""
+    def _build_ui(self):
+        """Build the compact account selector and action controls."""
         self.description = QLabel(
-            "Select a Steam account to restart Steam, or switch accounts before "
-            "starting ARK. ARK is closed before every Steam restart."
+            "SWITCH closes ARK before restarting Steam. SWITCH (INSTANT) restarts "
+            "Steam without touching ARK."
         )
         self.description.setObjectName("MutedCopy")
         self.description.setWordWrap(True)
@@ -71,9 +71,12 @@ class SwitchSteamHelper(WorkerHelperWindow):
         actions.setSpacing(8)
         self.switch_button = AnimatedButton("SWITCH", "primary")
         self.switch_button.clicked.connect(self.switch_account)
+        self.switch_instant_button = AnimatedButton("SWITCH (INSTANT)", "secondary")
+        self.switch_instant_button.clicked.connect(self.switch_account_instant)
         self.start_game_button = AnimatedButton("START GAME", "secondary")
         self.start_game_button.clicked.connect(self.start_game)
         actions.addWidget(self.switch_button)
+        actions.addWidget(self.switch_instant_button)
         actions.addWidget(self.start_game_button)
         self.content_layout.addLayout(actions)
 
@@ -87,7 +90,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
         status_row.addWidget(self.status, 1)
         self.content_layout.addLayout(status_row)
 
-    def _load_initial_accounts(self) -> None:
+    def _load_initial_accounts(self):
         """Resolve the VDF once and select the account marked MostRecent."""
         try:
             self.loginusers_file = steam_accounts.loginusers_path().resolve()
@@ -102,7 +105,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
         accounts: list[dict[str, object]],
         current: str,
         selected: str,
-    ) -> None:
+    ):
         """Populate account labels while retaining raw account names as item data."""
         self.accounts = accounts
         self.current_account = current
@@ -123,31 +126,33 @@ class SwitchSteamHelper(WorkerHelperWindow):
         self.account_combo.blockSignals(False)
         self._selection_changed()
 
-    def _selected_account(self) -> str:
+    def _selected_account(self):
         """Return the raw account name represented by the combo selection."""
         value = self.account_combo.currentData()
         return str(value).strip() if value is not None else ""
 
-    def _launcher_start_game_is_enabled(self) -> bool:
+    def _launcher_start_game_is_enabled(self):
         """Read the launcher's current START GAME state when available."""
         button = getattr(self.owner, "start_game_button", None)
         return button is None or button.isEnabled()
 
-    def _sync_start_game_enabled(self, enabled: bool) -> None:
+    def _sync_start_game_enabled(self, enabled: bool):
         """Mirror launcher availability without overriding worker state."""
         self.launcher_start_game_enabled = bool(enabled)
         valid = bool(self._selected_account())
+        self.switch_instant_button.setEnabled(valid and not self.switching)
         self.start_game_button.setEnabled(
             valid and not self.switching and self.launcher_start_game_enabled
         )
 
-    def _selection_changed(self, _index: int = -1) -> None:
+    def _selection_changed(self, _index: int = -1):
         """Update status copy without disabling valid same-account actions."""
         if self.switching:
             return
         selected = self._selected_account()
         valid = bool(selected)
         self.switch_button.setEnabled(valid)
+        self.switch_instant_button.setEnabled(valid)
         self.start_game_button.setEnabled(valid and self.launcher_start_game_enabled)
         if not selected:
             self.status.setText("No Steam accounts are available.")
@@ -159,7 +164,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
             current = self.current_account or "unknown"
             self.status.setText(f"Ready to switch Steam from {current} to {selected}.")
 
-    def _refresh_before_action(self) -> tuple[str, str] | None:
+    def _refresh_before_action(self):
         """Re-read the stored VDF and validate the selected account before acting."""
         selected = self._selected_account()
         if self.loginusers_file is None or not selected:
@@ -179,13 +184,19 @@ class SwitchSteamHelper(WorkerHelperWindow):
             self.status.setText(f"Cannot read Steam accounts: {exc}")
             return None
 
-    def switch_account(self) -> None:
+    def switch_account(self):
         """Force a Steam restart for the selected account."""
         state = self._refresh_before_action()
         if state is not None:
             self._start_switch(state[0], "switch")
 
-    def start_game(self) -> None:
+    def switch_account_instant(self):
+        """Restart Steam for the selected account without closing ARK."""
+        state = self._refresh_before_action()
+        if state is not None:
+            self._start_switch(state[0], "switch_instant")
+
+    def start_game(self):
         """Start ARK directly or switch accounts first when required."""
         state = self._refresh_before_action()
         if state is None:
@@ -196,7 +207,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
             return
         self._start_switch(selected, "start_game")
 
-    def _start_switch(self, account: str, action: str) -> None:
+    def _start_switch(self, account: str, action: str):
         """Start the one-shot account switch worker and lock helper controls."""
         if self.switching or self.loginusers_file is None:
             return
@@ -206,37 +217,43 @@ class SwitchSteamHelper(WorkerHelperWindow):
         self.status_spinner.start()
         self.account_combo.setEnabled(False)
         self.switch_button.setEnabled(False)
+        self.switch_instant_button.setEnabled(False)
         self.start_game_button.setEnabled(False)
         self.status.setText(f"Loading Steam switch modules for {account}...")
+        runner_args = [
+            "switch_steam",
+            "--account",
+            account,
+            "--loginusers",
+            str(self.loginusers_file),
+        ]
+        if action == "switch_instant":
+            runner_args.append("--instant")
         try:
-            self._start_worker(
-                "switch_steam",
-                "--account",
-                account,
-                "--loginusers",
-                str(self.loginusers_file),
-            )
+            self._start_worker(*runner_args)
         except Exception as exc:
             self._restore_after_worker()
             self.status.setText(f"Cannot switch Steam account: {exc}")
 
-    def _active_button(self) -> AnimatedButton:
+    def _active_button(self):
         """Return the action button that initiated the current worker."""
         if self.pending_action == "start_game":
             return self.start_game_button
+        if self.pending_action == "switch_instant":
+            return self.switch_instant_button
         return self.switch_button
 
-    def handle_hotkey(self) -> None:
+    def handle_hotkey(self):
         """Keep the global helper hotkey focus-only for destructive actions."""
         self.refocus_helper()
 
-    def _on_worker_ready(self) -> None:
+    def _on_worker_ready(self):
         """Report that imports and runtime validation completed."""
         if self.switching:
             self.status_spinner.stop()
             self.status.setText(f"Restarting Steam as {self.pending_account}...")
 
-    def _on_worker_finished(self, message: str) -> None:
+    def _on_worker_finished(self, message: str):
         """Restore controls and optionally continue into the launcher game flow."""
         account = self.pending_account
         start_game_after = self.pending_action == "start_game"
@@ -255,7 +272,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
             self.start_game_button.setEnabled(False)
             QTimer.singleShot(0, self.owner.start_game)
 
-    def _restore_after_worker(self) -> None:
+    def _restore_after_worker(self):
         """Stop loading animation and restore idle interaction state."""
         self.status_spinner.stop()
         self.switching = False
@@ -264,11 +281,13 @@ class SwitchSteamHelper(WorkerHelperWindow):
         self.account_combo.setEnabled(True)
         valid = bool(self._selected_account())
         self.switch_button.setEnabled(valid)
+        self.switch_instant_button.setEnabled(valid)
         self.start_game_button.setEnabled(valid and self.launcher_start_game_enabled)
 
-    def _show_load_error(self, exc: Exception) -> None:
+    def _show_load_error(self, exc: Exception):
         """Expose account discovery failures through status text only."""
         self.account_combo.setEnabled(False)
         self.switch_button.setEnabled(False)
+        self.switch_instant_button.setEnabled(False)
         self.start_game_button.setEnabled(False)
         self.status.setText(f"Cannot load Steam accounts: {exc}")

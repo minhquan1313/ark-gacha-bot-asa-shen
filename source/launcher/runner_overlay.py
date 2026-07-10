@@ -12,12 +12,19 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from source.launcher.components.widgets import AnimatedButton, LoadingSpinner
+from source.launcher.components.widgets import (
+    AnimatedButton,
+    LoadingSpinner,
+    RoundedShellFrame,
+    sync_rounded_window_mask,
+)
 from source.launcher.config.constants import (
     APP_TITLE,
     COLORS,
     HELPER_HEIGHT,
     RUNNER_WIDTH,
+    UI_FONTS,
+    UI_METRICS,
 )
 
 RUNNER_OVERLAY_UPCOMING_LIMIT = 3
@@ -31,7 +38,7 @@ def format_runner_overlay(
     snapshot: dict,
     now: float | None = None,
     limit: int = RUNNER_OVERLAY_UPCOMING_LIMIT,
-) -> tuple[str, list[str]]:
+):
     now = time.time() if now is None else now
     running = snapshot.get("running", [])
     if running:
@@ -48,7 +55,7 @@ def format_runner_overlay(
     return current, upcoming
 
 
-def _format_upcoming_task(task: dict, now: float) -> str:
+def _format_upcoming_task(task: dict, now: float):
     remaining = max(0, int(float(task.get("execution_time", now)) - now))
     if task.get("state") == "READY" or remaining == 0:
         # return f"READY {task.get('name', 'unknown')}"
@@ -62,30 +69,30 @@ def _format_upcoming_task(task: dict, now: float) -> str:
 class _ElidedLabel(QLabel):
     """Render a single line with three-dot truncation when space is limited."""
 
-    def __init__(self, text: str = "") -> None:
+    def __init__(self, text: str = ""):
         super().__init__("")
         self._full_text = ""
         self.setWordWrap(False)
         self.setMinimumWidth(0)
-        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.setText(text)
 
-    def setText(self, text: str) -> None:
+    def setText(self, text: str):
         self._full_text = str(text)
         self._sync_visible_text()
 
-    def resizeEvent(self, event: QResizeEvent) -> None:
+    def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
         self._sync_visible_text()
 
-    def _sync_visible_text(self) -> None:
+    def _sync_visible_text(self):
         """Update the rendered text for the label's current content width."""
         available_width = self.contentsRect().width()
         visible_text = self._elide_text(self._full_text, available_width)
         if super().text() != visible_text:
             super().setText(visible_text)
 
-    def _elide_text(self, text: str, max_width: int) -> str:
+    def _elide_text(self, text: str, max_width: int):
         """Return text shortened with ASCII dots to fit the requested width."""
         metrics = self.fontMetrics()
         if max_width <= 0 or metrics.horizontalAdvance(text) <= max_width:
@@ -106,9 +113,7 @@ class _ElidedLabel(QLabel):
         return f"{text[:low].rstrip()}{suffix}"
 
 
-def format_runner_logs(
-    lines: list[str], limit: int = RUNNER_OVERLAY_LOG_LIMIT
-) -> list[str]:
+def format_runner_logs(lines: list[str], limit: int = RUNNER_OVERLAY_LOG_LIMIT):
     """Return the newest timestamped launcher log messages for the overlay."""
     if limit <= 0:
         return []
@@ -124,7 +129,7 @@ def format_runner_logs(
     return formatted_lines
 
 
-def _format_runner_log_line(line: str) -> str | None:
+def _format_runner_log_line(line: str):
     """Remove launcher log metadata while preserving event time and message."""
     match = RUNNER_LOG_PREFIX.match(line.strip())
     if match is None:
@@ -139,7 +144,7 @@ def _format_runner_log_line(line: str) -> str | None:
 
 
 class RunnerOverlay(QWidget):
-    def __init__(self, owner: object) -> None:
+    def __init__(self, owner: object):
         super().__init__(None)
         self.owner = owner
         self.drag_position = None
@@ -149,8 +154,13 @@ class RunnerOverlay(QWidget):
 
         self.setObjectName("RunnerOverlayWindow")
         self.setWindowTitle(f"{APP_TITLE} Runner")
-        self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WA_DeleteOnClose)
+        self.setWindowFlags(
+            Qt.WindowType.Tool
+            | Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowOpacity(1.0)
         self.setFixedWidth(RUNNER_WIDTH)
         self.setMinimumHeight(HELPER_HEIGHT)
@@ -158,16 +168,17 @@ class RunnerOverlay(QWidget):
         self._resize_to_content_height()
         self._position_set()
 
-    def _build_ui(self) -> None:
+    def _build_ui(self):
         self.setStyleSheet(f"""
             QWidget#RunnerOverlayWindow {{
                 background: #050A10;
                 color: {COLORS["text"]};
-                border: 1px solid rgba(0, 216, 255, 150);
+                border-radius: {UI_METRICS["radius_lg"]}px;
             }}
             QFrame#RunnerOverlayShell {{
-                background: rgba(10, 16, 25, 245);
-                border: 1px solid rgba(0, 216, 255, 120);
+                background: transparent;
+                border: none;
+                border-radius: {UI_METRICS["radius_lg"]}px;
             }}
             QLabel#RunnerOverlayTitle {{
                 color: {COLORS["cyan"]};
@@ -177,7 +188,7 @@ class RunnerOverlay(QWidget):
             }}
             QLabel#RunnerOverlayClock {{
                 color: {COLORS["muted"]};
-                font-family: Consolas;
+                font-family: {UI_FONTS["mono"]};
                 font-size: 11px;
             }}
             QLabel#RunnerOverlayCurrent {{
@@ -187,12 +198,12 @@ class RunnerOverlay(QWidget):
             }}
             QLabel#RunnerOverlayHint {{
                 color: {COLORS["muted"]};
-                font-family: Consolas;
+                font-family: {UI_FONTS["mono"]};
                 font-size: 11px;
             }}
             QLabel#RunnerOverlayTask {{
                 color: {COLORS["muted"]};
-                font-family: Consolas;
+                font-family: {UI_FONTS["mono"]};
                 font-size: 11px;
             }}
             QFrame#RunnerOverlayDivider {{
@@ -201,14 +212,14 @@ class RunnerOverlay(QWidget):
             }}
             QLabel#RunnerOverlayLog {{
                 color: {COLORS["dim"]};
-                font-family: Consolas;
+                font-family: {UI_FONTS["mono"]};
                 font-size: 11px;
             }}
         """)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        shell = QFrame()
+        shell = RoundedShellFrame()
         shell.setObjectName("RunnerOverlayShell")
         root.addWidget(shell)
 
@@ -273,7 +284,7 @@ class RunnerOverlay(QWidget):
             self.log_labels.append(label)
             layout.addWidget(label)
 
-    def refresh(self, snapshot: dict, log_lines: list[str] | None = None) -> None:
+    def refresh(self, snapshot: dict, log_lines: list[str] | None = None):
         self.loading_active = False
         self.loading_spinner.stop()
         self.clock_label.setText(time.strftime("%H:%M:%S"))
@@ -296,7 +307,7 @@ class RunnerOverlay(QWidget):
         self._resize_to_content_height()
         self._position_set()
 
-    def refresh_loading(self, log_lines: list[str] | None = None) -> None:
+    def refresh_loading(self, log_lines: list[str] | None = None):
         if self.loading_active:
             return
         self.loading_active = True
@@ -311,7 +322,7 @@ class RunnerOverlay(QWidget):
         self._resize_to_content_height()
         self._position_set()
 
-    def _resize_to_content_height(self) -> None:
+    def _resize_to_content_height(self):
         layout = self.layout()
         if layout is None:
             return
@@ -327,13 +338,18 @@ class RunnerOverlay(QWidget):
         target_height = max(HELPER_HEIGHT, height)
         if self.height() != target_height:
             self.setFixedHeight(target_height)
+        sync_rounded_window_mask(self, UI_METRICS["window_radius"])
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        sync_rounded_window_mask(self, UI_METRICS["window_radius"])
 
     def stop_program(self):
         if self.owner is not None:
             self.owner.stop_program()
         self.close()
 
-    def _position_set(self) -> None:
+    def _position_set(self):
         screen = self.screen()
         if screen is None and self.owner is not None:
             screen = self.owner.screen()
@@ -345,28 +361,31 @@ class RunnerOverlay(QWidget):
         if self.x() != target_x or self.y() != target_y:
             self.move(target_x, target_y)
 
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+    def eventFilter(self, watched: QObject, event: QEvent):
         if watched not in (
             getattr(self, "header_frame", None),
             getattr(self, "header_title", None),
             getattr(self, "clock_label", None),
         ):
             return super().eventFilter(watched, event)
-        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+        if (
+            event.type() == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
             self.drag_position = (
                 event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             )
             event.accept()
             return True
         if (
-            event.type() == QEvent.MouseMove
+            event.type() == QEvent.Type.MouseMove
             and self.drag_position is not None
-            and event.buttons() & Qt.LeftButton
+            and event.buttons() & Qt.MouseButton.LeftButton
         ):
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
             return True
-        if event.type() == QEvent.MouseButtonRelease:
+        if event.type() == QEvent.Type.MouseButtonRelease:
             self.drag_position = None
             event.accept()
             return True
@@ -376,21 +395,17 @@ class RunnerOverlay(QWidget):
 class TransferRunnerOverlay(RunnerOverlay):
     """Run the server-transfer worker inside the standard compact overlay UI."""
 
-    def __init__(self, owner: object) -> None:
+    def __init__(self, owner: object):
         super().__init__(owner)
-        self.setWindowTitle("TRANSFER GBOT")
-        self.header_title.setText("TRANSFER GBOT")
-        # self.header_title.setStyleSheet("font-size: 9px; letter-spacing: 0px;")
-        # self.clock_label.setStyleSheet("font-size: 9px;")
+        self.setWindowTitle("Transfer GBot")
+        self.header_title.setText("Transfer GBot")
         header_layout = self.header_frame.layout()
         if header_layout is not None:
             header_layout.setSpacing(4)
-        # self.stop_button.setFixedWidth(96)
-        # self.stop_button.setFont(QFont("Segoe UI", 8, QFont.Bold))
         self._resize_to_content_height()
         self._position_set()
 
-    def stop_program(self) -> None:
+    def stop_program(self):
         """Delegate STOP to the transfer helper that owns the worker process."""
         stop = getattr(self.owner, "stop", None)
         if callable(stop):

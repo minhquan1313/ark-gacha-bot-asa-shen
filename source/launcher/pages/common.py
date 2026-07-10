@@ -46,6 +46,8 @@ from source.launcher.components.widgets import (
     CyberTextInputDialog,
     HeroBanner,
     MeterBar,
+    SmoothScrollArea,
+    ToolCoverCard,
 )
 from source.launcher.config.constants import (
     APP_NAME,
@@ -158,11 +160,13 @@ __all__ = [
     "Qt",
     "SETTINGS_GROUPS",
     "ServerTransferHelper",
+    "SmoothScrollArea",
     "SwitchSteamHelper",
     "TEMPLATE_DIRECTORY",
     "TEMPLATE_GROUP_REFERENCE_KEYS",
     "TEMPLATE_GROUP_SETTING_KEYS",
     "TemplateCatalog",
+    "ToolCoverCard",
     "_counted_title",
     "_deposit_route_child_count",
     "auto_fill_gacha_group",
@@ -210,12 +214,12 @@ __all__ = [
 ]
 
 
-def _counted_title(title: str, count: int | str) -> str:
+def _counted_title(title: str, count: int | str):
     """Format a settings title with its collection count."""
     return f"{title} - {count}"
 
 
-def _deposit_route_child_count(route: dict) -> int:
+def _deposit_route_child_count(route: dict):
     """Count configured child objects for a deposit route."""
     count = len(route["dedi"]["items"])
     if "vault" in route:
