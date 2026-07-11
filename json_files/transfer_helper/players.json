@@ -2,11 +2,7 @@
   "players": [
     {
       "bed_name": "BBedPlayer1",
-      "steam_account": "minhquan1313"
-    },
-    {
-      "bed_name": "BBedPlayer2",
-      "steam_account": "cadab3"
+      "steam_account": ""
     }
   ]
 }

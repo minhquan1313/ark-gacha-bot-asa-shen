@@ -13,7 +13,7 @@ from queue import Empty
 SHUTDOWN_TIMEOUT_SECONDS = 2.0
 DEBUG_SCREENSHOT_ROOT = Path("debug_screenshots")
 
-IS_DEBUG_ON = True
+IS_DEBUG_ON = False
 IS_CLEANUP_ONSTART = False
 
 CAPTURE_DEDI_DEPOSIT_CRYSTAL = True

@@ -23,8 +23,8 @@ if errorlevel 1 (
 )
 
 :: Pull updates from Git
-git checkout stable_before_qml
-git pull
+git pull origin stable_to_play
+@REM git pull
 
 :: Check if virtual environment exists
 if not exist "venv" (
@@ -42,7 +42,6 @@ if not exist "venv" (
   call venv\Scripts\activate.bat
   python -m pip install --upgrade pip
   python -m pip install -r requirements.txt
-  deactivate
 )
 
 :: Activate the virtual environment
@@ -64,6 +63,8 @@ if errorlevel 1 (
   deactivate
   exit /b
 )
+
+cls
 
 echo Running main.py...
 python main.py --app-id "%APP_ID%"
