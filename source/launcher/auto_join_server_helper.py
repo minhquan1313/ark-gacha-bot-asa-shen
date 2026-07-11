@@ -2,12 +2,12 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QWidget,
 )
 
 import settings
 from source.join_sim.source.server_number import normalize_server_number
+from source.launcher.components.custom_pyside_component import NoWheelComboBox
 from source.launcher.components.helper_window import WorkerHelperWindow
 from source.launcher.components.widgets import (
     AnimatedButton,
@@ -15,6 +15,10 @@ from source.launcher.components.widgets import (
     WrappedStatusLabel,
 )
 from source.launcher.config.constants import HELPER_HEIGHT, HELPER_WIDTH
+from source.launcher.utils.auto_join_server_store import (
+    load_auto_join_servers,
+    remember_auto_join_server,
+)
 from source.launcher.utils.deposit_helper_capture import (
     focus_game_window,
     register_alt_n_hotkey,
@@ -62,11 +66,20 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         server_row.setContentsMargins(0, 0, 0, 0)
         label = QLabel("SERVER NUMBER")
         label.setObjectName("FormLabel")
-        self.server_field = QLineEdit()
-        self.server_field.setObjectName("SettingField")
+        self.server_field = NoWheelComboBox()
+        self.server_field.setObjectName("HelperCombo")
+        self.server_field.setEditable(True)
         self.server_field.setPlaceholderText(settings.server_number)
-        self.server_field.setText(settings.server_number)
-        self.server_field.returnPressed.connect(self.start)
+        self.server_field.addItems(load_auto_join_servers())
+        initial_server = (
+            self.server_field.itemText(self.server_field.count() - 1)
+            if self.server_field.count()
+            else settings.server_number
+        )
+        self.server_field.setCurrentText(initial_server)
+        line_edit = self.server_field.lineEdit()
+        if line_edit is not None:
+            line_edit.returnPressed.connect(self.start)
         server_row.addWidget(label)
         server_row.addWidget(self.server_field, 1)
         self.content_layout.addWidget(self.server_row_widget)
@@ -102,7 +115,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
             self.status.setText("Cannot start while the main program is running.")
             return
         try:
-            server = normalize_server_number(self.server_field.text())
+            server = normalize_server_number(self.server_field.currentText())
         except ValueError as exc:
             self.status.setText(str(exc))
             self.owner.dialog("Invalid Server Number", str(exc), "warning", parent=self)
@@ -114,6 +127,11 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         except RuntimeError as exc:
             self.status.setText(f"Cannot start: {exc}")
             return
+
+        servers = remember_auto_join_server(server)
+        self.server_field.clear()
+        self.server_field.addItems(servers)
+        self.server_field.setCurrentText(server)
 
         self.starting = True
         self.active_server = server
