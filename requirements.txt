@@ -1,8 +1,8 @@
-numpy 
+numpy
 opencv-python
-mss 
-pyautogui 
-pywin32 
+mss
+pyautogui
+pywin32
 psutil
 pytesseract
 Pillow
