@@ -83,7 +83,7 @@ def spawn_in(bed_name: str):
     if is_open():
         while True:
             # Make sure we are still in the bed screen, not from the teleporter screen
-            # Because ARK is laggy and will display the bed title first then update to the teleporter title
+            # Because ARK is very lagging and will display the bed title first then update to the teleporter title
             if not is_open():
                 # Close teleport screen
                 player_state.check_state()
@@ -142,26 +142,26 @@ def spawn_in(bed_name: str):
         t = 2 if not player_state.uploaded else 15
         dl = utils_simple.get_default_clock(deadline=t)
         while not dl():
-            if template.template_await_true(template.white_flash, 0.1):
+            if template.template_await_true(template.white_flash, 0.5):
                 logs.logger.debug(
                     f"white flash detected waiting for up too {t} seconds"
                 )
                 template.template_await_false(template.white_flash, t)
                 break
             else:
-                time.sleep(0.05)
+                tribelog.open(1)
+                if tribelog.is_open():
+                    break
 
             # tribelog.open(1)
             # if tribelog.is_open():
             #     break
         dl = utils_simple.get_default_clock(deadline=10)
-        while not dl():
-            # animation spawn in is about 7 seconds
-            tribelog.open(1)
-            if tribelog.is_open():
+        while not tribelog.is_open():
+            if dl():
                 break
-            else:
-                time.sleep(0.05)
+            # animation spawn in is about 7 seconds
+            tribelog.open()
 
         time.sleep(3)
 

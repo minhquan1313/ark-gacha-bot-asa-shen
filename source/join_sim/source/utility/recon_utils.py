@@ -28,7 +28,7 @@ location: dict[RoiRegionReconKey, RoiRegion] = {
     "search": {"start_x": 1575, "start_y": 183, "width": 75, "height": 30},
     "download": {"start_x": 400, "start_y": 900, "width": 250, "height": 40},
     "beds_title": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
-    "tribelog_check": {"start_x": 862, "start_y": 26, "width": 113, "height": 113},
+    "tribelog_check": {"start_x": 680, "start_y": 26, "width": 574, "height": 113},
     "network_failure": {"start_x": 787, "start_y": 337, "width": 225, "height": 53},
     "is_logging": {"start_x": 65, "start_y": 75, "width": 180, "height": 60},
     "server_list_loaded": {

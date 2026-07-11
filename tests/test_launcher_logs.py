@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import QSize
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QApplication, QLineEdit, QPushButton, QWidget
 
 from source.launcher.components.widgets import AnimatedButton
@@ -372,6 +372,7 @@ class LauncherDashboardTests(unittest.TestCase):
             _icon_button=Mock(return_value=restore_button),
             toggle_program=Mock(),
             start_game=Mock(),
+            start_game_with_display_settings=Mock(),
             restore_game_settings=Mock(),
             clear_game_restore_settings=Mock(),
             toggle_auto_start_program=Mock(),
@@ -406,8 +407,20 @@ class LauncherDashboardTests(unittest.TestCase):
             "Hotkey: Shift + Alt + N"
         )
         launcher.start_game_button.setToolTip.assert_called_once_with(
-            "Set display to 1920x1080 and start ARK through Steam."
+            "Left-click: apply all automation settings and start ARK. "
+            "Right-click: apply only 1920x1080 and fullscreen settings."
         )
+        launcher.start_game_button.setContextMenuPolicy.assert_called_once_with(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        launcher.start_game_button.clicked.connect.assert_called_once_with(
+            launcher.start_game
+        )
+        right_click = launcher.start_game_button.customContextMenuRequested.connect.call_args.args[
+            0
+        ]
+        right_click(Mock())
+        launcher.start_game_with_display_settings.assert_called_once_with()
         launcher._icon_button.assert_called_once_with(
             "icon.restore_settings",
             "Restore the original display mode and ARK config. "
@@ -467,6 +480,79 @@ class LauncherDashboardTests(unittest.TestCase):
         self.assertEqual(single_shot.call_count, 2)
         launcher.restore_game_settings_button.setEnabled.assert_called_once_with(False)
         launcher._update_game_restore_button_visibility.assert_called_once_with()
+
+    def test_start_game_with_display_settings_delegates_to_shared_workflow(self):
+        launcher = SimpleNamespace(start_game=Mock())
+
+        SettingsGUI.start_game_with_display_settings(launcher)
+
+        launcher.start_game.assert_called_once_with(resolution_only=True)
+
+    @patch("source.launcher.gui_parts.settings_state.QTimer.singleShot")
+    @patch(
+        "source.launcher.gui_parts.settings_state.ark_game_setup.prepare_and_launch_game"
+    )
+    @patch(
+        "source.launcher.gui_parts.settings_state.ark_game_setup.prepare_and_launch_game_with_display_settings",
+        return_value="GameUserSettings.ini",
+    )
+    def test_resolution_only_start_uses_normal_button_lifecycle(
+        self, prepare_display, prepare_game, single_shot
+    ):
+        launcher = SimpleNamespace(
+            start_game_button=Mock(),
+            restore_game_settings_button=Mock(),
+            _set_start_game_enabled=Mock(),
+            _unlock_start_game_button=Mock(),
+            _unlock_restore_game_button=Mock(),
+            append_log=Mock(),
+            dialog=Mock(),
+            _update_game_restore_button_visibility=Mock(),
+        )
+
+        SettingsGUI.start_game(launcher, resolution_only=True)
+
+        prepare_display.assert_called_once_with()
+        prepare_game.assert_not_called()
+        launcher._set_start_game_enabled.assert_called_once_with(False)
+        single_shot.assert_any_call(
+            START_GAME_DISABLE_DELAY, launcher._unlock_start_game_button
+        )
+        single_shot.assert_any_call(
+            START_GAME_DISABLE_DELAY, launcher._unlock_restore_game_button
+        )
+        launcher.restore_game_settings_button.setEnabled.assert_called_once_with(False)
+        launcher.append_log.assert_any_call(
+            "[SUCCESS] ARK launch requested through Steam. "
+            "Config: GameUserSettings.ini\n"
+        )
+        launcher.dialog.assert_not_called()
+        launcher._update_game_restore_button_visibility.assert_called_once_with()
+
+    @patch("source.launcher.gui_parts.settings_state.QTimer.singleShot")
+    @patch(
+        "source.launcher.gui_parts.settings_state.ark_game_setup.prepare_and_launch_game_with_display_settings",
+        side_effect=OSError("Steam unavailable"),
+    )
+    def test_resolution_only_start_reports_failure(self, _prepare_display, _timer):
+        launcher = SimpleNamespace(
+            restore_game_settings_button=Mock(),
+            _set_start_game_enabled=Mock(),
+            _unlock_start_game_button=Mock(),
+            _unlock_restore_game_button=Mock(),
+            append_log=Mock(),
+            dialog=Mock(),
+            _update_game_restore_button_visibility=Mock(),
+        )
+
+        SettingsGUI.start_game(launcher, resolution_only=True)
+
+        launcher.append_log.assert_any_call(
+            "[ERROR] Resolution-only start game failed: Steam unavailable\n"
+        )
+        launcher.dialog.assert_called_once_with(
+            "Resolution-Only Start Game Failed", "Steam unavailable", "error"
+        )
 
     def test_unlock_start_game_button_enables_and_refreshes_visibility(self):
         launcher = SimpleNamespace(

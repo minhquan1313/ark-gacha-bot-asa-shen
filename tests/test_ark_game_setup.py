@@ -135,6 +135,79 @@ class ArkGameSetupTests(unittest.TestCase):
             self.assertIn("UnrelatedKey=keep\n", text)
             self.assertTrue(text.endswith("FrameGenerationMethod=0\n"))
 
+    def test_normal_launch_prepares_full_game_and_input_settings(self):
+        settings_path = Path("GameUserSettings.ini")
+        input_path = Path("Input.ini")
+        state = {"display_mode": {"frequency": 144}}
+
+        with (
+            patch.object(
+                ark_game_setup,
+                "find_game_user_settings_path",
+                return_value=settings_path,
+            ),
+            patch.object(
+                ark_game_setup, "find_game_user_input_path", return_value=input_path
+            ),
+            patch.object(ark_game_setup, "restore_state_exists", return_value=True),
+            patch.object(ark_game_setup, "load_restore_state", return_value=state),
+            patch.object(ark_game_setup, "apply_display_mode") as apply_display,
+            patch.object(ark_game_setup, "kill_running_ark") as kill_ark,
+            patch.object(ark_game_setup, "patch_game_settings") as patch_settings,
+            patch.object(ark_game_setup, "launch_ark_through_steam") as launch_ark,
+        ):
+            result = ark_game_setup.prepare_and_launch_game()
+
+        apply_display.assert_called_once_with(DisplayMode(1920, 1080, 144))
+        kill_ark.assert_called_once_with()
+        self.assertEqual(
+            patch_settings.call_args_list,
+            [
+                unittest.mock.call(settings_path, ark_game_setup.TARGET_GAME_SETTINGS),
+                unittest.mock.call(
+                    input_path, ark_game_setup.TARGET_GAME_INPUT_SETTINGS
+                ),
+            ],
+        )
+        launch_ark.assert_called_once_with()
+        self.assertEqual(result, f"{settings_path} | {input_path}")
+
+    def test_resolution_only_launch_uses_normal_lifecycle_without_input_settings(self):
+        settings_path = Path("GameUserSettings.ini")
+        state = {"display_mode": {"frequency": 144}}
+
+        with (
+            patch.object(
+                ark_game_setup,
+                "find_game_user_settings_path",
+                return_value=settings_path,
+            ),
+            patch.object(ark_game_setup, "find_game_user_input_path") as find_input,
+            patch.object(ark_game_setup, "restore_state_exists", return_value=False),
+            patch.object(ark_game_setup, "backup_game_settings_once") as backup,
+            patch.object(
+                ark_game_setup, "save_restore_state_once", return_value=state
+            ) as save_state,
+            patch.object(ark_game_setup, "apply_display_mode") as apply_display,
+            patch.object(ark_game_setup, "kill_running_ark") as kill_ark,
+            patch.object(ark_game_setup, "patch_game_settings") as patch_settings,
+            patch.object(ark_game_setup, "launch_ark_through_steam") as launch_ark,
+        ):
+            result = ark_game_setup.prepare_and_launch_game_with_display_settings()
+
+        find_input.assert_not_called()
+        backup.assert_called_once_with(settings_path, ark_game_setup.CONFIG_BACKUP_PATH)
+        save_state.assert_called_once_with(
+            settings_path, backup_path=ark_game_setup.CONFIG_BACKUP_PATH
+        )
+        apply_display.assert_called_once_with(DisplayMode(1920, 1080, 144))
+        kill_ark.assert_called_once_with()
+        patch_settings.assert_called_once_with(
+            settings_path, ark_game_setup.TARGET_GAME_DISPLAY_SETTINGS
+        )
+        launch_ark.assert_called_once_with()
+        self.assertEqual(result, str(settings_path))
+
     def test_restore_game_settings_copies_backup_and_removes_restore_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

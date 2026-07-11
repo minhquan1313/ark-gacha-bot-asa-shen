@@ -514,9 +514,6 @@ def run_transfer_helper(
             while True:
                 transfer_to_server(
                     settings["destination_server"],
-                    settings,
-                    players,
-                    account,
                     dedis,
                     "resource",
                     status_callback,
@@ -614,9 +611,6 @@ def run_transfer_helper(
             )
             transfer_to_server(
                 settings["resource_server"],
-                settings,
-                players,
-                account,
                 dedis,
                 "destination",
                 status_callback,
@@ -714,9 +708,6 @@ def run_transfer_helper(
             )
             transfer_to_server(
                 settings["destination_server"],
-                settings,
-                players,
-                final_account,
                 dedis,
                 "resource",
                 status_callback,
@@ -1223,9 +1214,6 @@ def go_back_to_dedi_and_fix_excess(dedis: TransferDedisConfig):
 
 def transfer_to_server(
     server: str,
-    settings: TransferSettings,
-    players: TransferPlayersConfig,
-    account: int,
     dedis: TransferDedisConfig,
     transmitter_side: TransferStage = "resource",
     status_callback=None,

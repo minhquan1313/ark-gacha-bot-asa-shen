@@ -64,7 +64,7 @@ def smart_wait_structure_with_teleport(
     *, wait_structure: float = 0.0, should_close_teleport=False, first_wait=5
 ):
     """
-    PLAYER MUST NOT IN TEK POD
+    PLAYER MUST NOT IN TEK POD, but don't worry, this one has "check_state" anyway =)))
 
     Assume player just spawned from transfer server, and already on top of a teleporter
 
@@ -94,7 +94,6 @@ def smart_wait_structure_with_teleport(
 
         if not teleporter.is_open():
             if dl():
-                # hotfix3_structure_wont_load()
                 return False
 
             logs.logger.warning("teleporter didnt open retrying now")

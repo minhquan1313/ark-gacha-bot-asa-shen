@@ -20,10 +20,14 @@ GAME_SETTINGS_RELATIVE_PATH = Path(
 )
 GAME_INPUT_RELATIVE_PATH = Path("ShooterGame/Saved/Config/Windows/Input.ini")
 
-TARGET_GAME_SETTINGS = {
+TARGET_GAME_DISPLAY_SETTINGS = {
     "ResolutionSizeX": "1920",
     "ResolutionSizeY": "1080",
     "FullscreenMode": "1",
+}
+TARGET_GAME_SETTINGS = {
+    **TARGET_GAME_DISPLAY_SETTINGS,
+    #
     "FoliageInteractionQuantityLimit": "0.500000",
     "GraphicsQuality": "5",
     "bEnableFootstepParticles": "False",
@@ -306,9 +310,12 @@ def launch_ark_through_steam():
     subprocess.Popen(["cmd", "/c", "start", "", ARK_STEAM_URL])
 
 
-def prepare_and_launch_game():
+def _prepare_and_launch_game(
+    target_settings: dict[str, str], target_input_settings: dict[str, str]
+):
+    """Prepare ARK with the selected config maps and launch it through Steam."""
     settings_path = find_game_user_settings_path()
-    input_path = find_game_user_input_path()
+    input_path = find_game_user_input_path() if target_input_settings else None
     if restore_state_exists():
         state = load_restore_state()
     else:
@@ -319,10 +326,24 @@ def prepare_and_launch_game():
         DisplayMode(width=1920, height=1080, frequency=int(original_mode["frequency"]))
     )
     kill_running_ark()
-    patch_game_settings(settings_path)
-    patch_game_settings(input_path, TARGET_GAME_INPUT_SETTINGS)
+    patch_game_settings(settings_path, target_settings)
+    if input_path is not None:
+        patch_game_settings(input_path, target_input_settings)
     launch_ark_through_steam()
-    return f"{settings_path} | {input_path}"
+    paths = [str(settings_path)]
+    if input_path is not None:
+        paths.append(str(input_path))
+    return " | ".join(paths)
+
+
+def prepare_and_launch_game():
+    """Prepare ARK with all automation settings and launch it through Steam."""
+    return _prepare_and_launch_game(TARGET_GAME_SETTINGS, TARGET_GAME_INPUT_SETTINGS)
+
+
+def prepare_and_launch_game_with_display_settings():
+    """Prepare ARK with only resolution and fullscreen settings, then launch it."""
+    return _prepare_and_launch_game(TARGET_GAME_DISPLAY_SETTINGS, {})
 
 
 def clear_restore_state(state_path=RESTORE_STATE_PATH):

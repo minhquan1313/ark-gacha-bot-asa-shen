@@ -5,7 +5,7 @@
   "destination_station_yaw": 64.41,
   "resource_server": "5147",
   "destination_server": "6032",
-  "loop_count": 6,
+  "loop_count": 9,
   "structure_load_delay": 10,
   "steam_restart_interval": 30,
   "ark_window_ready_timeout": 120,

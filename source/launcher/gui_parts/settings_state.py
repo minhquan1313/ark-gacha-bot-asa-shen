@@ -48,7 +48,8 @@ class SettingsStateGuiMixin:
             button.setEnabled(True)
         self._update_game_restore_button_visibility()
 
-    def start_game(self):
+    def start_game(self, resolution_only: bool = False):
+        """Prepare and launch ARK with full or resolution-only settings."""
         self._set_start_game_enabled(False)
         QTimer.singleShot(START_GAME_DISABLE_DELAY, self._unlock_start_game_button)
 
@@ -58,16 +59,29 @@ class SettingsStateGuiMixin:
         QTimer.singleShot(START_GAME_DISABLE_DELAY, self._unlock_restore_game_button)
 
         try:
-            self.append_log("[INFO] Preparing ARK for 1920x1080 launch...\n")
-            settings_path = ark_game_setup.prepare_and_launch_game()
+            if resolution_only:
+                self.append_log(
+                    "[INFO] Preparing ARK with resolution-only settings...\n"
+                )
+                settings_path = (
+                    ark_game_setup.prepare_and_launch_game_with_display_settings()
+                )
+            else:
+                self.append_log("[INFO] Preparing ARK for 1920x1080 launch...\n")
+                settings_path = ark_game_setup.prepare_and_launch_game()
             self.append_log(
                 f"[SUCCESS] ARK launch requested through Steam. Config: {settings_path}\n"
             )
         except Exception as exc:
-            self.append_log(f"[ERROR] Start game failed: {exc}\n")
-            self.dialog("Start Game Failed", str(exc), "error")
+            action = "Resolution-only start game" if resolution_only else "Start game"
+            self.append_log(f"[ERROR] {action} failed: {exc}\n")
+            self.dialog(f"{action.title()} Failed", str(exc), "error")
         finally:
             self._update_game_restore_button_visibility()
+
+    def start_game_with_display_settings(self):
+        """Launch ARK through the normal workflow using only display settings."""
+        self.start_game(resolution_only=True)
 
     def restore_game_settings(self):
         if not ark_game_setup.restore_state_exists():

@@ -23,8 +23,8 @@ if errorlevel 1 (
 )
 
 :: Pull updates from Git
-@REM git pull origin main
-@REM git pull
+git checkout stable_before_qml
+git pull
 
 :: Check if virtual environment exists
 if not exist "venv" (
@@ -54,6 +54,17 @@ if errorlevel 1 (
   pause
   exit /b
 )
+
+:: Run the main Python script
+echo Installing/updating dependencies from requirements.txt...
+python -m pip install -r requirements.txt
+if errorlevel 1 (
+  echo Failed to install dependencies from requirements.txt.
+  pause
+  deactivate
+  exit /b
+)
+
 echo Running main.py...
 python main.py --app-id "%APP_ID%"
 

@@ -107,10 +107,19 @@ class HomePagesMixin:
         start_game_row.setSpacing(8)
         self.start_game_button = self._button("ARK ASCENDED", "secondary")
         self.start_game_button.setToolTip(
-            "Set display to 1920x1080 and start ARK through Steam."
+            "Left-click: apply all automation settings and start ARK. "
+            "Right-click: apply only 1920x1080 and fullscreen settings."
         )
         self.start_game_button.clicked.connect(
             getattr(self, "start_game", lambda: None)
+        )
+        self.start_game_button.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self.start_game_button.customContextMenuRequested.connect(
+            lambda _pos: getattr(
+                self, "start_game_with_display_settings", lambda: None
+            )()
         )
         start_game_row.addWidget(self.start_game_button, 1)
         getattr(self, "_update_start_game_button_visibility", lambda: None)()
