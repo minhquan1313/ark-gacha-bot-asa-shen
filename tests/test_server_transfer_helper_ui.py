@@ -8,7 +8,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QWidget
 
+from source.launcher import server_transfer_helper as server_transfer_helper_module
 from source.launcher.auto_join_server_helper import AutoJoinServerHelper
+from source.launcher.components.widgets import AnimatedButton, WrappedStatusLabel
 from source.launcher.config.constants import (
     HELPER_HEIGHT,
     HELPER_WIDTH,
@@ -19,10 +21,8 @@ from source.launcher.deposit_route_helper import DepositRouteHelper
 from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
 from source.launcher.gui import SettingsGUI
 from source.launcher.position_render_helper import PositionRenderHelper
-from source.launcher import server_transfer_helper as server_transfer_helper_module
 from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.server_transfer_helper import ServerTransferHelper
-from source.launcher.components.widgets import AnimatedButton, WrappedStatusLabel
 
 
 class NegativeHeightStatusLabel(WrappedStatusLabel):
@@ -1649,6 +1649,75 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         finally:
             helper.close()
 
+    def test_auto_join_uses_last_history_server_in_editable_dropdown(self):
+        with (
+            patch(
+                "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+                return_value=False,
+            ),
+            patch(
+                "source.launcher.auto_join_server_helper.load_auto_join_servers",
+                return_value=["5147", "6049"],
+            ),
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            self.assertTrue(helper.server_field.isEditable())
+            self.assertEqual(
+                [
+                    helper.server_field.itemText(index)
+                    for index in range(helper.server_field.count())
+                ],
+                ["5147", "6049"],
+            )
+            self.assertEqual(helper.server_field.currentText(), "6049")
+        finally:
+            helper.close()
+
+    def test_auto_join_uses_default_server_when_history_is_empty(self):
+        with (
+            patch(
+                "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+                return_value=False,
+            ),
+            patch(
+                "source.launcher.auto_join_server_helper.load_auto_join_servers",
+                return_value=[],
+            ),
+            patch(
+                "source.launcher.auto_join_server_helper.settings.server_number",
+                "7777",
+            ),
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            self.assertEqual(helper.server_field.currentText(), "7777")
+            self.assertEqual(helper.server_field.count(), 0)
+        finally:
+            helper.close()
+
+    def test_auto_join_invalid_server_does_not_update_history(self):
+        owner = self._worker_owner()
+        with patch(
+            "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            helper = AutoJoinServerHelper(owner)
+
+        try:
+            helper.server_field.setCurrentText("invalid")
+            with patch(
+                "source.launcher.auto_join_server_helper.remember_auto_join_server"
+            ) as remember_server:
+                helper.start()
+
+            remember_server.assert_not_called()
+            owner.dialog.assert_called_once()
+        finally:
+            helper.close()
+
     def test_auto_join_starting_state_becomes_ready_stop_state(self):
         with patch(
             "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
@@ -1664,13 +1733,19 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper.worker_process = process
 
         try:
-            helper.server_field.setText("5147")
+            helper.server_field.setCurrentText("5147")
             with (
                 patch("source.launcher.auto_join_server_helper.focus_game_window"),
+                patch(
+                    "source.launcher.auto_join_server_helper.remember_auto_join_server",
+                    return_value=["6049", "5147"],
+                ) as remember_server,
                 patch.object(helper, "_start_worker", side_effect=launch_worker),
             ):
                 helper.start()
 
+            remember_server.assert_called_once_with("5147")
+            self.assertEqual(helper.server_field.currentText(), "5147")
             self.assertTrue(helper.starting)
             self.assertEqual(helper.start_stop_button.text(), "STOP")
             self.assertTrue(helper.start_stop_button.isEnabled())
@@ -1704,9 +1779,13 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper = AutoJoinServerHelper(self._worker_owner())
 
         try:
-            helper.server_field.setText("5147")
+            helper.server_field.setCurrentText("5147")
             with (
                 patch("source.launcher.auto_join_server_helper.focus_game_window"),
+                patch(
+                    "source.launcher.auto_join_server_helper.remember_auto_join_server",
+                    return_value=["5147"],
+                ),
                 patch.object(
                     helper,
                     "_start_worker",
