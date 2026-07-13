@@ -7,6 +7,7 @@ import win32clipboard
 
 import source.ASA.config
 from source.ASA.player import player_state
+from source.join_sim.source.crash import crash
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple
 
@@ -58,6 +59,8 @@ def enter_data(data: str):
 
 
 def console_reset():
+    if crash.detect_crash():
+        return
     # Open console - Might trigger middle console if the current console is blank
     if not is_open():
         utils.press_key("ConsoleKeys")

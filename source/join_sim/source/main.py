@@ -32,9 +32,14 @@ def is_crashed():
     return crash.detect_crash()
 
 
+should_click = True
+
+
 def join_round(server: str):
-    # This click will skip game intro
-    pyautogui.click(2, 2)
+    global should_click
+    if should_click:
+        # This click will skip game intro
+        pyautogui.click(2, 2)
     # Assume
     was_logging_in = is_logging_in()
 
@@ -61,6 +66,7 @@ def join_round(server: str):
         time.sleep(0.5)
 
     if multiplayer_menu.join_server(server):
+        should_click = False
         time.sleep(1)
 
     if mod_menu.mod_menu_join():

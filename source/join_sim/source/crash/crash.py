@@ -4,7 +4,7 @@ import psutil
 import pyautogui
 import win32process
 
-from source.join_sim.source import main
+from source.join_sim.source import main as join_sim
 from source.join_sim.source.logs import logger as logs
 from source.launcher import ark_game_setup
 from source.launcher.utils import system
@@ -20,14 +20,18 @@ def detect_crash():
         if proc.info["name"] == "CrashReportClient.exe":
             crash_process = proc
             logs.logger.critical("Crash detected", stack_info=True)
+            join_sim.should_click = True
             return True
     try:
         if not windows.ark_hwnd():
             logs.logger.critical("ARK window was not found; treating as crashed")
+            join_sim.should_click = True
             return True
     except Exception as exc:
         logs.logger.critical(f"Unable to detect ARK window: {exc}")
+        join_sim.should_click = True
         return True
+
     return False
 
 
@@ -99,10 +103,10 @@ def re_open_game():
 
             # Make sure when it restart the game, it will be at the main menu screen
             dl = utils_simple.get_default_clock(30)
-            while not main.is_menu() and not dl():
+            while not join_sim.is_menu() and not dl():
                 focus_game_window()
                 pyautogui.click(2, 2)
-                template.template_await_true(main.is_menu, 0.5)
+                template.template_await_true(join_sim.is_menu, 0.5)
             return
         except Exception as exc:
             message = f"ARK reopen attempt {attempt} failed: {exc}"

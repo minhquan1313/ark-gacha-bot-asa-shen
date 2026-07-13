@@ -2,6 +2,7 @@ import time
 
 from source.ASA.player import player_state
 from source.ASA.strucutres import bed
+from source.join_sim.source import main as join_sim
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.utility import recon_utils
 from source.utility import utils
@@ -28,11 +29,13 @@ def joined_server():
 
     if bed_spawn() or download():
         logs.logger.debug("bed spawn or download detected!")
+        join_sim.should_click = True
         return True
 
     utils.press_key("ShowTribeManager")
     time.sleep(0.5)
     if has_logs():
+        join_sim.should_click = True
         was_has_logs = True
         logs.logger.debug("tribe log detected")
         return True
