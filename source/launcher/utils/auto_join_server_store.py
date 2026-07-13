@@ -59,3 +59,13 @@ def remember_auto_join_server(server: object, path: str | Path = AUTO_JOIN_SERVE
         servers.remove(normalized)
     servers.append(normalized)
     return save_auto_join_servers(servers, path)
+
+
+def forget_auto_join_server(server: object, path: str | Path = AUTO_JOIN_SERVER_FILE):
+    """Remove a valid server from the auto-join history when present."""
+    normalized = normalize_server_number(server)
+    servers = load_auto_join_servers(path)
+    if normalized not in servers:
+        return servers
+    servers.remove(normalized)
+    return save_auto_join_servers(servers, path)

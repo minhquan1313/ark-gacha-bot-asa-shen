@@ -165,7 +165,7 @@ def open_and_has_timer():
     return still
 
 
-def open_and_transfer(server_number="0000"):
+def open_and_transfer(server_number="0000", *, should_go_tekpod=True):
     """
     When this is done, it should be ready at the bed spawning screen
     """
@@ -210,7 +210,9 @@ def open_and_transfer(server_number="0000"):
         transmitter_transfer_menu.open()
 
         # PERFORM TRANSFER, SUCCESS ONLY WHEN IT SHOW BEDS
-        success = transmitter_transfer_menu.do_join_server(str(server_number))
+        success = transmitter_transfer_menu.do_join_server(
+            str(server_number), should_go_tekpod=should_go_tekpod
+        )
         if success:
             logs.logger.debug("Successfully joined destination server!")
             return True

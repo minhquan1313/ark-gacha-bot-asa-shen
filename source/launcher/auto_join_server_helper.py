@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 
 import settings
 from source.join_sim.source.server_number import normalize_server_number
-from source.launcher.components.custom_pyside_component import NoWheelComboBox
+from source.launcher.components.custom_pyside_component import RemovableComboBox
 from source.launcher.components.helper_window import WorkerHelperWindow
 from source.launcher.components.widgets import (
     AnimatedButton,
@@ -16,6 +16,7 @@ from source.launcher.components.widgets import (
 )
 from source.launcher.config.constants import HELPER_HEIGHT, HELPER_WIDTH
 from source.launcher.utils.auto_join_server_store import (
+    forget_auto_join_server,
     load_auto_join_servers,
     remember_auto_join_server,
 )
@@ -64,9 +65,9 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.server_row_widget = QWidget()
         server_row = QHBoxLayout(self.server_row_widget)
         server_row.setContentsMargins(0, 0, 0, 0)
-        label = QLabel("SERVER NUMBER")
+        label = QLabel("Server")
         label.setObjectName("FormLabel")
-        self.server_field = NoWheelComboBox()
+        self.server_field = RemovableComboBox()
         self.server_field.setObjectName("HelperCombo")
         self.server_field.setEditable(True)
         self.server_field.setPlaceholderText(settings.server_number)
@@ -77,6 +78,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
             else settings.server_number
         )
         self.server_field.setCurrentText(initial_server)
+        self.server_field.item_remove_requested.connect(self._delete_saved_server)
         line_edit = self.server_field.lineEdit()
         if line_edit is not None:
             line_edit.returnPressed.connect(self.start)
@@ -101,6 +103,20 @@ class AutoJoinServerHelper(WorkerHelperWindow):
             self.description,
             self.server_row_widget,
         )
+
+    def _delete_saved_server(self, index: int):
+        """Delete one saved server and keep the editable selection useful."""
+        server = self.server_field.itemText(index)
+        current_server = self.server_field.currentText()
+        servers = forget_auto_join_server(server)
+        self.server_field.clear()
+        self.server_field.addItems(servers)
+        if current_server != server:
+            self.server_field.setEditText(current_server)
+        elif servers:
+            self.server_field.setCurrentText(servers[-1])
+        else:
+            self.server_field.setEditText(settings.server_number)
 
     def start(self):
         if self.is_running() or self.closing:

@@ -25,7 +25,6 @@ from source.launcher.components.widgets import (
 )
 from source.launcher.config.constants import (
     ASSETS,
-    HELPER_HEIGHT,
     MINIMAL_HELPER_RUNNING_WIDTH,
     TITLE_BAR_HEIGHT,
     UI_METRICS,
@@ -103,6 +102,7 @@ class BaseHelperWindow(QWidget):
         shell_layout = QVBoxLayout(shell)
         shell_layout.setContentsMargins(0, 0, 0, 0)
         shell_layout.setSpacing(0)
+        self.shell_layout = shell_layout
 
         self.header_frame = QFrame()
         self.header_frame.setObjectName("HelperHeader")
@@ -234,10 +234,12 @@ class BaseHelperWindow(QWidget):
 
     def _activate_layouts(self):
         self.content_layout.invalidate()
+        self.shell_layout.invalidate()
         root_layout = self.layout()
         if root_layout is not None:
             root_layout.invalidate()
             root_layout.activate()
+        self.shell_layout.activate()
         self.content_layout.activate()
 
     def _height_for_width(self, width):
@@ -511,7 +513,7 @@ class WorkerHelperWindow(BaseHelperWindow):
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215)
             self.setFixedWidth(MINIMAL_HELPER_RUNNING_WIDTH)
-            compact_height = self._height_for_width(HELPER_HEIGHT)
+            compact_height = self._height_for_width(MINIMAL_HELPER_RUNNING_WIDTH)
             self.setFixedHeight(compact_height)
             self.resize(MINIMAL_HELPER_RUNNING_WIDTH, compact_height)
         else:

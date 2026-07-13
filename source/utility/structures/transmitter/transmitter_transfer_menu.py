@@ -194,7 +194,7 @@ def has_failure():
         time.sleep(1)
 
 
-def transfer_timer_handle():
+def transfer_timer_handle(should_go_tekpod=True):
     should_go_tek_pod = utils_simple.get_default_clock(30)
     sleep_tek_pod_for = 10
     while failure_is_not_ready():
@@ -203,7 +203,7 @@ def transfer_timer_handle():
         cancel_transfer()
         time.sleep(0.2)
 
-        if should_go_tek_pod():
+        if should_go_tekpod and should_go_tek_pod():
             eslapsed = utils_simple.clock_tracker()
 
             cancel_transfer()
@@ -236,7 +236,7 @@ def sign_of_uploaded():
     return bed.is_open_respawn() or main.is_menu()
 
 
-def do_join_server(server: str):
+def do_join_server(server: str, *, should_go_tekpod=True):
     if not is_open():
         time.sleep(0.5)
         logs.logger.debug(
@@ -278,7 +278,7 @@ def do_join_server(server: str):
             windows.click(*get_pixel_loc("join_button"))
             time.sleep(0.2)
 
-            if not transfer_timer_handle():
+            if not transfer_timer_handle(should_go_tekpod):
                 return False
 
             dl = utils_simple.get_default_clock(60)

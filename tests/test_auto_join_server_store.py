@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from source.launcher.utils.auto_join_server_store import (
+    forget_auto_join_server,
     load_auto_join_servers,
     remember_auto_join_server,
     save_auto_join_servers,
@@ -50,6 +51,39 @@ class AutoJoinServerStoreTests(unittest.TestCase):
 
             self.assertEqual(remembered, ["6049", "5147"])
             self.assertEqual(load_auto_join_servers(path), remembered)
+
+    def test_forget_removes_existing_server(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "server.json"
+            save_auto_join_servers(["5147", "6049"], path)
+
+            remaining = forget_auto_join_server("5147", path)
+
+            self.assertEqual(remaining, ["6049"])
+            self.assertEqual(load_auto_join_servers(path), remaining)
+
+    def test_forget_unknown_server_leaves_file_unchanged(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "server.json"
+            save_auto_join_servers(["5147"], path)
+            original = path.read_text(encoding="utf-8")
+
+            remaining = forget_auto_join_server("6049", path)
+
+            self.assertEqual(remaining, ["5147"])
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
+
+    def test_forget_final_server_persists_empty_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "server.json"
+            save_auto_join_servers(["5147"], path)
+
+            remaining = forget_auto_join_server("5147", path)
+
+            self.assertEqual(remaining, [])
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8")), {"last_join": []}
+            )
 
 
 if __name__ == "__main__":

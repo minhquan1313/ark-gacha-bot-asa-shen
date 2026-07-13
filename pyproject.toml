@@ -9,7 +9,6 @@ exclude = [
     "**/.*",
 
     "venv",
-    "tests",
 ]
 
 ignore = [
@@ -17,6 +16,7 @@ ignore = [
     "**/dist/**",
     "**/Lib/**",
 
+    "tests",
     "**/launcher/*.py",
     "**/launcher/pages",
     "**/launcher/gui_parts",

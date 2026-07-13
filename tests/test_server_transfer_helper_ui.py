@@ -6,6 +6,8 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QFrame, QLabel, QWidget
 
 from source.launcher import server_transfer_helper as server_transfer_helper_module
@@ -23,6 +25,7 @@ from source.launcher.gui import SettingsGUI
 from source.launcher.position_render_helper import PositionRenderHelper
 from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.server_transfer_helper import ServerTransferHelper
+from source.launcher.styles import launcher_style_sheet
 
 
 class NegativeHeightStatusLabel(WrappedStatusLabel):
@@ -1618,6 +1621,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper = AutoJoinServerHelper(self._worker_owner())
 
         try:
+            helper.setStyleSheet(launcher_style_sheet())
             helper.show()
             self.app.processEvents()
             idle_height = helper.height()
@@ -1695,6 +1699,140 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         try:
             self.assertEqual(helper.server_field.currentText(), "7777")
             self.assertEqual(helper.server_field.count(), 0)
+        finally:
+            helper.close()
+
+    def test_auto_join_popup_x_deletes_row_without_starting(self):
+        with (
+            patch(
+                "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+                return_value=False,
+            ),
+            patch(
+                "source.launcher.auto_join_server_helper.load_auto_join_servers",
+                return_value=["5147", "6049"],
+            ),
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            helper.show()
+            helper.server_field.showPopup()
+            self.app.processEvents()
+            first_index = helper.server_field.model().index(0, 0)
+            first_row = helper.server_field.view().visualRect(first_index)
+            delete_position = first_row.center()
+            delete_position.setX(first_row.right() - 8)
+
+            with (
+                patch(
+                    "source.launcher.auto_join_server_helper.forget_auto_join_server",
+                    return_value=["6049"],
+                ) as forget_server,
+                patch.object(helper, "start") as start,
+            ):
+                QTest.mouseClick(
+                    helper.server_field.view().viewport(),
+                    Qt.MouseButton.LeftButton,
+                    pos=delete_position,
+                )
+                self.app.processEvents()
+
+            forget_server.assert_called_once_with("5147")
+            start.assert_not_called()
+            self.assertEqual(helper.server_field.currentText(), "6049")
+            self.assertTrue(helper.server_field.view().isVisible())
+        finally:
+            helper.server_field.hidePopup()
+            helper.close()
+
+    def test_auto_join_popup_server_text_still_selects_row(self):
+        with (
+            patch(
+                "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+                return_value=False,
+            ),
+            patch(
+                "source.launcher.auto_join_server_helper.load_auto_join_servers",
+                return_value=["5147", "6049"],
+            ),
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            helper.show()
+            helper.server_field.showPopup()
+            self.app.processEvents()
+            first_index = helper.server_field.model().index(0, 0)
+            row_rect = helper.server_field.view().visualRect(first_index)
+            select_position = row_rect.center()
+            select_position.setX(row_rect.left() + 8)
+
+            QTest.mouseClick(
+                helper.server_field.view().viewport(),
+                Qt.MouseButton.LeftButton,
+                pos=select_position,
+            )
+            self.app.processEvents()
+
+            self.assertEqual(helper.server_field.currentText(), "5147")
+        finally:
+            helper.server_field.hidePopup()
+            helper.close()
+
+    def test_auto_join_deleting_current_server_uses_latest_remaining(self):
+        with (
+            patch(
+                "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+                return_value=False,
+            ),
+            patch(
+                "source.launcher.auto_join_server_helper.load_auto_join_servers",
+                return_value=["5147", "6049"],
+            ),
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            with patch(
+                "source.launcher.auto_join_server_helper.forget_auto_join_server",
+                return_value=["5147"],
+            ):
+                helper._delete_saved_server(1)
+
+            self.assertEqual(helper.server_field.currentText(), "5147")
+        finally:
+            helper.server_field.hidePopup()
+            helper.close()
+
+    def test_auto_join_deleting_final_server_uses_default(self):
+        with (
+            patch(
+                "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+                return_value=False,
+            ),
+            patch(
+                "source.launcher.auto_join_server_helper.load_auto_join_servers",
+                return_value=["5147"],
+            ),
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            with (
+                patch(
+                    "source.launcher.auto_join_server_helper.forget_auto_join_server",
+                    return_value=[],
+                ),
+                patch(
+                    "source.launcher.auto_join_server_helper.settings.server_number",
+                    "7777",
+                ),
+            ):
+                helper._delete_saved_server(0)
+
+            self.assertEqual(helper.server_field.count(), 0)
+            self.assertEqual(helper.server_field.currentText(), "7777")
         finally:
             helper.close()
 

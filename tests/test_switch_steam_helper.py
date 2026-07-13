@@ -12,6 +12,7 @@ from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QApplication
 
 from source.launcher.components.custom_pyside_component import NoWheelComboBox
+from source.launcher.config.constants import MINIMAL_HELPER_RUNNING_WIDTH
 from source.launcher.gui import SettingsGUI
 from source.launcher.switch_steam_helper import SwitchSteamHelper
 
@@ -260,6 +261,28 @@ class SwitchSteamHelperTests(unittest.TestCase):
             refocus.assert_called_once_with()
             self.assertTrue(helper.switching)
         finally:
+            helper.close()
+
+    def test_running_status_uses_actual_helper_width_for_height(self) -> None:
+        helper = self._helper()
+        try:
+            helper.show()
+            self.app.processEvents()
+            helper.status.setText("Launching Steam (attempt 1).")
+            expected_height = helper._height_for_width(MINIMAL_HELPER_RUNNING_WIDTH)
+
+            helper._set_running_ui(True)
+            self.app.processEvents()
+
+            self.assertEqual(helper.width(), MINIMAL_HELPER_RUNNING_WIDTH)
+            self.assertEqual(helper.height(), expected_height)
+
+            helper.status.setText("Steam restarted for beta.")
+            self.app.processEvents()
+
+            self.assertEqual(helper.height(), expected_height)
+        finally:
+            helper.worker_process = None
             helper.close()
 
     def test_tools_open_registers_helper_and_refocuses_duplicate(self) -> None:
