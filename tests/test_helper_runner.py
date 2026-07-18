@@ -23,11 +23,11 @@ class HelperRunnerReadyTests(unittest.TestCase):
             redirect_stdout(output),
         ):
             result = helper_runner.run_auto_join_server(
-                types.SimpleNamespace(server="5147")
+                types.SimpleNamespace(server="5147", afk_join=False)
             )
 
         self.assertEqual(result, 0)
-        runtime.run_auto_join_server.assert_called_once_with("5147")
+        runtime.run_auto_join_server.assert_called_once_with("5147", False)
         self.assertEqual(
             output.getvalue().splitlines(),
             [helper_runner.READY_MESSAGE, "__HELPER_COMPLETION__ Joined server."],
@@ -43,6 +43,20 @@ class HelperRunnerReadyTests(unittest.TestCase):
             helper_runner.run_auto_join_server(types.SimpleNamespace(server="5147"))
 
         self.assertEqual(output.getvalue(), "")
+
+    def test_auto_join_parser_defaults_afk_join_to_true(self) -> None:
+        args = helper_runner.build_parser().parse_args(
+            ["auto_join_server", "--server", "5147"]
+        )
+
+        self.assertTrue(args.afk_join)
+
+    def test_auto_join_parser_accepts_disabled_afk_join(self) -> None:
+        args = helper_runner.build_parser().parse_args(
+            ["auto_join_server", "--server", "5147", "--no-afk-join"]
+        )
+
+        self.assertFalse(args.afk_join)
 
     def test_transfer_emits_ready_after_config_load(self) -> None:
         runtime = types.ModuleType("source.gacha_bot.server_transfer")

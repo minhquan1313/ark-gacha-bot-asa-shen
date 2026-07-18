@@ -1,3 +1,6 @@
+import time
+
+from source.ASA.player import player_state
 from source.join_sim.source import main as join_main
 from source.join_sim.source.crash import crash
 from source.join_sim.source.server_number import normalize_server_number
@@ -8,7 +11,7 @@ from source.utility import utils_simple
 REOPEN_INTERVAL_SECONDS = 15 * 60  # 15 mins
 
 
-def run_auto_join_server(server: object):
+def run_auto_join_server(server: object, afk_join: bool = True):
     server = normalize_server_number(server)
 
     dl = utils_simple.get_default_clock(REOPEN_INTERVAL_SECONDS)
@@ -31,5 +34,13 @@ def run_auto_join_server(server: object):
 
         logs.logger.info(f"Trying to join server {server}...")
         if join_main.join_round(server):
-            logs.logger.info(f"Joined server {server}.")
-            return True
+            if not afk_join:
+                logs.logger.info(f"Joined server {server}.")
+                return True
+            else:
+                logs.logger.info("AFK Enabled!")
+                sleep = 30
+                logs.logger.info(f"Sleeping {sleep}s before checking state")
+                time.sleep(sleep)
+                player_state.reset_state()
+                dl.reset()

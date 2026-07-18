@@ -30,7 +30,7 @@ def run_auto_join_server(args: argparse.Namespace):
     from source.join_sim.source.auto_join import run_auto_join_server
 
     send_ready()
-    joined = run_auto_join_server(args.server)
+    joined = run_auto_join_server(args.server, args.afk_join)
     completion = "Joined server." if joined else "Stopped."
     logs.logger.info(completion)
     send_completion(completion)
@@ -130,6 +130,11 @@ def build_parser():
 
     auto_join = subparsers.add_parser("auto_join_server")
     auto_join.add_argument("--server", required=True)
+    auto_join.add_argument(
+        "--afk-join",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     auto_join.set_defaults(func=run_auto_join_server)
 
     fertilizer = subparsers.add_parser("fertilizer_refresh")

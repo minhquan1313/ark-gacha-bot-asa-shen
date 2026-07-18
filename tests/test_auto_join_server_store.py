@@ -5,8 +5,10 @@ from pathlib import Path
 
 from source.launcher.utils.auto_join_server_store import (
     forget_auto_join_server,
+    load_auto_join_afk_join,
     load_auto_join_servers,
     remember_auto_join_server,
+    save_auto_join_afk_join,
     save_auto_join_servers,
 )
 
@@ -39,7 +41,30 @@ class AutoJoinServerStoreTests(unittest.TestCase):
             self.assertEqual(saved, ["5147", "6049"])
             self.assertEqual(
                 json.loads(path.read_text(encoding="utf-8")),
-                {"last_join": ["5147", "6049"]},
+                {"last_join": ["5147", "6049"], "afk_join": True},
+            )
+
+    def test_loads_afk_join_value_and_defaults_to_true(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "server.json"
+            self.assertTrue(load_auto_join_afk_join(path))
+
+            path.write_text(json.dumps({"afk_join": False}), encoding="utf-8")
+            self.assertFalse(load_auto_join_afk_join(path))
+
+            path.write_text(json.dumps({"afk_join": "false"}), encoding="utf-8")
+            self.assertTrue(load_auto_join_afk_join(path))
+
+    def test_save_afk_join_preserves_server_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "server.json"
+            save_auto_join_servers(["5147"], path)
+
+            save_auto_join_afk_join(False, path)
+
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8")),
+                {"last_join": ["5147"], "afk_join": False},
             )
 
     def test_remember_moves_existing_server_to_end(self):
@@ -82,7 +107,8 @@ class AutoJoinServerStoreTests(unittest.TestCase):
 
             self.assertEqual(remaining, [])
             self.assertEqual(
-                json.loads(path.read_text(encoding="utf-8")), {"last_join": []}
+                json.loads(path.read_text(encoding="utf-8")),
+                {"last_join": [], "afk_join": True},
             )
 
 

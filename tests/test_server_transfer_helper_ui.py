@@ -1904,6 +1904,93 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper.worker_process = None
             helper.close()
 
+    def test_auto_join_afk_join_defaults_enabled_and_passes_flag(self):
+        with patch(
+            "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            self.assertTrue(helper.afk_join_switch.isChecked())
+            helper.server_field.setCurrentText("5147")
+            with (
+                patch("source.launcher.auto_join_server_helper.focus_game_window"),
+                patch(
+                    "source.launcher.auto_join_server_helper.remember_auto_join_server",
+                    return_value=["5147"],
+                ),
+                patch(
+                    "source.launcher.auto_join_server_helper.save_auto_join_afk_join"
+                ) as save_afk,
+                patch.object(helper, "_start_worker") as start_worker,
+            ):
+                helper.start()
+
+            save_afk.assert_called_once_with(True)
+            start_worker.assert_called_once_with(
+                "auto_join_server", "--server", "5147", "--afk-join"
+            )
+        finally:
+            helper.close()
+
+    def test_auto_join_afk_join_reload_on_show(self):
+        with (
+            patch(
+                "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+                return_value=False,
+            ),
+            patch(
+                "source.launcher.auto_join_server_helper.load_auto_join_afk_join",
+                return_value=False,
+            ),
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            helper.afk_join_switch.setChecked(True)
+            with patch(
+                "source.launcher.auto_join_server_helper.load_auto_join_afk_join",
+                return_value=False,
+            ) as load_afk:
+                helper.show()
+                self.app.processEvents()
+
+            load_afk.assert_called_once_with()
+            self.assertFalse(helper.afk_join_switch.isChecked())
+        finally:
+            helper.close()
+
+    def test_auto_join_afk_join_disabled_passes_no_afk_flag(self):
+        with patch(
+            "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            helper.afk_join_switch.setChecked(False)
+            helper.server_field.setCurrentText("5147")
+            with (
+                patch("source.launcher.auto_join_server_helper.focus_game_window"),
+                patch(
+                    "source.launcher.auto_join_server_helper.remember_auto_join_server",
+                    return_value=["5147"],
+                ),
+                patch(
+                    "source.launcher.auto_join_server_helper.save_auto_join_afk_join"
+                ) as save_afk,
+                patch.object(helper, "_start_worker") as start_worker,
+            ):
+                helper.start()
+
+            save_afk.assert_called_once_with(False)
+            start_worker.assert_called_once_with(
+                "auto_join_server", "--server", "5147", "--no-afk-join"
+            )
+        finally:
+            helper.close()
+
     def test_auto_join_startup_failure_restores_start_button(self):
         with patch(
             "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
