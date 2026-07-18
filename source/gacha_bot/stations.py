@@ -159,9 +159,10 @@ class render_station(base_task):
             player_inventory.open()
             player_inventory.drop_all_inv()
             player_inventory.close()
-            tribelog.open()
         else:
+            tribelog.close()
             player_state.check_disconnected()
+        tribelog.open()
 
     def get_priority_level(self):
         return 8

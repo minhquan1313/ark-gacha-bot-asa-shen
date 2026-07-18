@@ -1,4 +1,5 @@
 from PySide6.QtCore import Signal
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -11,13 +12,16 @@ from source.launcher.components.custom_pyside_component import RemovableComboBox
 from source.launcher.components.helper_window import WorkerHelperWindow
 from source.launcher.components.widgets import (
     AnimatedButton,
+    CyberSwitch,
     WrappedStatusLabel,
 )
 from source.launcher.config.constants import HELPER_HEIGHT, HELPER_WIDTH
 from source.launcher.utils.auto_join_server_store import (
     forget_auto_join_server,
+    load_auto_join_afk_join,
     load_auto_join_servers,
     remember_auto_join_server,
+    save_auto_join_afk_join,
 )
 from source.launcher.utils.deposit_helper_capture import (
     focus_game_window,
@@ -83,6 +87,10 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         server_row.addWidget(self.server_field, 1)
         self.content_layout.addWidget(self.server_row_widget)
 
+        self.afk_join_switch = CyberSwitch("AFK Join")
+        self.afk_join_switch.setChecked(False)
+        self.content_layout.addWidget(self.afk_join_switch)
+
         self.start_stop_button = AnimatedButton("START", "primary")
         self.start_stop_button.clicked.connect(self.toggle)
         self.content_layout.addWidget(self.start_stop_button)
@@ -93,7 +101,13 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.register_minimal_running_widgets(
             self.description,
             self.server_row_widget,
+            self.afk_join_switch,
         )
+
+    def showEvent(self, event: QShowEvent):
+        """Refresh persisted options whenever the helper becomes visible."""
+        self.afk_join_switch.setChecked(load_auto_join_afk_join())
+        super().showEvent(event)
 
     def _delete_saved_server(self, index: int):
         """Delete one saved server and keep the editable selection useful."""
@@ -136,6 +150,8 @@ class AutoJoinServerHelper(WorkerHelperWindow):
             return
 
         servers = remember_auto_join_server(server)
+        afk_join = self.afk_join_switch.isChecked()
+        save_auto_join_afk_join(afk_join)
         self.server_field.clear()
         self.server_field.addItems(servers)
         self.server_field.setCurrentText(server)
@@ -146,7 +162,8 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.start_stop_button.set_variant("danger")
         self.start_stop_button.setEnabled(True)
         try:
-            self._start_worker("auto_join_server", "--server", server)
+            afk_flag = "--afk-join" if afk_join else "--no-afk-join"
+            self._start_worker("auto_join_server", "--server", server, afk_flag)
         except Exception as exc:
             self.starting = False
             self.start_stop_button.setText("START")
