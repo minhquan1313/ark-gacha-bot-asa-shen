@@ -23,8 +23,37 @@ if errorlevel 1 (
 )
 
 :: Pull updates from Git
-git pull origin stable_to_play
-@REM git pull
+set "BRANCH=stable_to_play"
+if not exist ".git\" (
+  echo Git repository not found.
+  echo Initializing repository...
+  
+  git init
+  if errorlevel 1 goto :git_error
+  
+  git remote add origin https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git
+  if errorlevel 1 goto :git_error
+  
+  git fetch origin %BRANCH%
+  if errorlevel 1 goto :git_error
+  
+  git checkout -f -B %BRANCH% origin/%BRANCH%
+  if errorlevel 1 goto :git_error
+)
+
+git pull origin %BRANCH%
+if errorlevel 1 goto :git_error
+
+echo Update completed successfully.
+goto :git_done
+
+:git_error
+echo.
+echo Git update failed.
+pause
+exit /b 1
+
+:git_done
 
 :: Check if virtual environment exists
 if not exist "venv" (
