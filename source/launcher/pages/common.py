@@ -36,6 +36,7 @@ from source.gacha_bot.deposit_config import (
     load_deposit_config,
     save_deposit_config,
 )
+from source.launcher.auto_fishing_helper import AutoFishingHelper
 from source.launcher.auto_join_server_helper import AutoJoinServerHelper
 from source.launcher.components.custom_pyside_component import NoWheelComboBox
 from source.launcher.components.widgets import (
@@ -113,6 +114,7 @@ __all__ = [
     "APP_VERSION",
     "ASSETS",
     "AnimatedButton",
+    "AutoFishingHelper",
     "AutoJoinServerHelper",
     "COLORS",
     "ClickableTextEdit",

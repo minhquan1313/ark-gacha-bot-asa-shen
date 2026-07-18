@@ -50,6 +50,10 @@ IS_DEBUG = False
 DEBUG_ITEM = "no_session"
 
 
+def register_roi(items: dict[RoiRegionReconKey, RoiRegion]):
+    location.update(items)
+
+
 def template_await_true(func, sleep_amount: float, *args):
     count = 0
     while not func(*args):

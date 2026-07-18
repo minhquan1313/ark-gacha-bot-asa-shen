@@ -30,7 +30,7 @@ def register_template_roi():
 
     registered = True
 
-    recon_utils.location.update(
+    recon_utils.register_roi(
         {button: join_game_location.copy() for button in join_game_buttons}
     )
 

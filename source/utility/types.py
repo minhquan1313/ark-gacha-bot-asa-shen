@@ -182,6 +182,18 @@ RoiRegionKey: TypeAlias = Literal[
     "dedi_deposit_ready",
     "dedi_deposit_clear",
     "capture_item_player_second_slot",
+    "fishing_press_prompt",
+    "fishing_failed",
+    "fishing_success",
+    "fishing_press_q",
+    "fishing_press_w",
+    "fishing_press_e",
+    "fishing_press_a",
+    "fishing_press_s",
+    "fishing_press_d",
+    "fishing_press_z",
+    "fishing_press_x",
+    "fishing_press_c",
 ]
 RoiRegionReconKey: TypeAlias = Literal[
     #
@@ -190,9 +202,6 @@ RoiRegionReconKey: TypeAlias = Literal[
     "escape_obscured",
     "join_last_session",
     "join_game",
-    "join_game_3_gen1",
-    "join_game_4_gen1",
-    "join_game_5_gen1",
     "join_button",
     "multiplayer",
     "server_full",
@@ -213,6 +222,9 @@ RoiRegionReconKey: TypeAlias = Literal[
     "is_logging",
     "server_list_loaded",
     "term_and_conditions",
+    "join_game_3_gen1",
+    "join_game_4_gen1",
+    "join_game_5_gen1",
 ]
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

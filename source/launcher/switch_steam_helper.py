@@ -1,13 +1,12 @@
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QLabel, QVBoxLayout
 
 from source.launcher.components.custom_pyside_component import NoWheelComboBox
 from source.launcher.components.helper_window import WorkerHelperWindow
 from source.launcher.components.widgets import (
     AnimatedButton,
-    LoadingSpinner,
     WrappedStatusLabel,
 )
 from source.launcher.config.constants import HELPER_HEIGHT, HELPER_WIDTH
@@ -17,7 +16,6 @@ from source.launcher.utils import steam_accounts
 class SwitchSteamHelper(WorkerHelperWindow):
     """Provide account selection and one-shot Steam restart actions."""
 
-    status_changed = Signal(str)
     worker_ready = Signal()
     worker_finished = Signal(str)
 
@@ -45,7 +43,6 @@ class SwitchSteamHelper(WorkerHelperWindow):
         if start_game_signal is not None:
             start_game_signal.connect(self._sync_start_game_enabled)
         self._register_hotkey()
-        self.status_changed.connect(self.status.setText)
         self.worker_ready.connect(self._on_worker_ready)
         self.worker_finished.connect(self._on_worker_finished)
         self._load_initial_accounts()
@@ -80,15 +77,9 @@ class SwitchSteamHelper(WorkerHelperWindow):
         actions.addWidget(self.start_game_button)
         self.content_layout.addLayout(actions)
 
-        self.status_spinner = LoadingSpinner()
         self.status = WrappedStatusLabel("Loading Steam accounts...")
         self.status.setObjectName("HelperStatus")
-        status_row = QHBoxLayout()
-        status_row.setContentsMargins(0, 0, 0, 0)
-        status_row.setSpacing(8)
-        status_row.addWidget(self.status_spinner)
-        status_row.addWidget(self.status, 1)
-        self.content_layout.addLayout(status_row)
+        self.content_layout.addWidget(self.status)
 
     def _load_initial_accounts(self):
         """Resolve the VDF once and select the account marked MostRecent."""
@@ -214,12 +205,10 @@ class SwitchSteamHelper(WorkerHelperWindow):
         self.switching = True
         self.pending_action = action
         self.pending_account = account
-        self.status_spinner.start()
         self.account_combo.setEnabled(False)
         self.switch_button.setEnabled(False)
         self.switch_instant_button.setEnabled(False)
         self.start_game_button.setEnabled(False)
-        self.status.setText(f"Loading Steam switch modules for {account}...")
         runner_args = [
             "switch_steam",
             "--account",
@@ -250,7 +239,6 @@ class SwitchSteamHelper(WorkerHelperWindow):
     def _on_worker_ready(self):
         """Report that imports and runtime validation completed."""
         if self.switching:
-            self.status_spinner.stop()
             self.status.setText(f"Restarting Steam as {self.pending_account}...")
 
     def _on_worker_finished(self, message: str):
@@ -274,7 +262,6 @@ class SwitchSteamHelper(WorkerHelperWindow):
 
     def _restore_after_worker(self):
         """Stop loading animation and restore idle interaction state."""
-        self.status_spinner.stop()
         self.switching = False
         self.pending_action = ""
         self.pending_account = ""

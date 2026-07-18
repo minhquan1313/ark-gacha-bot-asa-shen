@@ -2,7 +2,6 @@ import contextlib
 import json
 import os
 import tempfile
-import time
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QCursor
@@ -46,7 +45,6 @@ from source.launcher.config.transfer_helper_config import (
     suggested_loop_count,
 )
 from source.launcher.runner_overlay import (
-    RUNNER_OVERLAY_LOG_LIMIT,
     TransferRunnerOverlay,
 )
 from source.launcher.utils.deposit_helper_capture import (
@@ -90,7 +88,6 @@ TRANSFER_START_MODE_DESCRIPTIONS = {
 
 
 class ServerTransferHelper(WorkerHelperWindow):
-    status_changed = Signal(str)
     task_state_changed = Signal(dict)
     worker_ready = Signal()
     worker_finished = Signal(str)
@@ -104,7 +101,6 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.collapsible_panels = []
         self.transfer_overlay = None
         self.starting = False
-        self.transfer_log_lines = []
         self.switching_player_steam = False
         self.pending_switch_account = ""
         self.pending_switch_row = None
@@ -134,7 +130,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         self._build_ui()
         self._register_hotkey()
         self._preload_capture_view()
-        self.status_changed.connect(self._append_status)
+        self.helper_log_changed.connect(self._refresh_transfer_overlay)
         self.task_state_changed.connect(self._update_transfer_task_snapshot)
         self.worker_ready.connect(self._on_worker_ready)
         self.worker_finished.connect(self._on_worker_finished)
@@ -738,14 +734,12 @@ class ServerTransferHelper(WorkerHelperWindow):
             return
 
         self.running_log.clear()
-        self.transfer_log_lines.clear()
         self.transfer_task_snapshot = {
             "running": [{"name": "Loading server transfer modules"}],
             "active": [],
             "waiting": [],
         }
         self.starting = True
-        self.status.setText("Loading server transfer modules...")
         try:
             self.runtime_config_path = self._write_runtime_config(config)
             self._start_worker("server_transfer", "--config", self.runtime_config_path)
@@ -796,19 +790,6 @@ class ServerTransferHelper(WorkerHelperWindow):
             self.transfer_overlay.stop_button.setEnabled(True)
         self._refresh_transfer_overlay()
 
-    def _append_status(self, message: str):
-        if self.switching_player_steam:
-            self.status.setText(message)
-            return
-        self.running_summary.setText(message)
-        self.status.setText(message)
-        self.running_log.append(message)
-        self.transfer_log_lines.append(
-            f"{time.strftime('%H:%M:%S')} - INFO - transfer - {message}"
-        )
-        self.transfer_log_lines = self.transfer_log_lines[-RUNNER_OVERLAY_LOG_LIMIT:]
-        self._refresh_transfer_overlay()
-
     def _on_worker_finished(self, message: str):
         if self.switching_player_steam:
             self._on_player_steam_switch_finished(message)
@@ -848,7 +829,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             if self.starting:
                 overlay.refresh_loading()
                 return
-            overlay.refresh(self.transfer_task_snapshot, self.transfer_log_lines)
+            overlay.refresh(self.transfer_task_snapshot, self.helper_log_lines)
         except RuntimeError:
             self.transfer_overlay = None
             self.transfer_refresh_timer.stop()

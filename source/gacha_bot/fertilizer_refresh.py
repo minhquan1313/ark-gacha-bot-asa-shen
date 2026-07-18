@@ -1,5 +1,4 @@
 import time
-from collections.abc import Callable
 
 from source.ASA import config as asa_config
 from source.ASA.player import player_inventory
@@ -56,43 +55,37 @@ def wait_for_no_fece_in_crop():
         template.template_await_false(is_still_fece, 5)
 
 
-def run_fertilizer_refresh(
-    status_callback: Callable[[str], object] | None = None,
-):
-    def set_status(message: str):
-        if status_callback is not None:
-            status_callback(message)
-
+def run_fertilizer_refresh():
     def wait_for_prompt_to_clear():
-        set_status("Aim away from the crop plot to continue...")
+        logs.logger.info("Aim away from the crop plot to continue...")
         while template.check_template_no_bounds("crop_plot_prompt", 0.9):
             time.sleep(POLL_INTERVAL)
 
     while True:
-        set_status("Aim at a crop plot to refresh fertilizer...")
+        logs.logger.info("Aim at a crop plot to refresh fertilizer...")
         while True:
             if is_open():
                 break
             if is_open_prompt():
-                set_status("Opening crop plot inventory...")
+                logs.logger.info("Opening crop plot inventory...")
                 _open_crop_plot_inventory()
                 if is_open():
                     break
                 if inventory.is_open():
                     _close_crop_plot_inventory()
-                set_status("Crop plot did not open. Aim away and try again.")
+                logs.logger.warning("Crop plot did not open. Aim away and try again.")
                 # wait_for_prompt_to_clear()
-                set_status("Aim at a crop plot to refresh fertilizer...")
+                logs.logger.info("Aim at a crop plot to refresh fertilizer...")
             time.sleep(POLL_INTERVAL)
 
-        set_status("Refreshing fertilizer...")
+        logs.logger.info("Refreshing fertilizer...")
         inventory.transfer_all_from()
 
         wait_for_no_fece_in_crop()
 
         player_inventory.transfer_all_inventory()
 
-        set_status("Closing crop plot inventory...")
+        logs.logger.info("Closing crop plot inventory...")
         _close_crop_plot_inventory()
         wait_for_prompt_to_clear()
 

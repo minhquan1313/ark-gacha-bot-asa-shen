@@ -1,6 +1,7 @@
 import json
 import time
 from contextlib import contextmanager
+from typing import TypeAlias
 
 import cv2
 import numpy as np
@@ -205,8 +206,11 @@ template_u_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
     "item_fertilizer_fece": (60, 255, 255),
     "crop_plot_prompt": (255, 100, 255),
 }
-default_template_bounds = [(0, 30, 200), (255, 255, 255)]
-default_template_no_bounds = [(0, 0, 0), (255, 255, 255)]
+
+# Playground https://pseudopencv.site/utilities/hsvcolormask/
+TBound: TypeAlias = tuple[int, int, int]
+default_bounds: list[TBound] = [(0, 30, 200), (255, 255, 255)]
+default_no_bounds: list[TBound] = [(0, 0, 0), (255, 255, 255)]
 
 # Use this to overwrite what template image will be used to compare.
 # This help reduce duplicate template images, but they serve only 1 template but different location
@@ -218,6 +222,22 @@ template_image_overwrite: dict[RoiRegionKey, RoiRegionKey] = {
 
 IS_DEBUG = False
 DEBUG_ITEM = None
+
+
+def register_roi(
+    items: dict[RoiRegionKey, RoiRegion],
+    l_bound: TBound = default_bounds[0],
+    u_bound: TBound = default_bounds[1],
+):
+    global template_l_bounds_overwrite
+    global template_u_bounds_overwrite
+
+    roi_regions.update(items)
+
+    for key in items:
+        template_l_bounds_overwrite.update({key: l_bound})
+        template_u_bounds_overwrite.update({key: u_bound})
+
 
 _roi_overwrite = None
 
@@ -283,12 +303,12 @@ def _masked_gray_capture(
     upper_boundary=None,
 ):
     lower_boundary = np.array(
-        template_l_bounds_overwrite.get(item, default_template_bounds[0])
+        template_l_bounds_overwrite.get(item, default_bounds[0])
         if lower_boundary is None
         else lower_boundary
     )
     upper_boundary = np.array(
-        template_u_bounds_overwrite.get(item, default_template_bounds[1])
+        template_u_bounds_overwrite.get(item, default_bounds[1])
         if upper_boundary is None
         else upper_boundary
     )
@@ -311,8 +331,8 @@ def capture_for_compare(item: RoiRegionKey):
     return _masked_gray_capture(
         item,
         get_region_roi(region),
-        default_template_no_bounds[0],
-        default_template_no_bounds[1],
+        default_no_bounds[0],
+        default_no_bounds[1],
     )
 
 
@@ -358,12 +378,12 @@ def capture_compare_changed(item: RoiRegionKey, before: MatLike, threshold=0.02)
 
 
 def check_template(item: RoiRegionKey, threshold: float):
-    global default_template_bounds
+    global default_bounds
     region = roi_regions[item] if _roi_overwrite is None else _roi_overwrite
     roi = get_region_roi(region)
 
-    l_bound = template_l_bounds_overwrite.get(item, default_template_bounds[0])
-    u_bound = template_u_bounds_overwrite.get(item, default_template_bounds[1])
+    l_bound = template_l_bounds_overwrite.get(item, default_bounds[0])
+    u_bound = template_u_bounds_overwrite.get(item, default_bounds[1])
 
     # Playground https://pseudopencv.site/utilities/hsvcolormask/
     lower_boundary = np.array(l_bound)
@@ -382,7 +402,7 @@ def check_template(item: RoiRegionKey, threshold: float):
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM):
+    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM or item in DEBUG_ITEM):
         import winsound
         from pathlib import Path
 
@@ -431,8 +451,8 @@ def check_template_no_bounds(item: RoiRegionKey, threshold: float):
     roi = get_region_roi(region)
 
     # Playground https://pseudopencv.site/utilities/hsvcolormask/
-    lower_boundary = np.array(default_template_no_bounds[0])
-    upper_boundary = np.array(default_template_no_bounds[1])
+    lower_boundary = np.array(default_no_bounds[0])
+    upper_boundary = np.array(default_no_bounds[1])
 
     gray_roi = _masked_gray_capture(item, roi, lower_boundary, upper_boundary)
 
@@ -446,7 +466,7 @@ def check_template_no_bounds(item: RoiRegionKey, threshold: float):
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM):
+    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM or item in DEBUG_ITEM):
         import winsound
         from pathlib import Path
 

@@ -5,26 +5,23 @@ import traceback
 from pathlib import Path
 from typing import cast
 
-STATUS_PREFIX = "__HELPER_STATUS__ "
-RESULT_PREFIX = "__HELPER_RESULT__ "
+from source.logs import gachalogs as logs
+
+COMPLETION_PREFIX = "__HELPER_COMPLETION__ "
 TASK_STATE_PREFIX = "__HELPER_TASK_STATE__ "
 READY_MESSAGE = "__HELPER_READY__"
 
 
-def emit_status(message):
-    print(f"{STATUS_PREFIX}{message}", flush=True)
+def send_completion(message: str):
+    print(f"{COMPLETION_PREFIX}{message}", flush=True)
 
 
-def emit_result(message):
-    print(f"{RESULT_PREFIX}{message}", flush=True)
-
-
-def emit_ready():
+def send_ready():
     """Tell the launcher that the selected helper finished importing."""
     print(READY_MESSAGE, flush=True)
 
 
-def emit_task_state(snapshot: dict):
+def send_task_state(snapshot: dict):
     """Write a structured helper task snapshot to the parent process."""
     print(f"{TASK_STATE_PREFIX}{json.dumps(snapshot)}", flush=True)
 
@@ -32,18 +29,32 @@ def emit_task_state(snapshot: dict):
 def run_auto_join_server(args: argparse.Namespace):
     from source.join_sim.source.auto_join import run_auto_join_server
 
-    emit_ready()
-    joined = run_auto_join_server(args.server, emit_status)
-    emit_result("Joined server." if joined else "Stopped.")
+    send_ready()
+    joined = run_auto_join_server(args.server)
+    completion = "Joined server." if joined else "Stopped."
+    logs.logger.info(completion)
+    send_completion(completion)
     return 0 if joined else 1
 
 
 def run_fertilizer_refresh(_args: argparse.Namespace):
     from source.gacha_bot.fertilizer_refresh import run_fertilizer_refresh
 
-    emit_ready()
-    run_fertilizer_refresh(emit_status)
-    emit_result("Stopped.")
+    send_ready()
+    run_fertilizer_refresh()
+    logs.logger.info("Stopped.")
+    send_completion("Stopped.")
+    return 0
+
+
+def run_auto_fishing(args: argparse.Namespace):
+    """Run auto fishing with the selected loop behavior."""
+    from source.gacha_bot.auto_fishing import run_auto_fishing
+
+    send_ready()
+    run_auto_fishing(args.infinite)
+    logs.logger.info("Finished.")
+    send_completion("Finished.")
     return 0
 
 
@@ -59,15 +70,16 @@ def run_server_transfer(args: argparse.Namespace):
     with open(args.config, "r", encoding="utf-8") as file:
         raw_config = cast(object, json.load(file))
     config = normalize_transfer_runtime_config(raw_config)
-    emit_ready()
+    send_ready()
     try:
-        completed = run_transfer_helper(
-            config, emit_status, task_callback=emit_task_state
-        )
+        completed = run_transfer_helper(config, task_callback=send_task_state)
     except TransferConfigError as exc:
-        emit_result(f"Config blocked: {exc}")
+        logs.logger.error(f"Config blocked: {exc}")
+        send_completion(f"Config blocked: {exc}")
         return 2
-    emit_result("Finished." if completed else "Stopped.")
+    completion = "Finished." if completed else "Stopped."
+    logs.logger.info(completion)
+    send_completion(completion)
     return 0 if completed else 1
 
 
@@ -94,19 +106,20 @@ def run_switch_steam(args: argparse.Namespace):
     settings = load_transfer_settings()
     ui_coords = load_transfer_ui_coords()
 
-    emit_ready()
+    send_ready()
     switch_steam_account(
         1,
         current_account,
         players,
         ui_coords,
-        emit_status,
         force_restart=True,
         close_ark=not getattr(args, "instant", False),
         loginusers=loginusers,
         steam_restart_interval=settings["steam_restart_interval"],
     )
-    emit_result(f"Steam restarted for {args.account}.")
+    completion = f"Steam restarted for {args.account}."
+    logs.logger.info(completion)
+    send_completion(completion)
     return 0
 
 
@@ -121,6 +134,10 @@ def build_parser():
 
     fertilizer = subparsers.add_parser("fertilizer_refresh")
     fertilizer.set_defaults(func=run_fertilizer_refresh)
+
+    auto_fishing = subparsers.add_parser("auto_fishing")
+    auto_fishing.add_argument("--infinite", action="store_true")
+    auto_fishing.set_defaults(func=run_auto_fishing)
 
     transfer = subparsers.add_parser("server_transfer")
     transfer.add_argument("--config", required=True)
@@ -140,11 +157,12 @@ def main(argv=None):
     try:
         return args.func(args)
     except KeyboardInterrupt:
-        emit_result("Stopped.")
+        send_completion("Stopped.")
         return 1
     except Exception as exc:
         traceback.print_exc()
-        emit_result(f"Failed: {exc}")
+        logs.logger.error(f"Failed: {exc}")
+        send_completion(f"Failed: {exc}")
         return 1
 
 

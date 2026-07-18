@@ -6,7 +6,7 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
@@ -25,9 +25,14 @@ from source.launcher.components.widgets import (
 )
 from source.launcher.config.constants import (
     ASSETS,
+    GACHA_LOG_FILE,
     MINIMAL_HELPER_RUNNING_WIDTH,
     TITLE_BAR_HEIGHT,
     UI_METRICS,
+)
+from source.launcher.runner_overlay import (
+    HelperRunnerOverlay,
+    _format_runner_log_line,
 )
 from source.launcher.utils.deposit_helper_capture import (
     register_alt_n_hotkey,
@@ -37,8 +42,7 @@ from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
 from source.launcher.utils.process_control import terminate_process_tree
 from source.logs import gachalogs as logs
 
-HELPER_STATUS_PREFIX = "__HELPER_STATUS__ "
-HELPER_RESULT_PREFIX = "__HELPER_RESULT__ "
+HELPER_COMPLETION_PREFIX = "__HELPER_COMPLETION__ "
 HELPER_READY_MESSAGE = "__HELPER_READY__"
 
 
@@ -371,6 +375,9 @@ class BaseHelperWindow(QWidget):
 
 
 class WorkerHelperWindow(BaseHelperWindow):
+    helper_log_changed = Signal()
+    helper_ready = Signal()
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.worker_process = None
@@ -383,6 +390,13 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.running_widgets = []
         self.running_ui_active = False
         self.running_hotkey_hint = "ALT + N stops this helper"
+        self.helper_log_lines = []
+        self.helper_log_file_position = 0
+        self.helper_log_overlay = None
+        self.helper_log_timer = QTimer(self)
+        self.helper_log_timer.timeout.connect(self._poll_helper_log_file)
+        self.helper_log_changed.connect(self._refresh_helper_log_overlay)
+        self.helper_ready.connect(self._finish_helper_loading)
 
     def register_minimal_running_widgets(self, *widgets):
         self.running_widgets.extend(widgets)
@@ -400,6 +414,8 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.toggle()
 
     def _start_worker(self, *runner_args):
+        self.helper_log_lines = []
+        self.helper_log_file_position = self._helper_log_file_size()
         self._set_running_ui(True)
         self.worker_stopping = False
         self.worker_stop_deadline = None
@@ -424,6 +440,7 @@ class WorkerHelperWindow(BaseHelperWindow):
             target=self._read_worker_output, args=(self.worker_process,), daemon=True
         )
         self.output_reader_thread.start()
+        self.helper_log_timer.start(250)
 
     def _read_worker_output(self, process):
         if process is None or process.stdout is None:
@@ -454,15 +471,11 @@ class WorkerHelperWindow(BaseHelperWindow):
         if line == HELPER_READY_MESSAGE:
             self._emit_worker_ready()
             return
-        if line.startswith(HELPER_STATUS_PREFIX):
-            self._emit_status(line[len(HELPER_STATUS_PREFIX) :])
-            return
-        if line.startswith(HELPER_RESULT_PREFIX):
-            self.worker_result_message = line[len(HELPER_RESULT_PREFIX) :]
+        if line.startswith(HELPER_COMPLETION_PREFIX):
+            self.worker_result_message = line[len(HELPER_COMPLETION_PREFIX) :]
             return
         if line:
             self.worker_debug_lines.append(line)
-            self._emit_status(line)
 
     def _log_worker_debug_output(self, result_message: str):
         """Write unstructured worker output as one traceback-style log entry."""
@@ -474,18 +487,65 @@ class WorkerHelperWindow(BaseHelperWindow):
             "\n".join(self.worker_debug_lines),
         )
 
-    def _emit_status(self, message):
-        signal = getattr(self, "status_changed", None)
-        if signal is not None:
-            signal.emit(message)
-        elif hasattr(self, "status"):
-            self.status.setText(message)
+    @staticmethod
+    def _helper_log_file_size():
+        try:
+            return os.path.getsize(GACHA_LOG_FILE)
+        except OSError:
+            return 0
+
+    def _poll_helper_log_file(self):
+        try:
+            file_size = os.path.getsize(GACHA_LOG_FILE)
+            if file_size < self.helper_log_file_position:
+                self.helper_log_file_position = 0
+            with open(GACHA_LOG_FILE, "r", encoding="utf-8", errors="replace") as file:
+                file.seek(self.helper_log_file_position)
+                lines = file.readlines()
+                self.helper_log_file_position = file.tell()
+        except (OSError, ValueError):
+            return
+
+        changed = False
+        for line in lines:
+            message = _format_runner_log_line(line)
+            if message is None:
+                continue
+            self.helper_log_lines.append(line.rstrip())
+            changed = True
+        if changed:
+            self.helper_log_lines = self.helper_log_lines[-2000:]
+            self.helper_log_changed.emit()
+
+    def _refresh_helper_log_overlay(self):
+        overlay = self.helper_log_overlay
+        if overlay is None or overlay.loading_active:
+            return
+        try:
+            overlay.refresh(
+                {"running": [], "active": [], "waiting": []}, self.helper_log_lines
+            )
+        except RuntimeError:
+            self.helper_log_overlay = None
 
     def _emit_worker_ready(self):
         """Forward worker readiness through a Qt signal when supported."""
+        self.helper_ready.emit()
         signal = getattr(self, "worker_ready", None)
         if signal is not None:
             signal.emit()
+
+    def _finish_helper_loading(self):
+        """Switch the generic helper overlay from loading to file-backed logs."""
+        overlay = self.helper_log_overlay
+        if overlay is None:
+            return
+        try:
+            overlay.refresh(
+                {"running": [], "active": [], "waiting": []}, self.helper_log_lines
+            )
+        except RuntimeError:
+            self.helper_log_overlay = None
 
     def _emit_worker_finished(self, message):
         signal = getattr(self, "worker_finished", None)
@@ -495,6 +555,11 @@ class WorkerHelperWindow(BaseHelperWindow):
     def _finish_worker(self):
         process = self.worker_process
         self._close_output_reader(process)
+        self.helper_log_timer.stop()
+        overlay = self.helper_log_overlay
+        self.helper_log_overlay = None
+        if overlay is not None:
+            overlay.close()
         self.worker_process = None
         self.worker_stopping = False
         self.worker_stop_deadline = None
@@ -516,6 +581,15 @@ class WorkerHelperWindow(BaseHelperWindow):
             compact_height = self._height_for_width(MINIMAL_HELPER_RUNNING_WIDTH)
             self.setFixedHeight(compact_height)
             self.resize(MINIMAL_HELPER_RUNNING_WIDTH, compact_height)
+            if self.helper_log_overlay is None:
+                self.helper_log_overlay = HelperRunnerOverlay(self)
+            self.helper_log_overlay.stop_button.setText("STOP")
+            self.helper_log_overlay.stop_button.set_variant("danger")
+            self.helper_log_overlay.stop_button.setEnabled(True)
+            self.helper_log_overlay.refresh_loading(self.helper_log_lines)
+            self.hide()
+            self.helper_log_overlay.show()
+            self.helper_log_overlay.raise_()
         else:
             self.setMaximumHeight(16777215)
             self.setFixedWidth(self.idle_width)
@@ -525,6 +599,9 @@ class WorkerHelperWindow(BaseHelperWindow):
             self.hotkey_label.setText(self.hotkey_hint)
             self.resize(self.idle_width, self._idle_content_height())
             self.running_ui_active = False
+            self.show()
+            self.raise_()
+            self.activateWindow()
         self._position_middle_right()
 
     def stop(self):

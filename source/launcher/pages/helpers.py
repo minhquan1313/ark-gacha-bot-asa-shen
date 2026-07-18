@@ -1,4 +1,5 @@
 from source.launcher.pages.common import (
+    AutoFishingHelper,
     AutoJoinServerHelper,
     DepositRouteHelper,
     FertilizerRefreshHelper,
@@ -83,6 +84,26 @@ class HelperPagesMixin:
 
         self.close_external_helpers()
         helper = AutoJoinServerHelper(self)
+        self.register_deposit_helper(helper)
+        helper.show()
+        helper.raise_()
+        helper.activateWindow()
+        self.deposit_helper = helper
+
+    def open_auto_fishing_helper(self):
+        """Open or refocus the auto-fishing helper."""
+        if not self._can_open_setup_helper():
+            return
+        helper = self.find_deposit_helper("auto_fishing", None)
+        if helper is not None:
+            helper.show()
+            helper.raise_()
+            helper.activateWindow()
+            self.deposit_helper = helper
+            return
+
+        self.close_external_helpers()
+        helper = AutoFishingHelper(self)
         self.register_deposit_helper(helper)
         helper.show()
         helper.raise_()

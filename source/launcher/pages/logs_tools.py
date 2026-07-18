@@ -105,6 +105,12 @@ class LogsToolsPagesMixin:
             ASSETS["dashboard"],
             self.open_fertilizer_refresh_helper,
         )
+        fishing_card = self._tool_cover_card(
+            "Auto Fishing",
+            "Enjoy AFK fishing",
+            ASSETS["dashboard"],
+            self.open_auto_fishing_helper,
+        )
         switch_card = self._tool_cover_card(
             "Switch Steam",
             "Restart Steam with any saved account, or switch accounts before "
@@ -114,7 +120,13 @@ class LogsToolsPagesMixin:
         )
 
         loc_gen = utils_simple.grid_loc_gen(col=2)
-        helpers = [auto_join_card, fertilizer_card, transfer_card, switch_card]
+        helpers = [
+            auto_join_card,
+            fertilizer_card,
+            fishing_card,
+            transfer_card,
+            switch_card,
+        ]
         for index, helper in enumerate(helpers):
             col, row = loc_gen(index)
             tools_grid.addWidget(helper, row, col)

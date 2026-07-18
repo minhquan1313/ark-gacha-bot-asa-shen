@@ -5,7 +5,6 @@ import pyautogui
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.menus import multiplayer_menu
 from source.join_sim.source.utility import recon_utils
-from source.utility import windows
 
 buttons = {
     "search_x": 1672,
@@ -57,7 +56,7 @@ def has_failure(should_go_back=True):
     if is_server_full():
         logs.logger.debug("Server full")
 
-        windows.click(get_pixel_loc("cancel_x"), get_pixel_loc("cancel_y"))
+        pyautogui.click(get_pixel_loc("cancel_x"), get_pixel_loc("cancel_y"))
         recon_utils.window_still_open_no_bounds("server_full", 0.7, 2)
         time.sleep(0.3)
 
