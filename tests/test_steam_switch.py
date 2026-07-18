@@ -106,8 +106,6 @@ class SteamSwitchTests(unittest.TestCase):
             launch_steam=Mock(),
         )
         ark_setup = SimpleNamespace(kill_running_ark=Mock())
-        statuses = []
-
         with (
             patch.object(steam_switch, "steam_accounts", accounts),
             patch.object(steam_switch, "ark_game_setup", ark_setup),
@@ -126,7 +124,6 @@ class SteamSwitchTests(unittest.TestCase):
                 "alpha",
                 players,
                 default_transfer_ui_coords(),
-                statuses.append,
                 loginusers=Path("loginusers.vdf"),
                 steam_restart_interval=30,
             )
@@ -137,8 +134,6 @@ class SteamSwitchTests(unittest.TestCase):
         self.assertEqual(ark_setup.kill_running_ark.call_count, 3)
         graceful_close.assert_called_once_with()
         self.assertEqual(wait_ready.call_count, 3)
-        self.assertIn("Launching Steam (attempt 3).", statuses)
-        self.assertEqual(statuses[-1], "Steam is visible and maximized for beta.")
 
     def test_instant_switch_retries_without_touching_ark(self) -> None:
         players = {"players": [{"bed_name": "Bed1", "steam_account": "beta"}]}
@@ -148,8 +143,6 @@ class SteamSwitchTests(unittest.TestCase):
             launch_steam=Mock(),
         )
         ark_setup = SimpleNamespace(kill_running_ark=Mock())
-        statuses = []
-
         with (
             patch.object(steam_switch, "steam_accounts", accounts),
             patch.object(steam_switch, "ark_game_setup", ark_setup),
@@ -168,7 +161,6 @@ class SteamSwitchTests(unittest.TestCase):
                 "alpha",
                 players,
                 default_transfer_ui_coords(),
-                statuses.append,
                 close_ark=False,
                 loginusers=Path("loginusers.vdf"),
                 steam_restart_interval=30,
@@ -180,7 +172,6 @@ class SteamSwitchTests(unittest.TestCase):
         self.assertEqual(accounts.close_steam.call_count, 2)
         graceful_close.assert_not_called()
         ark_setup.kill_running_ark.assert_not_called()
-        self.assertNotIn("Closing ARK before restarting Steam.", statuses)
 
     def test_same_account_remains_noop_without_force_restart(self) -> None:
         players = {"players": [{"bed_name": "Bed1", "steam_account": "alpha"}]}

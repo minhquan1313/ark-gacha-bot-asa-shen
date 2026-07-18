@@ -21,7 +21,13 @@ from source.launcher.config.constants import (
     MAX_LAUNCHER_LOG_LINES,
 )
 from source.launcher.gui import START_GAME_DISABLE_DELAY, SettingsGUI
-from source.launcher.runner_overlay import format_runner_logs, format_runner_overlay
+from source.launcher.runner_overlay import (
+    HelperRunnerOverlay,
+    RunnerOverlay,
+    TransferRunnerOverlay,
+    format_runner_logs,
+    format_runner_overlay,
+)
 from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
 
 
@@ -1019,6 +1025,49 @@ class LauncherStartProgramTests(unittest.TestCase):
 
 
 class RunnerOverlayFormattingTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_overlay_clock_uses_shared_100_ms_timer(self):
+        overlays = [
+            RunnerOverlay(SimpleNamespace(screen=lambda: None)),
+            HelperRunnerOverlay(
+                SimpleNamespace(
+                    screen=lambda: None,
+                    windowTitle=lambda: "Helper",
+                )
+            ),
+            TransferRunnerOverlay(SimpleNamespace(screen=lambda: None)),
+        ]
+        try:
+            for overlay in overlays:
+                self.assertEqual(overlay.clock_timer.interval(), 100)
+                self.assertTrue(overlay.clock_timer.isActive())
+        finally:
+            for overlay in overlays:
+                overlay.close()
+
+    def test_overlay_clock_refreshes_without_overlay_content_refresh(self):
+        overlay = RunnerOverlay(SimpleNamespace(screen=lambda: None))
+        try:
+            with patch(
+                "source.launcher.runner_overlay.time.strftime",
+                return_value="12:34:56",
+            ):
+                overlay.clock_timer.timeout.emit()
+
+            self.assertEqual(overlay.clock_label.text(), "12:34:56")
+        finally:
+            overlay.close()
+
+    def test_overlay_clock_timer_stops_when_overlay_closes(self):
+        overlay = RunnerOverlay(SimpleNamespace(screen=lambda: None))
+
+        overlay.close()
+
+        self.assertFalse(overlay.clock_timer.isActive())
+
     def test_overlay_formats_running_and_next_three_tasks_soonest_first(self) -> None:
         snapshot = {
             "running": [{"name": "pego deposit"}],

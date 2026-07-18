@@ -33,7 +33,7 @@ player_inventory = _module(
 )
 logs = _module(
     "source.logs.gachalogs",
-    logger=types.SimpleNamespace(debug=Mock(), error=Mock()),
+    logger=types.SimpleNamespace(debug=Mock(), info=Mock(), warning=Mock(), error=Mock()),
 )
 template = _module(
     "source.utility.template",
@@ -191,9 +191,7 @@ class FertilizerRunnerTests(unittest.TestCase):
         calls = []
         runtime_module = _module(
             "source.gacha_bot.fertilizer_refresh",
-            run_fertilizer_refresh=Mock(
-                side_effect=lambda _status: calls.append("run")
-            ),
+            run_fertilizer_refresh=Mock(side_effect=lambda: calls.append("run")),
         )
         output = io.StringIO()
 
@@ -210,7 +208,7 @@ class FertilizerRunnerTests(unittest.TestCase):
         self.assertEqual(calls, ["run"])
         self.assertEqual(
             output.getvalue().splitlines(),
-            [helper_runner.READY_MESSAGE, "__HELPER_RESULT__ Stopped."],
+            [helper_runner.READY_MESSAGE, "__HELPER_COMPLETION__ Stopped."],
         )
 
     def test_runner_does_not_emit_ready_when_import_fails(self):

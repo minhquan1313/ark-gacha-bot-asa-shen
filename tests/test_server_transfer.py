@@ -182,13 +182,9 @@ class ServerTransferRunnerTests(unittest.TestCase):
             run_transfer_helper(config)
 
     def test_single_account_flow_uses_saved_servers_and_player_bed(self):
-        status = []
         with runtime_dependencies() as dependencies:
             self.assertTrue(
-                run_transfer_helper(
-                    ready_config(),
-                    status_callback=status.append,
-                )
+                run_transfer_helper(ready_config())
             )
 
         self.assertTrue(
@@ -214,7 +210,6 @@ class ServerTransferRunnerTests(unittest.TestCase):
         dependencies.switch_steam_account.assert_not_called()
         self.assertEqual(dependencies.ensure_ark_running.call_count, 2)
         self.assertEqual(dependencies.join_server.call_count, 2)
-        self.assertEqual(status[-1], "Server transfer helper finished.")
 
     def test_multi_account_flow_restores_player_one_on_resource_server(self):
         config = ready_config()
@@ -254,18 +249,12 @@ class ServerTransferRunnerTests(unittest.TestCase):
         config["steam_accounts"].append(
             {"account_name": "beta", "most_recent": False, "timestamp": 0}
         )
-        status = []
-
         with runtime_dependencies(
             ensure_ark_running=Mock(side_effect=[True, True, True, True, False])
         ) as dependencies:
-            self.assertFalse(run_transfer_helper(config, status_callback=status.append))
+            self.assertFalse(run_transfer_helper(config))
 
-        self.assertEqual(
-            status[-1], "Player 1 restoration failed: ARK did not become ready."
-        )
         self.assertEqual(dependencies.join_server.call_count, 4)
-        self.assertNotIn("Server transfer helper finished.", status)
 
     def test_player_one_restore_join_failure_returns_false(self):
         config = ready_config()
@@ -275,37 +264,24 @@ class ServerTransferRunnerTests(unittest.TestCase):
         config["steam_accounts"].append(
             {"account_name": "beta", "most_recent": False, "timestamp": 0}
         )
-        status = []
-
         with runtime_dependencies(
             join_server=Mock(side_effect=[True, True, True, True, False])
         ):
-            self.assertFalse(run_transfer_helper(config, status_callback=status.append))
-
-        self.assertEqual(
-            status[-1],
-            "Player 1 restoration failed: resource server join did not complete.",
-        )
-        self.assertNotIn("Server transfer helper finished.", status)
+            self.assertFalse(run_transfer_helper(config))
 
     def test_destinate_mode_starts_at_destination_loop(self):
         config = ready_config()
         config["settings"]["transfer_start_mode"] = "destinate"
-        status = []
         snapshots = []
 
         with runtime_dependencies() as dependencies:
             self.assertTrue(
                 run_transfer_helper(
                     config,
-                    status_callback=status.append,
                     task_callback=snapshots.append,
                 )
             )
 
-        self.assertEqual(
-            status[0], "Starting destination transfer phase from filled characters."
-        )
         dependencies.verify_tribelog.assert_not_called()
         dependencies.withdraw_from_transfer_dedis.assert_not_called()
         dependencies.go_back_to_bed.assert_not_called()

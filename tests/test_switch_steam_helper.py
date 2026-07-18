@@ -146,7 +146,7 @@ class SwitchSteamHelperTests(unittest.TestCase):
         finally:
             helper.close()
 
-    def test_switch_and_start_game_flow_uses_status_spinner(self) -> None:
+    def test_switch_and_start_game_flow_uses_running_overlay(self) -> None:
         helper = self._helper()
         try:
             helper.account_combo.setCurrentIndex(1)
@@ -166,7 +166,6 @@ class SwitchSteamHelperTests(unittest.TestCase):
                 "--loginusers",
                 str(Path("C:/Steam/config/loginusers.vdf").resolve()),
             )
-            self.assertTrue(helper.status_spinner.timer.isActive())
             self.assertFalse(helper.switch_button.isEnabled())
             self.assertFalse(helper.switch_instant_button.isEnabled())
             self.assertFalse(helper.account_combo.isEnabled())
@@ -174,7 +173,6 @@ class SwitchSteamHelperTests(unittest.TestCase):
             helper._on_worker_finished("Steam restarted for alpha.")
             self.app.processEvents()
 
-            self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertTrue(helper.switch_button.isEnabled())
             self.assertTrue(helper.switch_instant_button.isEnabled())
             self.assertEqual(helper.current_account, "alpha")
@@ -230,7 +228,6 @@ class SwitchSteamHelperTests(unittest.TestCase):
 
             helper._on_worker_finished("Failed: restart failed")
 
-            self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertTrue(helper.account_combo.isEnabled())
             self.assertTrue(helper.switch_button.isEnabled())
             self.assertTrue(helper.switch_instant_button.isEnabled())
@@ -253,7 +250,6 @@ class SwitchSteamHelperTests(unittest.TestCase):
 
             helper._on_worker_ready()
             self.assertEqual(helper.status.text(), "Restarting Steam as beta...")
-            self.assertFalse(helper.status_spinner.timer.isActive())
 
             with patch.object(helper, "refocus_helper") as refocus:
                 helper.handle_hotkey()

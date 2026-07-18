@@ -218,11 +218,10 @@ class ServerTransferHelperUiTests(unittest.TestCase):
 
         try:
             helper._set_running_ui(True)
-            with patch(
-                "source.launcher.server_transfer_helper.time.strftime",
-                return_value="14:21:33",
-            ):
-                helper._append_status("Account 1: joining resource server.")
+            helper.helper_log_lines = [
+                "14:21:33 - INFO - helper - Account 1: joining resource server."
+            ]
+            helper._refresh_transfer_overlay()
             helper._handle_worker_output(
                 '__HELPER_TASK_STATE__ {"running":[{"name":"Acc 1 - Join Resource - 1111"}],'
                 '"active":[{"name":"Acc 1 - Verify Tribe Log","state":"READY"}],'
@@ -1887,8 +1886,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertTrue(helper.starting)
             self.assertEqual(helper.start_stop_button.text(), "STOP")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertTrue(helper.status_spinner.timer.isActive())
-            self.assertEqual(helper.status.text(), "Loading auto join modules...")
+            self.assertTrue(helper.helper_log_overlay.loading_active)
 
             with patch.object(helper, "stop") as stop:
                 helper.handle_hotkey()
@@ -1901,10 +1899,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertEqual(helper.start_stop_button.text(), "STOP")
             self.assertEqual(helper.start_stop_button.variant, "danger")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertFalse(helper.status_spinner.timer.isActive())
-            self.assertEqual(
-                helper.status.text(), "Starting auto join for server 5147..."
-            )
+            self.assertFalse(helper.helper_log_overlay.loading_active)
         finally:
             helper.worker_process = None
             helper.close()
@@ -1935,7 +1930,6 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertFalse(helper.starting)
             self.assertEqual(helper.start_stop_button.text(), "START")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertEqual(helper.status.text(), "Cannot start: worker unavailable")
         finally:
             helper.close()
@@ -2003,8 +1997,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertTrue(helper.starting)
             self.assertEqual(helper.start_stop_button.text(), "STOP")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertTrue(helper.status_spinner.timer.isActive())
-            self.assertEqual(helper.status.text(), "Loading fertilizer modules...")
+            self.assertTrue(helper.helper_log_overlay.loading_active)
 
             with patch.object(helper, "stop") as stop:
                 helper.handle_hotkey()
@@ -2017,10 +2010,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertEqual(helper.start_stop_button.text(), "STOP")
             self.assertEqual(helper.start_stop_button.variant, "danger")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertFalse(helper.status_spinner.timer.isActive())
-            self.assertEqual(
-                helper.status.text(), "Aim at a crop plot to refresh fertilizer..."
-            )
+            self.assertFalse(helper.helper_log_overlay.loading_active)
         finally:
             helper.worker_process = None
             helper.close()
@@ -2046,7 +2036,6 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertFalse(helper.starting)
             self.assertEqual(helper.start_stop_button.text(), "START")
             self.assertTrue(helper.start_stop_button.isEnabled())
-            self.assertFalse(helper.status_spinner.timer.isActive())
             self.assertEqual(helper.status.text(), "Cannot start: worker unavailable")
         finally:
             helper.close()

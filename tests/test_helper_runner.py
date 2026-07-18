@@ -27,12 +27,10 @@ class HelperRunnerReadyTests(unittest.TestCase):
             )
 
         self.assertEqual(result, 0)
-        runtime.run_auto_join_server.assert_called_once_with(
-            "5147", helper_runner.emit_status
-        )
+        runtime.run_auto_join_server.assert_called_once_with("5147")
         self.assertEqual(
             output.getvalue().splitlines(),
-            [helper_runner.READY_MESSAGE, "__HELPER_RESULT__ Joined server."],
+            [helper_runner.READY_MESSAGE, "__HELPER_COMPLETION__ Joined server."],
         )
 
     def test_auto_join_does_not_emit_ready_when_import_fails(self) -> None:
@@ -66,12 +64,11 @@ class HelperRunnerReadyTests(unittest.TestCase):
         self.assertEqual(result, 0)
         runtime.run_transfer_helper.assert_called_once_with(
             config,
-            helper_runner.emit_status,
-            task_callback=helper_runner.emit_task_state,
+            task_callback=helper_runner.send_task_state,
         )
         self.assertEqual(
             output.getvalue().splitlines(),
-            [helper_runner.READY_MESSAGE, "__HELPER_RESULT__ Finished."],
+            [helper_runner.READY_MESSAGE, "__HELPER_COMPLETION__ Finished."],
         )
 
     def test_transfer_does_not_emit_ready_when_config_load_fails(self) -> None:
@@ -160,7 +157,7 @@ class HelperRunnerReadyTests(unittest.TestCase):
             output.getvalue().splitlines(),
             [
                 helper_runner.READY_MESSAGE,
-                "__HELPER_RESULT__ Steam restarted for beta.",
+                "__HELPER_COMPLETION__ Steam restarted for beta.",
             ],
         )
 
@@ -215,7 +212,7 @@ class HelperRunnerReadyTests(unittest.TestCase):
             output.getvalue().splitlines(),
             [
                 helper_runner.READY_MESSAGE,
-                "__HELPER_RESULT__ Steam restarted for beta.",
+                "__HELPER_COMPLETION__ Steam restarted for beta.",
             ],
         )
 
