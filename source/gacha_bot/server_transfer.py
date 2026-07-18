@@ -1,6 +1,6 @@
 import ctypes
 import time
-from typing import Callable, cast
+from typing import Callable
 
 import psutil
 import pyautogui
@@ -296,7 +296,6 @@ transmitter_teleport = ""
 
 def run_transfer_helper(
     config: TransferRuntimeConfig,
-    status_callback: Callable[[str], object] | None = None,
     task_callback: Callable[[dict], object] | None = None,
 ):
     global list_of_withdrawed_dedi
@@ -339,10 +338,6 @@ def run_transfer_helper(
         task_callback,
     )
 
-    def emit(message: str):
-        if status_callback is not None:
-            status_callback(message)
-
     # DEBUG START
     # update_global_config(settings, "resource", _bed_name(players, 1))
     # teleporter.look_down_teleport_safe()
@@ -351,9 +346,9 @@ def run_transfer_helper(
 
     start_mode = str(settings.get("transfer_start_mode", "default")).strip().lower()
     if start_mode == "destinate":
-        emit("Starting destination transfer phase from filled characters.")
+        logs.logger.info("Starting destination transfer phase from filled characters.")
     else:
-        emit("Starting resource fill phase.")
+        logs.logger.info("Starting resource fill phase.")
         for account in _account_order(account_count, start_account):
             if is_withdrawed_all:
                 break
@@ -373,16 +368,15 @@ def run_transfer_helper(
                     current_steam_account,
                     players,
                     ui_coords,
-                    status_callback,
                     steam_restart_interval=settings.get("steam_restart_interval", 30),
                 )
             # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(_transfer_task_label(account, "ARK Ready"))
-            if ensure_ark_running(status_callback, settings, ui_coords) is False:
+            if ensure_ark_running(settings, ui_coords) is False:
                 return False
 
             # -=-=-=-=-=-=-=-=-=-=-=-=
-            emit(
+            logs.logger.info(
                 f"Account {account}: joining resource server {settings['resource_server']}."
             )
             task_tracker.start(
@@ -390,14 +384,14 @@ def run_transfer_helper(
                     account, "Join R", str(settings["resource_server"])
                 )
             )
-            if not join_server(settings["resource_server"], status_callback):
+            if not join_server(settings["resource_server"]):
                 if account_count == 1:
-                    emit(
+                    logs.logger.error(
                         "Account 1: resource join did not complete; stopping without "
                         "closing ARK."
                     )
                     return False
-                emit(
+                logs.logger.warning(
                     f"Account {account}: resource join did not complete; skipping account."
                 )
                 continue
@@ -425,12 +419,16 @@ def run_transfer_helper(
 
     # Starting loop of go to [des -> deposit -> go back -> withdraw]
     for loop_number in range(1, int(settings["loop_count"]) + 1):
-        emit(f"Starting destination loop {loop_number}/{settings['loop_count']}.")
+        logs.logger.info(
+            f"Starting destination loop {loop_number}/{settings['loop_count']}."
+        )
         loop_start_account = start_account if loop_number == 1 else 1
         if is_withdrawed_all:
             if did_last_transfer_after_withdrawed_all:
                 # Nothing else to withdraw
-                emit("Nothing else to withdraw for now, so stopping loop...")
+                logs.logger.info(
+                    "Nothing else to withdraw for now, so stopping loop..."
+                )
                 break
             elif account_detect_withdrawed_all is not None:
                 # This help let all player do last transfer again
@@ -465,16 +463,15 @@ def run_transfer_helper(
                     current_steam_account,
                     players,
                     ui_coords,
-                    status_callback,
                     steam_restart_interval=settings.get("steam_restart_interval", 30),
                 )
             task_tracker.start(
                 _transfer_task_label(account, "ARK Ready", loop_number=loop_number)
             )
-            if ensure_ark_running(status_callback, settings, ui_coords) is False:
+            if ensure_ark_running(settings, ui_coords) is False:
                 return False
             # -=-=-=-=-=-=-=-=-=-=-=-=
-            emit(f"Account {account}: joining resource server.")
+            logs.logger.info(f"Account {account}: joining resource server.")
             task_tracker.start(
                 _transfer_task_label(
                     account,
@@ -483,8 +480,8 @@ def run_transfer_helper(
                     loop_number,
                 )
             )
-            if not join_server(settings["resource_server"], status_callback):
-                emit(f"Account {account}: resource join failed; stopping.")
+            if not join_server(settings["resource_server"]):
+                logs.logger.error(f"Account {account}: resource join failed; stopping.")
                 return False
             # -=-=-=-=-=-=-=-=-=-=-=-=
             if start_mode == "default" or join_main.was_in_mainmenu:
@@ -516,7 +513,6 @@ def run_transfer_helper(
                     settings["destination_server"],
                     dedis,
                     "resource",
-                    status_callback,
                 )
                 if transmitter.was_excess_amount:
                     go_back_to_dedi_and_fix_excess(dedis)
@@ -613,7 +609,6 @@ def run_transfer_helper(
                 settings["resource_server"],
                 dedis,
                 "destination",
-                status_callback,
             )
             # -=-=-=-=-=Here we are back to Resource server-=-=-=-=-=-=-=
             update_global_config(
@@ -681,20 +676,21 @@ def run_transfer_helper(
             current_steam_account,
             players,
             ui_coords,
-            status_callback,
             steam_restart_interval=settings.get("steam_restart_interval", 30),
         )
         # -=-=-=-=-=-=-=-=-=-=-=-=
         task_tracker.start(_transfer_task_label(1, "ARK Ready"))
-        if ensure_ark_running(status_callback, settings, ui_coords) is False:
-            emit("Player 1 restoration failed: ARK did not become ready.")
+        if ensure_ark_running(settings, ui_coords) is False:
+            logs.logger.error("Player 1 restoration failed: ARK did not become ready.")
             return False
         # -=-=-=-=-=-=-=-=-=-=-=-=
         task_tracker.start(
             _transfer_task_label(1, "Join R", str(settings["resource_server"]))
         )
-        if not join_server(settings["resource_server"], status_callback):
-            emit("Player 1 restoration failed: resource server join did not complete.")
+        if not join_server(settings["resource_server"]):
+            logs.logger.error(
+                "Player 1 restoration failed: resource server join did not complete."
+            )
             return False
         # -=-=-=-=-=-=-=-=-=-=-=-=
         if acc_1_last_server == "resource":
@@ -710,7 +706,6 @@ def run_transfer_helper(
                 settings["destination_server"],
                 dedis,
                 "resource",
-                status_callback,
             )
             # -=-=-=-=-=-=HERE WE ARE AT THE DESTINATION SERVER-=-=-=-=-=-=
             update_global_config(
@@ -731,16 +726,14 @@ def run_transfer_helper(
             # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(_transfer_task_label(final_account, "Enter Tekpod"))
             render.enter_tekpod(allow_eat_implant=False)
-    emit("Server transfer helper finished.")
+    logs.logger.info("Server transfer helper finished.")
     return True
 
 
 def ensure_ark_running(
-    status_callback: Callable[[str], object] | None = None,
     settings: TransferSettings | None = None,
     ui_coords: TransferUiCoords | None = None,
 ):
-    emit = status_callback or (lambda _message: None)
     timeout = _settings_int(settings, "ark_window_ready_timeout", 120)
     attempts = _settings_int(settings, "ark_launch_attempts", 3)
     last_error = None
@@ -752,7 +745,7 @@ def ensure_ark_running(
 
     for attempt in range(1, attempts + 1):
         if not _process_running(ARK_PROCESS_NAME):
-            emit("Launching ARK through Steam.")
+            logs.logger.info("Launching ARK through Steam.")
             launch_ark_through_steam()
             launched = True
         dl = utils_simple.get_default_clock(timeout)
@@ -761,24 +754,21 @@ def ensure_ark_running(
                 try:
                     window_size = validate_ark_window()
                     if launched:
-                        return _prepare_ark_window_for_join(
-                            status_callback, window_size
-                        )
+                        return _prepare_ark_window_for_join(window_size)
                     return True
                 except RuntimeError as exc:
                     last_error = exc
-            steam_has_failure(steam, emit)
+            steam_has_failure(steam)
             time.sleep(1)
         if attempt >= attempts:
             break
-        emit(
+        logs.logger.warning(
             "ARK did not reach a usable window state; relaunching "
             f"({attempt}/{attempts})."
         )
         _restart_steam_before_ark_retry(
             steam,
             _settings_int(settings, "steam_restart_interval", 30),
-            emit,
         )
         launched = False
     if last_error is not None:
@@ -789,9 +779,8 @@ def ensure_ark_running(
     raise RuntimeError(f"ARK did not start after {attempts} attempt(s).")
 
 
-def _prepare_ark_window_for_join(status_callback=None, window_size=None):
-    emit = status_callback or (lambda _message: None)
-    emit("ARK detected. Focusing game before joining server.")
+def _prepare_ark_window_for_join(window_size=None):
+    logs.logger.info("ARK detected. Focusing game before joining server.")
     focus_game_window(center_cursor_when_switching=True)
     time.sleep(1)
     return True
@@ -801,10 +790,10 @@ def is_menu():
     return bool(join_main.is_menu())
 
 
-def join_server(server, status_callback=None):
+def join_server(server):
     join_main.was_in_mainmenu = False
     player_state.reset_state()
-    return run_auto_join_server(server, status_callback)
+    return run_auto_join_server(server)
 
 
 def update_global_config(
@@ -1024,14 +1013,13 @@ def steam_cloud_sync_conflict_is_open():
         return False
 
 
-def steam_has_failure(steam, status_callback=None):
+def steam_has_failure(steam):
     """Handle known Steam launch dialogs before ARK becomes usable."""
-    emit = status_callback or (lambda _message: None)
-    if not _focus_visible_steam_window(steam, emit):
+    if not _focus_visible_steam_window(steam):
         return False
 
     if steam_launch_option_is_open():
-        emit("Detected Steam launch option dialog.")
+        logs.logger.warning("Detected Steam launch option dialog.")
         _click_steam_button(pyautogui, "launch_option_select")
         time.sleep(0.2)
         _click_steam_button(pyautogui, "launch_option_checkbox")
@@ -1041,7 +1029,7 @@ def steam_has_failure(steam, status_callback=None):
         return True
 
     if steam_cloud_sync_conflict_is_open():
-        emit("Detected Steam cloud sync conflict dialog.")
+        logs.logger.warning("Detected Steam cloud sync conflict dialog.")
         _click_steam_button(pyautogui, "cloud_sync_conflict_play")
         time.sleep(0.2)
         return True
@@ -1049,9 +1037,7 @@ def steam_has_failure(steam, status_callback=None):
     return False
 
 
-def _restart_steam_before_ark_retry(
-    steam: TransferSteamUiCoords | None, timeout: int, emit: Callable[[str], object]
-):
+def _restart_steam_before_ark_retry(steam: TransferSteamUiCoords | None, timeout: int):
     """Hard-reset ARK and Steam before the next ARK launch attempt."""
     ark_game_setup.kill_running_ark()
     steam_accounts.close_steam()
@@ -1061,25 +1047,24 @@ def _restart_steam_before_ark_retry(
         restart_delay = steam.get("restart_delay", restart_delay)
     time.sleep(float(restart_delay))
 
-    emit("Restarting Steam before relaunching ARK.")
+    logs.logger.warning("Restarting Steam before relaunching ARK.")
     steam_accounts.launch_steam()
 
     dl = utils_simple.get_default_clock(timeout)
     while not dl():
-        if _focus_visible_steam_window(steam, emit):
-            emit("Steam is visible and maximized before ARK retry.")
+        if _focus_visible_steam_window(steam):
+            logs.logger.info("Steam is visible and maximized before ARK retry.")
             return True
         time.sleep(1)
 
-    emit("Steam was not visible and maximized before ARK retry; relaunching ARK.")
+    logs.logger.warning(
+        "Steam was not visible and maximized before ARK retry; relaunching ARK."
+    )
     return False
 
 
-def _focus_visible_steam_window(
-    steam: TransferSteamUiCoords | None, status_callback=None
-):
+def _focus_visible_steam_window(steam: TransferSteamUiCoords | None):
     """Focus and maximize Steam only when its window exists and is visible."""
-    emit = status_callback or (lambda _message: None)
     title = "Steam"
     if isinstance(steam, dict):
         title = steam.get("window_title") or title
@@ -1094,7 +1079,7 @@ def _focus_visible_steam_window(
     try:
         return bool(_focus_steam_window_maximized(title))
     except RuntimeError as exc:
-        emit(f"Steam window focus failed: {exc}")
+        logs.logger.error(f"Steam window focus failed: {exc}")
         return False
 
 
@@ -1216,15 +1201,8 @@ def transfer_to_server(
     server: str,
     dedis: TransferDedisConfig,
     transmitter_side: TransferStage = "resource",
-    status_callback=None,
 ):
-    emit = (
-        cast(Callable[[str], object], status_callback)
-        if callable(status_callback)
-        else (lambda _message: None)
-    )
-
-    emit("Teleport to transmitter ")
+    logs.logger.info("Teleport to transmitter ")
 
     transmitter_teleport = _transfer_transmitter_teleport(dedis, transmitter_side)
 
@@ -1232,20 +1210,22 @@ def transfer_to_server(
         teleporter.teleport_not_default(transmitter_teleport)
         utils.zero_center()
 
-        emit(
+        logs.logger.info(
             f"Transferring to server {server} "
             f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
         )
 
         if transmitter.open_and_transfer(server):
-            emit(f"Transfer to server {server} requested.")
+            logs.logger.info(f"Transfer to server {server} requested.")
             return True
 
         if transmitter.was_excess_amount:
             return False
 
         if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
-            emit("Transmitter transfer did not complete; recovering player state.")
+            logs.logger.warning(
+                "Transmitter transfer did not complete; recovering player state."
+            )
             player_state.check_state()
             utils.zero_center()
             time.sleep(0.5)

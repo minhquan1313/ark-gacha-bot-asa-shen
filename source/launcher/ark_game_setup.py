@@ -39,6 +39,7 @@ TARGET_GAME_SETTINGS = {
     "bEnableFluidInteraction": "False",
     "GUI3DWidgetQuality": "0.000000",
     "bThirdPersonPlayer": "False",
+    "UIQuickbarScaling": "0.75",
     #
     "FrameGenerationMethod": "0",
     "FrameGenerationMultiplier": "1",
@@ -133,7 +134,7 @@ def restore_state_exists(state_path=RESTORE_STATE_PATH):
 
 
 def parse_steam_library_paths(vdf_text):
-    paths = []
+    paths: list[Path] = []
     for match in re.finditer(r'"path"\s+"((?:\\.|[^"\\])*)"', vdf_text):
         raw_path = match.group(1)
         paths.append(Path(raw_path.replace("\\\\", "\\")))
@@ -273,11 +274,13 @@ def backup_game_settings_once(settings_path, backup_path=CONFIG_BACKUP_PATH):
     return backup_path
 
 
-def patch_game_settings(settings_path, target_settings=TARGET_GAME_SETTINGS):
+def patch_game_settings(
+    settings_path, target_settings: dict[str, str] = TARGET_GAME_SETTINGS
+):
     settings_path = Path(settings_path)
     lines = settings_path.read_text(encoding="utf-8", errors="replace").splitlines()
-    remaining = dict(target_settings)
-    updated_lines = []
+    remaining = dict(target_settings)  # Deep copy obj
+    updated_lines: list[str] = []
 
     for line in lines:
         stripped = line.strip()
@@ -316,6 +319,7 @@ def _prepare_and_launch_game(
     """Prepare ARK with the selected config maps and launch it through Steam."""
     settings_path = find_game_user_settings_path()
     input_path = find_game_user_input_path() if target_input_settings else None
+
     if restore_state_exists():
         state = load_restore_state()
     else:
@@ -329,6 +333,7 @@ def _prepare_and_launch_game(
     patch_game_settings(settings_path, target_settings)
     if input_path is not None:
         patch_game_settings(input_path, target_input_settings)
+
     launch_ark_through_steam()
     paths = [str(settings_path)]
     if input_path is not None:

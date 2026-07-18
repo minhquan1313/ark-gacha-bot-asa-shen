@@ -1,11 +1,11 @@
 import ctypes
 import time
 from pathlib import Path
-from typing import Callable
 
 from source.launcher import ark_game_setup
 from source.launcher.config.transfer_helper_config import player_steam_account
 from source.launcher.utils import steam_accounts
+from source.logs import gachalogs as logs
 from source.utility import utils
 from source.utility.types import TransferPlayersConfig, TransferUiCoords
 
@@ -18,7 +18,6 @@ def switch_steam_account(
     current_steam_account: str,
     players: TransferPlayersConfig,
     ui_coords: TransferUiCoords,
-    status_callback: Callable[[str], object] | None = None,
     *,
     force_restart: bool = False,
     close_ark: bool = True,
@@ -36,14 +35,12 @@ def switch_steam_account(
     readiness_seconds = int(steam_restart_interval)
     if readiness_seconds < 1:
         raise ValueError("steam_restart_interval must be at least 1.")
-    emit = status_callback or (lambda _message: None)
-
     if target_steam_account == current_steam_account:
-        emit(f"Restarting Steam with account {target_steam_account}.")
+        logs.logger.info(f"Restarting Steam with account {target_steam_account}.")
     else:
-        emit(f"Switching Steam account to {target_steam_account}.")
+        logs.logger.info(f"Switching Steam account to {target_steam_account}.")
     if close_ark:
-        emit("Closing ARK before restarting Steam.")
+        logs.logger.info("Closing ARK before restarting Steam.")
 
         utils.close_ark_with_console_exit()
 
@@ -66,16 +63,18 @@ def switch_steam_account(
         window_title = str(steam_config.get("window_title") or window_title)
     attempt = 1
     while True:
-        emit(f"Launching Steam (attempt {attempt}).")
+        logs.logger.info(f"Launching Steam (attempt {attempt}).")
         try:
             steam_accounts.launch_steam()
             if _wait_for_steam_window(window_title, readiness_seconds):
-                emit(f"Steam is visible and maximized for {target_steam_account}.")
+                logs.logger.info(
+                    f"Steam is visible and maximized for {target_steam_account}."
+                )
                 return target_steam_account
         except Exception as exc:
-            emit(f"Steam launch attempt {attempt} failed: {exc}")
+            logs.logger.warning(f"Steam launch attempt {attempt} failed: {exc}")
 
-        emit(
+        logs.logger.warning(
             "Steam was not visible and maximized within "
             f"{readiness_seconds} seconds; restarting (attempt {attempt + 1})."
         )

@@ -14,10 +14,6 @@ from source.utility.debug_screenshots import (
 )
 from source.utility.structures.transmitter import transmitter
 
-global crouched
-global uploaded
-global human
-crouched = False
 uploaded = False
 
 capture_state = capture_for("player_state", active=CAPTURE_PLAYER_STATE)

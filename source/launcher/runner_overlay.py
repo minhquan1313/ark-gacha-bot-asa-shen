@@ -1,7 +1,7 @@
 import re
 import time
 
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer
 from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QFrame,
@@ -165,6 +165,11 @@ class RunnerOverlay(QWidget):
         self.setFixedWidth(RUNNER_WIDTH)
         self.setMinimumHeight(HELPER_HEIGHT)
         self._build_ui()
+        self.clock_timer = QTimer(self)
+        self.clock_timer.setInterval(100)
+        self.clock_timer.timeout.connect(self._refresh_clock)
+        self.clock_timer.start()
+        self._refresh_clock()
         self._resize_to_content_height()
         self._position_set()
 
@@ -258,12 +263,14 @@ class RunnerOverlay(QWidget):
         self.current_label = _ElidedLabel("Waiting for running task...")
         self.current_label.setObjectName("RunnerOverlayCurrent")
         self.loading_spinner = LoadingSpinner()
-        loading_row = QHBoxLayout()
-        loading_row.setContentsMargins(0, 0, 0, 0)
-        loading_row.setSpacing(8)
-        loading_row.addWidget(self.loading_spinner)
-        loading_row.addWidget(self.current_label, 1)
-        layout.addLayout(loading_row)
+        loading_row = QFrame()
+        loading_layout = QHBoxLayout(loading_row)
+        loading_layout.setContentsMargins(0, 0, 0, 0)
+        loading_layout.setSpacing(8)
+        loading_layout.addWidget(self.loading_spinner)
+        loading_layout.addWidget(self.current_label, 1)
+        self.loading_row = loading_row
+        layout.addWidget(loading_row)
 
         for _ in range(RUNNER_OVERLAY_UPCOMING_LIMIT):
             label = _ElidedLabel()
@@ -287,7 +294,7 @@ class RunnerOverlay(QWidget):
     def refresh(self, snapshot: dict, log_lines: list[str] | None = None):
         self.loading_active = False
         self.loading_spinner.stop()
-        self.clock_label.setText(time.strftime("%H:%M:%S"))
+        self._refresh_clock()
         current, upcoming = format_runner_overlay(snapshot)
         self.current_label.setText(current)
         for index, label in enumerate(self.upcoming_labels):
@@ -311,7 +318,7 @@ class RunnerOverlay(QWidget):
         if self.loading_active:
             return
         self.loading_active = True
-        self.clock_label.setText(time.strftime("%H:%M:%S"))
+        self._refresh_clock()
         self.current_label.setText("Loading runner...")
         self.loading_spinner.start()
         for label in self.upcoming_labels:
@@ -321,6 +328,10 @@ class RunnerOverlay(QWidget):
             label.hide()
         self._resize_to_content_height()
         self._position_set()
+
+    def _refresh_clock(self):
+        """Refresh the overlay clock independently of worker or log updates."""
+        self.clock_label.setText(time.strftime("%H:%M:%S"))
 
     def _resize_to_content_height(self):
         layout = self.layout()
@@ -348,6 +359,10 @@ class RunnerOverlay(QWidget):
         if self.owner is not None:
             self.owner.stop_program()
         self.close()
+
+    def closeEvent(self, event):
+        self.clock_timer.stop()
+        super().closeEvent(event)
 
     def _position_set(self):
         screen = self.screen()
@@ -407,6 +422,46 @@ class TransferRunnerOverlay(RunnerOverlay):
 
     def stop_program(self):
         """Delegate STOP to the transfer helper that owns the worker process."""
+        stop = getattr(self.owner, "stop", None)
+        if callable(stop):
+            stop()
+
+
+class HelperRunnerOverlay(RunnerOverlay):
+    """Display the shared compact log overlay for a worker helper."""
+
+    def __init__(self, owner: object):
+        super().__init__(owner)
+        self.current_label.hide()
+        for label in self.upcoming_labels:
+            label.hide()
+        title = getattr(owner, "windowTitle", lambda: APP_TITLE)()
+        self.setWindowTitle(title)
+        self.header_title.setText(title)
+        self._resize_to_content_height()
+        self._position_set()
+
+    def refresh(self, snapshot: dict, log_lines: list[str] | None = None):
+        """Show only the helper log section after worker loading completes."""
+        super().refresh(snapshot, log_lines)
+        self.loading_row.hide()
+        self.current_label.hide()
+        for label in self.upcoming_labels:
+            label.hide()
+        self._resize_to_content_height()
+
+    def refresh_loading(self, log_lines: list[str] | None = None):
+        """Show the compact helper loading state before logs become available."""
+        super().refresh_loading(log_lines)
+        self.current_label.setText("Loading helper...")
+        self.loading_row.show()
+        self.current_label.show()
+        for label in self.upcoming_labels:
+            label.hide()
+        self._resize_to_content_height()
+
+    def stop_program(self):
+        """Stop the helper worker that owns this overlay."""
         stop = getattr(self.owner, "stop", None)
         if callable(stop):
             stop()
