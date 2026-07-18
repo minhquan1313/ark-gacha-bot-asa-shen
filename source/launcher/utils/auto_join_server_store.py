@@ -4,7 +4,7 @@ from pathlib import Path
 from source.join_sim.source.server_number import normalize_server_number
 
 AUTO_JOIN_SERVER_FILE = Path("json_files/auto_join/server.json")
-DEFAULT_AFK_JOIN = True
+DEFAULT_AFK_JOIN = False
 
 
 def _load_data(path: str | Path):

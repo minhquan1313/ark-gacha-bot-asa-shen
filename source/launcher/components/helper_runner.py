@@ -133,7 +133,7 @@ def build_parser():
     auto_join.add_argument(
         "--afk-join",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
     )
     auto_join.set_defaults(func=run_auto_join_server)
 

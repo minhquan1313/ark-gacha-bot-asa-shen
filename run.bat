@@ -23,8 +23,16 @@ if errorlevel 1 (
 )
 
 :: Pull updates from Git
-@REM git pull origin stable_to_play
-@REM git pull
+echo Update completed successfully.
+goto :git_done
+
+:git_error
+echo.
+echo Git update failed.
+pause
+exit /b 1
+
+:git_done
 
 :: Check if virtual environment exists
 if not exist "venv" (

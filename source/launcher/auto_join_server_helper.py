@@ -88,7 +88,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.content_layout.addWidget(self.server_row_widget)
 
         self.afk_join_switch = CyberSwitch("AFK Join")
-        self.afk_join_switch.setChecked(True)
+        self.afk_join_switch.setChecked(False)
         self.content_layout.addWidget(self.afk_join_switch)
 
         self.start_stop_button = AnimatedButton("START", "primary")
