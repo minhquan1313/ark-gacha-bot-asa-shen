@@ -1,5 +1,5 @@
 import time
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 import pyautogui
 
@@ -58,9 +58,9 @@ FISHING_PRESS_REGION: RoiRegion = {
     "width": 800,
     "height": 300,
 }
-white_b: LBound = ((0, 0, 200), (255, 30, 255))
+white_b: LBound = ((0, 0, 200), (255, 10, 255))
 
-PRESS_KEY_THRESHOLD = 0.95
+PRESS_KEY_THRESHOLD = 0.97
 
 registered = False
 
@@ -72,6 +72,9 @@ def register_template_roi():
         return
 
     registered = True
+    # template.IS_DEBUG = True
+    # template.DEBUG_ITEM = [k for k in FISHING_KEY_TEMPLATES]
+    # template.reset_debug_folder()
 
     template.register_roi(
         {k: FISHING_RESULT_REGION.copy() for k in FISHING_RESULT_TEMPLATES},
@@ -84,6 +87,8 @@ def register_template_roi():
         white_b[0],
         white_b[1],
     )
+
+    template.templates_preload([k for k in FISHING_KEY_TEMPLATES])
 
 
 def is_key_prompt():
@@ -122,9 +127,8 @@ def _find_requested_key():
         "fishing_press_prompt", [k for k in FISHING_KEY_TEMPLATES], PRESS_KEY_THRESHOLD
     )
     if t_name is not None:
-        for template_name, k in FISHING_KEY_TEMPLATES.items():
-            if t_name == template_name:
-                return template_name, k
+        z = FISHING_KEY_TEMPLATES.get(t_name)
+        return t_name, cast(str, z)
     return None
 
 
