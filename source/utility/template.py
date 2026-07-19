@@ -222,6 +222,8 @@ template_image_overwrite: dict[RoiRegionKey, RoiRegionKey] = {
 
 IS_DEBUG = False
 DEBUG_ITEM = None
+DEBUG_GRAY = False
+DEBUG_BEEP = False
 
 
 def register_roi(
@@ -270,7 +272,7 @@ def temporary_overwrite_regions(
         _roi_overwrite = None
 
 
-def get_region_roi(region):
+def get_region_roi(region: RoiRegion):
     return screen.get_screen_roi(
         region["start_x"], region["start_y"], region["width"], region["height"]
     )
@@ -377,6 +379,115 @@ def capture_compare_changed(item: RoiRegionKey, before: MatLike, threshold=0.02)
     return compare_captures(before, after) > threshold
 
 
+def reset_debug_folder():
+    from pathlib import Path
+
+    debug_folder = Path.cwd() / "debug_template"
+
+    if not debug_folder.exists():
+        return
+
+    for file_path in debug_folder.iterdir():
+        if file_path.is_file():
+            file_path.unlink()
+
+
+_preloads: dict[RoiRegionKey, MatLike] = {}
+
+
+def templates_preload(items: list[RoiRegionKey]):
+    global _preloads
+    for item in items:
+        l_bound = template_l_bounds_overwrite.get(item, default_bounds[0])
+        u_bound = template_u_bounds_overwrite.get(item, default_bounds[1])
+
+        # Playground https://pseudopencv.site/utilities/hsvcolormask/
+        lower_boundary = np.array(l_bound)
+        upper_boundary = np.array(u_bound)
+
+        image_path = template_image_overwrite.get(item, item)
+        image = cv2.imread(f"assets/icons1080/{image_path}.png")
+        if image is None:
+            raise FileNotFoundError(
+                f"Image assets/icons1080/{image_path}.png not found"
+            )
+        image = _masked_gray_capture(item, image, lower_boundary, upper_boundary)
+        _preloads[item] = image
+
+
+def check_templates(base: RoiRegionKey, items: list[RoiRegionKey], threshold: float):
+    l_bound = template_l_bounds_overwrite.get(base, default_bounds[0])
+    u_bound = template_u_bounds_overwrite.get(base, default_bounds[1])
+    lower_boundary = np.array(l_bound)
+    upper_boundary = np.array(u_bound)
+
+    region = roi_regions[base] if _roi_overwrite is None else _roi_overwrite
+    roi = get_region_roi(region)
+    gray_roi = _masked_gray_capture(base, roi, lower_boundary, upper_boundary)
+
+    for item in items:
+        if item in _preloads:
+            image = _preloads[item]
+        else:
+            l_bound = template_l_bounds_overwrite.get(item, default_bounds[0])
+            u_bound = template_u_bounds_overwrite.get(item, default_bounds[1])
+
+            # Playground https://pseudopencv.site/utilities/hsvcolormask/
+            lower_boundary = np.array(l_bound)
+            upper_boundary = np.array(u_bound)
+
+            image_path = template_image_overwrite.get(item, item)
+            image = cv2.imread(f"assets/icons1080/{image_path}.png")
+            if image is None:
+                raise FileNotFoundError(
+                    f"Image assets/icons1080/{image_path}.png not found"
+                )
+            image = _masked_gray_capture(item, image, lower_boundary, upper_boundary)
+        res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+
+        # DEBUG
+        if IS_DEBUG and (
+            DEBUG_ITEM is None or item == DEBUG_ITEM or item in DEBUG_ITEM
+        ):
+            import winsound
+            from pathlib import Path
+
+            score = f"{max_val:.3f}"
+
+            debug_roi = gray_roi.copy() if DEBUG_GRAY else roi.copy()
+            cv2.rectangle(
+                debug_roi,
+                (max_loc[0], max_loc[1]),
+                (max_loc[0] + image.shape[1], max_loc[1] + image.shape[0]),
+                (0, 0, 255),
+                2,
+            )
+
+            root_path = Path.cwd()
+            dir_folder = root_path / "debug_template"
+            dir_folder.mkdir(parents=True, exist_ok=True)
+
+            template_path = dir_folder / f"{item}_template.png"
+            roi_path = dir_folder / f"{item}_{score}_roi.png"
+
+            if not template_path.exists():
+                cv2.imwrite(str(template_path), image)
+            if not roi_path.exists():
+                cv2.imwrite(str(roi_path), debug_roi)
+
+            if DEBUG_BEEP:
+                if max_val > threshold:
+                    winsound.Beep(frequency=1000, duration=50)
+                else:
+                    winsound.Beep(100, 200)
+
+        if max_val > threshold:
+            return item
+
+    return None
+
+
 def check_template(item: RoiRegionKey, threshold: float):
     global default_bounds
     region = roi_regions[item] if _roi_overwrite is None else _roi_overwrite
@@ -408,7 +519,7 @@ def check_template(item: RoiRegionKey, threshold: float):
 
         score = f"{max_val:.3f}"
 
-        debug_roi = roi.copy()
+        debug_roi = gray_roi.copy() if DEBUG_GRAY else roi.copy()
         cv2.rectangle(
             debug_roi,
             (max_loc[0], max_loc[1]),
@@ -430,10 +541,11 @@ def check_template(item: RoiRegionKey, threshold: float):
         if not roi_path.exists():
             cv2.imwrite(str(roi_path), debug_roi)
 
-        if max_val > threshold:
-            winsound.Beep(1000, 100)
-        else:
-            winsound.Beep(100, 200)
+        if DEBUG_BEEP:
+            if max_val > threshold:
+                winsound.Beep(1000, 100)
+            else:
+                winsound.Beep(100, 200)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
@@ -472,7 +584,7 @@ def check_template_no_bounds(item: RoiRegionKey, threshold: float):
 
         score = f"{max_val:.3f}"
 
-        debug_roi = roi.copy()
+        debug_roi = gray_roi.copy() if DEBUG_GRAY else roi.copy()
         cv2.rectangle(
             debug_roi,
             (max_loc[0], max_loc[1]),
@@ -493,10 +605,11 @@ def check_template_no_bounds(item: RoiRegionKey, threshold: float):
         if not roi_path.exists():
             cv2.imwrite(str(roi_path), debug_roi)
 
-        if max_val > threshold:
-            winsound.Beep(1000, 50)
-        else:
-            winsound.Beep(100, 200)
+        if DEBUG_BEEP:
+            if max_val > threshold:
+                winsound.Beep(1000, 50)
+            else:
+                winsound.Beep(100, 200)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")

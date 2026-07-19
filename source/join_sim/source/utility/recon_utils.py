@@ -20,6 +20,7 @@ location: dict[RoiRegionReconKey, RoiRegion] = {
     "red_fail": {"start_x": 922, "start_y": 363, "width": 188, "height": 45},
     "mod_join": {"start_x": 1691, "start_y": 918, "width": 75, "height": 45},
     "req_mods": {"start_x": 723, "start_y": 140, "width": 150, "height": 38},
+    "req_mods_loading": {"start_x": 760, "start_y": 455, "width": 400, "height": 180},
     "join_text": {"start_x": 675, "start_y": 476, "width": 300, "height": 23},
     "loading_screen": {"start_x": 0, "start_y": 0, "width": 375, "height": 375},
     "searching": {"start_x": 870, "start_y": 476, "width": 90, "height": 30},

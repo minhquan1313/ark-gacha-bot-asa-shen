@@ -225,6 +225,7 @@ RoiRegionReconKey: TypeAlias = Literal[
     "join_game_3_gen1",
     "join_game_4_gen1",
     "join_game_5_gen1",
+    "req_mods_loading",
 ]
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
