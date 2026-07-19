@@ -74,7 +74,7 @@ def smart_wait_structure_with_teleport(
 
     delay = wait_structure
 
-    time.sleep(min(0, first_wait))
+    time.sleep(max(0, first_wait))
 
     check_state()  # Leave tek pod if in tek pod
 

@@ -270,7 +270,7 @@ def temporary_overwrite_regions(
         _roi_overwrite = None
 
 
-def get_region_roi(region):
+def get_region_roi(region: RoiRegion):
     return screen.get_screen_roi(
         region["start_x"], region["start_y"], region["width"], region["height"]
     )
@@ -375,6 +375,39 @@ def capture_compare_changed(item: RoiRegionKey, before: MatLike, threshold=0.02)
     score = compare_captures(before, after)
     logs.logger.template(f"{item} diff score:{score} threshold:{threshold}")
     return compare_captures(before, after) > threshold
+
+
+def check_templates(base: RoiRegionKey, items: list[RoiRegionKey], threshold: float):
+    l_bound = template_l_bounds_overwrite.get(base, default_bounds[0])
+    u_bound = template_u_bounds_overwrite.get(base, default_bounds[1])
+    lower_boundary = np.array(l_bound)
+    upper_boundary = np.array(u_bound)
+
+    region = roi_regions[base] if _roi_overwrite is None else _roi_overwrite
+    roi = get_region_roi(region)
+    gray_roi = _masked_gray_capture(base, roi, lower_boundary, upper_boundary)
+
+    for item in items:
+        l_bound = template_l_bounds_overwrite.get(item, default_bounds[0])
+        u_bound = template_u_bounds_overwrite.get(item, default_bounds[1])
+
+        # Playground https://pseudopencv.site/utilities/hsvcolormask/
+        lower_boundary = np.array(l_bound)
+        upper_boundary = np.array(u_bound)
+
+        image_path = template_image_overwrite.get(item, item)
+        image = cv2.imread(f"assets/icons1080/{image_path}.png")
+        if image is None:
+            raise FileNotFoundError(
+                f"Image assets/icons1080/{image_path}.png not found"
+            )
+        image = _masked_gray_capture(item, image, lower_boundary, upper_boundary)
+        res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+        if max_val > threshold:
+            return item
+
+    return None
 
 
 def check_template(item: RoiRegionKey, threshold: float):

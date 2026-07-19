@@ -10,6 +10,10 @@ def get_pixel_loc(location):
     return buttons.get(location)
 
 
+def is_loading():
+    return recon_utils.check_template_no_bounds("req_mods_loading", 0.7)
+
+
 def is_open():
     return recon_utils.check_template_no_bounds("req_mods", 0.7)
 

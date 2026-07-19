@@ -67,7 +67,14 @@ def join_round(server: str):
 
     if multiplayer_menu.join_server(server):
         should_click = False
-        time.sleep(1)
+        time.sleep(0.5)
+
+        if mod_menu.is_loading():
+            recon_utils.template_await_false(mod_menu.is_loading, 3)
+            recon_utils.template_await_true(mod_menu.is_open, 3)
+            time.sleep(0.3)
+        else:
+            time.sleep(0.5)
 
     if mod_menu.mod_menu_join():
         time.sleep(0.5)

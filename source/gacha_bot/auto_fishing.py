@@ -11,8 +11,8 @@ from source.utility.types import RoiRegion, RoiRegionKey
 
 LBound: TypeAlias = tuple[template.TBound, template.TBound]
 
-CLICK_INTERVAL = 0.1
-KEY_PRESS_INTERVAL = 0.05
+CLICK_INTERVAL = 0.2
+KEY_PRESS_INTERVAL = 0.1
 RESULT_DELAY = 0.5
 POLL_INTERVAL = 0.01
 
@@ -60,6 +60,7 @@ FISHING_PRESS_REGION: RoiRegion = {
 }
 white_b: LBound = ((0, 0, 200), (255, 30, 255))
 
+PRESS_KEY_THRESHOLD = 0.95
 
 registered = False
 
@@ -102,7 +103,7 @@ def is_fishing_done():
 
 
 def check_press_key(name: RoiRegionKey):
-    return template.check_template(name, 0.96)
+    return template.check_template(name, PRESS_KEY_THRESHOLD)
 
 
 def _cast_until_prompt():
@@ -117,9 +118,13 @@ def _cast_until_prompt():
 
 def _find_requested_key():
     """Return the first visible fishing key template and mapped key."""
-    for template_name, key in FISHING_KEY_TEMPLATES.items():
-        if check_press_key(template_name):
-            return template_name, key
+    t_name = template.check_templates(
+        "fishing_press_prompt", [k for k in FISHING_KEY_TEMPLATES], PRESS_KEY_THRESHOLD
+    )
+    if t_name is not None:
+        for template_name, k in FISHING_KEY_TEMPLATES.items():
+            if t_name == template_name:
+                return template_name, k
     return None
 
 
