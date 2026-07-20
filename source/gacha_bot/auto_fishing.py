@@ -72,9 +72,6 @@ def register_template_roi():
         return
 
     registered = True
-    # template.IS_DEBUG = True
-    # template.DEBUG_ITEM = [k for k in FISHING_KEY_TEMPLATES]
-    # template.reset_debug_folder()
 
     template.register_roi(
         {k: FISHING_RESULT_REGION.copy() for k in FISHING_RESULT_TEMPLATES},
