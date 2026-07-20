@@ -41,6 +41,7 @@ from source.launcher.utils.deposit_helper_capture import (
 from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
 from source.launcher.utils.process_control import terminate_process_tree
 from source.logs import gachalogs as logs
+from source.utility.utils_simple import start_subprocess
 
 HELPER_COMPLETION_PREFIX = "__HELPER_COMPLETION__ "
 HELPER_READY_MESSAGE = "__HELPER_READY__"
@@ -422,7 +423,7 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.worker_result_message = None
         self.worker_debug_lines = []
         self.output_reader_stop = threading.Event()
-        self.worker_process = subprocess.Popen(
+        self.worker_process = start_subprocess(
             [
                 sys.executable,
                 "-u",

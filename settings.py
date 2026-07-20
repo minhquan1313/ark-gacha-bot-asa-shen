@@ -32,6 +32,8 @@ station_pushout_yaw: float | None = None
 wait_structure_load: float = 30
 wait_reconnect: float = 60
 
+APP_ID = "ShenGBot"
+
 
 if __name__ == "__main__":
     pass
