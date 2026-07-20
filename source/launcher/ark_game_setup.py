@@ -1,12 +1,17 @@
-import ctypes
 import json
 import re
 import shutil
 import subprocess
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 
 import psutil
+
+from source.utility.screen import (
+    DisplayMode,
+    apply_display_mode,
+    get_current_display_mode,
+)
 
 RESTORE_STATE_PATH = Path("json_files/ark_start_game_restore.json")
 CONFIG_BACKUP_PATH = Path("json_files/GameUserSettings.ini.backup")
@@ -73,60 +78,6 @@ TARGET_GAME_INPUT_SETTINGS = {
     #
     "bEnableMouseSmoothing": "False",
 }
-
-ENUM_CURRENT_SETTINGS = -1
-DISP_CHANGE_SUCCESSFUL = 0
-DM_PELSWIDTH = 0x80000
-DM_PELSHEIGHT = 0x100000
-DM_DISPLAYFREQUENCY = 0x400000
-
-
-@dataclass(frozen=True)
-class DisplayMode:
-    width: int
-    height: int
-    frequency: int
-
-
-class POINTL(ctypes.Structure):
-    _fields_ = [
-        ("x", ctypes.c_long),
-        ("y", ctypes.c_long),
-    ]
-
-
-class DEVMODEW(ctypes.Structure):
-    _fields_ = [
-        ("dmDeviceName", ctypes.c_wchar * 32),
-        ("dmSpecVersion", ctypes.c_ushort),
-        ("dmDriverVersion", ctypes.c_ushort),
-        ("dmSize", ctypes.c_ushort),
-        ("dmDriverExtra", ctypes.c_ushort),
-        ("dmFields", ctypes.c_ulong),
-        ("dmPosition", POINTL),
-        ("dmDisplayOrientation", ctypes.c_ulong),
-        ("dmDisplayFixedOutput", ctypes.c_ulong),
-        ("dmColor", ctypes.c_short),
-        ("dmDuplex", ctypes.c_short),
-        ("dmYResolution", ctypes.c_short),
-        ("dmTTOption", ctypes.c_short),
-        ("dmCollate", ctypes.c_short),
-        ("dmFormName", ctypes.c_wchar * 32),
-        ("dmLogPixels", ctypes.c_ushort),
-        ("dmBitsPerPel", ctypes.c_ulong),
-        ("dmPelsWidth", ctypes.c_ulong),
-        ("dmPelsHeight", ctypes.c_ulong),
-        ("dmDisplayFlags", ctypes.c_ulong),
-        ("dmDisplayFrequency", ctypes.c_ulong),
-        ("dmICMMethod", ctypes.c_ulong),
-        ("dmICMIntent", ctypes.c_ulong),
-        ("dmMediaType", ctypes.c_ulong),
-        ("dmDitherType", ctypes.c_ulong),
-        ("dmReserved1", ctypes.c_ulong),
-        ("dmReserved2", ctypes.c_ulong),
-        ("dmPanningWidth", ctypes.c_ulong),
-        ("dmPanningHeight", ctypes.c_ulong),
-    ]
 
 
 def restore_state_exists(state_path=RESTORE_STATE_PATH):
@@ -207,38 +158,6 @@ def find_game_user_input_path(steam_dir=None):
             continue
 
     raise RuntimeError("ARK Survival Ascended GameUserSettings.ini was not found.")
-
-
-def get_current_display_mode():
-    if not hasattr(ctypes, "windll"):
-        raise RuntimeError("Display mode changes are only supported on Windows.")
-
-    mode = DEVMODEW()
-    mode.dmSize = ctypes.sizeof(DEVMODEW)
-    if not ctypes.windll.user32.EnumDisplaySettingsW(
-        None, ENUM_CURRENT_SETTINGS, ctypes.byref(mode)
-    ):
-        raise RuntimeError("Unable to read the current display mode.")
-    return DisplayMode(
-        width=int(mode.dmPelsWidth),
-        height=int(mode.dmPelsHeight),
-        frequency=int(mode.dmDisplayFrequency),
-    )
-
-
-def apply_display_mode(display_mode):
-    if not hasattr(ctypes, "windll"):
-        raise RuntimeError("Display mode changes are only supported on Windows.")
-
-    mode = DEVMODEW()
-    mode.dmSize = ctypes.sizeof(DEVMODEW)
-    mode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_DISPLAYFREQUENCY
-    mode.dmPelsWidth = int(display_mode.width)
-    mode.dmPelsHeight = int(display_mode.height)
-    mode.dmDisplayFrequency = int(display_mode.frequency)
-    result = ctypes.windll.user32.ChangeDisplaySettingsW(ctypes.byref(mode), 0)
-    if result != DISP_CHANGE_SUCCESSFUL:
-        raise RuntimeError(f"Unable to change display mode. Windows result: {result}")
 
 
 def load_restore_state(state_path=RESTORE_STATE_PATH):

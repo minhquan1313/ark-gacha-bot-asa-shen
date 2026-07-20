@@ -60,8 +60,12 @@ if errorlevel 1 (
   exit /b
 )
 
+cls
 
 :: Prepare to pull update
+set "SHOULD_UPDATE=1"
+if "%SHOULD_UPDATE%"=="0" goto :git_done
+
 set "BRANCH=stable_to_play"
 if not exist ".git\" (
   echo Git repository not found.
@@ -82,8 +86,6 @@ if not exist ".git\" (
   git pull origin %BRANCH%
   if errorlevel 1 goto :git_error
 )
-
-cls
 
 :: Pull updates from Git
 echo Checking update...
