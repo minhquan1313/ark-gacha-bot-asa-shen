@@ -158,7 +158,11 @@ def build_parser():
 
 def main(argv=None):
     parser = build_parser()
-    args = parser.parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if "--app-id" in arguments:
+        app_id_index = arguments.index("--app-id")
+        del arguments[app_id_index : app_id_index + 2]
+    args = parser.parse_args(arguments)
     try:
         return args.func(args)
     except KeyboardInterrupt:

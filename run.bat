@@ -1,8 +1,8 @@
 @echo off
+setlocal EnableExtensions EnableDelayedExpansion
 
 :: Specify the required Python version
 set "PYTHON_VERSION=3.11"
-set "APP_ID=ShenGBot"
 
 :: Check if Python 3.11 is installed
 echo Checking for Python %PYTHON_VERSION%...
@@ -21,39 +21,6 @@ if errorlevel 1 (
   ) else (
   echo Python is already installed. Please make sure its of version 3.10 or higher, using an older version will NOT work!
 )
-
-:: Pull updates from Git
-set "BRANCH=stable_to_play"
-if not exist ".git\" (
-  echo Git repository not found.
-  echo Initializing repository...
-  
-  git init
-  if errorlevel 1 goto :git_error
-  
-  git remote add origin https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git
-  if errorlevel 1 goto :git_error
-  
-  git fetch origin %BRANCH%
-  if errorlevel 1 goto :git_error
-  
-  git checkout -f -B %BRANCH% origin/%BRANCH%
-  if errorlevel 1 goto :git_error
-)
-
-git pull origin %BRANCH%
-if errorlevel 1 goto :git_error
-
-echo Update completed successfully.
-goto :git_done
-
-:git_error
-echo.
-echo Git update failed.
-pause
-exit /b 1
-
-:git_done
 
 :: Check if virtual environment exists
 if not exist "venv" (
@@ -93,9 +60,60 @@ if errorlevel 1 (
   exit /b
 )
 
+
+:: Prepare to pull update
+set "BRANCH=stable_to_play"
+if not exist ".git\" (
+  echo Git repository not found.
+  echo Initializing repository...
+  
+  git init
+  if errorlevel 1 goto :git_error
+  
+  git remote add origin https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git  >nul 2>&1
+  if errorlevel 1 goto :git_error
+  
+  git fetch origin %BRANCH%
+  if errorlevel 1 goto :git_error
+  
+  git checkout -f -B %BRANCH% origin/%BRANCH%
+  if errorlevel 1 goto :git_error
+  
+  git pull origin %BRANCH%
+  if errorlevel 1 goto :git_error
+)
+
 cls
 
-echo Running main.py...
+:: Pull updates from Git
+echo Checking update...
+git fetch origin "%BRANCH%" >nul 2>&1
+if errorlevel 1  goto :git_error
+
+for /f %%C in ('git rev-list --count HEAD..origin/%BRANCH%') do (
+  set "UPDATE_COUNT=%%C"
+)
+
+if not "!UPDATE_COUNT!"=="0" (
+  echo Downloading update...
+  git pull origin %BRANCH%
+  if errorlevel 1  goto :git_error
+  ) else (
+  echo Up to date!
+)
+
+goto :git_done
+
+:git_error
+echo.
+echo Update failed.
+pause
+exit /b 1
+
+:git_done
+
+set "APP_ID=ShenGBot"
+echo Starting GBot...
 python main.py --app-id "%APP_ID%"
 
 :: Deactivate virtual environment

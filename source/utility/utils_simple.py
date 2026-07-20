@@ -1,6 +1,8 @@
+import subprocess
 import time
 from typing import Literal, cast
 
+from settings import APP_ID
 from source.ASA import config
 
 """
@@ -118,3 +120,12 @@ def get_default_clock(
 
 def get_default_timeout_value():
     return config.timeout_deadline
+
+
+def start_subprocess(cmd: list[str], *args, **kwargs):
+    """Start a child process while retaining its command and adding its app id."""
+    return subprocess.Popen(
+        [*cmd, "--app-id", APP_ID],
+        *args,
+        **kwargs,
+    )

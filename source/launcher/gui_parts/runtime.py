@@ -31,6 +31,7 @@ from source.launcher.utils.system import (
     get_memory_usage_gb,
 )
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
+from source.utility.utils_simple import start_subprocess
 
 START_GAME_DISABLE_DELAY = 10000
 RUNNER_LAUNCH_DELAY_MS = 120
@@ -140,7 +141,7 @@ class RuntimeGuiMixin:
             self.runner_launch_pending = False
             self.close_external_helpers()
             cleanup_debug_screenshots_on_program_start()
-            self.process = subprocess.Popen(
+            self.process = start_subprocess(
                 [sys.executable, "-u", "-m", "source.launcher.runner_process"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
