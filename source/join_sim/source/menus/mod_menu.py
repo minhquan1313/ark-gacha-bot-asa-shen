@@ -1,3 +1,5 @@
+import time
+
 import pyautogui
 
 from source.join_sim.source.logs import logger as logs
@@ -23,5 +25,6 @@ def mod_menu_join():
         logs.logger.debug("mod menu click")
         pyautogui.click(get_pixel_loc("mod_join_x"), get_pixel_loc("mod_join_y"))
         recon_utils.window_still_open_no_bounds("req_mods", 0.7, 1)
+        time.sleep(3)
         return True
     return False

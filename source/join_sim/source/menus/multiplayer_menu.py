@@ -1,5 +1,7 @@
 import time
 
+import pyautogui
+
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.menus import failure
 from source.join_sim.source.utility import recon_utils
@@ -86,7 +88,7 @@ def exit_menu():
 
 def refresh():
     if is_open():
-        windows.click(get_pixel_loc("refresh_x"), get_pixel_loc("refresh_y"))
+        pyautogui.click(get_pixel_loc("refresh_x"), get_pixel_loc("refresh_y"))
 
 
 def join_server(server: str):
@@ -101,7 +103,7 @@ def join_server(server: str):
 
     failure.has_failure(False)
 
-    dl = utils_simple.get_default_clock(10)
+    dl = utils_simple.get_default_clock(5)
     while is_open() and not is_server_list_loaded() and not dl():
         if not wait_server_list_loaded(1):
             refresh()
