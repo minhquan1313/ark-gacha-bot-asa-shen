@@ -1,10 +1,19 @@
+import json
+from pathlib import Path
+
 SETTINGS_FILE = "json_files/settings.json"
 GACHA_LOG_FILE = "source/logs/logs.txt"
 JOIN_LOG_FILE = "source/join_sim/source/logs/logs.txt"
 MAX_LAUNCHER_LOG_LINES = 2000
 APP_NAME = "Shen GBot"
 APP_TITLE = APP_NAME.upper()
-APP_VERSION = "v1.0.0"
+_MANIFEST_PATH = Path(__file__).resolve().parents[3] / "manifest.json"
+try:
+    APP_VERSION = (
+        f"v{json.loads(_MANIFEST_PATH.read_text(encoding='utf-8'))['version']}"
+    )
+except (OSError, KeyError, TypeError, ValueError):
+    APP_VERSION = "v1.0.0"
 SUPPORTED_GAME_RESOLUTIONS = ((1920, 1080),)
 GAME_WINDOW_TITLE = "Ark: Survival Ascended ("
 BUTTON_TRANSITION_MS = 200

@@ -62,58 +62,6 @@ if errorlevel 1 (
 
 cls
 
-:: Prepare to pull update
-set "SHOULD_UPDATE=1"
-if "%SHOULD_UPDATE%"=="0" goto :git_done
-
-set "BRANCH=stable_to_play"
-if not exist ".git\" (
-  echo Git repository not found.
-  echo Initializing repository...
-  
-  git init
-  if errorlevel 1 goto :git_error
-  
-  git remote add origin https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git  >nul 2>&1
-  if errorlevel 1 goto :git_error
-  
-  git fetch origin %BRANCH%
-  if errorlevel 1 goto :git_error
-  
-  git checkout -f -B %BRANCH% origin/%BRANCH%
-  if errorlevel 1 goto :git_error
-  
-  git pull origin %BRANCH%
-  if errorlevel 1 goto :git_error
-)
-
-:: Pull updates from Git
-echo Checking update...
-git fetch origin "%BRANCH%" >nul 2>&1
-if errorlevel 1  goto :git_error
-
-for /f %%C in ('git rev-list --count HEAD..origin/%BRANCH%') do (
-  set "UPDATE_COUNT=%%C"
-)
-
-if not "!UPDATE_COUNT!"=="0" (
-  echo Downloading update...
-  git pull origin %BRANCH%
-  if errorlevel 1  goto :git_error
-  ) else (
-  echo Up to date!
-)
-
-goto :git_done
-
-:git_error
-echo.
-echo Update failed.
-pause
-exit /b 1
-
-:git_done
-
 set "APP_ID=ShenGBot"
 echo Starting GBot...
 python main.py --app-id "%APP_ID%"
@@ -124,5 +72,8 @@ call deactivate
 
 echo Killing remaining Shen GBot processes...
 powershell.exe -NoProfile -Command "$appId = '%APP_ID%'; Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'python.exe' -or $_.Name -eq 'pythonw.exe') -and $_.CommandLine -like ('*--app-id ' + $appId + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
-@REM taskkill /F /IM python.exe /T
-@REM taskkill /F /IM pythonw.exe /T
+
+if exist ".update_restart.request" (
+  del /q ".update_restart.request" >nul 2>&1
+  start "" /d "%~dp0" "%~f0"
+)

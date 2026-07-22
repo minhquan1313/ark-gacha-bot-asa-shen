@@ -1,7 +1,7 @@
 import os
 import threading
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -42,6 +42,7 @@ class SettingsGUI(
 ):
     start_game_enabled_changed = Signal(bool)
     runner_ready = Signal()
+    update_check_finished = Signal(object, bool)
 
     def __init__(self):
         super().__init__()
@@ -93,6 +94,9 @@ class SettingsGUI(
         self.is_narrow_layout = False
         self.is_custom_maximized = False
         self.normal_geometry = None
+        self.update_check_in_progress = False
+        self.update_auto_check_enabled = True
+        self.update_check_finished.connect(self._on_update_check_finished)
 
         self._build_ui()
         self.sync_configured_templates()
@@ -105,3 +109,4 @@ class SettingsGUI(
         self.load_previous_logs()
         self._register_start_stop_hotkey()
         self._schedule_auto_start()
+        QTimer.singleShot(0, self._automatic_update_check)
