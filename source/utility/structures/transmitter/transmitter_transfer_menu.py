@@ -204,7 +204,7 @@ def transfer_timer_handle(should_go_tekpod=True):
         time.sleep(0.2)
 
         if should_go_tekpod and should_go_tek_pod():
-            eslapsed = utils_simple.clock_tracker()
+            cl = utils_simple.get_default_clock()
 
             cancel_transfer()
             time.sleep(0.2)
@@ -214,7 +214,7 @@ def transfer_timer_handle(should_go_tekpod=True):
             render.enter_tekpod(allow_eat_implant=False)
             player_inventory.open()
 
-            time.sleep(max(5, sleep_tek_pod_for - eslapsed()))
+            time.sleep(max(5, sleep_tek_pod_for - cl.eslapsed()))
 
             player_state.check_state()
             teleporter.teleport_not_default(current_tele)

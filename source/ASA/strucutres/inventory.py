@@ -104,9 +104,12 @@ def open(crouch_if_problem=True):
             f"trying to open strucuture inventory {attempts} / {source.ASA.config.inventory_open_attempts}"
         )
         dl2 = utils_simple.get_default_clock(3)
-        while not dl2() and not is_open():
+        pressed_c, pressed_max = 1, 2
+        while not is_open() and not dl2():
             # Repeatedly press key to make sure the server receives the input
-            utils.press_key("AccessInventory")
+            if pressed_c <= pressed_max:
+                pressed_c += 1
+                utils.press_key("AccessInventory")
             if template.template_await_true(is_open, 0.3):
                 break
 
