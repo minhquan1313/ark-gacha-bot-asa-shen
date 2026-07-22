@@ -166,6 +166,9 @@ class WindowGuiMixin:
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
         self.timer.start(1000)
+        self.auto_update_timer = QTimer(self)
+        self.auto_update_timer.timeout.connect(self._automatic_update_check)
+        self.auto_update_timer.start(60 * 60 * 1000)
         self.auto_start_timer = QTimer(self)
         self.auto_start_timer.setSingleShot(True)
         self.auto_start_timer.timeout.connect(self.start_program)
@@ -261,6 +264,8 @@ class WindowGuiMixin:
             self.timer.stop()
         if hasattr(self, "auto_start_timer"):
             self.auto_start_timer.stop()
+        if hasattr(self, "auto_update_timer"):
+            self.auto_update_timer.stop()
         self._unregister_start_stop_hotkey()
         self._hide_runner_overlay()
         self.close_external_helpers()
@@ -382,6 +387,8 @@ class WindowGuiMixin:
             self._update_game_restore_button_visibility()
             self._render_logs()
             self._tick()
+        elif name == "update":
+            self._start_update_check()
 
     def _panel(self, title=None):
         panel = QFrame()
