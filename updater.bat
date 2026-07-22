@@ -25,6 +25,13 @@ if errorlevel 1 goto :git_error
 set "UPDATE_COUNT=0"
 for /f %%C in ('git rev-list --count HEAD..origin/%BRANCH%') do set "UPDATE_COUNT=%%C"
 
+if /I "%MODE%"=="/check" (
+  echo UPDATE_MANIFEST_BEGIN
+  git show origin/%BRANCH%:manifest.json
+  if errorlevel 1 goto :git_error
+  echo UPDATE_MANIFEST_END
+)
+
 if not "!UPDATE_COUNT!"=="0" (
   if /I "%MODE%"=="/check" (
     echo UPDATE_AVAILABLE
