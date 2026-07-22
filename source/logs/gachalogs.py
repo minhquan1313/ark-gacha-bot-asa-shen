@@ -1,7 +1,8 @@
 import logging
-from collections.abc import Mapping
 from types import TracebackType
-from typing import cast
+from typing import Mapping, cast
+
+from source.launcher.config.constants import GACHA_LOG_FILE
 
 """ FOR TEMPLATE DEBUGGING """
 TEMPLATE_LEVEL = 5
@@ -18,17 +19,17 @@ ExcInfoType = (
 class LoggerExtended(logging.Logger):
     def template(
         self,
-        message: object,
+        msg: object,
         *args: object,
         exc_info: ExcInfoType = None,
-        extra: Mapping[str, object] | None = None,
         stack_info: bool = False,
         stacklevel: int = 1,
+        extra: Mapping[str, object] | None = None,
     ):
         if self.isEnabledFor(TEMPLATE_LEVEL):
             self._log(
                 TEMPLATE_LEVEL,
-                message,
+                msg,
                 args,
                 exc_info=exc_info,
                 extra=extra,
@@ -37,18 +38,48 @@ class LoggerExtended(logging.Logger):
             )
 
 
-# with open("source/logs/logs.txt", 'w') as file:
-#     file.close()
+logging.Logger.template = LoggerExtended.template  # type: ignore
 
-logging.setLoggerClass(LoggerExtended)
-setattr(logging.Logger, "template", LoggerExtended.template)  # noqa: B010
-logging_level = logging.DEBUG
-
-logger = cast(LoggerExtended, logging.getLogger("Gacha"))
-logging.basicConfig(
-    filename="source/logs/logs.txt",
-    level=logging_level,
-    format="%(asctime)s - %(levelname)s - %(funcName)s - %(message)s",
+file_name = GACHA_LOG_FILE
+_formatter = logging.Formatter(
+    "%(asctime)s - %(levelname)s - %(funcName)s - %(message)s",
     datefmt="%H:%M:%S",
 )
-logger.setLevel(logging_level)
+_logger_file = logging.FileHandler(
+    file_name,
+    encoding="utf-8",
+)
+_logger_file.setFormatter(_formatter)
+_logger_file.setLevel(logging.DEBUG)
+
+logger = cast(LoggerExtended, logging.getLogger("Gacha"))
+logger.setLevel(logging.DEBUG)
+logger.addHandler(_logger_file)
+
+logger.propagate = False
+
+
+def enable_log():
+    logger.disabled = False
+
+
+def disable_log():
+    logger.disabled = True
+
+
+def clear_log():
+    with open(file_name, "w") as file:
+        file.close()
+
+
+def _clean_up_on_start():
+    with open(file_name, "rb") as file:
+        line_count = sum(
+            chunk.count(b"\n") for chunk in iter(lambda: file.read(1024 * 1024), b"")
+        )
+
+    if line_count > 100_000:
+        clear_log()
+
+
+_clean_up_on_start()

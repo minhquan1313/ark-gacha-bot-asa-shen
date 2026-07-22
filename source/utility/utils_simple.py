@@ -78,19 +78,12 @@ def grid_loc_gen(
     return gen
 
 
-def clock_tracker():
-    """Function that return float value in SECOND time"""
-    start = time.time()
-
-    def diff():
-        """Return elapsed time in second"""
-        return time.time() - start
-
-    return diff
-
-
 class TimedOutCounter:
     """Track whether a configurable timeout duration has elapsed."""
+
+    _timeout = 0
+    _started = 0
+    limit_seconds = 0
 
     def __init__(self, limit_seconds: float = 3):
         self.limit_seconds = limit_seconds
@@ -102,12 +95,11 @@ class TimedOutCounter:
 
     def reset(self):
         """Restart the timeout countdown using the current duration."""
-        self._timeout = time.monotonic() + self.limit_seconds
+        self._started = time.monotonic()
+        self._timeout = self._started + self.limit_seconds
 
-
-def timed_out_counter(limit_seconds: float = 3):
-    """Create a resettable timeout checker."""
-    return TimedOutCounter(limit_seconds)
+    def eslapsed(self):
+        return time.monotonic() - self._started
 
 
 def get_default_clock(
@@ -115,7 +107,7 @@ def get_default_clock(
     multiplier: float = 1,
 ):
     """Create the default timeout checker."""
-    return timed_out_counter(deadline * multiplier)
+    return TimedOutCounter(deadline * multiplier)
 
 
 def get_default_timeout_value():

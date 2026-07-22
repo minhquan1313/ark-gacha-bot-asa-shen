@@ -87,7 +87,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         server_row.addWidget(self.server_field, 1)
         self.content_layout.addWidget(self.server_row_widget)
 
-        self.afk_join_switch = CyberSwitch("AFK Join")
+        self.afk_join_switch = CyberSwitch("AFK Join - Anti DC")
         self.afk_join_switch.setChecked(False)
         self.content_layout.addWidget(self.afk_join_switch)
 
