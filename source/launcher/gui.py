@@ -1,7 +1,7 @@
 import os
 import threading
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -109,3 +109,4 @@ class SettingsGUI(
         self.load_previous_logs()
         self._register_start_stop_hotkey()
         self._schedule_auto_start()
+        QTimer.singleShot(0, self._automatic_update_check)

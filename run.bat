@@ -63,14 +63,12 @@ if errorlevel 1 (
 cls
 
 :: Check for and apply updates before starting the launcher.
-call updater.bat /update
-if errorlevel 1 (
-  echo Update failed.
-  pause
-  exit /b 1
-)
-
-:git_done
+@REM call updater.bat /update
+@REM if errorlevel 1 (
+@REM  echo Update failed.
+@REM  pause
+@REM  exit /b 1
+@REM )
 
 set "APP_ID=ShenGBot"
 echo Starting GBot...
