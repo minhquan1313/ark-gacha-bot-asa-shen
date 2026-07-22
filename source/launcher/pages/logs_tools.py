@@ -22,6 +22,7 @@ from source.launcher.pages.common import (
 from source.launcher.utils.update_service import (
     REPOSITORY_ROOT,
     UpdateCheckResult,
+    UpdateManifest,
     check_for_update,
     load_manifest,
 )
@@ -295,7 +296,14 @@ class LogsToolsPagesMixin:
 
     def _run_update_check(self, automatic):
         """Execute the update service on a worker thread."""
-        result = check_for_update()
+        try:
+            result = check_for_update()
+        except Exception as exc:
+            try:
+                current = load_manifest()
+            except Exception:
+                current = UpdateManifest("0.0.0", "", "", ())
+            result = UpdateCheckResult(current, current, False, str(exc))
         self.update_check_finished.emit(result, automatic)
 
     def _on_update_check_finished(self, result: UpdateCheckResult, automatic):
