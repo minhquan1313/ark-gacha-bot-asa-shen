@@ -62,14 +62,6 @@ if errorlevel 1 (
 
 cls
 
-:: Check for and apply updates before starting the launcher.
-@REM call updater.bat /update
-@REM if errorlevel 1 (
-@REM  echo Update failed.
-@REM  pause
-@REM  exit /b 1
-@REM )
-
 set "APP_ID=ShenGBot"
 echo Starting GBot...
 python main.py --app-id "%APP_ID%"
@@ -80,8 +72,6 @@ call deactivate
 
 echo Killing remaining Shen GBot processes...
 powershell.exe -NoProfile -Command "$appId = '%APP_ID%'; Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'python.exe' -or $_.Name -eq 'pythonw.exe') -and $_.CommandLine -like ('*--app-id ' + $appId + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
-@REM taskkill /F /IM python.exe /T
-@REM taskkill /F /IM pythonw.exe /T
 
 if exist ".update_restart.request" (
   del /q ".update_restart.request" >nul 2>&1

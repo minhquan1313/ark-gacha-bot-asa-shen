@@ -32,7 +32,7 @@ if not "!UPDATE_COUNT!"=="0" (
   )
   
   if /I not "%MODE%"=="/update" goto :usage_error
-  
+  ::Revert local changes so git can update smoothly
   for /f "delims=" %%F in ('git diff --name-only') do (
     git diff --quiet HEAD..origin/%BRANCH% -- "%%F"
     if errorlevel 1 (
