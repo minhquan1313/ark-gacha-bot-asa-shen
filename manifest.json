@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "released_at": "2026-07-22",
   "title": "GBot - Shen - Version 1",
-  "changelog": ["Cuối cùng cũng đã có chức năng Update hẳn hoi rồi nhó các em iu =))"]
+  "changelog": ["Cuối cùng cũng đã có chức năng Update hẳn hoi rồi nhó các em iu =))", "Đã fix lỗi update không được file"]
 }

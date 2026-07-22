@@ -13,6 +13,8 @@ from source.launcher.pages.common import (
     QPixmap,
     QSizePolicy,
     Qt,
+    QVBoxLayout,
+    QWidget,
     ToolCoverCard,
     os,
     utils_simple,
@@ -32,6 +34,26 @@ class LogsToolsPagesMixin:
         notes = [manifest.title, f"Released: {manifest.released_at}"]
         notes.extend(f"- {item}" for item in manifest.changelog)
         return "\n".join(item for item in notes if item)
+
+    def _set_update_notes(self, text):
+        """Render each release-note line as its own expanding label."""
+        notes_panel = self.update_changelog_label
+        notes_layout = notes_panel.layout()
+        while notes_layout.count():
+            item = notes_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        for line in text.splitlines() or [""]:
+            label = QLabel(line)
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            label.setWordWrap(True)
+            label.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Preferred,
+            )
+            notes_layout.addWidget(label)
 
     def copy_text(self, value):
         QApplication.clipboard().setText(str(value))
@@ -203,11 +225,22 @@ class LogsToolsPagesMixin:
         latest.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.update_status_label = latest
         changelog, changelog_layout = self._panel("RELEASE NOTES")
-        changelog_text = QLabel(
+        changelog_text = QWidget()
+        changelog_text.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
+        notes_layout = QVBoxLayout(changelog_text)
+        notes_layout.setContentsMargins(0, 0, 0, 0)
+        notes_layout.setSpacing(2)
+        self.update_changelog_label = changelog_text
+        self._set_update_notes(
             local_manifest_error or self._format_manifest_notes(local_manifest)
         )
-        changelog_text.setWordWrap(True)
-        self.update_changelog_label = changelog_text
+        changelog.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Preferred,
+        )
         changelog_layout.addWidget(changelog_text)
         row = QHBoxLayout()
         action = self._button("CHECK UPDATE", "primary")
@@ -281,7 +314,7 @@ class LogsToolsPagesMixin:
                 status.show()
                 status.setText("UPDATE CHECK FAILED")
             if changelog is not None:
-                changelog.setText(result.error)
+                self._set_update_notes(result.error)
             if action is not None:
                 action.setText("CHECK UPDATE")
                 action.setEnabled(True)
@@ -299,7 +332,7 @@ class LogsToolsPagesMixin:
                 status.hide()
         if changelog is not None:
             manifest = result.latest if result.update_available else result.current
-            changelog.setText(self._format_manifest_notes(manifest))
+            self._set_update_notes(self._format_manifest_notes(manifest))
         if action is not None:
             action.setText("UPDATE" if result.update_available else "CHECK UPDATE")
             action.setEnabled(True)

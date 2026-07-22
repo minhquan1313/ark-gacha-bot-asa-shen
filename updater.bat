@@ -30,11 +30,23 @@ if not "!UPDATE_COUNT!"=="0" (
     echo UPDATE_AVAILABLE
     endlocal & exit /b 10
   )
+  
   if /I not "%MODE%"=="/update" goto :usage_error
+  ::Revert local changes so git can update smoothly
+  for /f "delims=" %%F in ('git diff --name-only') do (
+    git diff --quiet HEAD..origin/%BRANCH% -- "%%F"
+    if errorlevel 1 (
+      echo Restoring conflicting local file: %%F
+      git restore --worktree --staged -- "%%F"
+    )
+  )
+  
   echo Downloading update...
   git pull origin "%BRANCH%"
+  
   if errorlevel 1 goto :git_error
   echo Update complete.
+  
   endlocal & exit /b 0
 )
 

@@ -1,3 +1,4 @@
+import math
 import subprocess
 import time
 from typing import Literal, cast
@@ -100,6 +101,14 @@ class TimedOutCounter:
 
     def eslapsed(self):
         return time.monotonic() - self._started
+
+    def eslapsed_str(self, normalized=False):
+        seconds = math.ceil(self.eslapsed())
+        if normalized and seconds > 60:
+            minutes, seconds = divmod(seconds, 60)
+            return f"{minutes}min {seconds}s"
+
+        return f"{seconds}s"
 
 
 def get_default_clock(
