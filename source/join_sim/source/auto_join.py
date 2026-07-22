@@ -38,7 +38,7 @@ def run_auto_join_server(server: object, afk_join: bool = True):
 
         logs.logger.info(f"Trying to join server {server}...")
         if join_main.join_round(server):
-            logs.logger.info(f"Took {cl.eslapsed():.1f}s to join.")
+            logs.logger.info(f"Took {cl.eslapsed_str()} to join.")
             if not afk_join:
                 logs.logger.info(f"Joined server {server}.")
                 return True
