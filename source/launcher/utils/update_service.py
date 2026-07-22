@@ -7,7 +7,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = REPOSITORY_ROOT / "manifest.json"
 UPDATER_PATH = REPOSITORY_ROOT / "updater.bat"
-UPDATE_BRANCH = "stable_before_qml"
+UPDATE_BRANCH = "stable_to_play"
 UPDATE_AVAILABLE_CODE = 10
 VERSION_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
