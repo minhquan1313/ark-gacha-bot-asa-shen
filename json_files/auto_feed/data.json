@@ -1,0 +1,34 @@
+{
+  "ping": 100,
+  "tek_pod": true,
+  "station_yaw": 91.01,
+  "food_slot": -1,
+  "water_slot": -1,
+  "feed_cycle": 30,
+  "babies": [
+    {
+      "location": {
+        "yaw": -145.58,
+        "pitch": -43.05
+      },
+      "crouched": false,
+      "food": "berry"
+    },
+    {
+      "location": {
+        "yaw": -130.71,
+        "pitch": -38.32
+      },
+      "crouched": false,
+      "food": "berry"
+    },
+    {
+      "location": {
+        "yaw": -65.09,
+        "pitch": -43.22
+      },
+      "crouched": false,
+      "food": "berry"
+    }
+  ]
+}

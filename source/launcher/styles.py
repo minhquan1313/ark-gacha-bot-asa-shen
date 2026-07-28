@@ -368,7 +368,7 @@ def launcher_style_sheet():
             border: 1px solid rgba(255, 209, 102, 190);
             border-radius: {UI_METRICS["radius_lg"]}px;
         }}
-        QWidget#DepositHelperWindow, QDialog#DepositHelperGuide {{
+        QWidget#DepositHelperWindow, QDialog#DepositHelperGuide, QDialog#AutoFeedGuide {{
             background: transparent;
             color: {COLORS["text"]};
             border: none;
@@ -441,6 +441,24 @@ def launcher_style_sheet():
             background: {UI_COLORS["helper_details_bg"]};
             border: 1px solid {UI_COLORS["border_soft"]};
             border-radius: {UI_METRICS["radius_sm"]}px;
+        }}
+        QFrame#AutoFeedRow {{
+            background: transparent;
+            border: 1px solid {UI_COLORS["border_soft"]};
+            border-radius: {UI_METRICS["radius_md"]}px;
+        }}
+        QWidget#AutoFeedRowDetails {{
+            background: transparent;
+            border: none;
+        }}
+        QWidget#AutoFeedSectionBody {{
+            background: transparent;
+            border: none;
+        }}
+        QFrame#AutoFeedAddCaptureRow {{
+            background: transparent;
+            border: 1px dashed {UI_COLORS["border_active"]};
+            border-radius: {UI_METRICS["radius_md"]}px;
         }}
         QLabel#HelperRowSummary {{
             color: {COLORS["text"]};
@@ -532,7 +550,7 @@ def launcher_style_sheet():
             font-weight: 900;
         }}
         QScrollArea#SettingsScroll {{
-            background: rgba(5, 10, 16, 110);
+            background: rgba(5, 10, 16, 0);
             border: none;
         }}
         QWidget#SettingsForm {{

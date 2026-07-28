@@ -27,6 +27,7 @@ Otherwise, was_server_lag_last_open will always false if it was once false
 _detect_lag_for_long_process = False
 was_server_lag_last_open = False
 was_server_lag_last_open_long = False
+g_last_check_can_drop = False
 
 
 def is_open():
@@ -43,6 +44,13 @@ def is_ready():
 
 def is_turned_on():
     return not template.check_template("structure_turn_on", 0.8)
+
+
+def is_can_drop():
+    global g_last_check_can_drop
+
+    g_last_check_can_drop = v = bool(template.check_template("inventory_drop", 0.8))
+    return v
 
 
 def turn_on():
@@ -103,15 +111,9 @@ def open(crouch_if_problem=True):
         logs.logger.debug(
             f"trying to open strucuture inventory {attempts} / {source.ASA.config.inventory_open_attempts}"
         )
-        dl2 = utils_simple.get_default_clock(3)
-        pressed_c, pressed_max = 1, 2
-        while not is_open() and not dl2():
-            # Repeatedly press key to make sure the server receives the input
-            if pressed_c <= pressed_max:
-                pressed_c += 1
-                utils.press_key("AccessInventory")
-            if template.template_await_true(is_open, 0.3):
-                break
+
+        utils.press_key("AccessInventory")
+        template.template_await_true(is_open, 3)
 
         if is_open():
             logs.logger.debug("inventory opened")
@@ -136,7 +138,7 @@ def open(crouch_if_problem=True):
 
         # check state of the char before redoing
         else:
-            player_state.check_state(crouch_if_problem)
+            player_state.check_state(crouch=crouch_if_problem)
 
         was_server_lag_last_open = True
 

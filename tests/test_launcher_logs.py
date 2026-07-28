@@ -833,7 +833,7 @@ class LauncherStartProgramTests(unittest.TestCase):
 
         self.assertIs(launcher.runner_overlay, overlay)
         overlay.refresh.assert_called_once_with(
-            launcher.queue_snapshot, launcher.log_lines[1:]
+            launcher.queue_snapshot, launcher.log_lines
         )
         overlay.show.assert_called_once_with()
         overlay.raise_.assert_called_once_with()

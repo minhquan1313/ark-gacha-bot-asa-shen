@@ -149,6 +149,12 @@ class LogsToolsPagesMixin:
             ASSETS["dashboard"],
             self.open_auto_fishing_helper,
         )
+        auto_feed_card = self._tool_cover_card(
+            "Auto Baby Feeding",
+            "Feed every configured Baby and maintain food and water between cycles.",
+            ASSETS["welcome"],
+            self.open_auto_feed_helper,
+        )
         switch_card = self._tool_cover_card(
             "Switch Steam",
             "Restart Steam with any saved account, or switch accounts before "
@@ -162,6 +168,7 @@ class LogsToolsPagesMixin:
             auto_join_card,
             fertilizer_card,
             fishing_card,
+            auto_feed_card,
             transfer_card,
             switch_card,
         ]

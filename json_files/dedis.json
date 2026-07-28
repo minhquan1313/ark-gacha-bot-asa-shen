@@ -162,7 +162,7 @@
   "depositGrindableData": [
     {
       "teleport": "GACHAGRIND1",
-      "check_on_every_dedi": 2,
+      "check_on_every_dedi": 5,
       "grinder": {
         "active": true,
         "location": {
