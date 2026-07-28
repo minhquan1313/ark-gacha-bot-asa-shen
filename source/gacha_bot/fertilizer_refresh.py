@@ -9,6 +9,14 @@ from source.utility import template
 POLL_INTERVAL = 0.01
 
 
+def is_open():
+    return template.check_template("crop_plot", 0.7)
+
+
+def is_open_prompt():
+    return template.check_template("crop_plot_prompt", 0.7)
+
+
 def _open_crop_plot_inventory():
     attempts = 0
     while not template.check_template("inventory", 0.7):
@@ -55,11 +63,13 @@ def wait_for_no_fece_in_crop():
         template.template_await_false(is_still_fece, 5)
 
 
+def wait_for_prompt_to_clear():
+    logs.logger.info("Aim away from the crop plot to continue...")
+    while template.check_template_no_bounds("crop_plot_prompt", 0.9):
+        time.sleep(POLL_INTERVAL)
+
+
 def run_fertilizer_refresh():
-    def wait_for_prompt_to_clear():
-        logs.logger.info("Aim away from the crop plot to continue...")
-        while template.check_template_no_bounds("crop_plot_prompt", 0.9):
-            time.sleep(POLL_INTERVAL)
 
     while True:
         logs.logger.info("Aim at a crop plot to refresh fertilizer...")
@@ -74,7 +84,6 @@ def run_fertilizer_refresh():
                 if inventory.is_open():
                     _close_crop_plot_inventory()
                 logs.logger.warning("Crop plot did not open. Aim away and try again.")
-                # wait_for_prompt_to_clear()
                 logs.logger.info("Aim at a crop plot to refresh fertilizer...")
             time.sleep(POLL_INTERVAL)
 
@@ -87,12 +96,3 @@ def run_fertilizer_refresh():
 
         logs.logger.info("Closing crop plot inventory...")
         _close_crop_plot_inventory()
-        wait_for_prompt_to_clear()
-
-
-def is_open():
-    return template.check_template("crop_plot", 0.7)
-
-
-def is_open_prompt():
-    return template.check_template("crop_plot_prompt", 0.9)

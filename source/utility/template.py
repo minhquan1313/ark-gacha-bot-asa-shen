@@ -37,11 +37,17 @@ roi_regions: dict[RoiRegionKey, RoiRegion] = {
     "tek_trough": {"start_x": 877, "start_y": 195, "width": 161, "height": 30},
     "exit_resume": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
     "inventory": {"start_x": 150, "start_y": 93, "width": 270, "height": 113},
+    "inventory_drop": {
+        "start_x": 1455,
+        "start_y": 170,
+        "width": 60,
+        "height": 60,
+    },
     "inventory_player_drop": {
-        "start_x": 300,
-        "start_y": 120,
-        "width": 300,
-        "height": 150,
+        "start_x": 430,
+        "start_y": 170,
+        "width": 60,
+        "height": 60,
     },
     "inventory_player_transfer_all": {
         "start_x": 300,
@@ -52,7 +58,7 @@ roi_regions: dict[RoiRegionKey, RoiRegion] = {
     "seed_inv": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
     "slot_capped": {"start_x": 1680, "start_y": 985, "width": 113, "height": 75},
     "teleporter_title": {"start_x": 150, "start_y": 101, "width": 304, "height": 139},
-    "tribelog_check": {"start_x": 862, "start_y": 26, "width": 113, "height": 113},
+    "tribelog_check": {"start_x": 500, "start_y": 26, "width": 800, "height": 113},
     "waiting_inv": {"start_x": 1500, "start_y": 75, "width": 375, "height": 188},
     "teleporter_icon": {"start_x": 600, "start_y": 150, "width": 1268, "height": 825},
     "teleporter_icon_pressed": {
@@ -185,32 +191,38 @@ roi_regions: dict[RoiRegionKey, RoiRegion] = {
     },
 }
 
+# Playground https://pseudopencv.site/utilities/hsvcolormask/
+TBound: TypeAlias = tuple[int, int, int]
+BoundCouple: TypeAlias = tuple[TBound, TBound]
+default_bounds: BoundCouple = (0, 30, 200), (255, 255, 255)
+default_no_bounds: BoundCouple = (0, 0, 0), (255, 255, 255)
+white_bounds: BoundCouple = (0, 0, 200), (255, 10, 255)
+blue_bounds: BoundCouple = (90, 30, 200), (100, 255, 255)
+
+
 # Use this to overwrite the bounds of opencv2.
 # Playground https://pseudopencv.site/utilities/hsvcolormask/
 template_l_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
     # saturation to 0 so the white underline will still be tracked
     "beds_title_respawn": (0, 0, 200),
     "inventory_player_drop": (0, 30, 150),
+    "inventory_drop": (0, 30, 150),
     "inventory_player_transfer_all": (0, 30, 150),
     "server_trans_uploaded": (40, 30, 180),
     "item_snow_owl_pellet": (0, 30, 0),
     "item_fertilizer": (0, 30, 0),
     "item_fertilizer_fece": (0, 30, 0),
     "transmitter_inv": (0, 0, 200),
-    "crop_plot_prompt": (0, 0, 100),
+    "crop_plot_prompt": white_bounds[0],
 }
 template_u_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
     "server_trans_uploaded": (70, 255, 255),
     "item_snow_owl_pellet": (60, 255, 255),
     "item_fertilizer": (60, 255, 255),
     "item_fertilizer_fece": (60, 255, 255),
-    "crop_plot_prompt": (255, 100, 255),
+    "crop_plot_prompt": white_bounds[1],
 }
 
-# Playground https://pseudopencv.site/utilities/hsvcolormask/
-TBound: TypeAlias = tuple[int, int, int]
-default_bounds: list[TBound] = [(0, 30, 200), (255, 255, 255)]
-default_no_bounds: list[TBound] = [(0, 0, 0), (255, 255, 255)]
 
 # Use this to overwrite what template image will be used to compare.
 # This help reduce duplicate template images, but they serve only 1 template but different location
@@ -218,6 +230,7 @@ template_image_overwrite: dict[RoiRegionKey, RoiRegionKey] = {
     #
     "search_object_inv": "search_player_inv",
     "search_death_screen": "search",
+    "inventory_drop": "inventory_player_drop",
 }
 
 IS_DEBUG = False

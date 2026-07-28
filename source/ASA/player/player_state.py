@@ -57,7 +57,11 @@ human = charecter()
 
 
 def smart_wait_structure_with_teleport(
-    *, wait_structure: float = 0.0, should_close_teleport=False, first_wait=5
+    *,
+    wait_structure: float = 0.0,
+    should_close_teleport=False,
+    first_wait=5,
+    should_check_state=True,
 ):
     """
     PLAYER MUST NOT IN TEK POD, but don't worry, this one has "check_state" anyway =)))
@@ -76,7 +80,8 @@ def smart_wait_structure_with_teleport(
 
     time.sleep(max(0, first_wait))
 
-    check_state()  # Leave tek pod if in tek pod
+    if should_check_state:
+        check_state()  # Leave tek pod if in tek pod
 
     teleporter.look_down_teleport()
 
@@ -110,6 +115,8 @@ def smart_wait_structure_with_teleport(
 
 def check_disconnected():
     if main.is_menu() or main.is_crashed():
+        logs.enable_log()
+
         logs.logger.critical("We are disconnected from the server", exc_info=True)
         # DEBUG START
         capture_state("disconnected")
@@ -149,7 +156,7 @@ def reset_state(crouch=True):
         human.reset_crouch()
 
 
-def check_state(crouch=True):
+def check_state(*, crouch=True, should_replesh=True, should_wait_structure=True):
     # mainliy checked at the start of every task to check for food / water on the char
     if check_disconnected():
         return
@@ -163,7 +170,7 @@ def check_state(crouch=True):
             f"tekpod buff found on screen leaving tekpod now reason | type : {type} render flag : {source.gacha_bot.render.render_flag}"
         )
         source.gacha_bot.render.leave_tekpod()
-    elif type == 2 or type == 3:
+    elif (type == 2 or type == 3) and should_replesh:
         logs.logger.warning(
             f"tping back to render bed to replenish food and water | 2= water 3= food | reason:{type}"
         )
@@ -175,5 +182,9 @@ def check_state(crouch=True):
         time.sleep(1)
 
     if not utils.was_initialized:
-        utils.get_yaw_pitch()
+        logs.logger.debug("Doing init location")
         utils.was_initialized = True
+
+        utils.get_yaw_pitch()
+        if should_wait_structure:
+            smart_wait_structure_with_teleport(should_check_state=False, first_wait=0)

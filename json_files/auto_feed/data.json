@@ -1,0 +1,9 @@
+{
+  "ping": 100,
+  "tek_pod": true,
+  "station_yaw": 0,
+  "food_slot": 1,
+  "water_slot": 2,
+  "feed_cycle": 30,
+  "babies": []
+}

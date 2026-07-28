@@ -12,7 +12,7 @@ from source.utility import utils_simple
 REOPEN_INTERVAL_SECONDS = 15 * 60  # 15 mins
 
 
-def run_auto_join_server(server: object, afk_join: bool = True):
+def run_auto_join_server(server: object, afk_join: bool = False):
     logged = False
     server = normalize_server_number(server)
 
@@ -38,7 +38,7 @@ def run_auto_join_server(server: object, afk_join: bool = True):
 
         logs.logger.info(f"Trying to join server {server}...")
         if join_main.join_round(server):
-            logs.logger.info(f"Took {cl.eslapsed_str()} to join.")
+            logs.logger.info(f"Took {cl.eslapsed_str(normalized=True)} to join.")
             if not afk_join:
                 logs.logger.info(f"Joined server {server}.")
                 return True

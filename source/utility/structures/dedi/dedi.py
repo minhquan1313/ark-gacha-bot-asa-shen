@@ -151,7 +151,7 @@ def unsafe_fast_deposit_all(item: DediStorageState):
 
     utils.press_key("Use")
     _capture_deposit()
-    time.sleep(0.3)
+    utils_simple.sleep()
 
     if capture_name:
         logs.logger.debug(f"{capture_name} deposit handshake completed")

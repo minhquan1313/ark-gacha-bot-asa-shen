@@ -806,20 +806,17 @@ def update_global_config(
     global station_pushout_yaw_destination
     global transmitter_teleport
 
+    transmitter_teleport = _transfer_transmitter_teleport(dedis, current_server)
+
     utils.was_initialized = False
     global_settings.bed_spawn = bed
     global_settings.ping = int(settings["ping"])
+    global_settings.wait_structure_load = float(settings["structure_load_delay"])
+
     if current_server == "resource":
         global_settings.server_number = str(settings["resource_server"])
         global_settings.station_yaw = float(settings["resource_station_yaw"])
-    else:
-        global_settings.server_number = str(settings["destination_server"])
-        global_settings.station_yaw = float(settings["destination_station_yaw"])
-    # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-    global_settings.wait_structure_load = float(settings["structure_load_delay"])
-    # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-    if current_server == "resource":
         if global_settings.station_pushout_yaw is not None:
             station_pushout_yaw_destination = global_settings.station_pushout_yaw
 
@@ -828,7 +825,11 @@ def update_global_config(
             if station_pushout_yaw_resource is not None
             else None
         )
+
     else:
+        global_settings.server_number = str(settings["destination_server"])
+        global_settings.station_yaw = float(settings["destination_station_yaw"])
+
         if global_settings.station_pushout_yaw is not None:
             station_pushout_yaw_resource = global_settings.station_pushout_yaw
 
@@ -837,8 +838,6 @@ def update_global_config(
             if station_pushout_yaw_destination is not None
             else None
         )
-    # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
-    transmitter_teleport = _transfer_transmitter_teleport(dedis, current_server)
 
 
 def wait_structure_load(was_in_bed=False):

@@ -180,6 +180,7 @@ RoiRegionKey: TypeAlias = Literal[
     "structure_turn_on",
     "trans_inv_ready",
     "dedi_deposit_ready",
+    "inventory_drop",
     "dedi_deposit_clear",
     "capture_item_player_second_slot",
     "fishing_press_prompt",

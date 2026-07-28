@@ -106,10 +106,13 @@ class pego_station(base_task):
         self.delay = delay
 
     def execute(self):
+        # DEBUG START
         # print("Start debugging")
+        # template.IS_DEBUG = True
+        # template.DEBUG_ITEM = "tribelog_check"
+        # template.DEBUG_BEEP = True
         # while True:
-        #     template.IS_DEBUG = True
-        #     bed.is_open_respawn()
+        #     tribelog.is_open()
         #     time.sleep(0.3)
 
         # utils.zero_center()

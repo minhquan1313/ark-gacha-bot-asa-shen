@@ -1,5 +1,6 @@
 from source.launcher.pages.common import (
     CyberSwitch,
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -345,16 +346,16 @@ class DediPagesMixin:
             row.addWidget(field)
 
     def _crouch_switch(self, item):
-        switch = CyberSwitch("CROUCHED")
-        switch.blockSignals(True)
-        switch.setChecked(bool(item.get("crouched", False)))
-        switch.blockSignals(False)
-        switch.toggled.connect(
+        checkbox = QCheckBox("Crouched")
+        checkbox.blockSignals(True)
+        checkbox.setChecked(bool(item.get("crouched", False)))
+        checkbox.blockSignals(False)
+        checkbox.toggled.connect(
             lambda checked, route_item=item: self.update_deposit_bool(
                 route_item, "crouched", checked
             )
         )
-        return switch
+        return checkbox
 
     def _deposit_line_edit(self, value):
         field = QLineEdit(str(value))

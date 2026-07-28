@@ -1,8 +1,9 @@
 import math
 import subprocess
 import time
-from typing import Literal, cast
+from typing import Literal, TypeAlias, cast
 
+import settings
 from settings import APP_ID
 from source.ASA import config
 
@@ -105,8 +106,22 @@ class TimedOutCounter:
     def eslapsed_str(self, normalized=False):
         seconds = math.ceil(self.eslapsed())
         if normalized and seconds > 60:
-            minutes, seconds = divmod(seconds, 60)
-            return f"{minutes}min {seconds}s"
+            m, s = divmod(seconds, 60)
+            if s > 0:
+                return f"{m}m:{s}s"
+            else:
+                return f"{m}m"
+
+        return f"{seconds}s"
+
+    def to_string(self, normalized=False):
+        seconds = math.ceil(self.limit_seconds)
+        if normalized and seconds > 60:
+            m, s = divmod(seconds, 60)
+            if s > 0:
+                return f"{m}m:{s}s"
+            else:
+                return f"{m}m"
 
         return f"{seconds}s"
 
@@ -130,3 +145,18 @@ def start_subprocess(cmd: list[str], *args, **kwargs):
         *args,
         **kwargs,
     )
+
+
+TBase: TypeAlias = Literal["fast", "complicated", "single_player"]
+BASE_DELAY: dict[TBase, float] = {
+    "fast": 0.1,
+    "complicated": 0.3,
+    "single_player": 0.1,
+}
+
+
+def sleep(type: TBase = "fast"):
+    base = BASE_DELAY.get(type, 0.1)
+    delay_add = (settings.ping / 1000) * 1.2
+    delay = base + delay_add
+    time.sleep(delay)

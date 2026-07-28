@@ -7,6 +7,7 @@ from PySide6.QtCore import QTimer, Signal
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDialog,
     QFrame,
     QGridLayout,
@@ -25,7 +26,6 @@ from source.launcher.components.widgets import (
     AnimatedButton,
     ClickableTextEdit,
     CyberDialog,
-    CyberSwitch,
     SmoothScrollArea,
     WrappedStatusLabel,
 )
@@ -162,6 +162,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         content = QWidget()
         content.setObjectName("HelperScrollContent")
         content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(8)
@@ -454,7 +455,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         info.setSpacing(8)
         yaw = self._line_edit(item.get("location", {}).get("yaw", 0.0))
         pitch = self._line_edit(item.get("location", {}).get("pitch", 0.0))
-        crouched = CyberSwitch("Crouch")
+        crouched = QCheckBox("Crouched")
         crouched.setChecked(bool(item.get("crouched", False)))
         capture = self._helper_action_button(
             CAPTURE_ACTION_ICON, "Capture yaw and pitch"

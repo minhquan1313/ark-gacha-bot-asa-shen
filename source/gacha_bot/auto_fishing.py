@@ -1,5 +1,5 @@
 import time
-from typing import TypeAlias, cast
+from typing import cast
 
 import pyautogui
 
@@ -8,8 +8,6 @@ from source.ASA.player import player_state
 from source.launcher.utils import deposit_helper_capture
 from source.utility import template, utils, utils_simple
 from source.utility.types import RoiRegion, RoiRegionKey
-
-LBound: TypeAlias = tuple[template.TBound, template.TBound]
 
 CLICK_INTERVAL = 0.2
 KEY_PRESS_INTERVAL = 0.1
@@ -38,7 +36,6 @@ FISHING_RESULT_REGION: RoiRegion = {
     "width": 888,
     "height": 270,
 }
-blue_b: LBound = ((90, 30, 200), (100, 255, 255))
 
 FISHING_PRESS_TEMPLATE: list[RoiRegionKey] = [
     "fishing_press_prompt",
@@ -58,7 +55,6 @@ FISHING_PRESS_REGION: RoiRegion = {
     "width": 800,
     "height": 300,
 }
-white_b: LBound = ((0, 0, 200), (255, 10, 255))
 
 PRESS_KEY_THRESHOLD = 0.97
 
@@ -75,14 +71,14 @@ def register_template_roi():
 
     template.register_roi(
         {k: FISHING_RESULT_REGION.copy() for k in FISHING_RESULT_TEMPLATES},
-        blue_b[0],
-        blue_b[1],
+        template.blue_bounds[0],
+        template.blue_bounds[1],
     )
 
     template.register_roi(
         {k: FISHING_PRESS_REGION.copy() for k in FISHING_PRESS_TEMPLATE},
-        white_b[0],
-        white_b[1],
+        template.white_bounds[0],
+        template.white_bounds[1],
     )
 
     template.templates_preload([k for k in FISHING_KEY_TEMPLATES])

@@ -59,7 +59,7 @@ TARGET_GAME_SETTINGS = {
     "bCustomCosmeticsShowAllItems": "False",
     #
     "FrameMultiplier": "1",
-    "ScreenPercentage": "1.000000",
+    "ScreenPercentage": "0.500000",
     #
     "sg.ReflectionQuality": "0",
     "sg.PostProcessQuality": "0",

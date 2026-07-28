@@ -234,7 +234,7 @@ class RuntimeGuiMixin:
             if self.runner_loading:
                 overlay.refresh_loading()
             else:
-                overlay.refresh(self.queue_snapshot, self._runner_overlay_log_lines())
+                overlay.refresh(self.queue_snapshot, self.log_lines)
             overlay.show()
             overlay.raise_()
         except RuntimeError:

@@ -83,6 +83,20 @@ def run_server_transfer(args: argparse.Namespace):
     return 0 if completed else 1
 
 
+def run_auto_feed(args: argparse.Namespace):
+    """Run Auto Baby Feeding from a validated runtime configuration file."""
+    from source.gacha_bot.auto_feed import run_auto_feed as run_feed
+    from source.launcher.config.auto_feed_config import normalize_auto_feed
+
+    with open(args.config, "r", encoding="utf-8") as file:
+        config = normalize_auto_feed(json.load(file))
+    send_ready()
+    completed = run_feed(config)
+    completion = "Finished." if completed else "Stopped."
+    send_completion(completion)
+    return 0 if completed else 1
+
+
 def run_switch_steam(args: argparse.Namespace):
     """Restart Steam with the selected account through the transfer workflow."""
     from source.launcher.config.transfer_helper_config import (
@@ -147,6 +161,10 @@ def build_parser():
     transfer = subparsers.add_parser("server_transfer")
     transfer.add_argument("--config", required=True)
     transfer.set_defaults(func=run_server_transfer)
+
+    auto_feed = subparsers.add_parser("auto_feed")
+    auto_feed.add_argument("--config", required=True)
+    auto_feed.set_defaults(func=run_auto_feed)
 
     switch_steam = subparsers.add_parser("switch_steam")
     switch_steam.add_argument("--account", required=True)

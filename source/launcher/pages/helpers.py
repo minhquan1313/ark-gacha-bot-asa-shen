@@ -1,4 +1,5 @@
 from source.launcher.pages.common import (
+    AutoBabyFeedingHelper,
     AutoFishingHelper,
     AutoJoinServerHelper,
     DepositRouteHelper,
@@ -11,6 +12,26 @@ from source.launcher.pages.common import (
 
 
 class HelperPagesMixin:
+    def open_auto_feed_helper(self):
+        """Open or refocus the Auto Baby Feeding helper."""
+        if not self._can_open_setup_helper():
+            return
+        helper = self.find_deposit_helper("auto_feed", None)
+        if helper is not None:
+            helper.show()
+            helper.raise_()
+            helper.activateWindow()
+            self.deposit_helper = helper
+            return
+
+        self.close_external_helpers()
+        helper = AutoBabyFeedingHelper(self)
+        self.register_deposit_helper(helper)
+        helper.show()
+        helper.raise_()
+        helper.activateWindow()
+        self.deposit_helper = helper
+
     def open_deposit_helper(self, route_kind, route_index):
         if not self._can_open_setup_helper():
             return

@@ -4,6 +4,7 @@ from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QCursor, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QFrame,
@@ -552,7 +553,7 @@ class DepositRouteHelper(BaseHelperWindow):
             self.status.setText(message)
         for widget in self.findChildren(QWidget):
             if not isinstance(
-                widget, (AnimatedButton, QLineEdit, QComboBox, CyberSwitch)
+                widget, (AnimatedButton, QCheckBox, QLineEdit, QComboBox, CyberSwitch)
             ):
                 continue
             widget.setEnabled(not active)
@@ -685,7 +686,7 @@ class CollapsibleHelperRow(QFrame):
         switches = QHBoxLayout()
         switches.setContentsMargins(0, 2, 0, 2)
         switches.setSpacing(8)
-        crouched = CyberSwitch("CROUCHED")
+        crouched = QCheckBox("Crouched")
         crouched.blockSignals(True)
         crouched.setChecked(bool(self.entry.get("crouched", False)))
         crouched.blockSignals(False)
