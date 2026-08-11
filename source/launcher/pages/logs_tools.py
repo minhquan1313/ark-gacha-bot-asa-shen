@@ -132,8 +132,8 @@ class LogsToolsPagesMixin:
             self.open_auto_join_server_helper,
         )
         transfer_card = self._tool_cover_card(
-            "Server Transfer Helper",
-            "Move resources between two servers across multiple Steam accounts.",
+            "Server Transfer",
+            "Move resources between two servers across multiple Steam accounts(max 4 accounts gives best exp).",
             "assets/templateHammer/GachaBot - Transfer Base.jpg",
             self.open_server_transfer_helper,
         )
@@ -151,7 +151,7 @@ class LogsToolsPagesMixin:
         )
         auto_feed_card = self._tool_cover_card(
             "Auto Baby Feeding",
-            "Feed every configured Baby and maintain food and water between cycles.",
+            "Feed every baby and maintain food and water of character.",
             ASSETS["welcome"],
             self.open_auto_feed_helper,
         )

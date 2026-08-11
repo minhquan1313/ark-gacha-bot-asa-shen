@@ -5,8 +5,7 @@ import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
-import psutil
-
+from source.launcher.utils import steam_accounts
 from source.utility.screen import (
     DisplayMode,
     apply_display_mode,
@@ -45,6 +44,9 @@ TARGET_GAME_SETTINGS = {
     "GUI3DWidgetQuality": "0.000000",
     "bThirdPersonPlayer": "False",
     "UIQuickbarScaling": "0.75",
+    "RemoteItemSortType": "1",
+    "LocalItemSortType": "1",
+    "FilterTypeInventoryLocal": "9",
     #
     "FrameGenerationMethod": "0",
     "FrameGenerationMultiplier": "1",
@@ -92,24 +94,17 @@ def parse_steam_library_paths(vdf_text):
     return paths
 
 
-def find_running_steam_dir():
-    if psutil is None:
-        raise RuntimeError("psutil is required to locate running steam.exe.")
-
-    for proc in psutil.process_iter(attrs=["name", "exe"]):
-        try:
-            name = proc.info.get("name") or ""
-            exe = proc.info.get("exe")
-        except (psutil.AccessDenied, psutil.NoSuchProcess):
-            continue
-        if name.lower() == "steam.exe" and exe:
-            return Path(exe).parent
-
-    raise RuntimeError("steam.exe is not running.")
-
-
 def find_game_user_settings_path(steam_dir=None):
-    steam_root = Path(steam_dir) if steam_dir is not None else find_running_steam_dir()
+    try:
+        steam_root = (
+            Path(steam_dir)
+            if steam_dir is not None
+            else steam_accounts.find_running_steam_dir()
+        )
+    except steam_accounts.SteamNotRunning:
+        steam_accounts.restart_steam()
+        steam_root = steam_accounts.find_running_steam_dir()
+
     library_vdf = steam_root / "steamapps" / "libraryfolders.vdf"
     if not library_vdf.exists():
         raise RuntimeError(f"Steam library file was not found: {library_vdf}")
@@ -134,8 +129,20 @@ def find_game_user_settings_path(steam_dir=None):
     raise RuntimeError("ARK Survival Ascended GameUserSettings.ini was not found.")
 
 
-def find_game_user_input_path(steam_dir=None):
-    steam_root = Path(steam_dir) if steam_dir is not None else find_running_steam_dir()
+def find_game_user_input_path(steam_dir=None, restart_steam_if_missing=True):
+    """Locate ARK Input.ini through Steam libraryfolders.vdf."""
+    try:
+        steam_root = (
+            Path(steam_dir)
+            if steam_dir is not None
+            else steam_accounts.find_running_steam_dir()
+        )
+    except steam_accounts.SteamNotRunning:
+        if not restart_steam_if_missing:
+            raise
+        steam_accounts.restart_steam()
+        steam_root = steam_accounts.find_running_steam_dir()
+
     library_vdf = steam_root / "steamapps" / "libraryfolders.vdf"
     if not library_vdf.exists():
         raise RuntimeError(f"Steam library file was not found: {library_vdf}")

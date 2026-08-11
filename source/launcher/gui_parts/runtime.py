@@ -40,6 +40,65 @@ RUNNER_OVERLAY_READY_MESSAGE = "__RUNNER_OVERLAY_READY__"
 
 
 class RuntimeGuiMixin:
+    def _auto_keys_are_suspended(self):
+        """Return whether one or more launcher workers own an Auto Keys pause."""
+        return bool(getattr(self, "auto_keys_automation_suspensions", set()))
+
+    def _sync_auto_keys_suspension_ui(self):
+        """Reflect temporary automation suspension without persisting the switch."""
+        field = getattr(self, "auto_keys_enabled_field", None)
+        if field is None:
+            return
+        suspended = self._auto_keys_are_suspended()
+        configured = bool(self.settings.get("auto_keys", {}).get("enabled", False))
+        field.blockSignals(True)
+        field.setChecked(configured and not suspended)
+        field.setEnabled(not suspended)
+        field.setToolTip("Paused while automation is running" if suspended else "")
+        field.blockSignals(False)
+
+    def _suspend_auto_keys_for_automation(self, token: object):
+        """Acquire one worker-owned Auto Keys suspension token."""
+        suspensions = getattr(self, "auto_keys_automation_suspensions", None)
+        if suspensions is None:
+            suspensions = set()
+            self.auto_keys_automation_suspensions = suspensions
+        if token in suspensions:
+            return
+        first_suspension = not suspensions
+        suspensions.add(token)
+        if first_suspension:
+            runtime = getattr(self, "auto_keys_runtime", None)
+            self.auto_keys_restore_after_automation = bool(
+                runtime is not None and runtime.suspend_for_automation()
+            )
+        self._sync_auto_keys_suspension_ui()
+
+    def _resume_auto_keys_after_automation(self, token: object):
+        """Release one worker token and restore Auto Keys after the final worker."""
+        suspensions = getattr(self, "auto_keys_automation_suspensions", set())
+        if token not in suspensions:
+            return
+        suspensions.remove(token)
+        if suspensions:
+            self._sync_auto_keys_suspension_ui()
+            return
+        should_restore = bool(
+            getattr(self, "auto_keys_restore_after_automation", False)
+            and self.settings.get("auto_keys", {}).get("enabled", False)
+            and not self.shutdown_started
+        )
+        self.auto_keys_restore_after_automation = False
+        runtime = getattr(self, "auto_keys_runtime", None)
+        if should_restore and runtime is not None:
+            runtime.configure(self.settings)
+        self._sync_auto_keys_suspension_ui()
+
+    def _clear_auto_keys_automation_suspensions(self):
+        """Forget worker suspension state without restarting Auto Keys."""
+        self.auto_keys_automation_suspensions = set()
+        self.auto_keys_restore_after_automation = False
+
     def toggle_program(self):
         if self.is_program_running():
             self.stop_program()
@@ -137,6 +196,10 @@ class RuntimeGuiMixin:
         ):
             return
 
+        token = "main-runner"
+        suspend_auto_keys = getattr(self, "_suspend_auto_keys_for_automation", None)
+        if callable(suspend_auto_keys):
+            suspend_auto_keys(token)
         try:
             self.runner_launch_pending = False
             self.close_external_helpers()
@@ -159,6 +222,15 @@ class RuntimeGuiMixin:
             )
             self.output_reader_thread.start()
         except Exception as exc:
+            process = getattr(self, "process", None)
+            if process is not None and process.poll() is None:
+                with contextlib.suppress(Exception):
+                    terminate_process_tree(process)
+                self._close_output_reader(process)
+                self.process = None
+            resume_auto_keys = getattr(self, "_resume_auto_keys_after_automation", None)
+            if callable(resume_auto_keys):
+                resume_auto_keys(token)
             self.runner_loading = False
             self.runner_launch_pending = False
             self.runner_ready_pending = False
@@ -214,6 +286,9 @@ class RuntimeGuiMixin:
         elif was_loading:
             self.append_log("[ERROR] Runner stopped before it finished loading.\n")
         self.runner_ready_pending = False
+        resume_auto_keys = getattr(self, "_resume_auto_keys_after_automation", None)
+        if callable(resume_auto_keys):
+            resume_auto_keys("main-runner")
         self._update_start_stop_button()
         self._hide_runner_overlay()
 
@@ -342,6 +417,10 @@ class RuntimeGuiMixin:
         self._update_start_stop_button()
         self._update_start_game_button_visibility()
         self._sync_ark_status_labels()
+        if getattr(self, "current_settings_group", "") == "LAUNCHER":
+            refresh_supported = getattr(self, "_refresh_auto_keys_supported_keys", None)
+            if refresh_supported is not None:
+                refresh_supported()
         if hasattr(self, "server_value"):
             server_number = self.form_values.get(
                 "server_number", self.settings.get("server_number", "0")

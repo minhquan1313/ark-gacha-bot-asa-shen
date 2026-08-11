@@ -17,6 +17,11 @@
     "helper_inactive_opacity": 0.3,
     "launcher_width": 1200,
     "launcher_height": 800,
+    "auto_keys": {
+        "enabled": false,
+        "interval": 0.15,
+        "hold_duration": 1.0
+    },
     "ping_template": "",
     "iguanadon_template": "",
     "bed_spawn_template": "",

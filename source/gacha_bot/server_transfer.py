@@ -1,4 +1,3 @@
-import ctypes
 import time
 from typing import Callable
 
@@ -12,7 +11,6 @@ from source.gacha_bot import render
 from source.join_sim.source import main as join_main
 from source.join_sim.source.auto_join import run_auto_join_server
 from source.join_sim.source.menus import success
-from source.launcher import ark_game_setup
 from source.launcher.ark_game_setup import (
     ARK_PROCESS_NAME,
     launch_ark_through_steam,
@@ -27,7 +25,7 @@ from source.launcher.config.transfer_helper_config import (
 from source.launcher.utils import steam_accounts
 from source.launcher.utils.deposit_helper_capture import focus_game_window
 from source.launcher.utils.steam_switch import switch_steam_account
-from source.launcher.utils.system import focus_window_if_needed, validate_ark_window
+from source.launcher.utils.system import validate_ark_window
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple
 from source.utility.structures.dedi import dedi
@@ -1014,7 +1012,7 @@ def steam_cloud_sync_conflict_is_open():
 
 def steam_has_failure(steam):
     """Handle known Steam launch dialogs before ARK becomes usable."""
-    if not _focus_visible_steam_window(steam):
+    if not steam_accounts._focus_visible_steam_window():
         return False
 
     if steam_launch_option_is_open():
@@ -1038,48 +1036,7 @@ def steam_has_failure(steam):
 
 def _restart_steam_before_ark_retry(steam: TransferSteamUiCoords | None, timeout: int):
     """Hard-reset ARK and Steam before the next ARK launch attempt."""
-    ark_game_setup.kill_running_ark()
-    steam_accounts.close_steam()
-
-    restart_delay = 8
-    if isinstance(steam, dict):
-        restart_delay = steam.get("restart_delay", restart_delay)
-    time.sleep(float(restart_delay))
-
-    logs.logger.warning("Restarting Steam before relaunching ARK.")
-    steam_accounts.launch_steam()
-
-    dl = utils_simple.get_default_clock(timeout)
-    while not dl():
-        if _focus_visible_steam_window(steam):
-            logs.logger.info("Steam is visible and maximized before ARK retry.")
-            return True
-        time.sleep(1)
-
-    logs.logger.warning(
-        "Steam was not visible and maximized before ARK retry; relaunching ARK."
-    )
-    return False
-
-
-def _focus_visible_steam_window(steam: TransferSteamUiCoords | None):
-    """Focus and maximize Steam only when its window exists and is visible."""
-    title = "Steam"
-    if isinstance(steam, dict):
-        title = steam.get("window_title") or title
-
-    user32 = ctypes.windll.user32
-    hwnd = user32.FindWindowW(None, title)
-    if not hwnd:
-        return False
-    if not user32.IsWindowVisible(hwnd):
-        return False
-
-    try:
-        return bool(_focus_steam_window_maximized(title))
-    except RuntimeError as exc:
-        logs.logger.error(f"Steam window focus failed: {exc}")
-        return False
+    return steam_accounts.restart_steam(timeout=timeout)
 
 
 def _click_steam_button(pyautogui, button_name):
@@ -1291,18 +1248,6 @@ def _bed_name(players: TransferPlayersConfig, account: int):
 
 def _steam_account(players: TransferPlayersConfig, account: int):
     return player_steam_account(players, account)
-
-
-def _focus_steam_window_maximized(window_title: str):
-    if not focus_window_if_needed(window_title, center_cursor_when_switching=True):
-        return False
-    hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
-    if not hwnd:
-        return False
-    if not ctypes.windll.user32.IsZoomed(hwnd):
-        ctypes.windll.user32.ShowWindow(hwnd, 3)
-    ctypes.windll.user32.BringWindowToTop(hwnd)
-    return True
 
 
 def _process_running(process_name):

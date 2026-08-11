@@ -1,9 +1,17 @@
+import ctypes
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from source.launcher.ark_game_setup import ARK_STEAM_ID, find_running_steam_dir
+import psutil
+
+import settings
+from source.launcher import ark_game_setup
+from source.launcher.utils import system
+from source.logs import gachalogs as logs
+from source.utility import utils_simple
 
 
 @dataclass(frozen=True)
@@ -74,6 +82,29 @@ def most_recent_account_name(
     return ""
 
 
+class SteamNotRunning(RuntimeError):
+    pass
+
+
+def find_running_steam_dir():
+    if psutil is None:
+        raise RuntimeError("psutil is required to locate running steam.exe.")
+
+    for proc in psutil.process_iter(attrs=["name", "exe"]):
+        try:
+            name = proc.info.get("name") or ""
+            exe = proc.info.get("exe")
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            continue
+        if name.lower() == "steam.exe" and exe:
+            return Path(exe).parent
+
+    # steam.exe is not running.
+    # restart_steam()
+
+    raise SteamNotRunning("steam.exe is not running")
+
+
 def account_to_dict(account: SteamAccount):
     return {
         "steam_id": account.steam_id,
@@ -141,8 +172,73 @@ def launch_steam():
     """Open the registered Steam client without resolving its executable path."""
     # subprocess.Popen(["cmd", "/c", "start", "", "steam://open/main"])
     subprocess.Popen(
-        ["cmd", "/c", "start", "", f"steam://nav/games/details/{ARK_STEAM_ID}"]
+        [
+            "cmd",
+            "/c",
+            "start",
+            "",
+            f"steam://nav/games/details/{ark_game_setup.ARK_STEAM_ID}",
+        ]
     )
+
+
+def restart_steam(*, timeout=-1):
+    if timeout == -1:
+        timeout = settings.wait_reconnect
+
+    ark_game_setup.kill_running_ark()
+    close_steam()
+    time.sleep(settings.steam_restart_sleep)
+    launch_steam()
+
+    dl = utils_simple.get_default_clock(timeout)
+    while True:
+        if dl():
+            # close_steam()
+            # time.sleep(1)
+            # launch_steam()
+            break
+            # dl.reset()
+
+        if _focus_visible_steam_window():
+            logs.logger.info("Steam is visible and maximized.")
+            return True
+        time.sleep(1)
+
+    logs.logger.error("Failed to restart Steam.")
+    return False
+
+
+def _focus_visible_steam_window():
+    """Focus and maximize Steam only when its window exists and is visible."""
+    title = "Steam"
+
+    user32 = ctypes.windll.user32
+    hwnd = user32.FindWindowW(None, title)
+    if not hwnd:
+        return False
+    if not user32.IsWindowVisible(hwnd):
+        return False
+
+    try:
+        return bool(_focus_steam_window_maximized(title))
+    except RuntimeError as exc:
+        logs.logger.error(f"Steam window focus failed: {exc}")
+        return False
+
+
+def _focus_steam_window_maximized(window_title: str):
+    if not system.focus_window_if_needed(
+        window_title, center_cursor_when_switching=True
+    ):
+        return False
+    hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
+    if not hwnd:
+        return False
+    if not ctypes.windll.user32.IsZoomed(hwnd):
+        ctypes.windll.user32.ShowWindow(hwnd, 3)
+    ctypes.windll.user32.BringWindowToTop(hwnd)
+    return True
 
 
 def _iter_account_blocks(vdf_text: str):

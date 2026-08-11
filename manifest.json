@@ -1,6 +1,9 @@
 {
-  "version": "1.0.2",
-  "released_at": "2026-07-29",
-  "title": "GBot[Shen] - Auto Baby and more fixes",
-  "changelog": ["Added Auto Baby Feeding tool.", "Normalized auto join time taken", "(Ex: 'Took 3m41s to join')", "Enhance detections and UI", "GachotBot now deposit safer(based on server ping)"]
+  "version": "1.0.3",
+  "released_at": "2026-08-11",
+  "title": "GBot[Shen] - Auto Key and more fixes",
+  "changelog": [
+    "Added Auto Key tool(Under settings/launcher).",
+    "Requested by IDean, have fun!"
+  ]
 }

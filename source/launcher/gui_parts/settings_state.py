@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from PySide6.QtCore import QTimer
 
 from source.launcher import ark_game_setup
@@ -184,6 +186,8 @@ class SettingsStateGuiMixin:
     def _collect_settings(self):
         data = {}
         for key, default_value in DEFAULT_SETTINGS.items():
+            if key == "auto_keys":
+                continue
             value = self.form_values.get(key, default_value)
             if isinstance(default_value, bool):
                 data[key] = bool(value)
@@ -193,6 +197,9 @@ class SettingsStateGuiMixin:
                 data[key] = float(value)
             else:
                 data[key] = str(value)
+        data["auto_keys"] = deepcopy(
+            self.form_values.get("auto_keys", DEFAULT_SETTINGS["auto_keys"])
+        )
         data["helper_inactive_opacity"] = max(
             0.1, min(1.0, data["helper_inactive_opacity"])
         )

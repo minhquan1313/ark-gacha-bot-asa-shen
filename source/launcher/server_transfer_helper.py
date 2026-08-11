@@ -117,7 +117,7 @@ class ServerTransferHelper(WorkerHelperWindow):
 
         super().__init__(
             owner,
-            "Server Transfer Helper",
+            "Server Transfer",
             360,
             520,
             route_kind="server_transfer",

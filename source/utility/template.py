@@ -58,6 +58,12 @@ roi_regions: dict[RoiRegionKey, RoiRegion] = {
     "seed_inv": {"start_x": 412, "start_y": 337, "width": 1253, "height": 660},
     "slot_capped": {"start_x": 1680, "start_y": 985, "width": 113, "height": 75},
     "teleporter_title": {"start_x": 150, "start_y": 101, "width": 304, "height": 139},
+    "teleporter_write_your_text": {
+        "start_x": 760,
+        "start_y": 260,
+        "width": 400,
+        "height": 300,
+    },
     "tribelog_check": {"start_x": 500, "start_y": 26, "width": 800, "height": 113},
     "waiting_inv": {"start_x": 1500, "start_y": 75, "width": 375, "height": 188},
     "teleporter_icon": {"start_x": 600, "start_y": 150, "width": 1268, "height": 825},
@@ -194,9 +200,13 @@ roi_regions: dict[RoiRegionKey, RoiRegion] = {
 # Playground https://pseudopencv.site/utilities/hsvcolormask/
 TBound: TypeAlias = tuple[int, int, int]
 BoundCouple: TypeAlias = tuple[TBound, TBound]
+
 default_bounds: BoundCouple = (0, 30, 200), (255, 255, 255)
 default_no_bounds: BoundCouple = (0, 0, 0), (255, 255, 255)
-white_bounds: BoundCouple = (0, 0, 200), (255, 10, 255)
+
+# Use this for fully white element UI
+white_bounds: BoundCouple = ((0, 0, 200), (255, 10, 255))
+# Use this when element is cyan color, check fishing_success.png for the cyan color reference
 blue_bounds: BoundCouple = (90, 30, 200), (100, 255, 255)
 
 
