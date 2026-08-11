@@ -57,6 +57,7 @@ from source.launcher.config.constants import (
     APP_TITLE,
     APP_VERSION,
     ASSETS,
+    AUTO_KEYS_ACTIONS,
     COLORS,
     DEFAULT_SETTINGS,
     SETTINGS_GROUPS,
@@ -111,6 +112,7 @@ from source.launcher.utils.settings_store import load_settings, save_settings
 from source.utility import utils_simple
 
 __all__ = [
+    "AUTO_KEYS_ACTIONS",
     "APP_NAME",
     "APP_TITLE",
     "APP_VERSION",

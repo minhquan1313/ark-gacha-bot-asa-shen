@@ -69,17 +69,18 @@ def get_fov():
     return float(required_user_setting("FOVMultiplier"))
 
 
-def get_input_settings(input_name):
-    base_path = get_base_path()
-
-    input_path = os.path.join(
-        base_path, "ShooterGame", "Saved", "Config", "Windows", "input.ini"
-    )
+def get_input_settings(input_name, input_path=None):
+    """Read an action binding from ARK Input.ini or the running game path."""
+    if input_path is None:
+        base_path = get_base_path()
+        input_path = os.path.join(
+            base_path, "ShooterGame", "Saved", "Config", "Windows", "input.ini"
+        )
 
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input settings file not found: {input_path}")
 
-    with open(input_path, "r") as file:
+    with open(input_path, "r", encoding="utf-8", errors="replace") as file:
         if input_name == "ConsoleKeys":
             for line in file:
                 if input_name in line:

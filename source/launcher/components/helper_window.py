@@ -394,6 +394,7 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.helper_log_lines = []
         self.helper_log_file_position = 0
         self.helper_log_overlay = None
+        self.auto_keys_suspension_active = False
         self.helper_log_timer = QTimer(self)
         self.helper_log_timer.timeout.connect(self._poll_helper_log_file)
         self.helper_log_changed.connect(self._refresh_helper_log_overlay)
@@ -415,6 +416,12 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.toggle()
 
     def _start_worker(self, *runner_args):
+        suspend_auto_keys = getattr(
+            self.owner, "_suspend_auto_keys_for_automation", None
+        )
+        if callable(suspend_auto_keys) and not self.auto_keys_suspension_active:
+            suspend_auto_keys(self)
+            self.auto_keys_suspension_active = True
         self.helper_log_lines = []
         self.helper_log_file_position = self._helper_log_file_size()
         self._set_running_ui(True)
@@ -423,25 +430,42 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.worker_result_message = None
         self.worker_debug_lines = []
         self.output_reader_stop = threading.Event()
-        self.worker_process = start_subprocess(
-            [
-                sys.executable,
-                "-u",
-                "-m",
-                "source.launcher.components.helper_runner",
-                *runner_args,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            cwd=os.getcwd(),
-        )
-        self.output_reader_thread = threading.Thread(
-            target=self._read_worker_output, args=(self.worker_process,), daemon=True
-        )
-        self.output_reader_thread.start()
-        self.helper_log_timer.start(250)
+        try:
+            self.worker_process = start_subprocess(
+                [
+                    sys.executable,
+                    "-u",
+                    "-m",
+                    "source.launcher.components.helper_runner",
+                    *runner_args,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                cwd=os.getcwd(),
+            )
+        except Exception:
+            self._release_auto_keys_suspension()
+            raise
+        try:
+            self.output_reader_thread = threading.Thread(
+                target=self._read_worker_output,
+                args=(self.worker_process,),
+                daemon=True,
+            )
+            self.output_reader_thread.start()
+            self.helper_log_timer.start(250)
+        except Exception:
+            process = self.worker_process
+            if process is not None and process.poll() is None:
+                with contextlib.suppress(Exception):
+                    terminate_process_tree(process)
+            self._close_output_reader(process)
+            self.worker_process = None
+            self.helper_log_timer.stop()
+            self._release_auto_keys_suspension()
+            raise
 
     def _read_worker_output(self, process):
         if process is None or process.stdout is None:
@@ -564,11 +588,23 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.worker_process = None
         self.worker_stopping = False
         self.worker_stop_deadline = None
+        self._release_auto_keys_suspension()
         if self.closing:
             self.close()
             return True
         self._set_running_ui(False)
         return False
+
+    def _release_auto_keys_suspension(self):
+        """Release this helper's temporary Auto Keys suspension once."""
+        if not self.auto_keys_suspension_active:
+            return
+        self.auto_keys_suspension_active = False
+        resume_auto_keys = getattr(
+            self.owner, "_resume_auto_keys_after_automation", None
+        )
+        if callable(resume_auto_keys):
+            resume_auto_keys(self)
 
     def _set_running_ui(self, running):
         if running:

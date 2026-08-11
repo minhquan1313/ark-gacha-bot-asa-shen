@@ -53,3 +53,7 @@ def run_auto_join_server(server: object, afk_join: bool = False):
                 time.sleep(sleep)
                 player_state.reset_state()
                 dl.reset()
+        elif logged:
+            join_logs.disable_log()
+            logs.disable_log()
+            logged = False

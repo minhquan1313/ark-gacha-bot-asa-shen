@@ -14,6 +14,10 @@ def is_open():
     return template.check_template("teleporter_title", 0.7)
 
 
+def is_open_name_prompt():
+    return template.check_template("teleporter_write_your_text", 0.7)  # Update this
+
+
 def open():
     """
     player should already be looking down at the teleporter this just opens and WILL try and correct if there are issues
@@ -60,6 +64,14 @@ def open():
 
 def close():
     attempts = 0
+
+    if is_open_name_prompt():
+        windows.click(
+            variables.get_pixel_loc("cancel_name_tp_x"),
+            variables.get_pixel_loc("cancel_name_tp_y"),
+        )
+        time.sleep(0.1)
+
     while is_open():
         attempts += 1
         logs.logger.debug(

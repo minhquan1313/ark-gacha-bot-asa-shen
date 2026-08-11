@@ -16,6 +16,18 @@ FUNCTIONS FOR KEYBOARD
 WM_KEYDOWN = 0x0100
 WM_KEYUP = 0x0101
 WM_CHAR = 0x0102
+WM_LBUTTONDOWN = 0x0201
+WM_LBUTTONUP = 0x0202
+WM_RBUTTONDOWN = 0x0204
+WM_RBUTTONUP = 0x0205
+WM_MBUTTONDOWN = 0x0207
+WM_MBUTTONUP = 0x0208
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
+MOUSEEVENTF_RIGHTDOWN = 0x0008
+MOUSEEVENTF_RIGHTUP = 0x0010
+MOUSEEVENTF_MIDDLEDOWN = 0x0020
+MOUSEEVENTF_MIDDLEUP = 0x0040
 
 keymap = {
     "tab": 0x09,
@@ -92,12 +104,84 @@ def keymap_return(key_input):
 
 
 def press_key(input_action):
-    vk_code = keymap_return(local_player.get_input_settings(input_action))
-    hwnd = windows.ark_hwnd()
+    press_action(input_action, 0.05)
 
+
+def _mouse_message(input_key, pressed):
+    messages = {
+        "leftmousebutton": (WM_LBUTTONDOWN, WM_LBUTTONUP),
+        "rightmousebutton": (WM_RBUTTONDOWN, WM_RBUTTONUP),
+        "middlemousebutton": (WM_MBUTTONDOWN, WM_MBUTTONUP),
+    }
+    pair = messages.get(input_key.lower())
+    if pair is None:
+        return None
+    return pair[0 if pressed else 1]
+
+
+def _mouse_lparam(hwnd):
+    point = windows.POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
+    ctypes.windll.user32.ScreenToClient(hwnd, ctypes.byref(point))
+    return ((point.y & 0xFFFF) << 16) | (point.x & 0xFFFF)
+
+
+def _send_mouse_button(input_key, pressed):
+    flags = {
+        "leftmousebutton": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
+        "rightmousebutton": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
+        "middlemousebutton": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
+    }.get(str(input_key).lower())
+    if flags is None:
+        return False
+    input_event = windows.INPUT(type=windows.INPUT_MOUSE)
+    input_event.mi = windows.MOUSEINPUT(
+        dx=0,
+        dy=0,
+        mouseData=0,
+        dwFlags=flags[0 if pressed else 1],
+        time=0,
+        dwExtraInfo=0,
+    )
+    ctypes.windll.user32.SendInput(
+        1, ctypes.byref(input_event), ctypes.sizeof(windows.INPUT)
+    )
+    return True
+
+
+def action_down(input_action):
+    """Send a resolved keyboard or mouse action down event to ARK."""
+    input_key = local_player.get_input_settings(input_action)
+    hwnd = windows.ark_hwnd()
+    if _send_mouse_button(input_key, True):
+        return
+    mouse_message = _mouse_message(input_key, True)
+    if mouse_message is not None:
+        ctypes.windll.user32.PostMessageW(hwnd, mouse_message, 0, _mouse_lparam(hwnd))
+        return
+    vk_code = keymap_return(input_key)
     ctypes.windll.user32.PostMessageW(hwnd, WM_KEYDOWN, vk_code, 0)
-    time.sleep(0.05)
+
+
+def action_up(input_action):
+    """Send a resolved keyboard or mouse action up event to ARK."""
+    input_key = local_player.get_input_settings(input_action)
+    hwnd = windows.ark_hwnd()
+    if _send_mouse_button(input_key, False):
+        return
+    mouse_message = _mouse_message(input_key, False)
+    if mouse_message is not None:
+        ctypes.windll.user32.PostMessageW(hwnd, mouse_message, 0, _mouse_lparam(hwnd))
+        return
+    vk_code = keymap_return(input_key)
     ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, vk_code, 0)
+
+
+def press_action(input_action, hold_duration=0.05):
+    """Send one resolved action press with a configurable down/up delay."""
+    action_down(input_action)
+    time.sleep(hold_duration)
+    action_up(input_action)
 
 
 def post_charecter(char):

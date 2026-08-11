@@ -31,6 +31,7 @@ helper_inactive_opacity: float = max(
 station_pushout_yaw: float | None = None
 wait_structure_load: float = 30
 wait_reconnect: float = 60
+steam_restart_sleep = 1
 
 APP_ID = "ShenGBot"
 

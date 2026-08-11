@@ -181,9 +181,16 @@ DEFAULT_SETTINGS = {
     "helper_inactive_opacity": 0.3,
     "launcher_width": 1200,
     "launcher_height": 800,
+    "auto_keys": {
+        "enabled": False,
+        "interval": 0.25,
+        "hold_duration": 1.0,
+    },
 }
 
-TEMPLATE_SETTING_KEYS = tuple(key for key in DEFAULT_SETTINGS if key != "station_yaw")
+TEMPLATE_SETTING_KEYS = tuple(
+    key for key in DEFAULT_SETTINGS if key not in {"station_yaw", "auto_keys"}
+)
 TEMPLATE_REFERENCE_DEFAULTS = {
     **{f"{key}_template": "" for key in TEMPLATE_SETTING_KEYS},
     "dedis_template": "",
@@ -214,6 +221,8 @@ SETTING_LABELS = {
     "launcher_height": "Launcher startup height",
     "check_on_every_dedi": "Check every N dedis",
 }
+
+AUTO_KEYS_ACTIONS = ("Fire", "Use", "DropItem", "Crouch", "Jump")
 
 
 def setting_label(key):
@@ -274,6 +283,7 @@ SETTINGS_GROUPS = {
         "focus_ark_window_interval",
         "launcher_width",
         "launcher_height",
+        "auto_keys",
     ],
 }
 
@@ -283,7 +293,7 @@ TEMPLATE_GROUP_SETTING_KEYS = {
         key for key in SETTINGS_GROUPS["STATIONS"] if key != "station_yaw"
     ),
     "GACHA": tuple(SETTINGS_GROUPS["GACHA"]),
-    "LAUNCHER": tuple(SETTINGS_GROUPS["LAUNCHER"]),
+    "LAUNCHER": tuple(key for key in SETTINGS_GROUPS["LAUNCHER"] if key != "auto_keys"),
 }
 
 TEMPLATE_GROUP_REFERENCE_KEYS = {

@@ -9,6 +9,7 @@ from source.launcher import ark_game_setup
 from source.launcher.ark_game_setup import (
     DisplayMode,
     clear_restore_state,
+    find_game_user_input_path,
     find_game_user_settings_path,
     parse_steam_library_paths,
     patch_game_settings,
@@ -18,6 +19,24 @@ from source.launcher.ark_game_setup import (
 
 
 class ArkGameSetupTests(unittest.TestCase):
+    def test_offline_input_lookup_does_not_restart_steam(self):
+        with (
+            patch.object(
+                ark_game_setup.steam_accounts,
+                "find_running_steam_dir",
+                side_effect=ark_game_setup.steam_accounts.SteamNotRunning(
+                    "steam.exe is not running"
+                ),
+            ),
+            patch.object(
+                ark_game_setup.steam_accounts, "restart_steam"
+            ) as restart_steam,
+        ):
+            with self.assertRaises(ark_game_setup.steam_accounts.SteamNotRunning):
+                find_game_user_input_path(restart_steam_if_missing=False)
+
+        restart_steam.assert_not_called()
+
     def test_parse_steam_library_paths_extracts_multiple_paths(self):
         paths = parse_steam_library_paths(
             """

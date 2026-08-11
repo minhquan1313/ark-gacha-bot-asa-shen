@@ -267,6 +267,14 @@ class WindowGuiMixin:
         if hasattr(self, "auto_update_timer"):
             self.auto_update_timer.stop()
         self._unregister_start_stop_hotkey()
+        clear_suspensions = getattr(
+            self, "_clear_auto_keys_automation_suspensions", None
+        )
+        if clear_suspensions is not None:
+            clear_suspensions()
+        runtime = getattr(self, "auto_keys_runtime", None)
+        if runtime is not None:
+            runtime.disable()
         self._hide_runner_overlay()
         self.close_external_helpers()
         self.output_reader_stop.set()

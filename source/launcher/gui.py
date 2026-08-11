@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
 )
 
+from source.launcher.auto_keys import AutoKeysRuntime
 from source.launcher.components.widgets import (
     LogBridge,
 )
@@ -22,7 +23,7 @@ from source.launcher.gui_parts.runtime import RuntimeGuiMixin
 from source.launcher.gui_parts.settings_state import SettingsStateGuiMixin
 from source.launcher.gui_parts.window import WindowGuiMixin
 from source.launcher.pages import LauncherPagesMixin
-from source.launcher.utils.settings_store import load_settings
+from source.launcher.utils.settings_store import load_settings, save_settings
 from source.launcher.utils.system import (
     get_cpu_times,
 )
@@ -43,6 +44,7 @@ class SettingsGUI(
     start_game_enabled_changed = Signal(bool)
     runner_ready = Signal()
     update_check_finished = Signal(object, bool)
+    auto_keys_failure = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -74,8 +76,16 @@ class SettingsGUI(
         self.fields = {}
         self.nav_buttons = {}
         self.external_helpers = []
+        self.auto_keys_automation_suspensions = set()
+        self.auto_keys_restore_after_automation = False
         self.log_bridge = LogBridge()
         self.log_bridge.line.connect(self.append_log)
+        self.auto_keys_failure.connect(self._handle_auto_keys_failure)
+        self.auto_keys_runtime = AutoKeysRuntime(
+            status_callback=self._auto_keys_status,
+            failure_callback=self.auto_keys_failure.emit,
+        )
+        self.auto_keys_runtime.configure(self.settings)
         self.runner_ready.connect(self._on_runner_ready)
         self.log_tail_stop = threading.Event()
         self.log_tail_thread = None
@@ -110,3 +120,21 @@ class SettingsGUI(
         self._register_start_stop_hotkey()
         self._schedule_auto_start()
         QTimer.singleShot(0, self._automatic_update_check)
+
+    def _auto_keys_status(self, message):
+        """Write Auto keys runtime transitions and failures to launcher logs."""
+        self.log_bridge.line.emit(f"[AUTO KEYS] {message}\n")
+
+    def _handle_auto_keys_failure(self, message):
+        """Disable and persist Auto keys after a fatal hook setup failure."""
+        field = getattr(self, "auto_keys_enabled_field", None)
+        if field is not None:
+            field.blockSignals(True)
+            field.setChecked(False)
+            field.blockSignals(False)
+        auto_keys = dict(self.form_values.get("auto_keys", {}))
+        auto_keys["enabled"] = False
+        self.form_values["auto_keys"] = auto_keys
+        self.settings = save_settings(self._collect_settings())
+        self.form_values = self.settings.copy()
+        self.append_log(f"[AUTO KEYS] Disabled: {message}\n")

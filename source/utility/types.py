@@ -195,6 +195,7 @@ RoiRegionKey: TypeAlias = Literal[
     "fishing_press_z",
     "fishing_press_x",
     "fishing_press_c",
+    "teleporter_write_your_text",
 ]
 RoiRegionReconKey: TypeAlias = Literal[
     #

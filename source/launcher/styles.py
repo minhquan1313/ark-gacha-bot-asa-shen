@@ -237,6 +237,33 @@ def launcher_style_sheet():
             font-family: {UI_FONTS["mono"]};
             font-size: {FONT_SIZES["footer"]}px;
         }}
+        QLabel#AutoKeysWarning,
+        QLabel#AutoKeysIntervalDescription,
+        QLabel#AutoKeysTriggerDescription,
+        QLabel#AutoKeysSupportedAction,
+        QLabel#AutoKeysSupportedBinding,
+        QLabel#AutoKeysInstruction {{
+            font-size: {FONT_SIZES["form"]}px;
+            padding: 0 0 4px 0;
+        }}
+        QLabel#AutoKeysWarning {{
+            color: {COLORS["yellow"]};
+        }}
+        QLabel#AutoKeysIntervalDescription,
+        QLabel#AutoKeysTriggerDescription {{
+            color: {COLORS["muted"]};
+        }}
+        QLabel#AutoKeysSupportedAction {{
+            color: {COLORS["cyan"]};
+            font-weight: 900;
+        }}
+        QLabel#AutoKeysSupportedBinding {{
+            color: {COLORS["text"]};
+        }}
+        QLabel#AutoKeysInstruction {{
+            color: {COLORS["cyan"]};
+            font-weight: 800;
+        }}
         QToolButton#TemplateActionSplitButton {{
             min-height: {UI_METRICS["control_height"]}px;
             max-height: {UI_METRICS["control_height"]}px;

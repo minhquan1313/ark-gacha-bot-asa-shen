@@ -1,5 +1,7 @@
 import json
+import math
 import os
+from copy import deepcopy
 from pathlib import Path
 
 from source.launcher.config.constants import (
@@ -11,8 +13,20 @@ from source.launcher.config.constants import (
 
 
 def _normalize_settings(data: dict):
-    normalized = DEFAULT_SETTINGS.copy()
+    normalized = deepcopy(DEFAULT_SETTINGS)
     normalized.update({key: data[key] for key in DEFAULT_SETTINGS if key in data})
+    auto_keys = data.get("auto_keys", {})
+    if not isinstance(auto_keys, dict):
+        auto_keys = {}
+    normalized["auto_keys"] = {
+        "enabled": bool(auto_keys.get("enabled", False)),
+        "interval": _positive_float(
+            auto_keys.get("interval", 0.25), "auto_keys.interval"
+        ),
+        "hold_duration": _positive_float(
+            auto_keys.get("hold_duration", 1.0), "auto_keys.hold_duration"
+        ),
+    }
     normalized.update(
         {
             key: str(data.get(key, default))
@@ -34,6 +48,17 @@ def _normalize_settings(data: dict):
         PHONE_MINIMUM_SIZE[1], int(normalized["launcher_height"])
     )
     return normalized
+
+
+def _positive_float(value: object, name: str):
+    """Parse a positive floating-point setting without accepting zero."""
+    try:
+        parsed = float(value)  # type: ignore
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a positive number.") from exc
+    if parsed <= 0 or not math.isfinite(parsed):
+        raise ValueError(f"{name} must be a positive number.")
+    return parsed
 
 
 def _int_value(value: object, name: str):

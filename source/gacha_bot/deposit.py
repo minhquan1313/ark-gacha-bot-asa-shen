@@ -326,6 +326,9 @@ def process_dedi_list_route(
         with inventory.detect_lag_long_process():
             dedi.open_deposit_all(route_metadata, item)
 
+            # if not is_last_dedi:
+            #     utils.get_yaw_pitch()
+
             if not player_inventory.g_last_check_can_transfer:
                 g_is_still_have_items = False
                 return True

@@ -74,14 +74,18 @@ def _feed_pass(babies: list[dict]) -> None:
 def _wait_in_tekpod(feed_cycle: int) -> None:
     """Keep the character in Tek pod for one configured feeding cycle."""
     render.enter_tekpod()
-    deadline = utils_simple.get_default_clock(feed_cycle)
-    logs.logger.info(f"In tek pod, wait {deadline.to_string(normalized=True)}")
+    dl = utils_simple.get_default_clock(feed_cycle)
+    logs.logger.info(f"In tek pod, wait {dl.to_string(normalized=True)}")
     logs.disable_log()
-    while not deadline():
+    while not dl():
         player_state.check_disconnected()
         tribelog.open()
-        time.sleep(1)
-        # tribelog.close()
+
+        if dl.remain() > 10:
+            time.sleep(10)
+            tribelog.close()
+        else:
+            time.sleep(dl.remain())
     logs.enable_log()
 
 
@@ -94,16 +98,20 @@ def _press_slot(slot: int) -> None:
 def _wait_without_tekpod(feed_cycle: int, food_slot: int, water_slot: int) -> None:
     """Maintain food and water until the non-Tek-pod cycle deadline."""
     utils.press_key("Prone")
-    deadline = utils_simple.get_default_clock(feed_cycle)
-    logs.logger.info(f"Lied on the ground, wait {deadline.to_string(normalized=True)}")
-    while not deadline():
+    dl = utils_simple.get_default_clock(feed_cycle)
+    logs.logger.info(f"Lied on the ground, wait {dl.to_string(normalized=True)}")
+    while not dl():
         player_state.check_disconnected()
         state = buffs.check_buffs().check_buffs()
         if state == 2:
             _press_slot(water_slot)
         elif state == 3:
             _press_slot(food_slot)
-        time.sleep(max(1, feed_cycle // 10))
+
+        if dl.remain() > 10:
+            time.sleep(10)
+        else:
+            time.sleep(dl.remain())
 
 
 def update_global_config(config: dict):

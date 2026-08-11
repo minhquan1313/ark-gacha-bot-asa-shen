@@ -35,6 +35,8 @@ data = {
     "drop_all_obj_x": 1483,
     "back_button_tp_x": 180,
     "back_button_tp_y": 963,
+    "cancel_name_tp_x": 1073,
+    "cancel_name_tp_y": 760,
 }
 
 

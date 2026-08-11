@@ -87,7 +87,7 @@ class TimedOutCounter:
     _started = 0
     limit_seconds = 0
 
-    def __init__(self, limit_seconds: float = 3):
+    def __init__(self, limit_seconds: float = 3.0):
         self.limit_seconds = limit_seconds
         self.reset()
 
@@ -103,19 +103,19 @@ class TimedOutCounter:
     def eslapsed(self):
         return time.monotonic() - self._started
 
+    def remain(self):
+        return self._timeout - time.monotonic()
+
     def eslapsed_str(self, normalized=False):
         seconds = math.ceil(self.eslapsed())
-        if normalized and seconds > 60:
-            m, s = divmod(seconds, 60)
-            if s > 0:
-                return f"{m}m:{s}s"
-            else:
-                return f"{m}m"
+        return self.to_string(normalized=normalized, num=seconds)
 
-        return f"{seconds}s"
+    def remain_str(self, normalized=False):
+        seconds = math.ceil(self.remain())
+        return self.to_string(normalized=normalized, num=seconds)
 
-    def to_string(self, normalized=False):
-        seconds = math.ceil(self.limit_seconds)
+    def to_string(self, num: int | None = None, normalized=False):
+        seconds = math.ceil(self.limit_seconds if not isinstance(num, int) else num)
         if normalized and seconds > 60:
             m, s = divmod(seconds, 60)
             if s > 0:

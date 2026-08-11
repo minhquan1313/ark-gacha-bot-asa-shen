@@ -1,4 +1,6 @@
+from source.launcher.auto_keys import resolve_supported_keys
 from source.launcher.pages.common import (
+    AUTO_KEYS_ACTIONS,
     DEFAULT_SETTINGS,
     DEFAULT_TEMPLATE_FILENAME,
     SETTINGS_GROUPS,
@@ -95,7 +97,9 @@ class SettingsPagesMixin:
 
         form_area = SmoothScrollArea()
         form_area.setWidgetResizable(True)
+        form_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         form_area.setObjectName("SettingsScroll")
+        self.settings_form_area = form_area
         self.settings_form = QWidget()
         self.settings_form.setObjectName("SettingsForm")
         self.settings_form_layout = QGridLayout(self.settings_form)
@@ -851,7 +855,274 @@ class SettingsPagesMixin:
             template_error,
             templated_keys,
         )
+        row = self._add_auto_keys_settings(row)
         self._add_settings_spacer(row)
+
+    def _add_auto_keys_settings(self, row_number: int):
+        """Render the Auto keys runtime controls below Launcher settings."""
+        frame = QFrame()
+        frame.setObjectName("AutoKeysHeader")
+        header = QHBoxLayout(frame)
+        header.setContentsMargins(0, 0, 0, 0)
+        heading = QLabel("AUTO KEYS")
+        heading.setObjectName("SectionHeading")
+        header.addWidget(heading)
+        header.addStretch()
+        enabled = CyberSwitch("ENABLED")
+        enabled.setChecked(
+            bool(self.form_values.get("auto_keys", {}).get("enabled", False))
+        )
+        enabled.toggled.connect(self.persist_auto_keys_settings)
+        header.addWidget(enabled)
+        self.settings_form_layout.addWidget(
+            frame, row_number, 0, 1, self._settings_form_action_column + 1
+        )
+        row_number += 1
+
+        auto_keys = self.form_values.get("auto_keys", {})
+        interval = QLineEdit(str(auto_keys.get("interval", 0.25)))
+        hold_duration = QLineEdit(str(auto_keys.get("hold_duration", 1.0)))
+        for field in (interval, hold_duration):
+            field.setObjectName("SettingField")
+            field.editingFinished.connect(self.persist_auto_keys_settings)
+        self.auto_keys_enabled_field = enabled
+        self.auto_keys_interval_field = interval
+        self.auto_keys_hold_field = hold_duration
+        sync_suspension_ui = getattr(self, "_sync_auto_keys_suspension_ui", None)
+        if callable(sync_suspension_ui):
+            sync_suspension_ui()
+        interval_label = QLabel("Interval (seconds)")
+        interval_label.setToolTip("How long to wait between each repeated key press.")
+        self.settings_form_layout.addWidget(interval_label, row_number, 0)
+        self.settings_form_layout.addWidget(interval, row_number, 1)
+        row_number += 1
+        interval_description = QLabel(
+            "The interval is the delay between repeated presses—for example: "
+            "press E → wait X seconds → press E again."
+        )
+        interval_description.setObjectName("AutoKeysIntervalDescription")
+        self._prepare_auto_keys_copy(interval_description)
+        self.settings_form_layout.addWidget(
+            interval_description,
+            row_number,
+            1,
+            1,
+            self._settings_form_action_column,
+        )
+        row_number += 1
+        interval_warning = QLabel(
+            "Intervals below 0.15 seconds may increase the risk of being banned "
+            "under ARK's anti-macro Code of Conduct."
+        )
+        interval_warning.setObjectName("AutoKeysWarning")
+        self._prepare_auto_keys_copy(interval_warning)
+        self.auto_keys_interval_warning = interval_warning
+        interval.textChanged.connect(self._refresh_auto_keys_interval_warning)
+        self._refresh_auto_keys_interval_warning()
+        self.settings_form_layout.addWidget(
+            interval_warning,
+            row_number,
+            1,
+            1,
+            self._settings_form_action_column,
+        )
+        row_number += 1
+        hold_label = QLabel("Trigger (seconds)")
+        hold_label.setToolTip(
+            "How long the physical key must be held before repeating starts."
+        )
+        self.settings_form_layout.addWidget(hold_label, row_number, 0)
+        self.settings_form_layout.addWidget(hold_duration, row_number, 1)
+        row_number += 1
+        hold_description = QLabel(
+            "How long the button must be held before Auto Keys activates. For "
+            "example, with a 1-second hold duration, holding Left Mouse Button "
+            "for at least 1 second starts repeating it until you press it again."
+        )
+        hold_description.setObjectName("AutoKeysTriggerDescription")
+        self._prepare_auto_keys_copy(hold_description)
+        self.settings_form_layout.addWidget(
+            hold_description,
+            row_number,
+            1,
+            1,
+            self._settings_form_action_column,
+        )
+        row_number += 1
+
+        supported_label = QLabel("Supported keys")
+        # supported_label.setObjectName("FormLabel")
+        supported_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        supported_grid = QWidget()
+        supported_grid.setObjectName("AutoKeysSupportedGrid")
+        supported_grid.setMinimumWidth(0)
+        supported_grid.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        supported_layout = QGridLayout(supported_grid)
+        supported_layout.setContentsMargins(0, 0, 0, 0)
+        supported_layout.setHorizontalSpacing(8)
+        supported_layout.setVerticalSpacing(4)
+        supported_layout.setColumnStretch(2, 1)
+
+        action_labels = {}
+        binding_labels = {}
+        for index, action in enumerate(AUTO_KEYS_ACTIONS):
+            pair = index % 2
+            grid_row = index // 2
+            action_column = pair * 3
+            action_label = QLabel(action)
+            action_label.setObjectName("AutoKeysSupportedAction")
+            action_label.setMinimumWidth(0)
+            binding_label = QLabel("—")
+            binding_label.setObjectName("AutoKeysSupportedBinding")
+            binding_label.setMinimumWidth(0)
+            alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+            supported_layout.addWidget(
+                action_label, grid_row, action_column, alignment=alignment
+            )
+            supported_layout.addWidget(
+                binding_label, grid_row, action_column + 1, alignment=alignment
+            )
+            action_labels[action] = action_label
+            binding_labels[action] = binding_label
+
+        self.auto_keys_supported_grid = supported_grid
+        self.auto_keys_supported_grid_layout = supported_layout
+        self.auto_keys_supported_action_labels = action_labels
+        self.auto_keys_supported_binding_labels = binding_labels
+        self.auto_keys_input_path = None
+        self.auto_keys_input_mtime = None
+        self.settings_form_layout.addWidget(
+            supported_label,
+            row_number,
+            0,
+            alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
+        )
+        self.settings_form_layout.addWidget(
+            supported_grid,
+            row_number,
+            1,
+            1,
+            self._settings_form_action_column,
+            alignment=Qt.AlignmentFlag.AlignTop,
+        )
+        self._refresh_auto_keys_supported_keys(force=True)
+        row_number += 1
+        instruction = QLabel()
+        instruction.setObjectName("AutoKeysInstruction")
+        self._prepare_auto_keys_copy(instruction)
+        self.auto_keys_instruction_label = instruction
+        hold_duration.textChanged.connect(self._refresh_auto_keys_instruction)
+        self._refresh_auto_keys_instruction()
+        self.settings_form_layout.addWidget(
+            instruction,
+            row_number,
+            1,
+            1,
+            self._settings_form_action_column,
+        )
+        return row_number + 1
+
+    @staticmethod
+    def _prepare_auto_keys_copy(label: QLabel):
+        """Allow Auto Keys guidance to wrap without widening the Settings page."""
+        label.setWordWrap(True)
+        label.setMinimumWidth(0)
+        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def _refresh_auto_keys_interval_warning(self, _text: str = ""):
+        """Show the advisory warning only for parsed intervals below 0.15 seconds."""
+        warning = getattr(self, "auto_keys_interval_warning", None)
+        field = getattr(self, "auto_keys_interval_field", None)
+        if warning is None or field is None:
+            return
+        try:
+            show_warning = float(field.text()) < 0.15
+        except ValueError:
+            show_warning = False
+        warning.setVisible(show_warning)
+
+    def _refresh_auto_keys_instruction(self, _text: str = ""):
+        """Show the current hold duration in the Auto Keys usage instruction."""
+        label = getattr(self, "auto_keys_instruction_label", None)
+        field = getattr(self, "auto_keys_hold_field", None)
+        if label is None or field is None:
+            return
+        try:
+            duration = float(field.text())
+        except ValueError:
+            return
+        if duration <= 0:
+            return
+        unit = "second" if duration == 1 else "seconds"
+        label.setText(
+            f"Hold a supported button for {duration:g} {unit} to start pressing "
+            "it automatically. Press the same button again to stop."
+        )
+
+    def _refresh_auto_keys_supported_keys(self, force=False):
+        """Refresh displayed bindings when the installed Input.ini changes."""
+        binding_labels = getattr(self, "auto_keys_supported_binding_labels", None)
+        if not binding_labels:
+            return
+        input_path = getattr(self, "auto_keys_input_path", None)
+        if not force and input_path is not None:
+            try:
+                mtime = input_path.stat().st_mtime_ns
+            except OSError:
+                mtime = None
+            if mtime == getattr(self, "auto_keys_input_mtime", None):
+                return
+
+        resolved, input_path = resolve_supported_keys()
+        tooltip = str(input_path) if input_path is not None else ""
+        for action, label in binding_labels.items():
+            binding = resolved.get(action)
+            label.setText(f"[{binding}]" if binding else "—")
+            label.setToolTip(tooltip)
+        self.auto_keys_input_path = input_path
+        try:
+            self.auto_keys_input_mtime = input_path.stat().st_mtime_ns
+        except (AttributeError, OSError):
+            self.auto_keys_input_mtime = None
+        supported_grid = getattr(self, "auto_keys_supported_grid", None)
+        if supported_grid is not None:
+            supported_grid.setToolTip(tooltip)
+
+    def persist_auto_keys_settings(self, _checked=False):
+        """Validate, save, and apply the Auto keys settings immediately."""
+        try:
+            is_suspended = getattr(self, "_auto_keys_are_suspended", lambda: False)()
+            enabled = (
+                bool(self.settings.get("auto_keys", {}).get("enabled", False))
+                if is_suspended
+                else self.auto_keys_enabled_field.isChecked()
+            )
+            auto_keys = {
+                "enabled": enabled,
+                "interval": float(self.auto_keys_interval_field.text()),
+                "hold_duration": float(self.auto_keys_hold_field.text()),
+            }
+            if auto_keys["interval"] <= 0 or auto_keys["hold_duration"] <= 0:
+                raise ValueError
+            self.form_values["auto_keys"] = auto_keys
+            self.settings = save_settings(self._collect_settings())
+            self.form_values = self.settings.copy()
+            runtime = getattr(self, "auto_keys_runtime", None)
+            if runtime is not None:
+                runtime.configure(self.settings, allow_enable=not is_suspended)
+            sync_suspension_ui = getattr(self, "_sync_auto_keys_suspension_ui", None)
+            if callable(sync_suspension_ui):
+                sync_suspension_ui()
+        except (TypeError, ValueError):
+            self.dialog(
+                "Invalid Auto keys Settings",
+                "Interval and hold duration must be positive numbers.",
+                "error",
+            )
 
     def _render_settings_group(self, group_name: str):
         if group_name not in SETTINGS_GROUPS:
@@ -904,6 +1175,10 @@ class SettingsPagesMixin:
         self.close_external_helpers()
         self.settings = settings
         self.form_values = settings.copy()
+        runtime = getattr(self, "auto_keys_runtime", None)
+        if runtime is not None:
+            is_suspended = getattr(self, "_auto_keys_are_suspended", lambda: False)()
+            runtime.configure(settings, allow_enable=not is_suspended)
         self.deposit_config = deposit_config
         self.gacha_config = gacha_config
         self.pego_config = pego_config
