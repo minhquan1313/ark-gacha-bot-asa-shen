@@ -98,6 +98,9 @@ def smart_wait_structure_with_teleport(
                 return False
 
             logs.logger.warning("teleporter didnt open retrying now")
+
+            utils.press_key("Jump")
+            time.sleep(1.3)
             # check state of char which should close out of any windows we are in or rejoin the game
             check_state()
 
@@ -159,6 +162,7 @@ def reset_state(crouch=True):
 def check_state(*, crouch=True, should_replesh=True, should_wait_structure=True):
     # mainliy checked at the start of every task to check for food / water on the char
     if check_disconnected():
+        utils.was_initialized = False
         return
 
     reset_state(crouch)

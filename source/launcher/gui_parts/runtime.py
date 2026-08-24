@@ -6,8 +6,9 @@ import threading
 import time
 
 import psutil
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QApplication
+from shiboken6 import isValid
 
 from source.launcher.config.constants import (
     COLORS,
@@ -48,6 +49,9 @@ class RuntimeGuiMixin:
         """Reflect temporary automation suspension without persisting the switch."""
         field = getattr(self, "auto_keys_enabled_field", None)
         if field is None:
+            return
+        if isinstance(field, QObject) and not isValid(field):
+            self.auto_keys_enabled_field = None
             return
         suspended = self._auto_keys_are_suspended()
         configured = bool(self.settings.get("auto_keys", {}).get("enabled", False))

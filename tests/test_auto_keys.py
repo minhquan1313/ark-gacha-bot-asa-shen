@@ -9,11 +9,13 @@ from unittest.mock import Mock, call, patch
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QGridLayout, QLabel, QWidget
+from shiboken6 import delete, isValid
 
 import source.utility
 from source.launcher import auto_keys
 from source.launcher.auto_keys import AutoKeysRuntime
 from source.launcher.components.helper_window import WorkerHelperWindow
+from source.launcher.components.widgets import CyberSwitch
 from source.launcher.config.constants import AUTO_KEYS_ACTIONS
 from source.launcher.gui_parts.runtime import RuntimeGuiMixin
 from source.launcher.utils.settings_store import _normalize_settings
@@ -520,6 +522,23 @@ class AutoKeysAutomationSuspensionTests(unittest.TestCase):
         launcher._resume_auto_keys_after_automation("worker")
 
         runtime.configure.assert_not_called()
+
+    def test_disabled_auto_keys_ignores_deleted_settings_switch(self):
+        app = QApplication.instance() or QApplication([])
+        runtime = Mock()
+        runtime.suspend_for_automation.return_value = False
+        launcher = self.Launcher(runtime, enabled=False)
+        stale_switch = CyberSwitch("ENABLED")
+        launcher.auto_keys_enabled_field = stale_switch
+        delete(stale_switch)
+        self.assertFalse(isValid(stale_switch))
+
+        launcher._suspend_auto_keys_for_automation("main")
+
+        runtime.suspend_for_automation.assert_called_once_with()
+        self.assertIn("main", launcher.auto_keys_automation_suspensions)
+        self.assertIsNone(launcher.auto_keys_enabled_field)
+        app.processEvents()
 
     def test_shutdown_does_not_restore_suspended_runtime(self):
         runtime = Mock()
