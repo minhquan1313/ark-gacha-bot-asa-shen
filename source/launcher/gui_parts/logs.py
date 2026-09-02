@@ -12,6 +12,7 @@ from source.launcher.config.constants import (
     GACHA_LOG_FILE,
     MAX_LAUNCHER_LOG_LINES,
 )
+from source.utility.runner_state import RUNNER_STATE_PREFIX
 
 START_GAME_DISABLE_DELAY = 10000
 RUNNER_READY_MESSAGE = "__RUNNER_READY__"
@@ -99,6 +100,16 @@ class LogsGuiMixin:
         return line
 
     def append_log(self, text):
+        if text.startswith(RUNNER_STATE_PREFIX):
+            try:
+                state = json.loads(text[len(RUNNER_STATE_PREFIX) :]).get("state")
+            except (json.JSONDecodeError, AttributeError):
+                return
+            if state not in {"RUNNING", "PAUSED"}:
+                return
+            self.runner_state = state
+            self._sync_runner_overlay()
+            return
         if text.startswith("[QUEUE_STATE] "):
             try:
                 snapshot = json.loads(text[len("[QUEUE_STATE] ") :])

@@ -214,7 +214,7 @@ def popcorn(
             if not is_open():
                 return
 
-            windows.move_mouse(x, y)
+            windows.game_move_mouse(x, y)
             windows.click(x, y)
             time.sleep(0.05)
 
@@ -248,7 +248,7 @@ def implant_eat():
 
         time.sleep(0.5)
 
-        windows.move_mouse(
+        windows.game_move_mouse(
             variables.get_pixel_loc("implant_eat_x"),
             variables.get_pixel_loc("implant_eat_y"),
         )
@@ -261,7 +261,7 @@ def implant_eat():
         utils.press_key("Use")
 
         time.sleep(1)
-        windows.move_mouse(
+        windows.game_move_mouse(
             variables.get_pixel_loc("close_inv_x"),
             variables.get_pixel_loc("close_inv_y"),
         )

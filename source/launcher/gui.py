@@ -62,6 +62,7 @@ class SettingsGUI(
         )
 
         self.process = None
+        self.runner_state = "STOPPED"
         self.program_stopping = False
         self.runner_loading = False
         self.runner_launch_pending = False

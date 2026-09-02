@@ -241,7 +241,7 @@ def popcorn(
             if not is_open():
                 return
 
-            windows.move_mouse(x, y)
+            windows.game_move_mouse(x, y)
             windows.click(x, y)
             time.sleep(0.05)
 

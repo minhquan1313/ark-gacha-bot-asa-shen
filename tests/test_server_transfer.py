@@ -118,7 +118,6 @@ def ready_config():
             "destination_station_yaw": 0,
             "resource_server": "1111",
             "destination_server": "2222",
-            "loop_count": 1,
             "structure_load_delay": 0,
             "transfer_retry_delay": 0,
         },
@@ -145,6 +144,16 @@ def ready_config():
 @contextmanager
 def runtime_dependencies(**overrides: object) -> Iterator[SimpleNamespace]:
     """Patch direct transfer operations for orchestration tests."""
+    withdraw_calls = 0
+
+    def withdraw_from_transfer_dedis(*args, **_kwargs):
+        nonlocal withdraw_calls
+        withdraw_calls += 1
+        if withdraw_calls >= 2:
+            server_transfer.is_withdrawed_all = True
+            server_transfer.account_detect_withdrawed_all = args[1]
+        return True
+
     defaults = {
         "switch_steam_account": Mock(
             side_effect=lambda target, _current, *_args, **_kwargs: target
@@ -154,7 +163,7 @@ def runtime_dependencies(**overrides: object) -> Iterator[SimpleNamespace]:
         "join_server": Mock(return_value=True),
         "verify_tribelog": Mock(return_value=True),
         "check_transfer_player_state": Mock(),
-        "withdraw_from_transfer_dedis": Mock(return_value=True),
+        "withdraw_from_transfer_dedis": Mock(side_effect=withdraw_from_transfer_dedis),
         "go_back_to_bed": Mock(),
         "enter_tekpod": Mock(),
         "leave_tekpod": Mock(),
@@ -205,7 +214,10 @@ class ServerTransferRunnerTests(unittest.TestCase):
         ]
         self.assertIn("resource", transfer_sides)
         self.assertIn("destination", transfer_sides)
-        dependencies.go_back_to_bed.assert_called_once_with("Bed1")
+        self.assertGreaterEqual(
+            dependencies.go_back_to_bed.call_count,
+            2,
+        )
         dependencies.spawn_bed.assert_any_call("Bed1")
         dependencies.switch_steam_account.assert_not_called()
         self.assertEqual(dependencies.ensure_ark_running.call_count, 2)
@@ -227,9 +239,9 @@ class ServerTransferRunnerTests(unittest.TestCase):
         final_switch = dependencies.switch_steam_account.call_args_list[-1]
         self.assertEqual(final_switch.args[:2], (1, 2))
         self.assertEqual(final_switch.kwargs["steam_restart_interval"], 30)
-        self.assertEqual(dependencies.ensure_ark_running.call_count, 5)
-        self.assertEqual(dependencies.join_server.call_count, 5)
-        self.assertEqual(dependencies.join_server.call_args.args[0], "1111")
+        self.assertEqual(dependencies.ensure_ark_running.call_count, 7)
+        self.assertEqual(dependencies.join_server.call_count, 7)
+        self.assertEqual(dependencies.join_server.call_args.args[0], "2222")
         restore_steam = next(
             snapshot
             for snapshot in snapshots
@@ -335,7 +347,6 @@ class ServerTransferRunnerTests(unittest.TestCase):
     def test_default_mode_start_account_only_skips_first_loop(self):
         config = ready_config()
         config["start_account"] = 3
-        config["settings"]["loop_count"] = 2
         config["players"]["players"].extend(
             [
                 {"bed_name": "Bed2", "steam_account": "beta"},
@@ -396,7 +407,6 @@ class ServerTransferRunnerTests(unittest.TestCase):
 
     def test_task_snapshots_track_dependency_actions_and_next_three(self):
         config = ready_config()
-        config["settings"]["loop_count"] = 2
         config["players"]["players"].append(
             {"bed_name": "Bed2", "steam_account": "beta"}
         )
@@ -459,6 +469,85 @@ class ServerTransferRunnerTests(unittest.TestCase):
         self.assertFalse(
             any("Stabilize Bed" in task_name for task_name in published_tasks)
         )
+
+    def test_detector_relative_final_passes_and_direct_destination_cleanup(self):
+        for detector in (1, 2, 3):
+            with self.subTest(detector=detector):
+                config = ready_config()
+                config["players"]["players"] = [
+                    {"bed_name": f"Bed{account}", "steam_account": f"p{account}"}
+                    for account in range(1, 4)
+                ]
+                config["steam_accounts"] = [
+                    {
+                        "account_name": f"p{account}",
+                        "most_recent": account == 1,
+                        "timestamp": 4 - account,
+                    }
+                    for account in range(1, 4)
+                ]
+                deposits = []
+                withdrawal_calls = []
+
+                def withdraw(_dedis, account):
+                    withdrawal_calls.append(account)
+                    if account == detector and not server_transfer.is_withdrawed_all:
+                        server_transfer.is_withdrawed_all = True
+                        server_transfer.account_detect_withdrawed_all = account
+                    return True
+
+                with runtime_dependencies(
+                    withdraw_from_transfer_dedis=Mock(side_effect=withdraw),
+                    deposit_to_transfer_dedis=Mock(
+                        side_effect=lambda _dedis, account: deposits.append(account)
+                        or True
+                    ),
+                ) as dependencies:
+                    self.assertTrue(run_transfer_helper(config))
+
+                self.assertEqual(deposits, [1, 2, 3, *range(1, detector + 1)])
+                self.assertEqual(
+                    [call.args[0] for call in dependencies.join_server.call_args_list],
+                    ["1111"] * (6 + detector)
+                    + ([] if detector == 1 else ["2222"]),
+                )
+                self.assertEqual(
+                    [call.args[0] for call in dependencies.switch_steam_account.call_args_list],
+                    [1, 2, 3, 1, 2, 3, *range(1, detector + 1)]
+                    + ([] if detector == 1 else [1]),
+                )
+
+    def test_detector_cutoff_skips_players_after_detector_in_final_pass(self):
+        config = ready_config()
+        config["players"]["players"] = [
+            {"bed_name": f"Bed{account}", "steam_account": f"p{account}"}
+            for account in range(1, 4)
+        ]
+        config["steam_accounts"] = [
+            {
+                "account_name": f"p{account}",
+                "most_recent": account == 1,
+                "timestamp": 4 - account,
+            }
+            for account in range(1, 4)
+        ]
+        deposits = []
+
+        def withdraw(_dedis, account):
+            if account == 2:
+                server_transfer.is_withdrawed_all = True
+                server_transfer.account_detect_withdrawed_all = account
+            return True
+
+        with runtime_dependencies(
+            withdraw_from_transfer_dedis=Mock(side_effect=withdraw),
+            deposit_to_transfer_dedis=Mock(
+                side_effect=lambda _dedis, account: deposits.append(account) or True
+            ),
+        ):
+            self.assertTrue(run_transfer_helper(config))
+
+        self.assertEqual(deposits, [1, 2, 3, 1, 2])
 
     def test_task_snapshots_insert_confirmed_conditional_wait(self):
         snapshots = []
@@ -823,14 +912,18 @@ class ServerTransferRunnerTests(unittest.TestCase):
             {"account_name": "beta", "most_recent": False, "timestamp": 1},
         ]
         events = []
+
+        def withdraw(_dedis, account):
+            events.append(("withdraw", account))
+            if len(events) >= 2:
+                server_transfer.is_withdrawed_all = True
+                server_transfer.account_detect_withdrawed_all = account
+            return True
+
         with runtime_dependencies(
-            withdraw_from_transfer_dedis=Mock(
-                side_effect=lambda _dedis, _settings, _players, account: (
-                    events.append(("withdraw", account)) or True
-                )
-            ),
+            withdraw_from_transfer_dedis=Mock(side_effect=withdraw),
             deposit_to_transfer_dedis=Mock(
-                side_effect=lambda _dedis, _settings, _players, account: (
+                side_effect=lambda _dedis, account: (
                     events.append(("deposit", account)) or True
                 )
             ),

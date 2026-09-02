@@ -1,13 +1,15 @@
 import os
 import sys
 import tempfile
+import threading
 import time
 import types
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, call, patch
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEasingCurve, Qt
+from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication, QGridLayout, QLabel, QWidget
 from shiboken6 import delete, isValid
 
@@ -15,11 +17,65 @@ import source.utility
 from source.launcher import auto_keys
 from source.launcher.auto_keys import AutoKeysRuntime
 from source.launcher.components.helper_window import WorkerHelperWindow
-from source.launcher.components.widgets import CyberSwitch
-from source.launcher.config.constants import AUTO_KEYS_ACTIONS
+from source.launcher.components.widgets import CyberCheckBox, CyberSwitch
+from source.launcher.config.constants import AUTO_KEYS_ACTIONS, TEMPLATE_SETTING_KEYS
 from source.launcher.gui_parts.runtime import RuntimeGuiMixin
 from source.launcher.utils.settings_store import _normalize_settings
 from source.utility import local_player
+
+
+class AutoKeysWidgetTests(unittest.TestCase):
+    def setUp(self):
+        self.app = QApplication.instance() or QApplication([])
+
+    def test_switch_loading_is_integrated_and_blocks_toggling(self):
+        switch = CyberSwitch("ENABLED")
+        initial_size = switch.sizeHint()
+        switch.setChecked(True)
+
+        switch.set_loading(True)
+
+        self.assertTrue(switch.isChecked())
+        self.assertTrue(switch.is_loading)
+        self.assertEqual(switch.text(), "ENABLED")
+        self.assertEqual(switch.sizeHint(), initial_size)
+        self.assertFalse(switch.hitButton(switch.rect().center()))
+        self.assertEqual(switch._loading_animation.duration(), 900)
+        self.assertEqual(switch._loading_animation.loopCount(), -1)
+        self.assertEqual(
+            switch._loading_animation.easingCurve().type(),
+            QEasingCurve.Type.Linear,
+        )
+
+        switch.nextCheckState()
+        self.assertTrue(switch.isChecked())
+        switch.set_loading(False)
+        self.assertFalse(switch.is_loading)
+        switch.nextCheckState()
+        self.assertFalse(switch.isChecked())
+
+    def test_checked_action_control_renders_cyan_fill_and_white_check(self):
+        checkbox = CyberCheckBox()
+        checkbox.resize(24, 24)
+        checkbox.blockSignals(True)
+        checkbox.setChecked(True)
+        checkbox.blockSignals(False)
+        image = QImage(checkbox.size(), QImage.Format.Format_ARGB32)
+        image.fill(QColor("#000000"))
+
+        checkbox.render(image)
+
+        from source.launcher.config.constants import COLORS
+
+        cyan = QColor(COLORS["cyan"]).rgb()
+        white = QColor(COLORS["text"]).rgb()
+        pixels = [
+            image.pixel(x, y)
+            for x in range(image.width())
+            for y in range(image.height())
+        ]
+        self.assertGreater(pixels.count(cyan), 100)
+        self.assertGreater(pixels.count(white), 10)
 
 
 class AutoKeysSettingsTests(unittest.TestCase):
@@ -28,8 +84,14 @@ class AutoKeysSettingsTests(unittest.TestCase):
 
         self.assertEqual(
             settings["auto_keys"],
-            {"enabled": False, "interval": 0.25, "hold_duration": 1.0},
+            {
+                "enabled": False,
+                "interval": 0.25,
+                "hold_duration": 1.0,
+                "actions": {action: True for action in AUTO_KEYS_ACTIONS},
+            },
         )
+        self.assertNotIn("auto_keys", TEMPLATE_SETTING_KEYS)
 
     def test_auto_keys_values_are_nested_and_validated(self):
         settings = _normalize_settings(
@@ -45,6 +107,7 @@ class AutoKeysSettingsTests(unittest.TestCase):
         self.assertEqual(settings["auto_keys"]["interval"], 0.5)
         self.assertEqual(settings["auto_keys"]["hold_duration"], 2.0)
         self.assertTrue(settings["auto_keys"]["enabled"])
+        self.assertTrue(all(settings["auto_keys"]["actions"].values()))
         self.assertEqual(
             _normalize_settings({"auto_keys": {"interval": 0.1}})["auto_keys"][
                 "interval"
@@ -53,6 +116,19 @@ class AutoKeysSettingsTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             _normalize_settings({"auto_keys": {"interval": 0}})
+
+    def test_auto_keys_action_states_are_normalized_and_unknown_actions_removed(self):
+        settings = _normalize_settings(
+            {
+                "auto_keys": {
+                    "actions": {"Use": False, "UnknownAction": False}
+                }
+            }
+        )
+
+        self.assertFalse(settings["auto_keys"]["actions"]["Use"])
+        self.assertTrue(settings["auto_keys"]["actions"]["Fire"])
+        self.assertNotIn("UnknownAction", settings["auto_keys"]["actions"])
 
     def test_suspended_ui_persistence_keeps_saved_enabled_preference(self):
         from source.launcher.pages import settings as settings_page
@@ -77,6 +153,33 @@ class AutoKeysSettingsTests(unittest.TestCase):
         self.assertTrue(launcher.form_values["auto_keys"]["enabled"])
         launcher.auto_keys_runtime.configure.assert_called_once_with(
             launcher.settings, allow_enable=False
+        )
+
+    def test_action_checkbox_states_are_persisted(self):
+        from source.launcher.pages import settings as settings_page
+
+        launcher = settings_page.SettingsPagesMixin()
+        launcher.settings = _normalize_settings({})
+        launcher.form_values = launcher.settings.copy()
+        launcher.auto_keys_enabled_field = Mock(isChecked=Mock(return_value=True))
+        launcher.auto_keys_interval_field = Mock(text=Mock(return_value="0.25"))
+        launcher.auto_keys_hold_field = Mock(text=Mock(return_value="1.0"))
+        launcher.auto_keys_action_fields = {
+            action: Mock(isChecked=Mock(return_value=action != "Use"))
+            for action in AUTO_KEYS_ACTIONS
+        }
+        launcher.auto_keys_runtime = Mock()
+        launcher._collect_settings = Mock(side_effect=lambda: launcher.form_values)
+        launcher.dialog = Mock()
+        with patch.object(
+            settings_page, "save_settings", side_effect=lambda settings: settings
+        ):
+            launcher.persist_auto_keys_settings()
+
+        self.assertFalse(launcher.settings["auto_keys"]["actions"]["Use"])
+        self.assertTrue(launcher.settings["auto_keys"]["actions"]["Fire"])
+        launcher.auto_keys_runtime.configure.assert_called_once_with(
+            launcher.settings, allow_enable=True
         )
 
 
@@ -293,15 +396,18 @@ class AutoKeysPollingTests(unittest.TestCase):
         self.assertIs(
             header.layout().itemAt(2).widget(), launcher.auto_keys_enabled_field
         )
+        self.assertEqual(header.layout().count(), 3)
         self.assertIsNone(container.findChild(QWidget, "SettingsDivider"))
 
-        action_labels = launcher.auto_keys_supported_action_labels
+        action_fields = launcher.auto_keys_action_fields
         binding_labels = launcher.auto_keys_supported_binding_labels
-        self.assertEqual(list(action_labels), list(AUTO_KEYS_ACTIONS))
+        self.assertEqual(list(action_fields), list(AUTO_KEYS_ACTIONS))
         self.assertTrue(
             all(
-                label.objectName() == "AutoKeysSupportedAction"
-                for label in action_labels.values()
+                isinstance(field, CyberCheckBox)
+                and field.objectName() == "AutoKeysSupportedAction"
+                and field.isChecked()
+                for field in action_fields.values()
             )
         )
         self.assertTrue(
@@ -314,7 +420,7 @@ class AutoKeysPollingTests(unittest.TestCase):
         from source.launcher.styles import launcher_style_sheet
 
         style = launcher_style_sheet()
-        action_style = style.split("QLabel#AutoKeysSupportedAction {", 1)[1].split(
+        action_style = style.split("QCheckBox#AutoKeysSupportedAction {", 1)[1].split(
             "}", 1
         )[0]
         self.assertIn(f'color: {COLORS["cyan"]};', action_style)
@@ -326,7 +432,7 @@ class AutoKeysPollingTests(unittest.TestCase):
             column = pair * 3
             action_item = grid.itemAtPosition(row, column)
             binding_item = grid.itemAtPosition(row, column + 1)
-            self.assertIs(action_item.widget(), action_labels[action])
+            self.assertIs(action_item.widget(), action_fields[action])
             self.assertIs(binding_item.widget(), binding_labels[action])
             self.assertTrue(action_item.alignment() & Qt.AlignmentFlag.AlignTop)
             self.assertTrue(binding_item.alignment() & Qt.AlignmentFlag.AlignTop)
@@ -360,6 +466,136 @@ class AutoKeysPollingTests(unittest.TestCase):
         self.assertFalse(labels["AutoKeysWarning"].isHidden())
         launcher.auto_keys_interval_field.setText("invalid")
         self.assertTrue(labels["AutoKeysWarning"].isHidden())
+
+    def test_enable_resolves_bindings_without_blocking_caller(self):
+        resolution_started = threading.Event()
+        release_resolution = threading.Event()
+        states = []
+        runtime = AutoKeysRuntime(("Use",), state_callback=states.append)
+        runtime._ark_is_foreground = lambda: False
+
+        def slow_resolution(_actions=None):
+            resolution_started.set()
+            release_resolution.wait(0.5)
+            return {}
+
+        with patch.object(runtime, "_resolve_bindings", side_effect=slow_resolution):
+            started_at = time.monotonic()
+            runtime.configure(
+                {
+                    "auto_keys": {
+                        "enabled": True,
+                        "actions": {"Use": True},
+                    }
+                }
+            )
+            elapsed = time.monotonic() - started_at
+            self.assertTrue(resolution_started.wait(0.2))
+            self.assertLess(elapsed, 0.15)
+            self.assertEqual(runtime.state, "starting")
+            release_resolution.set()
+            deadline = time.monotonic() + 1.0
+            while runtime.state != "ready" and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+        self.assertEqual(runtime.state, "ready")
+        self.assertEqual(states[:2], ["starting", "ready"])
+        runtime.shutdown()
+
+    def test_disabled_action_is_not_resolved(self):
+        runtime = AutoKeysRuntime(("Fire", "Use"))
+        fake_utils = types.SimpleNamespace(keymap_return=lambda key: 0x45)
+        with (
+            patch.object(source.utility, "utils", fake_utils, create=True),
+            patch(
+                "source.launcher.auto_keys.resolve_supported_keys",
+                return_value=({"Fire": "LeftMouseButton"}, Path("Input.ini")),
+            ) as resolver,
+        ):
+            bindings = runtime._resolve_bindings(("Fire",))
+
+        resolver.assert_called_once_with(("Fire",))
+        self.assertEqual(bindings, {("mouse", 0x01): "Fire"})
+        self.assertNotIn(("keyboard", 0x45), bindings)
+
+    def test_unchecking_active_action_stops_and_beeps(self):
+        self.runtime._active = self.binding
+        self.runtime._play_beep = Mock()
+
+        self.runtime.configure(
+            {
+                "auto_keys": {
+                    "enabled": True,
+                    "actions": {"Use": False},
+                }
+            }
+        )
+
+        self.assertIsNone(self.runtime._active)
+        self.runtime._play_beep.assert_called_once_with(False)
+        self.assertEqual(self.runtime._selected_actions, set())
+
+    def test_all_actions_unchecked_starts_ready_and_idle(self):
+        statuses = []
+        runtime = AutoKeysRuntime(("Use",), status_callback=statuses.append)
+        runtime._ark_is_foreground = lambda: False
+        with patch.object(
+            runtime, "_resolve_bindings", wraps=runtime._resolve_bindings
+        ) as resolver:
+            runtime.configure(
+                {
+                    "auto_keys": {
+                        "enabled": True,
+                        "actions": {"Use": False},
+                    }
+                }
+            )
+            deadline = time.monotonic() + 1.0
+            while runtime.state != "ready" and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+        self.assertEqual(runtime.state, "ready")
+        resolver.assert_called_once_with(())
+        self.assertEqual(runtime._bindings, {})
+        self.assertIn("No Auto Keys actions are selected.", statuses)
+        runtime.shutdown()
+
+    def test_late_binding_result_cannot_override_disable(self):
+        resolution_started = threading.Event()
+        release_resolution = threading.Event()
+        states = []
+        runtime = AutoKeysRuntime(("Use",), state_callback=states.append)
+
+        def slow_resolution(_actions=None):
+            resolution_started.set()
+            release_resolution.wait(0.5)
+            return {("keyboard", 0x45): "Use"}
+
+        with patch.object(runtime, "_resolve_bindings", side_effect=slow_resolution):
+            runtime.configure({"auto_keys": {"enabled": True}})
+            self.assertTrue(resolution_started.wait(0.2))
+            runtime.disable()
+            release_resolution.set()
+            runtime.shutdown()
+
+        self.assertEqual(runtime.state, "disabled")
+        self.assertNotIn("ready", states[states.index("disabled") + 1 :])
+
+    def test_fatal_startup_failure_ends_loading_and_disables_runtime(self):
+        failures = []
+        runtime = AutoKeysRuntime(("Use",), failure_callback=failures.append)
+        with patch.object(
+            runtime, "_resolve_bindings", side_effect=ValueError("broken binding")
+        ):
+            runtime.configure({"auto_keys": {"enabled": True}})
+            deadline = time.monotonic() + 1.0
+            while not failures and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+        self.assertFalse(runtime.enabled)
+        self.assertEqual(runtime.state, "disabled")
+        self.assertEqual(failures, ["Auto Keys runtime failed: broken binding"])
+        runtime.shutdown()
 
     def test_foreground_check_accepts_same_process_child_window(self):
         fake_windows = types.SimpleNamespace(ark_hwnd=lambda: 100)
@@ -522,6 +758,38 @@ class AutoKeysAutomationSuspensionTests(unittest.TestCase):
         launcher._resume_auto_keys_after_automation("worker")
 
         runtime.configure.assert_not_called()
+
+    def test_master_switch_shows_starting_and_ready_states(self):
+        app = QApplication.instance() or QApplication([])
+        launcher = self.Launcher(Mock(), enabled=True)
+        launcher.auto_keys_enabled_field = CyberSwitch("ENABLED")
+        launcher.auto_keys_runtime_state = "starting"
+
+        launcher._sync_auto_keys_suspension_ui()
+
+        self.assertEqual(launcher.auto_keys_enabled_field.text(), "ENABLED")
+        self.assertTrue(launcher.auto_keys_enabled_field.isChecked())
+        self.assertTrue(launcher.auto_keys_enabled_field.isEnabled())
+        self.assertTrue(launcher.auto_keys_enabled_field.is_loading)
+
+        launcher._on_auto_keys_state_changed("ready")
+
+        self.assertEqual(launcher.auto_keys_enabled_field.text(), "ENABLED")
+        self.assertTrue(launcher.auto_keys_enabled_field.isEnabled())
+        self.assertFalse(launcher.auto_keys_enabled_field.is_loading)
+        app.processEvents()
+
+    def test_runtime_state_ignores_deleted_settings_controls(self):
+        app = QApplication.instance() or QApplication([])
+        launcher = self.Launcher(Mock(), enabled=True)
+        stale_switch = CyberSwitch("ENABLED")
+        launcher.auto_keys_enabled_field = stale_switch
+        delete(stale_switch)
+
+        launcher._on_auto_keys_state_changed("ready")
+
+        self.assertIsNone(launcher.auto_keys_enabled_field)
+        app.processEvents()
 
     def test_disabled_auto_keys_ignores_deleted_settings_switch(self):
         app = QApplication.instance() or QApplication([])

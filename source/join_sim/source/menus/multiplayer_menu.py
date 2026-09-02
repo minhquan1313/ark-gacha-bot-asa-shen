@@ -1,11 +1,9 @@
 import time
 
-import pyautogui
-
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.menus import failure
 from source.join_sim.source.utility import recon_utils
-from source.utility import utils, utils_simple, windows
+from source.utility import ark_input, utils, utils_simple, windows
 
 buttons = {
     "search_x": 1672,
@@ -71,7 +69,7 @@ def join_button():
 
 def search_bar_search(server: str):
     if is_open():
-        windows.move_mouse(get_pixel_loc("search_x"), get_pixel_loc("search_y"))
+        windows.game_move_mouse(get_pixel_loc("search_x"), get_pixel_loc("search_y"))
         windows.click(get_pixel_loc("search_x"), get_pixel_loc("search_y"))
         windows.click(get_pixel_loc("search_x"), get_pixel_loc("search_y"))
         time.sleep(0.2)
@@ -88,7 +86,7 @@ def exit_menu():
 
 def refresh():
     if is_open():
-        pyautogui.click(get_pixel_loc("refresh_x"), get_pixel_loc("refresh_y"))
+        ark_input.click(get_pixel_loc("refresh_x"), get_pixel_loc("refresh_y"))
 
 
 def join_server(server: str):

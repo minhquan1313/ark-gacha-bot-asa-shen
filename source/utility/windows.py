@@ -3,7 +3,7 @@ from ctypes import wintypes
 
 from source.launcher.config.constants import GAME_WINDOW_TITLE
 from source.launcher.utils.system import find_window_handle
-from source.utility import local_player, screen
+from source.utility import action_gate, local_player, screen
 
 
 def find_window_by_title(title):
@@ -46,6 +46,7 @@ max_fov = 1.25
 
 
 def turn(x: int, y: int):
+    action_gate.before_ark_action()
 
     dx = int(
         round(
@@ -108,7 +109,14 @@ def move_mouse(x, y):
     )
 
 
+def game_move_mouse(x, y):
+    """Move the pointer for an ARK interaction after checking game state."""
+    action_gate.before_ark_action()
+    move_mouse(x, y)
+
+
 def click(x, y):
+    action_gate.before_ark_action()
     lparam = (y << 16) | x
     hwnd = ark_hwnd()
     ctypes.windll.user32.PostMessageW(hwnd, WM_LBUTTONDOWN, 0, lparam)

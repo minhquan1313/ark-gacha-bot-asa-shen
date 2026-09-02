@@ -1,7 +1,6 @@
 import time
 
 import psutil
-import pyautogui
 import win32process
 
 from source.join_sim.source import main as join_sim
@@ -9,7 +8,7 @@ from source.join_sim.source.logs import logger as logs
 from source.launcher import ark_game_setup
 from source.launcher.utils import system
 from source.launcher.utils.deposit_helper_capture import focus_game_window
-from source.utility import template, utils_simple, windows
+from source.utility import ark_input, template, utils_simple, windows
 
 crash_process: psutil.Process | None = None
 
@@ -105,7 +104,7 @@ def re_open_game():
             dl = utils_simple.get_default_clock(30)
             while not join_sim.is_menu() and not dl():
                 focus_game_window()
-                pyautogui.click(2, 2)
+                ark_input.click(2, 2)
                 template.template_await_true(join_sim.is_menu, 0.5)
             return
         except Exception as exc:

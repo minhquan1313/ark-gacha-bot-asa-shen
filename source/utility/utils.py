@@ -6,7 +6,7 @@ from source.ASA import config
 from source.ASA.player import console, player_state
 from source.launcher.utils import deposit_helper_capture
 from source.logs import gachalogs as logs
-from source.utility import utils_simple
+from source.utility import action_gate, utils_simple
 
 from . import local_player, windows
 
@@ -151,6 +151,7 @@ def _send_mouse_button(input_key, pressed):
 
 def action_down(input_action):
     """Send a resolved keyboard or mouse action down event to ARK."""
+    action_gate.before_ark_action()
     input_key = local_player.get_input_settings(input_action)
     hwnd = windows.ark_hwnd()
     if _send_mouse_button(input_key, True):
@@ -179,21 +180,27 @@ def action_up(input_action):
 
 def press_action(input_action, hold_duration=0.05):
     """Send one resolved action press with a configurable down/up delay."""
+    action_gate.before_ark_action()
     action_down(input_action)
-    time.sleep(hold_duration)
-    action_up(input_action)
+    try:
+        time.sleep(hold_duration)
+    finally:
+        action_up(input_action)
 
 
 def post_charecter(char):
+    action_gate.before_ark_action()
     ctypes.windll.user32.PostMessageW(windows.ark_hwnd(), WM_CHAR, ord(char), 0)
 
 
 def write(text):
+    action_gate.before_ark_action()
     for c in text:
         post_charecter(c)
 
 
 def ctrl_a():  # hotkey for sending ctrl a
+    action_gate.before_ark_action()
     hwnd = windows.ark_hwnd()
     ctypes.windll.user32.SendMessageW(hwnd, WM_KEYDOWN, 0x11, 0)
     time.sleep(0.1)

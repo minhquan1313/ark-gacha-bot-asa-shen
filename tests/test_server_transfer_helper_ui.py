@@ -99,7 +99,6 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                     "destination_station_yaw": 0,
                     "resource_server": "0",
                     "destination_server": "0",
-                    "loop_count": 1,
                     "structure_load_delay": 10,
                     "transfer_retry_delay": 5,
                 },
@@ -347,9 +346,6 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertGreaterEqual(len(bodies), 3)
             self.assertTrue(all(not body.isHidden() for body in bodies))
             self.assertNotIn("enabled", helper.dedi_rows[0])
-            self.assertEqual(
-                helper.loop_hint.text(), "1 dedi x 1 account = 6 transfer(s)."
-            )
         finally:
             helper.close()
 
@@ -517,7 +513,6 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                         ]
                     }
                 )
-                self.assertEqual(helper.setting_fields["loop_count"].text(), "3")
             finally:
                 helper.close()
 
@@ -1071,76 +1066,6 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             finally:
                 helper.close()
 
-    def test_current_config_does_not_autocalculate_manual_loop_count(self):
-        helper = self._transfer_helper(
-            account_count=2,
-            dedi_items=[
-                {"location": {"yaw": 0, "pitch": 0}, "crouched": False},
-                {"location": {"yaw": 1, "pitch": 1}, "crouched": False},
-                {"location": {"yaw": 2, "pitch": 2}, "crouched": False},
-            ],
-        )
-
-        try:
-            helper.setting_fields["loop_count"].setText("1")
-            config = helper._current_config()
-
-            self.assertEqual(config["settings"]["loop_count"], "1")
-            self.assertEqual(helper.setting_fields["loop_count"].text(), "1")
-            self.assertIn("9 transfer(s)", helper.loop_hint.text())
-        finally:
-            helper.close()
-
-    def test_unrelated_setting_edit_does_not_autocalculate_loop_count(self):
-        with patch(
-            "source.launcher.server_transfer_helper.save_transfer_settings",
-            side_effect=lambda data: data,
-        ) as save_settings:
-            helper = self._transfer_helper(
-                account_count=2,
-                dedi_items=[
-                    {"location": {"yaw": 0, "pitch": 0}, "crouched": False},
-                    {"location": {"yaw": 1, "pitch": 1}, "crouched": False},
-                    {"location": {"yaw": 2, "pitch": 2}, "crouched": False},
-                ],
-            )
-
-            try:
-                helper.setting_fields["loop_count"].setText("1")
-                helper.setting_fields["steam_restart_interval"].setText("45")
-                helper._persist_settings()
-
-                saved = save_settings.call_args.args[0]
-                self.assertEqual(saved["loop_count"], "1")
-                self.assertEqual(saved["steam_restart_interval"], "45")
-                self.assertEqual(helper.setting_fields["loop_count"].text(), "1")
-            finally:
-                helper.close()
-
-    def test_dedi_entry_edit_autocalculates_loop_count(self):
-        with patch(
-            "source.launcher.server_transfer_helper.save_transfer_settings",
-            side_effect=lambda data: data,
-        ) as save_settings:
-            helper = self._transfer_helper(
-                account_count=2,
-                dedi_items=[
-                    {"location": {"yaw": 0, "pitch": 0}, "crouched": False},
-                    {"location": {"yaw": 1, "pitch": 1}, "crouched": False},
-                    {"location": {"yaw": 2, "pitch": 2}, "crouched": False},
-                ],
-            )
-
-            try:
-                helper.setting_fields["loop_count"].setText("1")
-                helper.dedi_rows[0]["yaw"].setText("44")
-                helper.dedi_rows[0]["yaw"].editingFinished.emit()
-
-                self.assertEqual(helper.setting_fields["loop_count"].text(), "9")
-                self.assertEqual(save_settings.call_args.args[0]["loop_count"], "9")
-            finally:
-                helper.close()
-
     def test_dedi_edit_persists_to_dedis_json(self):
         with patch(
             "source.launcher.server_transfer_helper.save_transfer_dedis",
@@ -1523,7 +1448,6 @@ class ServerTransferHelperUiTests(unittest.TestCase):
                 "destination_station_yaw": 0,
                 "resource_server": "0",
                 "destination_server": "0",
-                "loop_count": 1,
                 "structure_load_delay": 10,
                 "transfer_retry_delay": 5,
                 "steam_restart_interval": 30,

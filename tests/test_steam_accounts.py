@@ -16,14 +16,14 @@ SAMPLE_LOGINUSERS = """"users"
     "111"
     {
         "AccountName"       "alpha"
-        "MostRecent"        "0"
+        "AutoLogin"         "0"
         "Timestamp"         "10"
         "AllowAutoLogin"    "0"
     }
     "222"
     {
         "AccountName"       "beta"
-        "MostRecent"        "1"
+        "AutoLogin"         "1"
         "Timestamp"         "20"
         "AllowAutoLogin"    "0"
     }
@@ -57,7 +57,7 @@ class SteamAccountsTests(unittest.TestCase):
         updated = update_allow_auto_login(SAMPLE_LOGINUSERS, "beta")
 
         self.assertIn('"AccountName"       "alpha"', updated)
-        self.assertIn('"MostRecent"        "1"', updated)
+        self.assertIn('"AutoLogin"         "1"', updated)
         self.assertIn('"AllowAutoLogin"    "0"', updated.split('"222"')[0])
         self.assertIn('"AllowAutoLogin"    "1"', updated.split('"222"')[1])
 

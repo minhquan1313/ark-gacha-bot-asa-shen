@@ -24,7 +24,6 @@ from source.launcher.config.transfer_helper_config import (
     save_transfer_settings,
     save_transfer_ui_coords,
     steam_account_assignment_issues,
-    suggested_loop_count,
 )
 
 STEAM_ACCOUNTS = [
@@ -77,14 +76,13 @@ class TransferHelperConfigTests(unittest.TestCase):
             self.assertNotIn("account_count", settings)
             self.assertNotIn("transfer_retry_delay", settings)
 
-    def test_normalize_settings_ignores_old_account_and_rejects_invalid_loop_values(
-        self,
-    ):
-        settings = normalize_transfer_settings({"account_count": 100})
+    def test_normalize_settings_ignores_old_account(self):
+        settings = normalize_transfer_settings(
+            {"account_count": 100, "loop_count": 99}
+        )
 
         self.assertNotIn("account_count", settings)
-        with self.assertRaisesRegex(ValueError, "loop_count"):
-            normalize_transfer_settings({"loop_count": 0})
+        self.assertNotIn("loop_count", settings)
         with self.assertRaisesRegex(ValueError, "ark_window_ready_timeout"):
             normalize_transfer_settings({"ark_window_ready_timeout": 0})
         with self.assertRaisesRegex(ValueError, "steam_restart_interval"):
@@ -254,13 +252,15 @@ class TransferHelperConfigTests(unittest.TestCase):
             path = Path(temp_dir) / "settings.json"
 
             settings = save_transfer_settings(
-                {"account_count": 12, "transfer_retry_delay": 5}, path
+                {"account_count": 12, "transfer_retry_delay": 5, "loop_count": 4}, path
             )
 
             self.assertNotIn("account_count", settings)
             self.assertNotIn("transfer_retry_delay", settings)
+            self.assertNotIn("loop_count", settings)
             self.assertNotIn("account_count", path.read_text(encoding="utf-8"))
             self.assertNotIn("transfer_retry_delay", path.read_text(encoding="utf-8"))
+            self.assertNotIn("loop_count", path.read_text(encoding="utf-8"))
 
     def test_ui_coords_load_save_is_code_only(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -280,11 +280,6 @@ class TransferHelperConfigTests(unittest.TestCase):
 
         self.assertNotIn("bed_prefix", settings)
         self.assertNotIn("bed_prefix_pad_start", settings)
-
-    def test_suggested_loop_count_ceilings_dedi_transfer_capacity(self):
-        self.assertEqual(suggested_loop_count(1, 4), 2)
-        self.assertEqual(suggested_loop_count(2, 4), 3)
-        self.assertEqual(suggested_loop_count(3, 2), 9)
 
     def test_dedi_config_normalizes_items_without_enabled_flag(self):
         config = normalize_transfer_dedis(
@@ -566,7 +561,7 @@ class TransferHelperConfigTests(unittest.TestCase):
         issues = steam_account_assignment_issues(players, STEAM_ACCOUNTS)
 
         self.assertIn(
-            "players[1].steam_account must match Steam MostRecent account", issues
+            "players[1].steam_account must match the current Steam account", issues
         )
 
     def test_steam_account_assignment_allows_non_first_start_account(self):
@@ -579,7 +574,7 @@ class TransferHelperConfigTests(unittest.TestCase):
         )
 
         self.assertNotIn(
-            "players[1].steam_account must match Steam MostRecent account", issues
+            "players[1].steam_account must match the current Steam account", issues
         )
 
     def test_non_first_start_account_keeps_other_steam_validation(self):

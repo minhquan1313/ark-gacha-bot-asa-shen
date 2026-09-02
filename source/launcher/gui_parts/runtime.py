@@ -32,6 +32,7 @@ from source.launcher.utils.system import (
     get_memory_usage_gb,
 )
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
+from source.utility.runner_state import RUNNER_STATE_PREFIX
 from source.utility.utils_simple import start_subprocess
 
 START_GAME_DISABLE_DELAY = 10000
@@ -196,6 +197,7 @@ class RuntimeGuiMixin:
         try:
             self.queue_snapshot = {"running": [], "active": [], "waiting": []}
             self.running_task_name = None
+            self.runner_state = "RUNNING"
             self.runner_loading = True
             self.runner_launch_pending = True
             self.runner_ready_pending = False
@@ -207,6 +209,7 @@ class RuntimeGuiMixin:
             self.runner_loading = False
             self.runner_launch_pending = False
             self.runner_ready_pending = False
+            self.runner_state = "STOPPED"
             self._hide_runner_overlay()
             self._update_start_stop_button()
             self.dialog("Start Failed", str(exc), "error")
@@ -301,6 +304,7 @@ class RuntimeGuiMixin:
         self.stop_log_tail()
         self._close_output_reader(self.process)
         self.process = None
+        self.runner_state = "STOPPED"
         self.runner_loading = False
         self.runner_launch_pending = False
         self.program_stopping = False
@@ -372,6 +376,9 @@ class RuntimeGuiMixin:
                 break
             if line.strip() == RUNNER_READY_MESSAGE:
                 self.runner_ready.emit()
+                continue
+            if line.startswith(RUNNER_STATE_PREFIX):
+                self._emit_log_line(line)
                 continue
             self._emit_log_line(line)
         if not self.output_reader_stop.is_set():
@@ -496,7 +503,10 @@ class RuntimeGuiMixin:
                 self.cpu_meter.set_percent(cpu_percent or 0)
 
             running = self.process and self.process.poll() is None
-            self.runner_value.setText("RUNNING" if running else "STOPPED")
+            if running:
+                self.runner_value.setText(getattr(self, "runner_state", "RUNNING"))
+            else:
+                self.runner_value.setText("STOPPED")
             self.activity_value.setText(self.last_activity)
             self.clock_value.setText(time.strftime("%I:%M:%S %p"))
 

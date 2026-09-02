@@ -29,6 +29,7 @@ from source.launcher.runner_overlay import (
     format_runner_overlay,
 )
 from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
+from source.utility.runner_state import RUNNER_STATE_PREFIX
 
 
 class LauncherLogTests(unittest.TestCase):
@@ -130,6 +131,32 @@ class LauncherLogTests(unittest.TestCase):
         SettingsGUI.append_log(self.launcher, "[INFO] live log message\n")
 
         self.launcher._sync_runner_overlay.assert_called_once_with()
+
+    def test_runner_state_message_updates_state_without_logging(self):
+        self.launcher.runner_state = "RUNNING"
+        self.launcher._sync_runner_overlay = Mock()
+
+        SettingsGUI.append_log(
+            self.launcher,
+            f'{RUNNER_STATE_PREFIX}{json.dumps({"state": "PAUSED"})}',
+        )
+
+        self.assertEqual(self.launcher.runner_state, "PAUSED")
+        self.assertEqual(self.launcher.log_lines, [])
+        self.launcher._sync_runner_overlay.assert_called_once_with()
+
+    def test_invalid_runner_state_message_is_ignored(self):
+        self.launcher.runner_state = "RUNNING"
+        self.launcher._sync_runner_overlay = Mock()
+
+        SettingsGUI.append_log(
+            self.launcher,
+            f'{RUNNER_STATE_PREFIX}{json.dumps({"state": "BROKEN"})}',
+        )
+
+        self.assertEqual(self.launcher.runner_state, "RUNNING")
+        self.assertEqual(self.launcher.log_lines, [])
+        self.launcher._sync_runner_overlay.assert_not_called()
 
     def test_live_log_during_loading_keeps_overlay_loading_only(self):
         overlay = Mock()
@@ -1103,6 +1130,20 @@ class RunnerOverlayFormattingTests(unittest.TestCase):
 
         self.assertEqual(current, "Waiting for running task...")
         self.assertEqual(upcoming, ["No upcoming tasks."])
+
+    def test_overlay_shows_paused_state_and_keeps_upcoming_tasks(self):
+        current, upcoming = format_runner_overlay(
+            {
+                "running": [{"name": "gacha"}],
+                "active": [],
+                "waiting": [{"name": "pego", "execution_time": 120}],
+            },
+            now=100,
+            state="PAUSED",
+        )
+
+        self.assertEqual(current, "PAUSED")
+        self.assertEqual(upcoming, ["00:00:20 pego"])
 
     def test_overlay_logs_include_every_level_without_metadata(self) -> None:
         lines = [

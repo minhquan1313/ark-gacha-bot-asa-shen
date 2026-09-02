@@ -2,14 +2,13 @@ import contextlib
 import threading
 import time
 
-import pyautogui
 import win32clipboard
 
 import source.ASA.config
 from source.ASA.player import player_state
 from source.join_sim.source.crash import crash
 from source.logs import gachalogs as logs
-from source.utility import template, utils, utils_simple
+from source.utility import ark_input, template, utils, utils_simple
 
 _clipboard_lock = threading.Lock()
 _clipboard_open_timeout = 3
@@ -54,7 +53,7 @@ def enter_data(data: str):
         logs.logger.warning(f"Unable to write to clipboard: {e}")
         return False
 
-    pyautogui.hotkey("ctrl", "v")
+    ark_input.hotkey("ctrl", "v")
     return True
 
 
@@ -68,7 +67,7 @@ def console_reset():
     # Append "?" character into the console, in case the console already contain old value
     # so maybe it contains "ccc" from previous ccc, but somehow failed to submit, here we
     # add "?" -> "ccc?" then we submit, that's a wrong console command so it execute nothing -> SAFE RESET CONSOLE
-    pyautogui.press("?")
+    ark_input.press("?")
     time.sleep(0.1)
 
     utils.press_key("Enter")

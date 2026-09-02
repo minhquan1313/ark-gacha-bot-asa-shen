@@ -38,14 +38,18 @@ def format_runner_overlay(
     snapshot: dict,
     now: float | None = None,
     limit: int = RUNNER_OVERLAY_UPCOMING_LIMIT,
+    state: str = "RUNNING",
 ):
     now = time.time() if now is None else now
-    running = snapshot.get("running", [])
-    if running:
-        # current = f"Running {running[0].get('name', 'unknown')}"
-        current = f"{running[0].get('name', 'unknown')}"
+    if state == "PAUSED":
+        current = "PAUSED"
     else:
-        current = "Waiting for running task..."
+        running = snapshot.get("running", [])
+        if running:
+            # current = f"Running {running[0].get('name', 'unknown')}"
+            current = f"{running[0].get('name', 'unknown')}"
+        else:
+            current = "Waiting for running task..."
 
     queued = snapshot.get("active", []) + snapshot.get("waiting", [])
     queued.sort(key=lambda task: float(task.get("execution_time", now)))
@@ -295,7 +299,10 @@ class RunnerOverlay(QWidget):
         self.loading_active = False
         self.loading_spinner.stop()
         self._refresh_clock()
-        current, upcoming = format_runner_overlay(snapshot)
+        current, upcoming = format_runner_overlay(
+            snapshot,
+            state=getattr(self.owner, "runner_state", "RUNNING"),
+        )
         self.current_label.setText(current)
         for index, label in enumerate(self.upcoming_labels):
             if index < len(upcoming):
