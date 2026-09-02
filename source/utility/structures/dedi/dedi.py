@@ -79,7 +79,7 @@ def recover_if_problem(teleporter_name: str, item: DediStorageState):
     player_state.check_state()
     teleporter.teleport_not_default(teleporter_name)
 
-    utils.zero_center()
+    utils.get_yaw_pitch()
     turn_to_dedi(item)
 
 

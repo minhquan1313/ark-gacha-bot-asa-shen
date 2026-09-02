@@ -1,67 +1,39 @@
 @echo off
-setlocal EnableExtensions EnableDelayedExpansion
+cd /d "%~dp0"
 
-:: Specify the required Python version
-set "PYTHON_VERSION=3.11"
+:: check if python is installed
+echo Checking Python...
+python --version >nul 2>&1
 
-:: Check if Python 3.11 is installed
-echo Checking for Python %PYTHON_VERSION%...
-py -%PYTHON_VERSION% --version >nul 2>&1
+if errorlevel 1 (
+  py --version >nul 2>&1
+)
+
 if errorlevel 1 (
   :: python is not installed
-  echo Python not installed, downloading installer...
-  powershell -c "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.1/python-3.11.1-amd64.exe' -OutFile '%USERPROFILE%\AppData\Local\Temp\python-3.11.1.exe'"
-  echo Launching installer, please make sure to follow the correct setup instructions Adding python to environment variables!
-  echo:
-  
-  "%USERPROFILE%\AppData\Local\Temp\python-3.11.1.exe"
+  echo Python not installed, please run setup.bat first!
   pause
-  echo Please press any button once you have completed the python setup, so we can continue installing the depedencies.
-  
-  ) else (
-  echo Python is already installed. Please make sure its of version 3.10 or higher, using an older version will NOT work!
+  exit /b 1
 )
 
 :: Check if virtual environment exists
 if not exist "venv" (
-  echo Virtual environment not found. Creating a new one using Python %PYTHON_VERSION%...
-  py -%PYTHON_VERSION% -m venv venv
-  if errorlevel 1 (
-    echo Failed to create virtual environment with Python %PYTHON_VERSION%. Ensure Python is installed and accessible.
-    pause
-    exit /b
-  )
-  echo Virtual environment created successfully.
-  
-  :: Install dependencies immediately after creating the venv
-  echo Installing dependencies from requirements.txt...
-  call venv\Scripts\activate.bat
-  python -m pip install --upgrade pip
-  python -m pip install -r requirements.txt
+  echo Virtual environment not found, please run setup.bat first!
+  pause
+  exit /b 1
 )
 
 :: Activate the virtual environment
 echo Activating virtual environment...
 call venv\Scripts\activate.bat
+
 if errorlevel 1 (
-  echo Failed to activate virtual environment. Please activate it manually using:
-  echo venv\Scripts\activate
+  echo Failed to activate virtual environment!
   pause
-  exit /b
+  exit /b 1
 )
 
 :: Run the main Python script
-echo Installing/updating dependencies from requirements.txt...
-python -m pip install -r requirements.txt
-if errorlevel 1 (
-  echo Failed to install dependencies from requirements.txt.
-  pause
-  deactivate
-  exit /b
-)
-
-cls
-
 set "APP_ID=ShenGBot"
 echo Starting GBot...
 python main.py --app-id "%APP_ID%"

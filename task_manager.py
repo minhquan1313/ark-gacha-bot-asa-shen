@@ -158,11 +158,7 @@ class task_scheduler(metaclass=SingletonMeta):
 
             self.prev_task_name = task.name
             self.running_task = None
-            if task.name != "pause":
-                self.move_to_waiting_queue(task)
-            else:
-                print("pause task skipping adding back ")
-                self.emit_queue_snapshot()
+            self.move_to_waiting_queue(task)
         else:
             self.active_queue.add(task, priority, exec_time)
 

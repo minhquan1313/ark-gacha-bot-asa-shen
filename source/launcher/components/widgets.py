@@ -2,6 +2,7 @@ import os
 
 from PySide6.QtCore import (
     QEasingCurve,
+    QEvent,
     QObject,
     QPoint,
     QPointF,
@@ -16,6 +17,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QBrush,
     QColor,
+    QEnterEvent,
     QFont,
     QLinearGradient,
     QPainter,
@@ -280,11 +282,131 @@ class SmoothScrollArea(QScrollArea):
         event.accept()
 
 
+class CyberCheckBox(QCheckBox):
+    """Paint a compact, high-contrast checkbox with native toggle semantics."""
+
+    def __init__(self, text: str = "", parent: QWidget | None = None):
+        super().__init__(text, parent)
+        self._check_progress = 1.0 if self.isChecked() else 0.0
+        self._check_animation = None
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(24)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        font = QFont(UI_FONTS["body"], FONT_SIZES["form"])
+        font.setWeight(QFont.Weight.Bold)
+        self.setFont(font)
+        self.toggled.connect(self._animate_check)
+
+    def sizeHint(self):
+        text_width = self.fontMetrics().horizontalAdvance(self.text())
+        return QSize(18 + (8 + text_width if self.text() else 0), 24)
+
+    def setChecked(self, checked: bool):
+        was_checked = self.isChecked()
+        signals_blocked = self.signalsBlocked()
+        super().setChecked(checked)
+        if signals_blocked and checked != was_checked:
+            self._check_progress = 1.0 if checked else 0.0
+            self.update()
+
+    def _animate_check(self, checked: bool):
+        """Animate the indicator fill when the checked state changes."""
+        if self._check_animation is not None:
+            self._check_animation.stop()
+        self._check_animation = QVariantAnimation(self)
+        self._check_animation.setDuration(140)
+        self._check_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._check_animation.setStartValue(self._check_progress)
+        self._check_animation.setEndValue(1.0 if checked else 0.0)
+        self._check_animation.valueChanged.connect(self._set_check_progress)
+        self._check_animation.start()
+
+    def _set_check_progress(self, value: float):
+        """Update the animated checked-state progress."""
+        self._check_progress = float(value)
+        self.update()
+
+    def enterEvent(self, event: QEnterEvent):
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: QEvent):
+        self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event: QPaintEvent):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        indicator_size = 18
+        indicator = QRectF(
+            0,
+            (self.height() - indicator_size) / 2,
+            indicator_size,
+            indicator_size,
+        )
+        enabled = self.isEnabled()
+        hovered = self.underMouse() and enabled
+        unchecked_fill = QColor("#071019")
+        checked_fill = QColor(COLORS["cyan"] if enabled else COLORS["muted"])
+        fill = CyberSwitch._blend(unchecked_fill, checked_fill, self._check_progress)
+        border = QColor(COLORS["cyan"] if enabled else COLORS["border"])
+        if hovered:
+            border = border.lighter(125)
+
+        painter.setPen(QPen(border, 1.5))
+        painter.setBrush(fill)
+        painter.drawRoundedRect(indicator, 4, 4)
+
+        if self._check_progress > 0:
+            check_color = QColor(COLORS["text"])
+            check_color.setAlpha(round(255 * self._check_progress))
+            check_pen = QPen(check_color, 2.4)
+            check_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            check_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(check_pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            path = QPainterPath()
+            path.moveTo(4.5, indicator.center().y())
+            path.lineTo(8.0, indicator.bottom() - 4.5)
+            path.lineTo(14.0, indicator.top() + 4.5)
+            painter.drawPath(path)
+
+        if self.hasFocus():
+            focus_color = QColor(COLORS["cyan"])
+            focus_color.setAlpha(115)
+            painter.setPen(QPen(focus_color, 1, Qt.PenStyle.DotLine))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 4, 4)
+
+        if self.text():
+            text_x = indicator_size + 8
+            painter.setPen(QColor(COLORS["cyan"] if enabled else COLORS["muted"]))
+            painter.setFont(self.font())
+            painter.drawText(
+                text_x,
+                0,
+                max(0, self.width() - text_x),
+                self.height(),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                self.text(),
+            )
+
+
 class CyberSwitch(QCheckBox):
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
         self._knob_progress = 0.0
         self._switch_animation = None
+        self._loading = False
+        self._loading_progress = 0.0
+        self._loading_animation = QVariantAnimation(self)
+        self._loading_animation.setDuration(900)
+        self._loading_animation.setStartValue(0.0)
+        self._loading_animation.setEndValue(1.0)
+        self._loading_animation.setLoopCount(-1)
+        self._loading_animation.setEasingCurve(QEasingCurve.Type.Linear)
+        self._loading_animation.valueChanged.connect(self._set_loading_progress)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(UI_METRICS["switch_height"])
         self.setMinimumWidth(58)
@@ -298,14 +420,44 @@ class CyberSwitch(QCheckBox):
         return QSize(max(58, 58 + label_width), UI_METRICS["switch_height"])
 
     def setChecked(self, checked):
+        was_checked = self.isChecked()
         signals_blocked = self.signalsBlocked()
         super().setChecked(checked)
-        if signals_blocked:
+        if signals_blocked and checked != was_checked:
             self._knob_progress = 1.0 if checked else 0.0
             self.update()
 
     def hitButton(self, pos):
-        return self.rect().contains(pos)
+        return not self._loading and self.rect().contains(pos)
+
+    @property
+    def is_loading(self):
+        """Return whether the integrated loading sweep is active."""
+        return self._loading
+
+    def set_loading(self, active: bool):
+        """Show or hide the non-interactive loading sweep inside the switch."""
+        active = bool(active)
+        if active == self._loading:
+            return
+        self._loading = active
+        if active:
+            self.setCursor(Qt.CursorShape.BusyCursor)
+            self._loading_animation.start()
+        else:
+            self._loading_animation.stop()
+            self._loading_progress = 0.0
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update()
+
+    def nextCheckState(self):
+        if not self._loading:
+            super().nextCheckState()
+
+    def _set_loading_progress(self, value: float):
+        """Advance the cyan loading sweep through the switch track."""
+        self._loading_progress = float(value)
+        self.update()
 
     def _animate_toggle(self, checked):
         start = self._knob_progress
@@ -338,8 +490,31 @@ class CyberSwitch(QCheckBox):
         )
         knob_color = self._blend(COLORS["muted"], COLORS["cyan"], self._knob_progress)
 
-        painter.setPen(QPen(border_color, 1.5))
+        painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(track_color)
+        painter.drawRoundedRect(track, 10, 10)
+
+        if self._loading:
+            sweep_center = (
+                track.left() - 18 + self._loading_progress * (track.width() + 36)
+            )
+            sweep = QLinearGradient(sweep_center - 14, 0, sweep_center + 14, 0)
+            transparent = QColor(COLORS["cyan"])
+            transparent.setAlpha(0)
+            highlight = QColor(COLORS["cyan"])
+            highlight.setAlpha(145)
+            sweep.setColorAt(0.0, transparent)
+            sweep.setColorAt(0.5, highlight)
+            sweep.setColorAt(1.0, transparent)
+            clip = QPainterPath()
+            clip.addRoundedRect(QRectF(track), 10, 10)
+            painter.save()
+            painter.setClipPath(clip)
+            painter.fillRect(track, sweep)
+            painter.restore()
+
+        painter.setPen(QPen(border_color, 1.5))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(track, 10, 10)
 
         knob_x = track_x + 4 + round(23 * self._knob_progress)

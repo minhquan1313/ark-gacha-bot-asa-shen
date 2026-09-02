@@ -1,6 +1,5 @@
 import copy
 import json
-import math
 from pathlib import Path
 from typing import cast
 
@@ -33,7 +32,6 @@ DEFAULT_TRANSFER_SETTINGS: TransferSettings = {
     "destination_station_yaw": 0.0,
     "resource_server": "0",
     "destination_server": "0",
-    "loop_count": 1,
     "structure_load_delay": 10,
     "steam_restart_interval": 30,
     "ark_window_ready_timeout": 120,
@@ -161,13 +159,6 @@ def player_account_count(players: TransferPlayersConfig | object):
 
 def runtime_account_count(players: TransferPlayersConfig | object):
     return min(player_account_count(players), MAX_TRANSFER_RUNTIME_ACCOUNTS)
-
-
-def suggested_loop_count(dedi_count: int, account_count: int):
-    account_count = int(account_count)
-    if account_count <= 0:
-        raise ValueError("account_count must be at least 1.")
-    return int(math.ceil((int(dedi_count) * 6) / account_count))
 
 
 def load_transfer_settings(
@@ -325,7 +316,6 @@ def normalize_transfer_settings(data: object):
     normalized["destination_server"] = _server_number(
         normalized["destination_server"], "destination_server"
     )
-    normalized["loop_count"] = _int_min(normalized["loop_count"], "loop_count", 1)
     normalized["structure_load_delay"] = _int_min(
         normalized["structure_load_delay"], "structure_load_delay", 0
     )
@@ -571,7 +561,7 @@ def steam_account_assignment_issues(
             seen[account_name] = index
         if index == start_account and most_recent and account_name != most_recent:
             issues.append(
-                f"players[{index}].steam_account must match Steam MostRecent account"
+                f"players[{index}].steam_account must match the current Steam account"
             )
     return issues
 

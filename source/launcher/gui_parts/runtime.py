@@ -46,7 +46,7 @@ class RuntimeGuiMixin:
         return bool(getattr(self, "auto_keys_automation_suspensions", set()))
 
     def _sync_auto_keys_suspension_ui(self):
-        """Reflect temporary automation suspension without persisting the switch."""
+        """Reflect suspension and runtime loading without persisting the switch."""
         field = getattr(self, "auto_keys_enabled_field", None)
         if field is None:
             return
@@ -55,11 +55,31 @@ class RuntimeGuiMixin:
             return
         suspended = self._auto_keys_are_suspended()
         configured = bool(self.settings.get("auto_keys", {}).get("enabled", False))
+        runtime = getattr(self, "auto_keys_runtime", None)
+        runtime_state = getattr(
+            self,
+            "auto_keys_runtime_state",
+            getattr(runtime, "state", "disabled"),
+        )
+        starting = configured and not suspended and runtime_state == "starting"
         field.blockSignals(True)
         field.setChecked(configured and not suspended)
+        field.setText("ENABLED")
+        field.set_loading(starting)
         field.setEnabled(not suspended)
-        field.setToolTip("Paused while automation is running" if suspended else "")
+        if suspended:
+            tooltip = "Paused while automation is running"
+        elif starting:
+            tooltip = "Resolving ARK input bindings"
+        else:
+            tooltip = ""
+        field.setToolTip(tooltip)
         field.blockSignals(False)
+
+    def _on_auto_keys_state_changed(self, state: str):
+        """Render Auto Keys worker lifecycle changes on the Qt GUI thread."""
+        self.auto_keys_runtime_state = state
+        self._sync_auto_keys_suspension_ui()
 
     def _suspend_auto_keys_for_automation(self, token: object):
         """Acquire one worker-owned Auto Keys suspension token."""

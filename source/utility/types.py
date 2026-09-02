@@ -63,7 +63,6 @@ class TransferSettings(TypedDict):
     destination_station_yaw: float
     resource_server: str
     destination_server: str
-    loop_count: int
     structure_load_delay: int
     steam_restart_interval: int
     ark_window_ready_timeout: int
@@ -228,6 +227,7 @@ RoiRegionReconKey: TypeAlias = Literal[
     "join_game_4_gen1",
     "join_game_5_gen1",
     "req_mods_loading",
+    "pause_menu",
 ]
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

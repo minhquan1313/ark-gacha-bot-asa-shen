@@ -19,9 +19,15 @@ was_in_mainmenu = False
 
 
 def is_menu():
-    return recon_utils.check_template_no_bounds(
-        "escape", 0.7
-    ) or recon_utils.check_template_no_bounds("escape_obscured", 0.7)
+    return is_menu_clear() or is_menu_obscured()
+
+
+def is_menu_clear() -> bool:
+    return recon_utils.check_template_no_bounds("escape", 0.7)
+
+
+def is_menu_obscured():
+    return recon_utils.check_template_no_bounds("escape_obscured", 0.7)
 
 
 def is_logging_in():
@@ -30,6 +36,10 @@ def is_logging_in():
 
 def is_crashed():
     return crash.detect_crash()
+
+
+def is_pause_menu():
+    return recon_utils.check_template("pause_menu", 0.7)
 
 
 should_click = True

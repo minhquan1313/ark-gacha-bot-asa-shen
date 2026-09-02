@@ -69,7 +69,7 @@ def _process_running(process_name):
 
 def _wait_for_usable_ark_window():
     """Wait until ARK has a valid window, then focus it and skip the intro."""
-    dl = utils_simple.get_default_clock()
+    dl = utils_simple.get_default_clock(60)
     last_error: RuntimeError | None = None
 
     while not dl():

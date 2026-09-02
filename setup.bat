@@ -1,22 +1,28 @@
 @echo off
 cd /d "%~dp0"
 
-cd
-
 :: check if python is installed
->nul 2>nul assoc .py
+echo Checking Python...
+python --version >nul 2>&1
+
+if errorlevel 1 (
+  py --version >nul 2>&1
+)
 
 if errorlevel 1 (
   :: python is not installed
   echo Python not installed, downloading installer...
-  powershell -c "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.1/python-3.11.1-amd64.exe' -OutFile '%USERPROFILE%\AppData\Local\Temp\python-3.11.1.exe'"
+  powershell -c "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.1/python-3.11.1-amd64.exe' -OutFile '%TEMP%\python-3.11.1.exe'"
   echo Launching installer, please make sure to follow the correct setup instructions Adding python to environment variables!
   echo:
   
-  "%USERPROFILE%\AppData\Local\Temp\python-3.11.1.exe"
-  pause
   echo Please press any button once you have completed the python setup, so we can continue installing the depedencies.
+  "%TEMP%\python-3.11.1.exe"
+  pause
   
+  :: Restart the script after installation, to get python in PATH
+  start "" cmd /c ""%~f0""
+  exit /b
   ) else (
   echo Python is already installed. Please make sure its of version 3.10 or higher, using an older version will NOT work!
 )
@@ -48,11 +54,29 @@ if errorlevel 1 (
   echo Git is already installed.
 )
 
-:: get depedencies, not worth checking worst case they are already installed.
-echo Installing dependencies...
-py -m pip install -r requirements.txt
+:: create virtual environment
+if not exist "venv" (
+  echo venv not exist, creating...
+  py -m venv venv
+  if errorlevel 1 (
+    echo Failed to create virtual environment with Python. Ensure Python is installed and accessible.
+    pause
+    exit /b 1
+  )
+  
+  echo Virtual environment created successfully.
+  ) else (
+  echo Virtual environment already exists.
+)
 
-echo Finished installing dependencies.
+call venv\Scripts\activate.bat
+
+python -m pip install --upgrade pip
+
+echo Installing dependencies...
+python -m pip install -r requirements.txt
 
 echo Setup finished.
 pause
+
+exit

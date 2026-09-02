@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from source.launcher.config.constants import (
+    AUTO_KEYS_ACTIONS,
     DEFAULT_SETTINGS,
     PHONE_MINIMUM_SIZE,
     SETTINGS_FILE,
@@ -18,6 +19,9 @@ def _normalize_settings(data: dict):
     auto_keys = data.get("auto_keys", {})
     if not isinstance(auto_keys, dict):
         auto_keys = {}
+    action_settings = auto_keys.get("actions", {})
+    if not isinstance(action_settings, dict):
+        action_settings = {}
     normalized["auto_keys"] = {
         "enabled": bool(auto_keys.get("enabled", False)),
         "interval": _positive_float(
@@ -26,6 +30,10 @@ def _normalize_settings(data: dict):
         "hold_duration": _positive_float(
             auto_keys.get("hold_duration", 1.0), "auto_keys.hold_duration"
         ),
+        "actions": {
+            action: bool(action_settings.get(action, True))
+            for action in AUTO_KEYS_ACTIONS
+        },
     }
     normalized.update(
         {

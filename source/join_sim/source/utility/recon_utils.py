@@ -44,11 +44,14 @@ location: dict[RoiRegionReconKey, RoiRegion] = {
         "width": 784,
         "height": 420,
     },
+    "pause_menu": {"start_x": 700, "start_y": 280, "width": 520, "height": 780},
 }
 
 
 IS_DEBUG = False
-DEBUG_ITEM = "no_session"
+DEBUG_ITEM = None
+DEBUG_GRAY = False
+DEBUG_BEEP = False
 
 
 def register_roi(items: dict[RoiRegionReconKey, RoiRegion]):
@@ -106,13 +109,18 @@ def check_template(item: RoiRegionReconKey, threshold: float):
     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
-    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM):
+    # DEBUG
+    if IS_DEBUG and (
+        DEBUG_ITEM is None
+        or item == DEBUG_ITEM
+        or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)
+    ):
         import winsound
         from pathlib import Path
 
         score = f"{max_val:.3f}"
 
-        debug_roi = roi.copy()
+        debug_roi = gray_roi.copy() if DEBUG_GRAY else roi.copy()
         cv2.rectangle(
             debug_roi,
             (max_loc[0], max_loc[1]),
@@ -130,14 +138,14 @@ def check_template(item: RoiRegionReconKey, threshold: float):
 
         if not template_path.exists():
             cv2.imwrite(str(template_path), image)
-
         if not roi_path.exists():
             cv2.imwrite(str(roi_path), debug_roi)
 
-        if max_val > threshold:
-            winsound.Beep(1000, 100)
-        else:
-            winsound.Beep(100, 200)
+        if DEBUG_BEEP:
+            if max_val > threshold:
+                winsound.Beep(1000, duration=50)
+            else:
+                winsound.Beep(400, 200)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
@@ -169,13 +177,18 @@ def check_template_no_bounds(item: RoiRegionReconKey, threshold: float):
     res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
-    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM):
+    # DEBUG
+    if IS_DEBUG and (
+        DEBUG_ITEM is None
+        or item == DEBUG_ITEM
+        or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)
+    ):
         import winsound
         from pathlib import Path
 
         score = f"{max_val:.3f}"
 
-        debug_roi = roi.copy()
+        debug_roi = gray_roi.copy() if DEBUG_GRAY else roi.copy()
         cv2.rectangle(
             debug_roi,
             (max_loc[0], max_loc[1]),
@@ -193,14 +206,14 @@ def check_template_no_bounds(item: RoiRegionReconKey, threshold: float):
 
         if not template_path.exists():
             cv2.imwrite(str(template_path), image)
-
         if not roi_path.exists():
             cv2.imwrite(str(roi_path), debug_roi)
 
-        if max_val > threshold:
-            winsound.Beep(1000, 100)
-        else:
-            winsound.Beep(100, 200)
+        if DEBUG_BEEP:
+            if max_val > threshold:
+                winsound.Beep(1000, 50)
+            else:
+                winsound.Beep(400, 200)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")

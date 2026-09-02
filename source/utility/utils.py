@@ -437,13 +437,13 @@ def zero_center(target_yaw: float | None = None, target_pitch: float | None = No
         logs.logger.error(f"error processing data into floats: {e}")
 
 
-def get_yaw_pitch(use_cache=True):
+def get_yaw_pitch(use_cache=True, reset_state=True):
     """
     Trigger CCC
     """
     global current_yaw
     global current_pitch
-    ccc_data = console.console_ccc()
+    ccc_data = console.console_ccc(reset_state)
     # print(
     #     "🚀 ~ utils.py:363 ~ get_yaw_pitch ~ ccc_data:",
     #     ccc_data,

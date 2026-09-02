@@ -274,7 +274,7 @@ class WindowGuiMixin:
             clear_suspensions()
         runtime = getattr(self, "auto_keys_runtime", None)
         if runtime is not None:
-            runtime.disable()
+            runtime.shutdown()
         self._hide_runner_overlay()
         self.close_external_helpers()
         self.output_reader_stop.set()

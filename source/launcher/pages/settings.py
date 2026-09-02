@@ -9,6 +9,7 @@ from source.launcher.pages.common import (
     TEMPLATE_GROUP_SETTING_KEYS,
     AnimatedButton,
     Counter,
+    CyberCheckBox,
     CyberSwitch,
     CyberTemplateConflictDialog,
     CyberTextInputDialog,
@@ -967,31 +968,36 @@ class SettingsPagesMixin:
         supported_layout.setVerticalSpacing(4)
         supported_layout.setColumnStretch(2, 1)
 
-        action_labels = {}
+        action_fields = {}
         binding_labels = {}
+        action_settings = auto_keys.get("actions", {})
+        if not isinstance(action_settings, dict):
+            action_settings = {}
         for index, action in enumerate(AUTO_KEYS_ACTIONS):
             pair = index % 2
             grid_row = index // 2
             action_column = pair * 3
-            action_label = QLabel(action)
-            action_label.setObjectName("AutoKeysSupportedAction")
-            action_label.setMinimumWidth(0)
+            action_field = CyberCheckBox(action)
+            action_field.setObjectName("AutoKeysSupportedAction")
+            action_field.setMinimumWidth(0)
+            action_field.setChecked(bool(action_settings.get(action, True)))
+            action_field.toggled.connect(self.persist_auto_keys_settings)
             binding_label = QLabel("—")
             binding_label.setObjectName("AutoKeysSupportedBinding")
             binding_label.setMinimumWidth(0)
             alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
             supported_layout.addWidget(
-                action_label, grid_row, action_column, alignment=alignment
+                action_field, grid_row, action_column, alignment=alignment
             )
             supported_layout.addWidget(
                 binding_label, grid_row, action_column + 1, alignment=alignment
             )
-            action_labels[action] = action_label
+            action_fields[action] = action_field
             binding_labels[action] = binding_label
 
         self.auto_keys_supported_grid = supported_grid
         self.auto_keys_supported_grid_layout = supported_layout
-        self.auto_keys_supported_action_labels = action_labels
+        self.auto_keys_action_fields = action_fields
         self.auto_keys_supported_binding_labels = binding_labels
         self.auto_keys_input_path = None
         self.auto_keys_input_mtime = None
@@ -1105,7 +1111,19 @@ class SettingsPagesMixin:
                 "enabled": enabled,
                 "interval": float(self.auto_keys_interval_field.text()),
                 "hold_duration": float(self.auto_keys_hold_field.text()),
+                "actions": {
+                    action: field.isChecked()
+                    for action, field in getattr(
+                        self, "auto_keys_action_fields", {}
+                    ).items()
+                },
             }
+            if not auto_keys["actions"]:
+                current_actions = self.settings.get("auto_keys", {}).get("actions", {})
+                auto_keys["actions"] = {
+                    action: bool(current_actions.get(action, True))
+                    for action in AUTO_KEYS_ACTIONS
+                }
             if auto_keys["interval"] <= 0 or auto_keys["hold_duration"] <= 0:
                 raise ValueError
             self.form_values["auto_keys"] = auto_keys

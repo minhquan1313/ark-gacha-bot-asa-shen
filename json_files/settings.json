@@ -20,7 +20,14 @@
     "auto_keys": {
         "enabled": false,
         "interval": 0.15,
-        "hold_duration": 1.0
+        "hold_duration": 1.0,
+        "actions": {
+            "Fire": true,
+            "Use": false,
+            "DropItem": false,
+            "Crouch": true,
+            "Jump": false
+        }
     },
     "ping_template": "",
     "iguanadon_template": "",

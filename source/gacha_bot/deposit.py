@@ -277,7 +277,12 @@ def _process_crystal_routes(
     route: CrystalDepositRoute,
     open_first_route_crystals: bool = False,
 ):
+    global g_is_still_have_items
     route_metadata = _teleport_to_route(route)
+
+    if not pego.is_crystal_hotbar_visible():
+        g_is_still_have_items = False
+        return
 
     if open_first_route_crystals:
         logs.logger.debug("opening crystals")
@@ -344,6 +349,9 @@ def process_dedi_list_route(
                     retry_item = dedi_list[retry_index]
                     process_fast_dedi(route, retry_item, retry_index, _type)
 
+            if not is_last_dedi:
+                utils.get_yaw_pitch(reset_state=False)
+
         batch_start_index = index + 1
     return True
 
@@ -399,10 +407,13 @@ def deposit_all():
     crystal_routes = deposit_config["depositCrystalData"]
     grindable_routes = deposit_config["depositGrindableData"]
     for index, route in enumerate(crystal_routes):
-        _process_crystal_routes(
-            route,
-            open_first_route_crystals=index == 0,
-        )
+        if g_is_still_have_items:
+            _process_crystal_routes(
+                route,
+                open_first_route_crystals=index == 0,
+            )
+        else:
+            break
 
     return (
         _process_grindable_routes(grindable_routes) if g_is_still_have_items else True

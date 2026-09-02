@@ -2,7 +2,7 @@
   "depositCrystalData": [
     {
       "teleport": "GACHADEDI1",
-      "check_on_every_dedi": 7,
+      "check_on_every_dedi": 6,
       "dedi": {
         "items": [
           {
@@ -126,17 +126,17 @@
           },
           {
             "location": {
-              "yaw": 17.42,
-              "pitch": -34.68
+              "yaw": 16.25,
+              "pitch": -23.06
             },
-            "crouched": false
+            "crouched": true
           },
           {
             "location": {
-              "yaw": 51.89,
-              "pitch": -34.68
+              "yaw": 49.33,
+              "pitch": -20.76
             },
-            "crouched": false
+            "crouched": true
           },
           {
             "location": {
@@ -273,8 +273,8 @@
           },
           {
             "location": {
-              "yaw": 148.37,
-              "pitch": 11.52
+              "yaw": 152.74,
+              "pitch": 14.51
             },
             "crouched": false
           }

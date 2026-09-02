@@ -121,9 +121,7 @@ def check_disconnected():
         logs.enable_log()
 
         logs.logger.critical("We are disconnected from the server", exc_info=True)
-        # DEBUG START
         capture_state("disconnected")
-        # DEBUG END
         main.main_loop(settings.server_number)
         tribelog.close()
         if not bed.is_open():
@@ -131,9 +129,7 @@ def check_disconnected():
             logs.logger.warning(
                 f"joined back into the server waiting {settings.wait_structure_load} seconds to render everything "
             )
-            # DEBUG START
             capture_state("joined")
-            # DEBUG END
             if success.was_has_logs:
                 # letting everything load back in
                 smart_wait_structure_with_teleport()

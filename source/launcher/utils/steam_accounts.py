@@ -53,7 +53,7 @@ def parse_loginusers(vdf_text: str):
             SteamAccount(
                 steam_id=steam_id,
                 account_name=account_name,
-                most_recent=_block_value(block, "MostRecent") == "1",
+                most_recent=_block_value(block, "AutoLogin") == "1",
                 timestamp=_int_or_zero(_block_value(block, "Timestamp")),
                 allow_auto_login=_block_value(block, "AllowAutoLogin"),
             )
@@ -62,7 +62,7 @@ def parse_loginusers(vdf_text: str):
 
 
 def sorted_steam_accounts(accounts: list[SteamAccount]):
-    """Sort accounts by most-recent status, then by newest timestamp."""
+    """Sort accounts by current-account status, then by newest timestamp."""
     return sorted(
         accounts, key=lambda account: (not account.most_recent, -account.timestamp)
     )
@@ -71,7 +71,7 @@ def sorted_steam_accounts(accounts: list[SteamAccount]):
 def most_recent_account_name(
     accounts: list[dict[str, object]] | list[SteamAccount],
 ):
-    """Return the AccountName marked MostRecent, or an empty string."""
+    """Return the AccountName marked as current, or an empty string."""
     for account in accounts:
         if isinstance(account, SteamAccount):
             if account.most_recent:

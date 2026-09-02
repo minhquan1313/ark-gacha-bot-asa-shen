@@ -82,7 +82,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
         self.content_layout.addWidget(self.status)
 
     def _load_initial_accounts(self):
-        """Resolve the VDF once and select the account marked MostRecent."""
+        """Resolve the VDF once and select the account marked as current."""
         try:
             self.loginusers_file = steam_accounts.loginusers_path().resolve()
             accounts = steam_accounts.load_steam_accounts(self.loginusers_file)

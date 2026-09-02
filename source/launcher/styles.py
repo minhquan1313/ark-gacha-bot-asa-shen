@@ -240,7 +240,7 @@ def launcher_style_sheet():
         QLabel#AutoKeysWarning,
         QLabel#AutoKeysIntervalDescription,
         QLabel#AutoKeysTriggerDescription,
-        QLabel#AutoKeysSupportedAction,
+        QCheckBox#AutoKeysSupportedAction,
         QLabel#AutoKeysSupportedBinding,
         QLabel#AutoKeysInstruction {{
             font-size: {FONT_SIZES["form"]}px;
@@ -253,7 +253,7 @@ def launcher_style_sheet():
         QLabel#AutoKeysTriggerDescription {{
             color: {COLORS["muted"]};
         }}
-        QLabel#AutoKeysSupportedAction {{
+        QCheckBox#AutoKeysSupportedAction {{
             color: {COLORS["cyan"]};
             font-weight: 900;
         }}

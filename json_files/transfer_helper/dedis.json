@@ -5,22 +5,85 @@
     "items": [
       {
         "location": {
-          "yaw": -172.96,
-          "pitch": -39.58
+          "yaw": -169.46,
+          "pitch": -42.31
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": -173.31,
-          "pitch": -14.91
+          "yaw": -170.92,
+          "pitch": -16.14
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": -174.01,
-          "pitch": 17.29
+          "yaw": -172.26,
+          "pitch": 15.37
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 133.14,
+          "pitch": 21.49
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 132.44,
+          "pitch": -22.61
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 131.39,
+          "pitch": -37.3
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 75.57,
+          "pitch": -21.03
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 75.75,
+          "pitch": -17.18
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 76.97,
+          "pitch": 12.92
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 26.75,
+          "pitch": 18.52
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 22.2,
+          "pitch": -11.58
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 21.85,
+          "pitch": -37.3
         },
         "crouched": false
       }
@@ -32,22 +95,85 @@
     "items": [
       {
         "location": {
-          "yaw": 118.15,
-          "pitch": -39.58
+          "yaw": 71.07,
+          "pitch": -42.31
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 117.8,
-          "pitch": -14.91
+          "yaw": 69.61,
+          "pitch": -16.14
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 117.1,
-          "pitch": 17.29
+          "yaw": 68.27,
+          "pitch": 15.37
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 13.67,
+          "pitch": 21.49
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 12.97,
+          "pitch": -22.61
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 11.92,
+          "pitch": -37.3
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -43.9,
+          "pitch": -21.03
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -43.72,
+          "pitch": -17.18
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -42.5,
+          "pitch": 12.92
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -92.72,
+          "pitch": 18.52
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -97.27,
+          "pitch": -11.58
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -97.62,
+          "pitch": -37.3
         },
         "crouched": false
       }

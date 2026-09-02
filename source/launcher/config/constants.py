@@ -162,6 +162,9 @@ ASSETS = {
     "icon.restore_settings": "assets/app/icons/restore_settings256.png",
 }
 
+AUTO_KEYS_ACTIONS = ("Fire", "Use", "DropItem", "Crouch", "Jump")
+
+
 DEFAULT_SETTINGS = {
     "ping": 100,
     "iguanadon": "GACHAIGUANADON",
@@ -185,6 +188,7 @@ DEFAULT_SETTINGS = {
         "enabled": False,
         "interval": 0.25,
         "hold_duration": 1.0,
+        "actions": {action: True for action in AUTO_KEYS_ACTIONS},
     },
 }
 
@@ -221,8 +225,6 @@ SETTING_LABELS = {
     "launcher_height": "Launcher startup height",
     "check_on_every_dedi": "Check every N dedis",
 }
-
-AUTO_KEYS_ACTIONS = ("Fire", "Use", "DropItem", "Crouch", "Jump")
 
 
 def setting_label(key):

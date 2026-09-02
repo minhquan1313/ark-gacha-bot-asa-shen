@@ -7,7 +7,7 @@ from source.ASA.player import console, player_inventory, player_state, tribelog
 from source.ASA.strucutres import teleporter
 from source.gacha_bot import deposit, gacha, iguanadon, pego, render
 from source.logs import gachalogs as logs
-from source.utility import template, utils
+from source.utility import utils
 
 global berry_station
 global last_berry
@@ -104,15 +104,16 @@ class pego_station(base_task):
         self.name = name
         self.teleporter_name = teleporter_name
         self.delay = delay
+        # self.is_first_run = True
 
     def execute(self):
         # DEBUG START
         # print("Start debugging")
-        # template.IS_DEBUG = True
-        # template.DEBUG_ITEM = "tribelog_check"
-        # template.DEBUG_BEEP = True
+        # recon_utils.IS_DEBUG = True
+        # recon_utils.DEBUG_ITEM = "pause_menu"
+        # recon_utils.DEBUG_BEEP = True
         # while True:
-        #     tribelog.is_open()
+        #     main.is_pause_menu()
         #     time.sleep(0.3)
 
         # utils.zero_center()
@@ -127,12 +128,8 @@ class pego_station(base_task):
         utils.zero_center()
 
         pego.pego_pickup(self.teleporter_name)
-        if template.check_template("crystal_in_hotbar", 0.7):
-            deposit.deposit_all()
-        else:
-            logs.logger.info(
-                "Bot has no crystals in hotbar we are skipping the deposit step"
-            )
+
+        deposit.deposit_all()
 
     def get_priority_level(self):
         return 2  # highest prio level as we cant have these get capped
@@ -174,26 +171,6 @@ class render_station(base_task):
         return 30  # after triggered we will wait for 30 seconds reduces the amount of cpu usage
 
 
-class pause(base_task):
-    def __init__(self, time):
-        super().__init__()
-        self.name = "pause"
-        self.time = time
-
-    def execute(self):
-        player_state.check_state()
-        teleporter.teleport_not_default(settings.bed_spawn)
-        render.enter_tekpod()
-        time.sleep(self.time)
-        render.leave_tekpod()
-
-    def get_priority_level(self):
-        return 1
-
-    def get_requeue_delay(self):
-        return 0
-
-
 class crafting(base_task):
     def __init__(self): ...
     def execute(self): ...
@@ -202,13 +179,3 @@ class crafting(base_task):
 
     def get_requeue_delay(self):
         return 90
-
-
-class transfer(base_task):
-    def __init__(self): ...
-    def execute(self): ...
-    def get_priority_level(self):
-        return 0
-
-    def get_requeue_delay(self):
-        return 0

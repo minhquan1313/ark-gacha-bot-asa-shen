@@ -45,6 +45,7 @@ class SettingsGUI(
     runner_ready = Signal()
     update_check_finished = Signal(object, bool)
     auto_keys_failure = Signal(str)
+    auto_keys_state_changed = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -78,12 +79,15 @@ class SettingsGUI(
         self.external_helpers = []
         self.auto_keys_automation_suspensions = set()
         self.auto_keys_restore_after_automation = False
+        self.auto_keys_runtime_state = "disabled"
         self.log_bridge = LogBridge()
         self.log_bridge.line.connect(self.append_log)
         self.auto_keys_failure.connect(self._handle_auto_keys_failure)
+        self.auto_keys_state_changed.connect(self._on_auto_keys_state_changed)
         self.auto_keys_runtime = AutoKeysRuntime(
             status_callback=self._auto_keys_status,
             failure_callback=self.auto_keys_failure.emit,
+            state_callback=self.auto_keys_state_changed.emit,
         )
         self.auto_keys_runtime.configure(self.settings)
         self.runner_ready.connect(self._on_runner_ready)
@@ -127,14 +131,11 @@ class SettingsGUI(
 
     def _handle_auto_keys_failure(self, message):
         """Disable and persist Auto keys after a fatal hook setup failure."""
-        field = getattr(self, "auto_keys_enabled_field", None)
-        if field is not None:
-            field.blockSignals(True)
-            field.setChecked(False)
-            field.blockSignals(False)
         auto_keys = dict(self.form_values.get("auto_keys", {}))
         auto_keys["enabled"] = False
         self.form_values["auto_keys"] = auto_keys
         self.settings = save_settings(self._collect_settings())
         self.form_values = self.settings.copy()
+        self.auto_keys_runtime_state = "disabled"
+        self._sync_auto_keys_suspension_ui()
         self.append_log(f"[AUTO KEYS] Disabled: {message}\n")
