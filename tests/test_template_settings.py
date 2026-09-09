@@ -31,7 +31,7 @@ def template_document(name: str = "Example") -> dict:
     return {
         "name": name,
         "type": TEMPLATE_TYPE,
-        "version": 1,
+        "version": 4,
         "data": {
             "settings": {key: DEFAULT_SETTINGS[key] for key in TEMPLATE_SETTING_KEYS},
             "dedis": default_deposit_config(),
@@ -42,20 +42,21 @@ def template_document(name: str = "Example") -> dict:
 
 
 class TemplateSettingsTests(unittest.TestCase):
-    def test_v1_normalization_strips_station_yaw_with_warning(self) -> None:
+    def test_current_normalization_strips_station_yaw_with_warning(self) -> None:
         document = template_document()
         document["data"]["settings"]["station_yaw"] = 55
 
         normalized, warnings = normalize_template(document)
 
         self.assertNotIn("station_yaw", normalized["data"]["settings"])
-        self.assertEqual(warnings, ["Ignored local-only station_yaw."])
+        self.assertIn("Ignored local-only station_yaw.", warnings)
+        self.assertEqual(normalized["version"], 4)
 
     def test_unsupported_version_is_rejected(self) -> None:
         document = template_document()
-        document["version"] = 2
+        document["version"] = 99
 
-        with self.assertRaisesRegex(ValueError, "Unsupported template version: 2"):
+        with self.assertRaisesRegex(ValueError, "Unsupported template version: 99"):
             normalize_template(document)
 
     def test_missing_required_setting_is_rejected(self) -> None:
@@ -130,6 +131,7 @@ class TemplateSettingsTests(unittest.TestCase):
         document["data"]["dedis"] = {
             "depositCrystalData": [],
             "depositGrindableData": [],
+            "depositGeneralData": [],
         }
 
         normalized, _warnings = normalize_template(document)

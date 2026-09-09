@@ -215,9 +215,9 @@ blue_bounds: BoundCouple = (90, 30, 200), (100, 255, 255)
 template_l_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
     # saturation to 0 so the white underline will still be tracked
     "beds_title_respawn": (0, 0, 200),
-    "inventory_player_drop": (0, 30, 150),
-    "inventory_drop": (0, 30, 150),
-    "inventory_player_transfer_all": (0, 30, 150),
+    "inventory_player_drop": (90, 30, 130),
+    "inventory_drop": (90, 30, 130),
+    "inventory_player_transfer_all": (90, 30, 130),
     "server_trans_uploaded": (40, 30, 180),
     "item_snow_owl_pellet": (0, 30, 0),
     "item_fertilizer": (0, 30, 0),

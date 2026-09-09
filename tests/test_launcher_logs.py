@@ -668,6 +668,7 @@ class LauncherDashboardTests(unittest.TestCase):
             last_activity="--:--:--",
         )
 
+        launcher._automatic_update_check = Mock()
         with patch("source.launcher.gui_parts.runtime.psutil", fake_psutil):
             SettingsGUI._tick(launcher)
 
@@ -769,6 +770,7 @@ class LauncherStartProgramTests(unittest.TestCase):
         launcher.runner_loading = True
         launcher.runner_launch_pending = True
 
+        launcher._resume_auto_keys_after_automation = Mock()
         SettingsGUI.stop_program(launcher)
 
         self.assertFalse(launcher.runner_loading)

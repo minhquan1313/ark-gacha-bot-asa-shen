@@ -7,7 +7,7 @@ from source.ASA.strucutres import bed, teleporter
 from source.join_sim.source import main
 from source.join_sim.source.menus import success
 from source.logs import gachalogs as logs
-from source.utility import action_gate, template, utils, utils_simple
+from source.utility import action_gate, ark_runtime, template, utils, utils_simple
 from source.utility.debug_screenshots import (
     CAPTURE_PLAYER_STATE,
     capture_for,
@@ -117,26 +117,28 @@ def smart_wait_structure_with_teleport(
 
 
 def check_disconnected():
-    with action_gate.recovery_scope():
-        if main.is_menu() or main.is_crashed():
-            logs.enable_log()
+    action_gate.before_ark_action()
+    crashed = main.is_crashed()
+    menu = ark_runtime.is_ark_foreground() and main.is_menu()
+    if crashed or menu:
+        logs.enable_log()
 
-            logs.logger.critical("We are disconnected from the server", exc_info=True)
-            capture_state("disconnected")
-            main.main_loop(settings.server_number)
-            tribelog.close()
-            if not bed.is_open():
-                # Checking in case the upcoming screen is a bed spawn from previous server transfer
-                logs.logger.warning(
-                    f"joined back into the server waiting {settings.wait_structure_load} seconds to render everything "
-                )
-                capture_state("joined")
-                if success.was_has_logs:
-                    # letting everything load back in
-                    smart_wait_structure_with_teleport()
-            return True
+        logs.logger.critical("We are disconnected from the server", exc_info=True)
+        capture_state("disconnected")
+        main.main_loop(settings.server_number)
+        tribelog.close()
+        if not bed.is_open():
+            # Checking in case the upcoming screen is a bed spawn from previous server transfer
+            logs.logger.warning(
+                f"joined back into the server waiting {settings.wait_structure_load} seconds to render everything "
+            )
+            capture_state("joined")
+            if success.was_has_logs:
+                # letting everything load back in
+                smart_wait_structure_with_teleport()
+        return True
 
-        return False
+    return False
 
 
 def reset_state(crouch=True):
@@ -164,6 +166,7 @@ def check_state(*, crouch=True, should_replesh=True, should_wait_structure=True)
         return
 
     reset_state(crouch)
+    logs.logger.debug("Checking player buff")
     buff = buffs.check_buffs()
     type = buff.check_buffs()
     if type == 1 or source.gacha_bot.render.render_flag:

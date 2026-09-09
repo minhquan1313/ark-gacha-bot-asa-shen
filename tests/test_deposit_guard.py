@@ -93,6 +93,8 @@ def load_deposit_module():
     dedi.unsafe_fast_deposit_all = Mock(return_value=True)
     dedi_package.dedi = dedi
     utility_types = types.ModuleType("source.utility.types")
+    utility_types.CraftRoute = dict
+    utility_types.CrafterStorageState = dict
     utility_types.CrystalDepositRoute = dict
     utility_types.DediStorageContainer = dict
     utility_types.DediStorageState = dict

@@ -48,6 +48,9 @@ def join_round(server: str):
     if should_click:
         # This click will skip game intro
         ark_input.click(2, 2)
+    else:
+        ark_input.move_to(2, 2)
+
     # Assume
     was_logging_in = is_logging_in()
 

@@ -452,7 +452,9 @@ class HelperRunnerOverlay(RunnerOverlay):
         """Show only the helper log section after worker loading completes."""
         super().refresh(snapshot, log_lines)
         self.loading_row.hide()
-        self.current_label.hide()
+        self.current_label.setVisible(
+            getattr(self.owner, "runner_state", "RUNNING") == "PAUSED"
+        )
         for label in self.upcoming_labels:
             label.hide()
         self._resize_to_content_height()

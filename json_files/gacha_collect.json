@@ -1,0 +1,86 @@
+[
+  {
+    "name": "GachaSnail1",
+    "teleporter": "GachaSnail1",
+    "side": "left",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail2",
+    "teleporter": "GachaSnail1",
+    "side": "right",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail3",
+    "teleporter": "GachaSnail2",
+    "side": "left",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail4",
+    "teleporter": "GachaSnail2",
+    "side": "right",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail5",
+    "teleporter": "GachaSnail3",
+    "side": "left",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail6",
+    "teleporter": "GachaSnail3",
+    "side": "right",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail7",
+    "teleporter": "GachaSnail4",
+    "side": "left",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail8",
+    "teleporter": "GachaSnail4",
+    "side": "right",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail9",
+    "teleporter": "GachaSnail5",
+    "side": "left",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail10",
+    "teleporter": "GachaSnail5",
+    "side": "right",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail11",
+    "teleporter": "GachaSnail6",
+    "side": "left",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  },
+  {
+    "name": "GachaSnail12",
+    "teleporter": "GachaSnail6",
+    "side": "right",
+    "item": "paste",
+    "dedi_teleport": "GACHACRAFT"
+  }
+]

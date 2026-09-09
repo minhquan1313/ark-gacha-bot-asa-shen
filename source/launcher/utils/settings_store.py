@@ -24,6 +24,7 @@ def _normalize_settings(data: dict):
         action_settings = {}
     normalized["auto_keys"] = {
         "enabled": bool(auto_keys.get("enabled", False)),
+        "activation_key": _activation_key(auto_keys.get("activation_key", "F1")),
         "interval": _positive_float(
             auto_keys.get("interval", 0.25), "auto_keys.interval"
         ),
@@ -56,6 +57,14 @@ def _normalize_settings(data: dict):
         PHONE_MINIMUM_SIZE[1], int(normalized["launcher_height"])
     )
     return normalized
+
+
+def _activation_key(value: object):
+    """Normalize the single keyboard key used to arm Auto Keys."""
+    key = str(value).strip().upper()
+    if not key or key in {"SHIFT", "CTRL", "ALT", "WIN", "META"}:
+        return "F1"
+    return key
 
 
 def _positive_float(value: object, name: str):

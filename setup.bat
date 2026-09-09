@@ -50,6 +50,10 @@ if errorlevel 1 (
   
   del "%TEMP%\git-installer.exe" >nul 2>&1
   echo Git installed successfully.
+  
+  :: Restart the script after installation, to get Git in PATH
+  start "" cmd /c ""%~f0""
+  exit /b
   ) else (
   echo Git is already installed.
 )

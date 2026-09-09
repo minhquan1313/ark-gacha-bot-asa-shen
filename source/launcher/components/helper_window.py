@@ -1,5 +1,6 @@
 import contextlib
 import ctypes
+import json
 import os
 import subprocess
 import sys
@@ -41,6 +42,7 @@ from source.launcher.utils.deposit_helper_capture import (
 from source.launcher.utils.native_window import WM_HOTKEY, WindowsMSG
 from source.launcher.utils.process_control import terminate_process_tree
 from source.logs import gachalogs as logs
+from source.utility.runner_state import RUNNER_STATE_PREFIX
 from source.utility.utils_simple import start_subprocess
 
 HELPER_COMPLETION_PREFIX = "__HELPER_COMPLETION__ "
@@ -376,13 +378,17 @@ class BaseHelperWindow(QWidget):
 
 
 class WorkerHelperWindow(BaseHelperWindow):
+    worker_result_ready = Signal(object, str)
     helper_log_changed = Signal()
     helper_ready = Signal()
+    runner_state_changed = Signal(str)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.worker_process = None
+        self.worker_result_ready.connect(self._dispatch_worker_result)
         self.worker_stopping = False
+        self.worker_launch_pending = False
         self.worker_stop_deadline = None
         self.output_reader_stop = threading.Event()
         self.output_reader_thread = None
@@ -394,17 +400,19 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.helper_log_lines = []
         self.helper_log_file_position = 0
         self.helper_log_overlay = None
+        self.runner_state = "RUNNING"
         self.auto_keys_suspension_active = False
         self.helper_log_timer = QTimer(self)
         self.helper_log_timer.timeout.connect(self._poll_helper_log_file)
         self.helper_log_changed.connect(self._refresh_helper_log_overlay)
         self.helper_ready.connect(self._finish_helper_loading)
+        self.runner_state_changed.connect(self._refresh_helper_overlay_for_runner_state)
 
     def register_minimal_running_widgets(self, *widgets):
         self.running_widgets.extend(widgets)
 
     def toggle(self):
-        if self.is_running():
+        if self.is_running() or self.worker_launch_pending:
             self.stop()
         else:
             self.start()
@@ -416,14 +424,32 @@ class WorkerHelperWindow(BaseHelperWindow):
         self.toggle()
 
     def _start_worker(self, *runner_args):
+        if self.closing or getattr(self.owner, "shutdown_started", False):
+            self.worker_launch_pending = False
+            self._release_auto_keys_suspension()
+            return
         suspend_auto_keys = getattr(
             self.owner, "_suspend_auto_keys_for_automation", None
         )
         if callable(suspend_auto_keys) and not self.auto_keys_suspension_active:
             suspend_auto_keys(self)
             self.auto_keys_suspension_active = True
+        runtime = getattr(self.owner, "auto_keys_runtime", None)
+        if getattr(runtime, "cleanup_pending", False) is True:
+            self.worker_launch_pending = True
+            self._set_running_ui(True)
+
+            def retry():
+                """Launch only while this helper still owns its suspension."""
+                if self.worker_launch_pending and self.auto_keys_suspension_active:
+                    self._start_worker(*runner_args)
+
+            QTimer.singleShot(20, self, retry)
+            return
         self.helper_log_lines = []
+        self.worker_launch_pending = False
         self.helper_log_file_position = self._helper_log_file_size()
+        self._set_runner_state("RUNNING")
         self._set_running_ui(True)
         self.worker_stopping = False
         self.worker_stop_deadline = None
@@ -470,11 +496,12 @@ class WorkerHelperWindow(BaseHelperWindow):
     def _read_worker_output(self, process):
         if process is None or process.stdout is None:
             return
+        stop_event = self.output_reader_stop
         for line in process.stdout:
-            if self.output_reader_stop.is_set():
+            if stop_event.is_set() or process is not self.worker_process:
                 break
             self._handle_worker_output(line.rstrip())
-        if not self.output_reader_stop.is_set():
+        if not stop_event.is_set() and process is self.worker_process:
             message = self.worker_result_message
             if not message:
                 return_code = process.poll()
@@ -490,6 +517,11 @@ class WorkerHelperWindow(BaseHelperWindow):
                 else:
                     message = f"Failed: helper exited with code {return_code}."
             self._log_worker_debug_output(message)
+            self.worker_result_ready.emit(process, message)
+
+    def _dispatch_worker_result(self, process: subprocess.Popen, message: str):
+        """Deliver completion only to the operation that owns this process."""
+        if process is self.worker_process:
             self._emit_worker_finished(message)
 
     def _handle_worker_output(self, line: str):
@@ -498,6 +530,14 @@ class WorkerHelperWindow(BaseHelperWindow):
             return
         if line.startswith(HELPER_COMPLETION_PREFIX):
             self.worker_result_message = line[len(HELPER_COMPLETION_PREFIX) :]
+            return
+        if line.startswith(RUNNER_STATE_PREFIX):
+            try:
+                state = json.loads(line[len(RUNNER_STATE_PREFIX) :]).get("state")
+            except (json.JSONDecodeError, AttributeError):
+                return
+            if state in {"RUNNING", "PAUSED"}:
+                self._set_runner_state(state)
             return
         if line:
             self.worker_debug_lines.append(line)
@@ -553,6 +593,17 @@ class WorkerHelperWindow(BaseHelperWindow):
         except RuntimeError:
             self.helper_log_overlay = None
 
+    def _refresh_helper_overlay_for_runner_state(self, _state: str):
+        """Refresh the generic helper overlay after a worker state change."""
+        self._refresh_helper_log_overlay()
+
+    def _set_runner_state(self, state: str):
+        """Store a valid worker state and publish it to the helper UI."""
+        if self.runner_state == state:
+            return
+        self.runner_state = state
+        self.runner_state_changed.emit(state)
+
     def _emit_worker_ready(self):
         """Forward worker readiness through a Qt signal when supported."""
         self.helper_ready.emit()
@@ -578,6 +629,7 @@ class WorkerHelperWindow(BaseHelperWindow):
             signal.emit(message)
 
     def _finish_worker(self):
+        self.worker_launch_pending = False
         process = self.worker_process
         self._close_output_reader(process)
         self.helper_log_timer.stop()
@@ -586,6 +638,7 @@ class WorkerHelperWindow(BaseHelperWindow):
         if overlay is not None:
             overlay.close()
         self.worker_process = None
+        self._set_runner_state("RUNNING")
         self.worker_stopping = False
         self.worker_stop_deadline = None
         self._release_auto_keys_suspension()
@@ -642,6 +695,11 @@ class WorkerHelperWindow(BaseHelperWindow):
         self._position_middle_right()
 
     def stop(self):
+        if self.worker_launch_pending:
+            self.worker_launch_pending = False
+            self._release_auto_keys_suspension()
+            self._set_running_ui(False)
+            return
         if self.is_running():
             self.worker_stopping = True
             self.worker_stop_deadline = time.time() + 5
@@ -666,6 +724,8 @@ class WorkerHelperWindow(BaseHelperWindow):
 
     def closeEvent(self, event):
         self.closing = True
+        if self.worker_launch_pending:
+            self.stop()
         process = self.worker_process
         if process is not None and process.poll() is None:
             self.stop()

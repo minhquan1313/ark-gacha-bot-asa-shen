@@ -23,6 +23,11 @@ def launcher_style_sheet():
             border-top-left-radius: {UI_METRICS["window_radius"]}px;
             border-top-right-radius: {UI_METRICS["window_radius"]}px;
         }}
+        QWidget#AppRoot[customMaximized="true"], QFrame#TitleBar[customMaximized="true"] {{
+            border-radius: 0px;
+            border-top-left-radius: 0px;
+            border-top-right-radius: 0px;
+        }}
         QLabel#ChromeTitle {{
             color: {COLORS["cyan"]};
             font-family: {UI_FONTS["display"]};

@@ -30,7 +30,6 @@ def _open_clipboard():
                 if is_dled:
                     raise
                 time.sleep(_clipboard_retry_delay)
-
         try:
             yield
         finally:
@@ -67,7 +66,7 @@ def console_reset():
     # Append "?" character into the console, in case the console already contain old value
     # so maybe it contains "ccc" from previous ccc, but somehow failed to submit, here we
     # add "?" -> "ccc?" then we submit, that's a wrong console command so it execute nothing -> SAFE RESET CONSOLE
-    ark_input.press("?")
+    utils.write("?")
     time.sleep(0.1)
 
     utils.press_key("Enter")

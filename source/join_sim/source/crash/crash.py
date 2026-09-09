@@ -11,6 +11,7 @@ from source.launcher.utils.deposit_helper_capture import focus_game_window
 from source.utility import ark_input, template, utils_simple, windows
 
 crash_process: psutil.Process | None = None
+BATTL_EYE_REQUIRED_WINDOW_TITLE = "BattlEye Required"
 
 
 def detect_crash():
@@ -22,6 +23,10 @@ def detect_crash():
             join_sim.should_click = True
             return True
     try:
+        if windows.find_window_by_title(BATTL_EYE_REQUIRED_WINDOW_TITLE):
+            logs.logger.critical("Crash detected", stack_info=True)
+            join_sim.should_click = True
+            return True
         if not windows.ark_hwnd():
             logs.logger.critical("ARK window was not found; treating as crashed")
             join_sim.should_click = True
@@ -95,7 +100,7 @@ def re_open_game():
     while True:
         close_game()
         ark_game_setup.kill_running_ark()
-        time.sleep(1)
+        time.sleep(10)
         try:
             ark_game_setup.prepare_and_launch_game()
             _wait_for_usable_ark_window()

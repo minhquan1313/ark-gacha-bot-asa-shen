@@ -1,13 +1,20 @@
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from source.launcher.utils import update_service
 
 
 class UpdateServiceTests(unittest.TestCase):
+    def setUp(self):
+        """Keep mocked update failures out of the user's persistent log."""
+        logger = patch.object(update_service, "logger")
+        logger.start()
+        self.addCleanup(logger.stop)
+
     def write_manifest(self, document):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -45,7 +52,7 @@ class UpdateServiceTests(unittest.TestCase):
         current = update_service.UpdateManifest("1.0.0", "", "", ())
         latest = update_service.UpdateManifest("1.1.0", "2026-07-22", "Release", ())
         load_manifest.return_value = current
-        run_updater.return_value = Mock(returncode=10, stdout="UPDATE_AVAILABLE")
+        run_updater.return_value = subprocess.CompletedProcess([], 10, "UPDATE_AVAILABLE", "")
         remote_manifest.return_value = latest
 
         result = update_service.check_for_update()
@@ -59,7 +66,7 @@ class UpdateServiceTests(unittest.TestCase):
     def test_check_for_update_reports_updater_failure(self, load_manifest, run_updater):
         current = update_service.UpdateManifest("1.0.0", "", "", ())
         load_manifest.return_value = current
-        run_updater.return_value = Mock(returncode=1, stderr="network unavailable")
+        run_updater.return_value = subprocess.CompletedProcess([], 1, "", "network unavailable")
 
         result = update_service.check_for_update()
 

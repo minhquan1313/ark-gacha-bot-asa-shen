@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 SETTINGS_FILE = "json_files/settings.json"
@@ -8,12 +9,22 @@ MAX_LAUNCHER_LOG_LINES = 2000
 APP_NAME = "Shen GBot"
 APP_TITLE = APP_NAME.upper()
 _MANIFEST_PATH = Path(__file__).resolve().parents[3] / "manifest.json"
-try:
-    APP_VERSION = (
-        f"v{json.loads(_MANIFEST_PATH.read_text(encoding='utf-8'))['version']}"
-    )
-except (OSError, KeyError, TypeError, ValueError):
-    APP_VERSION = "v1.0.0"
+
+
+def installed_version(path: Path = _MANIFEST_PATH):
+    """Read the installed release label without inventing a fallback version."""
+    try:
+        version = json.loads(path.read_text(encoding="utf-8"))["version"]
+        if not isinstance(version, str) or not re.fullmatch(
+            r"[vV]?\d+\.\d+\.\d+", version.strip()
+        ):
+            return "Unknown"
+        return f"v{version.strip().lstrip('vV')}"
+    except (OSError, KeyError, TypeError, ValueError):
+        return "Unknown"
+
+
+APP_VERSION = installed_version()
 SUPPORTED_GAME_RESOLUTIONS = ((1920, 1080),)
 GAME_WINDOW_TITLE = "Ark: Survival Ascended ("
 BUTTON_TRANSITION_MS = 200
@@ -162,7 +173,9 @@ ASSETS = {
     "icon.restore_settings": "assets/app/icons/restore_settings256.png",
 }
 
-AUTO_KEYS_ACTIONS = ("Fire", "Use", "DropItem", "Crouch", "Jump")
+AUTO_KEYS_REPEAT_ACTIONS = ("Fire", "Use", "DropItem", "Crouch", "Jump")
+KEY_HOLD_ACTIONS = ("MoveForward",)
+AUTO_KEYS_ACTIONS = AUTO_KEYS_REPEAT_ACTIONS + KEY_HOLD_ACTIONS
 
 
 DEFAULT_SETTINGS = {
@@ -179,6 +192,8 @@ DEFAULT_SETTINGS = {
     "external_berry": False,
     "iguanadon_seed_throw_amount": 18,
     "gacha_feed_delay": 6600,
+    "craft_delay": 600,
+    "gacha_collect_feed_delay": 6600,
     "allow_focus_ark_window": True,
     "focus_ark_window_interval": 5.0,
     "helper_inactive_opacity": 0.3,
@@ -186,6 +201,7 @@ DEFAULT_SETTINGS = {
     "launcher_height": 800,
     "auto_keys": {
         "enabled": False,
+        "activation_key": "F1",
         "interval": 0.25,
         "hold_duration": 1.0,
         "actions": {action: True for action in AUTO_KEYS_ACTIONS},
@@ -199,6 +215,8 @@ TEMPLATE_REFERENCE_DEFAULTS = {
     **{f"{key}_template": "" for key in TEMPLATE_SETTING_KEYS},
     "dedis_template": "",
     "gacha_template": "",
+    "gacha_collect_template": "",
+    "craft_template": "",
     "pego_template": "",
 }
 
@@ -218,6 +236,8 @@ SETTING_LABELS = {
     "external_berry": "Troughs away?",
     "iguanadon_seed_throw_amount": "Seed drop",
     "gacha_feed_delay": "Gacha feed delay",
+    "craft_delay": "Craft delay (s)",
+    "gacha_collect_feed_delay": "Feed delay (s)",
     "helper_inactive_opacity": "Helper inactive opacity",
     "allow_focus_ark_window": "Allow Ark window focus",
     "focus_ark_window_interval": "Ark window focus interval",
@@ -277,7 +297,9 @@ SETTINGS_GROUPS = {
     "DEDI": [],
     "GACHA": [
         "gacha_feed_delay",
+        "gacha_collect_feed_delay",
     ],
+    "CRAFT": ["craft_delay"],
     "LAUNCHER": [
         "auto_start_program",
         "helper_inactive_opacity",
@@ -295,6 +317,7 @@ TEMPLATE_GROUP_SETTING_KEYS = {
         key for key in SETTINGS_GROUPS["STATIONS"] if key != "station_yaw"
     ),
     "GACHA": tuple(SETTINGS_GROUPS["GACHA"]),
+    "CRAFT": tuple(SETTINGS_GROUPS["CRAFT"]),
     "LAUNCHER": tuple(key for key in SETTINGS_GROUPS["LAUNCHER"] if key != "auto_keys"),
 }
 
@@ -304,6 +327,12 @@ TEMPLATE_GROUP_REFERENCE_KEYS = {
         for group, keys in TEMPLATE_GROUP_SETTING_KEYS.items()
     },
     "DEDI": ("dedis_template",),
-    "GACHA": ("gacha_feed_delay_template", "gacha_template"),
+    "GACHA": (
+        "gacha_feed_delay_template",
+        "gacha_collect_feed_delay_template",
+        "gacha_template",
+        "gacha_collect_template",
+    ),
+    "CRAFT": ("craft_delay_template", "craft_template"),
     "PEGO": ("pego_template",),
 }

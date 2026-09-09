@@ -1,7 +1,7 @@
 {
   "name": "Shen",
   "type": "template_setting",
-  "version": 1,
+  "version": 4,
   "data": {
     "settings": {
       "ping": 100,
@@ -16,6 +16,8 @@
       "external_berry": false,
       "iguanadon_seed_throw_amount": 0,
       "gacha_feed_delay": 6600,
+      "craft_delay": 600,
+      "gacha_collect_feed_delay": 6600,
       "allow_focus_ark_window": true,
       "focus_ark_window_interval": 5.0,
       "helper_inactive_opacity": 0.3,
@@ -81,7 +83,9 @@
                   "pitch": -10.64
                 },
                 "crouched": true,
-                "items": ["riot"]
+                "items": [
+                  "riot"
+                ]
               },
               {
                 "location": {
@@ -89,7 +93,12 @@
                   "pitch": -11.27
                 },
                 "crouched": true,
-                "items": ["assault", "tree", "gate", "riot"]
+                "items": [
+                  "assault",
+                  "tree",
+                  "gate",
+                  "riot"
+                ]
               }
             ]
           }
@@ -196,7 +205,8 @@
             ]
           }
         }
-      ]
+      ],
+      "depositGeneralData": []
     },
     "gacha": [
       {
@@ -500,6 +510,10 @@
         "side": "right"
       }
     ],
+    "gacha_collect": [],
+    "craft": {
+      "generalCraftData": []
+    },
     "pego": [
       {
         "name": "pego1",

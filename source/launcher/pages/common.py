@@ -32,14 +32,12 @@ from source.gacha_bot.deposit_config import (
     default_crystal_route,
     default_dedi_item,
     default_deposit_config,
+    default_general_route,
     default_grindable_route,
     default_vault_item,
     load_deposit_config,
     save_deposit_config,
 )
-from source.launcher.auto_feed_helper import AutoBabyFeedingHelper
-from source.launcher.auto_fishing_helper import AutoFishingHelper
-from source.launcher.auto_join_server_helper import AutoJoinServerHelper
 from source.launcher.components.custom_pyside_component import NoWheelComboBox
 from source.launcher.components.widgets import (
     AnimatedButton,
@@ -75,17 +73,20 @@ from source.launcher.config.station_config import (
     DEFAULT_PEGO_TARGET_CRYSTALS,
     auto_fill_gacha_group,
     calculate_pego_delay,
+    default_gacha_collect_entry,
     default_gacha_entry,
     default_gacha_pair,
     default_pego_entry,
     gacha_name_from_teleporter,
     grouped_gacha_entries,
+    load_gacha_collect_config,
     load_gacha_config,
     load_pego_config,
     missing_gacha_side,
     next_gacha_teleporter,
     next_pego_index,
     risky_teleporter_names,
+    save_gacha_collect_config,
     save_gacha_config,
     save_pego_config,
     set_all_pego_delays,
@@ -105,11 +106,6 @@ from source.launcher.config.template_settings import (
     scan_templates,
     write_template,
 )
-from source.launcher.deposit_route_helper import DepositRouteHelper
-from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
-from source.launcher.position_render_helper import PositionRenderHelper
-from source.launcher.server_transfer_helper import ServerTransferHelper
-from source.launcher.switch_steam_helper import SwitchSteamHelper
 from source.launcher.utils.settings_store import load_settings, save_settings
 from source.utility import utils_simple
 
@@ -120,9 +116,6 @@ __all__ = [
     "APP_VERSION",
     "ASSETS",
     "AnimatedButton",
-    "AutoFishingHelper",
-    "AutoBabyFeedingHelper",
-    "AutoJoinServerHelper",
     "COLORS",
     "ClickableTextEdit",
     "QCheckBox",
@@ -137,14 +130,11 @@ __all__ = [
     "DEFAULT_PEGO_TARGET_CRYSTALS",
     "DEFAULT_SETTINGS",
     "DEFAULT_TEMPLATE_FILENAME",
-    "DepositRouteHelper",
-    "FertilizerRefreshHelper",
     "HeroBanner",
     "LoadingSpinner",
     "MeterBar",
     "NoWheelComboBox",
     "Path",
-    "PositionRenderHelper",
     "QAction",
     "QApplication",
     "QButtonGroup",
@@ -171,9 +161,7 @@ __all__ = [
     "QWidget",
     "Qt",
     "SETTINGS_GROUPS",
-    "ServerTransferHelper",
     "SmoothScrollArea",
-    "SwitchSteamHelper",
     "TEMPLATE_DIRECTORY",
     "TEMPLATE_GROUP_REFERENCE_KEYS",
     "TEMPLATE_GROUP_SETTING_KEYS",
@@ -188,9 +176,11 @@ __all__ = [
     "convert_deposit_yaw",
     "copy",
     "default_crystal_route",
+    "default_general_route",
     "default_dedi_item",
     "default_deposit_config",
     "default_gacha_entry",
+    "default_gacha_collect_entry",
     "default_gacha_pair",
     "default_grindable_route",
     "default_pego_entry",
@@ -199,6 +189,7 @@ __all__ = [
     "grouped_gacha_entries",
     "load_deposit_config",
     "load_gacha_config",
+    "load_gacha_collect_config",
     "load_pego_config",
     "load_settings",
     "migrate_template_references",
@@ -214,6 +205,7 @@ __all__ = [
     "safe_template_filename",
     "save_deposit_config",
     "save_gacha_config",
+    "save_gacha_collect_config",
     "save_pego_config",
     "save_settings",
     "scan_templates",

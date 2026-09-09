@@ -64,13 +64,54 @@ class PegoPagesMixin:
         controls_layout.addWidget(calculator)
         content_layout.addWidget(controls)
 
+        content_layout.addWidget(self._pego_section())
+        content_layout.addStretch()
+
+    def _pego_section(self):
+        """Group pego entries in a collapsible card with a delete-all action."""
+        section = QFrame()
+        section.setObjectName("DepositRouteCard")
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
+        expanded = getattr(self, "pego_section_expanded", True)
+        header = QHBoxLayout()
+        toggle = self._button("v" if expanded else ">", "secondary")
+        toggle.setObjectName("HelperIconButton")
+        title = QLabel(f"PEGO ({len(self.pego_config)})")
+        title.setObjectName("PanelTitle")
+        remove = self._icon_button(
+            "icon.trash_junk", "Remove all PEGO entries", "danger"
+        )
+        remove.setEnabled(bool(self.pego_config))
+        remove.clicked.connect(self.remove_pego_section)
+        header.addWidget(toggle)
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(remove)
+        layout.addLayout(header)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(8)
+        body.setVisible(expanded)
         for index, entry in enumerate(self.pego_config):
-            content_layout.addWidget(self._pego_card(index, entry))
+            body_layout.addWidget(self._pego_card(index, entry))
         add = self._button("ADD PEGO", "secondary")
         add.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         add.clicked.connect(self.add_pego)
-        content_layout.addWidget(add)
-        content_layout.addStretch()
+        body_layout.addWidget(add)
+
+        def toggle_body(checked: bool = False):
+            """Toggle the entry list and retain its state across page refreshes."""
+            is_visible = body.isHidden()
+            body.setVisible(is_visible)
+            toggle.setText("v" if is_visible else ">")
+            self.pego_section_expanded = is_visible
+
+        toggle.clicked.connect(toggle_body)
+        layout.addWidget(body)
+        return section
 
     def _pego_card(self, entry_index, entry):
         card = QFrame()
@@ -210,6 +251,18 @@ class PegoPagesMixin:
         self.pego_config.append(
             default_pego_entry(next_pego_index(self.pego_config), delay)
         )
+        self.save_pego_config()
+        self._render_settings_group("PEGO")
+
+    def remove_pego_section(self):
+        """Confirm deletion of the pego list, then save and refresh the page."""
+        if not self.pego_config or not self.confirm(
+            "Delete All PEGO",
+            f"Delete all {len(self.pego_config)} entries in PEGO?",
+            "DELETE ALL",
+        ):
+            return
+        self.pego_config.clear()
         self.save_pego_config()
         self._render_settings_group("PEGO")
 

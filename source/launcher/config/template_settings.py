@@ -2,24 +2,31 @@ import copy
 import json
 import os
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from source.gacha_bot.deposit_config import normalize_deposit_config
+from source.gacha_bot.craft_config import normalize_craft_config
+from source.gacha_bot.deposit_config import (
+    normalize_deposit_config,
+    validate_deposit_teleports,
+)
 from source.launcher.config.constants import (
     DEFAULT_SETTINGS,
     TEMPLATE_REFERENCE_DEFAULTS,
     TEMPLATE_SETTING_KEYS,
 )
 from source.launcher.config.station_config import (
+    normalize_gacha_collect_config,
     normalize_gacha_config,
     normalize_pego_config,
 )
+from source.utility.types import DediStorageState
 
 TEMPLATE_DIRECTORY = Path("json_files/template_settings")
 DEFAULT_TEMPLATE_FILENAME = "Default_Official_GBot.json"
 TEMPLATE_TYPE = "template_setting"
-CURRENT_TEMPLATE_VERSION = 1
+CURRENT_TEMPLATE_VERSION = 4
 WINDOWS_RESERVED_NAMES = {
     "CON",
     "PRN",
@@ -52,14 +59,25 @@ def convert_deposit_yaw(data: dict, station_yaw: float, exporting: bool):
     adjustment = -float(station_yaw) if exporting else float(station_yaw)
     for route in converted["depositCrystalData"]:
         for container in (route["dedi"]["items"], route["vault"]["items"]):
-            _adjust_item_yaws(container, adjustment)  # type: ignore
+            _adjust_item_yaws(container, adjustment)
     for route in converted["depositGrindableData"]:
-        _adjust_item_yaws([route["grinder"]], adjustment)  # type: ignore
-        _adjust_item_yaws(route["dedi"]["items"], adjustment)  # type: ignore
+        _adjust_item_yaws([route["grinder"]], adjustment)
+        _adjust_item_yaws(route["dedi"]["items"], adjustment)
+    for route in converted["depositGeneralData"]:
+        _adjust_item_yaws(route["dedi"]["items"], adjustment)
     return converted
 
 
-def _adjust_item_yaws(items: list[dict], adjustment: float):
+def convert_craft_yaw(data: dict, station_yaw: float, exporting: bool):
+    """Convert crafter and output-dedi yaw between local and template coordinates."""
+    converted = copy.deepcopy(normalize_craft_config(data))
+    adjustment = -float(station_yaw) if exporting else float(station_yaw)
+    for route in converted["generalCraftData"]:
+        _adjust_item_yaws([*route["crafters"], *route["dedi"]["items"]], adjustment)
+    return converted
+
+
+def _adjust_item_yaws(items: Iterable[DediStorageState], adjustment: float):
     """Apply a yaw adjustment to route objects in place."""
     for item in items:
         item["location"]["yaw"] = normalize_yaw(
@@ -103,23 +121,22 @@ def normalize_template(document: object):
     version = document.get("version")
     if isinstance(version, bool) or not isinstance(version, int):
         raise ValueError("Template version must be an integer.")
-    normalizer = {1: _normalize_v1}.get(version)
-    if normalizer is None:
+    if version != CURRENT_TEMPLATE_VERSION:
         raise ValueError(f"Unsupported template version: {version}.")
-    data, warnings = normalizer(document.get("data"))
+    data, warnings = _normalize_data(document.get("data"))
     return (
         {
             "name": name,
             "type": TEMPLATE_TYPE,
-            "version": version,
+            "version": CURRENT_TEMPLATE_VERSION,
             "data": data,
         },
         warnings,
     )
 
 
-def _normalize_v1(raw_data: object):
-    """Normalize the version 1 main-bot template payload."""
+def _normalize_data(raw_data: object):
+    """Normalize the current main-bot template payload."""
     if not isinstance(raw_data, dict):
         raise ValueError("Template data must be a JSON object.")
     raw_settings = raw_data.get("settings")
@@ -129,19 +146,34 @@ def _normalize_v1(raw_data: object):
     if "station_yaw" in raw_settings:
         warnings.append("Ignored local-only station_yaw.")
     settings = {
-        key: _normalize_setting_value(key, raw_settings.get(key))
+        key: _normalize_setting_value(
+            key,
+            raw_settings.get(
+                key,
+                DEFAULT_SETTINGS[key]
+                if key in {"craft_delay", "gacha_collect_feed_delay"}
+                else None,
+            ),
+        )
         for key in TEMPLATE_SETTING_KEYS
     }
     try:
         dedis = normalize_deposit_config(raw_data.get("dedis"))
+        validate_deposit_teleports(dedis)
         gacha = normalize_gacha_config(raw_data.get("gacha"))
+        gacha_collect = normalize_gacha_collect_config(
+            raw_data.get("gacha_collect", [])
+        )
         pego = normalize_pego_config(raw_data.get("pego"))
+        craft = normalize_craft_config(raw_data.get("craft", {"generalCraftData": []}))
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Invalid template data: {exc}") from exc
     return {
         "settings": settings,
         "dedis": dedis,
         "gacha": gacha,
+        "gacha_collect": gacha_collect,
+        "craft": craft,
         "pego": pego,
     }, warnings
 
@@ -177,8 +209,10 @@ def build_template(
     dedis: dict,
     gacha: list[dict],
     pego: list[dict],
+    gacha_collect: list[dict] | None = None,
+    craft: dict | None = None,
 ):
-    """Build a normalized v1 snapshot from current effective configuration."""
+    """Build a normalized current-format snapshot from current effective configuration."""
     document = {
         "name": str(name),
         "type": TEMPLATE_TYPE,
@@ -187,6 +221,10 @@ def build_template(
             "settings": {key: settings[key] for key in TEMPLATE_SETTING_KEYS},
             "dedis": convert_deposit_yaw(dedis, float(settings["station_yaw"]), True),
             "gacha": copy.deepcopy(gacha),
+            "gacha_collect": copy.deepcopy(gacha_collect or []),
+            "craft": convert_craft_yaw(
+                craft or {"generalCraftData": []}, float(settings["station_yaw"]), True
+            ),
             "pego": copy.deepcopy(pego),
         },
     }

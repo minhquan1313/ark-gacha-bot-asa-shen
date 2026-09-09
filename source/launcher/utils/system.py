@@ -92,6 +92,7 @@ def find_window_size(window_title):
 def focus_window_if_needed(
     window_title: str, center_cursor_when_switching: bool = False
 ):
+    """Activate a window with bounded retries and verify foreground ownership."""
     user32 = ctypes.windll.user32
     hwnd = find_window_handle(
         window_title, contains=_should_match_window_title_contains(window_title)
@@ -102,41 +103,81 @@ def focus_window_if_needed(
     if foreground_hwnd == hwnd:
         return True
 
-    current_thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
-    foreground_thread_id = user32.GetWindowThreadProcessId(foreground_hwnd, None)
-    attached = False
-    try:
-        if foreground_thread_id and foreground_thread_id != current_thread_id:
-            attached = bool(
-                user32.AttachThreadInput(current_thread_id, foreground_thread_id, True)
-            )
-            if not attached:
-                raise RuntimeError(
-                    f"Unable to attach to the foreground thread for {window_title}."
-                )
+    if user32.IsIconic(hwnd):
+        user32.ShowWindow(hwnd, 9)
+    if center_cursor_when_switching:
+        rect = wintypes.RECT()
+        if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+            raise RuntimeError(f"Unable to read {window_title} window position.")
+        if not user32.SetCursorPos(
+            (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
+        ):
+            raise RuntimeError("Unable to center the mouse cursor.")
 
-        if user32.IsIconic(hwnd):
-            user32.ShowWindow(hwnd, 9)
-        if center_cursor_when_switching:
-            rect = wintypes.RECT()
-            if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
-                raise RuntimeError(f"Unable to read {window_title} window position.")
-            center_x = (rect.left + rect.right) // 2
-            center_y = (rect.top + rect.bottom) // 2
-            if not user32.SetCursorPos(center_x, center_y):
-                raise RuntimeError("Unable to center the mouse cursor.")
-        user32.BringWindowToTop(hwnd)
-        if not user32.SetForegroundWindow(hwnd):
-            raise RuntimeError(f"Unable to focus {window_title} window.")
-        deadline = time.monotonic() + 0.25
-        while user32.GetForegroundWindow() != hwnd:
-            if time.monotonic() >= deadline:
-                raise RuntimeError(f"{window_title} window did not become foreground.")
-            time.sleep(0.01)
-        return True
-    finally:
-        if attached:
-            user32.AttachThreadInput(current_thread_id, foreground_thread_id, False)
+    kernel32 = ctypes.windll.kernel32
+    current_thread_id = kernel32.GetCurrentThreadId()
+    attachment_error = 0
+    # Try normal activation first. Later attempts use a fresh foreground thread,
+    # since launchers and transient windows can disappear during a focus switch.
+    for attempt in range(3):
+        attached = False
+        foreground_thread_id = 0
+        try:
+            if attempt:
+                hwnd = find_window_handle(
+                    window_title,
+                    contains=_should_match_window_title_contains(window_title),
+                )
+                if not hwnd:
+                    return False
+                foreground_hwnd = user32.GetForegroundWindow()
+                if foreground_hwnd == hwnd:
+                    return True
+                foreground_thread_id = user32.GetWindowThreadProcessId(
+                    foreground_hwnd, None
+                )
+                if foreground_thread_id and foreground_thread_id != current_thread_id:
+                    attached = bool(
+                        user32.AttachThreadInput(
+                            current_thread_id, foreground_thread_id, True
+                        )
+                    )
+                    if not attached:
+                        attachment_error = kernel32.GetLastError()
+                if user32.IsIconic(hwnd):
+                    user32.ShowWindow(hwnd, 9)
+
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            # The observed foreground window is authoritative, even when an API
+            # reports failure or activation completes asynchronously.
+            deadline = time.monotonic() + 0.25
+            while user32.GetForegroundWindow() != hwnd:
+                if time.monotonic() >= deadline:
+                    break
+                time.sleep(0.01)
+            else:
+                return True
+        finally:
+            if attached:
+                user32.AttachThreadInput(current_thread_id, foreground_thread_id, False)
+        if attempt < 2:
+            time.sleep(0.1)
+
+    foreground_hwnd = user32.GetForegroundWindow()
+    foreground_pid = wintypes.DWORD()
+    foreground_thread_id = user32.GetWindowThreadProcessId(
+        foreground_hwnd, ctypes.byref(foreground_pid)
+    )
+    foreground_title = ctypes.create_unicode_buffer(512)
+    user32.GetWindowTextW(foreground_hwnd, foreground_title, len(foreground_title))
+    raise RuntimeError(
+        f"Unable to focus {window_title} window after 3 attempts; "
+        f"target HWND={hwnd}, foreground HWND={foreground_hwnd}, "
+        f"title={foreground_title.value!r}, PID={foreground_pid.value}, "
+        f"thread={foreground_thread_id}, current thread={current_thread_id}, "
+        f"last AttachThreadInput error={attachment_error}."
+    )
 
 
 def validate_ark_window():

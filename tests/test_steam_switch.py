@@ -229,3 +229,37 @@ class SteamSwitchTests(unittest.TestCase):
             events[:4],
             ["graceful_close", "force_close", "select_account", "close_steam"],
         )
+
+    def test_graceful_ark_close_precedes_forced_close(self) -> None:
+        players = {"players": [{"bed_name": "Bed1", "steam_account": "beta"}]}
+        events = []
+        accounts = SimpleNamespace(
+            select_auto_login_account=Mock(side_effect=lambda *_args: events.append("select")),
+            close_steam=Mock(side_effect=lambda: events.append("close_steam")),
+            launch_steam=Mock(side_effect=lambda: events.append("launch")),
+        )
+        ark_setup = SimpleNamespace(kill_running_ark=Mock(side_effect=lambda: events.append("kill_ark")))
+
+        with (
+            patch.object(steam_switch, "steam_accounts", accounts),
+            patch.object(steam_switch, "ark_game_setup", ark_setup),
+            patch.object(
+                steam_switch.utils,
+                "close_ark_with_console_exit",
+                side_effect=lambda: events.append("graceful_close"),
+            ),
+            patch.object(steam_switch, "_wait_for_steam_window", return_value=True),
+            patch.object(steam_switch.time, "sleep"),
+        ):
+            steam_switch.switch_steam_account(
+                1,
+                "alpha",
+                players,
+                default_transfer_ui_coords(),
+                loginusers=Path("loginusers.vdf"),
+            )
+
+        self.assertEqual(
+            events[:3],
+            ["graceful_close", "kill_ark", "select"],
+        )

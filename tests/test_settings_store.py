@@ -122,12 +122,15 @@ class SettingsStoreTests(unittest.TestCase):
                 "PEGO",
                 "DEDI",
                 "GACHA",
+                "CRAFT",
                 "LAUNCHER",
             ],
         )
         self.assertEqual(SETTINGS_GROUPS["DEDI"], [])
         self.assertEqual(SETTINGS_GROUPS["PEGO"], [])
-        self.assertEqual(SETTINGS_GROUPS["GACHA"], ["gacha_feed_delay"])
+        self.assertEqual(SETTINGS_GROUPS["GACHA"], [
+            "gacha_feed_delay", "gacha_collect_feed_delay"
+        ])
         self.assertEqual(SETTINGS_GROUPS["STATIONS"].count("time_to_reberry"), 1)
         self.assertFalse(hasattr(constants, "SETTINGS_GROUP_ROWS"))
 

@@ -44,9 +44,22 @@ class GrindableDepositRoute(DepositRouteBase):
     grinder: GrinderStorageState
 
 
+class CrafterStorageState(DediStorageState):
+    item: str
+
+
+class CraftRoute(DepositRouteBase):
+    crafters: list[CrafterStorageState]
+
+
+class CraftConfig(TypedDict):
+    generalCraftData: list[CraftRoute]
+
+
 class DepositConfig(TypedDict):
     depositCrystalData: list[CrystalDepositRoute]
     depositGrindableData: list[GrindableDepositRoute]
+    depositGeneralData: list[DepositRouteBase]
 
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

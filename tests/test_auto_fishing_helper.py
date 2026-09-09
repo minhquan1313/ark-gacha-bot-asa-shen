@@ -76,7 +76,7 @@ class AutoFishingHelperTests(unittest.TestCase):
         )
 
         with patch(
-            "source.launcher.pages.helpers.AutoFishingHelper",
+            "source.launcher.auto_fishing_helper.AutoFishingHelper",
             return_value=helper,
         ):
             SettingsGUI.open_auto_fishing_helper(launcher)

@@ -3,7 +3,7 @@ import time
 
 import settings
 from source.ASA import config
-from source.ASA.player import console, player_state
+from source.ASA.player import console
 from source.launcher.utils import deposit_helper_capture
 from source.logs import gachalogs as logs
 from source.utility import action_gate, utils_simple
@@ -28,9 +28,12 @@ MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
+KEYEVENTF_KEYUP = 0x0002
 
 keymap = {
+    "backspace": 0x08,
     "tab": 0x09,
+    "esc": 0x1B,
     "escape": 0x1B,
     "return": 0x0D,
     "enter": 0x0D,
@@ -48,6 +51,17 @@ keymap = {
     "thumbmousebutton": 0x05,
     "thumbmousebutton2": 0x06,
     "spacebar": 0x20,
+    "space": 0x20,
+    "pageup": 0x21,
+    "pagedown": 0x22,
+    "end": 0x23,
+    "home": 0x24,
+    "left": 0x25,
+    "up": 0x26,
+    "right": 0x27,
+    "down": 0x28,
+    "insert": 0x2D,
+    "delete": 0x2E,
     "hyphen": 0xBD,
     "leftshift": 0xA0,
     "tilde": 0xC0,
@@ -62,6 +76,8 @@ default_keymap = {
     "dropitem": "o",
     "pausemenu": "escape",
     "reload": "r",
+    "moveforward": "w",
+    "movebackward": "s",
     "run": "leftshift",
     "crouch": "c",
     "useitem1": "one",
@@ -82,7 +98,8 @@ _VkKeyScanW = ctypes.WINFUNCTYPE(
 )(("VkKeyScanW", ctypes.windll.user32))
 
 
-def keymap_return(key_input):
+def keymap_return(key_input: str):
+    """Resolve an ARK action, named key, F1-F24, or character to a virtual-key code."""
     key = key_input.lower()
 
     if (
@@ -94,6 +111,12 @@ def keymap_return(key_input):
 
     if key in keymap:
         return keymap[key]
+
+    # For F1-F24 keys, the virtual-key codes are 0x70 through 0x87.
+    if key.startswith("f") and key[1:].isdigit():
+        number = int(key[1:])
+        if 1 <= number <= 24:
+            return 0x6F + number
 
     if len(key) == 1:
         result = _VkKeyScanW(key)
@@ -149,9 +172,10 @@ def _send_mouse_button(input_key, pressed):
     return True
 
 
-def action_down(input_action):
-    """Send a resolved keyboard or mouse action down event to ARK."""
-    action_gate.before_ark_action()
+def action_down(input_action: str, *, should_pause: bool = True):
+    """Send an action down event, optionally waiting for automation to resume."""
+    if should_pause:
+        action_gate.before_ark_action()
     input_key = local_player.get_input_settings(input_action)
     hwnd = windows.ark_hwnd()
     if _send_mouse_button(input_key, True):
@@ -176,6 +200,22 @@ def action_up(input_action):
         return
     vk_code = keymap_return(input_key)
     ctypes.windll.user32.PostMessageW(hwnd, WM_KEYUP, vk_code, 0)
+
+
+def key_hold_down(input_action: str, *, should_pause: bool = True):
+    """Send a physical key down event, optionally waiting for automation to resume."""
+    if should_pause:
+        action_gate.before_ark_action()
+    input_key = local_player.get_input_settings(input_action)
+    vk_code = keymap_return(input_key)
+    ctypes.windll.user32.keybd_event(vk_code, 0, 0, 0)
+
+
+def key_hold_up(input_action):
+    """Release a physical keyboard event started by ``key_hold_down``."""
+    input_key = local_player.get_input_settings(input_action)
+    vk_code = keymap_return(input_key)
+    ctypes.windll.user32.keybd_event(vk_code, 0, KEYEVENTF_KEYUP, 0)
 
 
 def press_action(input_action, hold_duration=0.05):
@@ -225,7 +265,7 @@ def close_ark_with_console_exit():
         )
         try:
             deposit_helper_capture.focus_game_window(center_cursor_when_switching=True)
-            player_state.reset_state()
+            # player_state.reset_state()
             if not console.console_write("exit"):
                 logs.logger.warning("ARK console did not accept the exit command")
         except Exception as e:

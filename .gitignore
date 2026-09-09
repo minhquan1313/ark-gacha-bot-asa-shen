@@ -1,4 +1,7 @@
 /venv
+.update_check.json
+.update_check.json.*.tmp
+launcher_logs/
 __pycache__
 *.pyc
 /json_files/backup2
@@ -13,3 +16,5 @@ json_files/transfer_helper
 log.txt
 logs.txt
 plan.drawio
+source/logs/launcher_startup.log
+source/logs/updater.log

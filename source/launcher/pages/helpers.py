@@ -1,12 +1,4 @@
 from source.launcher.pages.common import (
-    AutoBabyFeedingHelper,
-    AutoFishingHelper,
-    AutoJoinServerHelper,
-    DepositRouteHelper,
-    FertilizerRefreshHelper,
-    PositionRenderHelper,
-    ServerTransferHelper,
-    SwitchSteamHelper,
     contextlib,
 )
 
@@ -25,6 +17,8 @@ class HelperPagesMixin:
             return
 
         self.close_external_helpers()
+        from source.launcher.auto_feed_helper import AutoBabyFeedingHelper
+
         helper = AutoBabyFeedingHelper(self)
         self.register_deposit_helper(helper)
         helper.show()
@@ -35,7 +29,10 @@ class HelperPagesMixin:
     def open_deposit_helper(self, route_kind, route_index):
         if not self._can_open_setup_helper():
             return
-        self._ensure_deposit_config()
+        if route_kind == "craft":
+            self._ensure_craft_config()
+        else:
+            self._ensure_deposit_config()
         existing = self.find_deposit_helper(route_kind, route_index)
         if existing is not None:
             existing.show()
@@ -45,6 +42,8 @@ class HelperPagesMixin:
             return
 
         self.close_external_helpers()
+        from source.launcher.deposit_route_helper import DepositRouteHelper
+
         helper = DepositRouteHelper(self, route_kind, route_index)
         self.register_deposit_helper(helper)
         helper.show()
@@ -64,6 +63,8 @@ class HelperPagesMixin:
             return
 
         self.close_external_helpers()
+        from source.launcher.position_render_helper import PositionRenderHelper
+
         helper = PositionRenderHelper(self)
         helper.route_kind = "position_render"
         helper.route_index = None
@@ -85,6 +86,8 @@ class HelperPagesMixin:
             return
 
         self.close_external_helpers()
+        from source.launcher.fertilizer_refresh_helper import FertilizerRefreshHelper
+
         helper = FertilizerRefreshHelper(self)
         self.register_deposit_helper(helper)
         helper.show()
@@ -104,6 +107,8 @@ class HelperPagesMixin:
             return
 
         self.close_external_helpers()
+        from source.launcher.auto_join_server_helper import AutoJoinServerHelper
+
         helper = AutoJoinServerHelper(self)
         self.register_deposit_helper(helper)
         helper.show()
@@ -124,6 +129,8 @@ class HelperPagesMixin:
             return
 
         self.close_external_helpers()
+        from source.launcher.auto_fishing_helper import AutoFishingHelper
+
         helper = AutoFishingHelper(self)
         self.register_deposit_helper(helper)
         helper.show()
@@ -143,6 +150,8 @@ class HelperPagesMixin:
             return
 
         self.close_external_helpers()
+        from source.launcher.server_transfer_helper import ServerTransferHelper
+
         helper = ServerTransferHelper(self)
         self.register_deposit_helper(helper)
         helper.show()
@@ -162,6 +171,8 @@ class HelperPagesMixin:
             return
 
         self.close_external_helpers()
+        from source.launcher.switch_steam_helper import SwitchSteamHelper
+
         helper = SwitchSteamHelper(self)
         self.register_deposit_helper(helper)
         helper.show()

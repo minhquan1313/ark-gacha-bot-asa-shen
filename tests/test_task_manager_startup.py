@@ -32,6 +32,7 @@ class TaskManagerStartupTests(unittest.TestCase):
 
         with (
             patch.object(task_manager, "load_resolution_data", return_value=[]),
+            patch.object(task_manager, "load_craft_config", return_value={"generalCraftData": []}),
             patch.object(
                 task_manager.stations,
                 "render_station",

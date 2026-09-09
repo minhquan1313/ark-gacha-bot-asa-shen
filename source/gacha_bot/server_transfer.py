@@ -1,3 +1,4 @@
+import ctypes
 import time
 from typing import Callable
 
@@ -264,6 +265,16 @@ def run_transfer_helper(
     config: TransferRuntimeConfig,
     task_callback: Callable[[dict], object] | None = None,
 ):
+    """Run transfers with inventory-loss recovery disabled for nested teleports."""
+    with teleporter.prevent_suicide_recovery():
+        return _run_transfer_helper(config, task_callback)
+
+
+def _run_transfer_helper(
+    config: TransferRuntimeConfig,
+    task_callback: Callable[[dict], object] | None = None,
+):
+    """Execute the transfer cycle under the caller's teleport recovery policy."""
     global account_detect_withdrawed_all
     global is_withdrawed_all
     global list_of_withdrawed_dedi
@@ -766,7 +777,7 @@ def ensure_ark_running(
                 try:
                     window_size = validate_ark_window()
                     if launched:
-                        return _prepare_ark_window_for_join(window_size)
+                        return _prepare_ark_window_for_join(window_size, steam)
                     return True
                 except RuntimeError as exc:
                     last_error = exc
@@ -791,11 +802,33 @@ def ensure_ark_running(
     raise RuntimeError(f"ARK did not start after {attempts} attempt(s).")
 
 
-def _prepare_ark_window_for_join(window_size=None):
+def _prepare_ark_window_for_join(
+    window_size=None,
+    steam: TransferSteamUiCoords | None = None,
+):
     logs.logger.info("ARK detected. Focusing game before joining server.")
+    _minimize_steam_window(steam)
     focus_game_window(center_cursor_when_switching=True)
     time.sleep(1)
     return True
+
+
+def _minimize_steam_window(steam: TransferSteamUiCoords | None):
+    """Minimize the configured visible Steam window before focusing ARK."""
+    window_title = str((steam or {}).get("window_title") or "Steam")
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = user32.FindWindowW(None, window_title)
+        if not hwnd or not user32.IsWindowVisible(hwnd):
+            return False
+        if user32.IsIconic(hwnd):
+            return True
+        user32.ShowWindow(hwnd, 6)
+        logs.logger.info("Minimized Steam before focusing ARK.")
+        return True
+    except Exception as exc:
+        logs.logger.warning(f"Could not minimize Steam before focusing ARK: {exc}")
+        return False
 
 
 def is_menu():
@@ -804,6 +837,8 @@ def is_menu():
 
 def join_server(server):
     join_main.was_in_mainmenu = False
+    join_main.should_click = True
+
     player_state.reset_state()
     return run_auto_join_server(server)
 
@@ -874,7 +909,8 @@ def withdraw_from_transfer_dedis(
     resource_route = dedis["resource"]
     route_teleport_name = resource_route["teleport"]
 
-    teleporter.teleport_not_default(route_teleport_name) if should_teleport else ...
+    if should_teleport:
+        teleporter.teleport_not_default(route_teleport_name)
     utils.zero_center()
 
     items: list[DediStorageState] = resource_route["items"]

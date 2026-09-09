@@ -348,6 +348,7 @@ class ArkGameSetupTests(unittest.TestCase):
             check=False,
             stdout=ark_game_setup.subprocess.DEVNULL,
             stderr=ark_game_setup.subprocess.DEVNULL,
+            creationflags=getattr(ark_game_setup.subprocess, "CREATE_NO_WINDOW", 0),
         )
 
     def test_clear_restore_state_removes_state_and_backup(self):

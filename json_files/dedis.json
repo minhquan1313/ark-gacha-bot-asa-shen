@@ -281,5 +281,36 @@
         ]
       }
     }
+  ],
+  "depositGeneralData": [
+    {
+      "teleport": "GACHACRAFT",
+      "check_on_every_dedi": 3,
+      "dedi": {
+        "items": [
+          {
+            "location": {
+              "yaw": 7.27,
+              "pitch": -39.05
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 3.77,
+              "pitch": -15.61
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 1.49,
+              "pitch": 19.04
+            },
+            "crouched": false
+          }
+        ]
+      }
+    }
   ]
 }

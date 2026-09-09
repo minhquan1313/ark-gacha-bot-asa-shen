@@ -68,22 +68,29 @@
       },
       {
         "location": {
-          "yaw": 26.75,
-          "pitch": 18.52
+          "yaw": 18.7,
+          "pitch": 15.19
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 22.2,
-          "pitch": -11.58
+          "yaw": 20.8,
+          "pitch": -14.38
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 21.85,
-          "pitch": -37.3
+          "yaw": 18.7,
+          "pitch": -35.38
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -47.44,
+          "pitch": -7.21
         },
         "crouched": false
       }
@@ -95,85 +102,92 @@
     "items": [
       {
         "location": {
-          "yaw": 71.07,
+          "yaw": 121.25,
           "pitch": -42.31
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 69.61,
+          "yaw": 119.79,
           "pitch": -16.14
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 68.27,
+          "yaw": 118.45,
           "pitch": 15.37
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 13.67,
+          "yaw": 63.85,
           "pitch": 21.49
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 12.97,
+          "yaw": 63.15,
           "pitch": -22.61
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": 11.92,
+          "yaw": 62.1,
           "pitch": -37.3
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": -43.9,
+          "yaw": 6.28,
           "pitch": -21.03
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": -43.72,
+          "yaw": 6.46,
           "pitch": -17.18
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": -42.5,
+          "yaw": 7.68,
           "pitch": 12.92
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": -92.72,
-          "pitch": 18.52
+          "yaw": -50.59,
+          "pitch": 15.19
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": -97.27,
-          "pitch": -11.58
+          "yaw": -48.49,
+          "pitch": -14.38
         },
         "crouched": false
       },
       {
         "location": {
-          "yaw": -97.62,
-          "pitch": -37.3
+          "yaw": -50.59,
+          "pitch": -35.38
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -116.73,
+          "pitch": -7.21
         },
         "crouched": false
       }

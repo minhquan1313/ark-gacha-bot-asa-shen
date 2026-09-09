@@ -1,45 +1,54 @@
-import sys
-import types
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from source.utility import action_gate
 
 
 class ActionGateTests(unittest.TestCase):
-    def setUp(self):
-        action_gate._last_check = 0.0
-        action_gate._state.recovery_depth = 0
-
-    def test_before_action_throttles_state_checks(self):
-        player_state = types.SimpleNamespace(check_disconnected=Mock())
-        player_package = types.ModuleType("source.ASA.player")
-        player_package.player_state = player_state
-
-        with (
-            patch.dict(sys.modules, {"source.ASA.player": player_package}),
-            patch.object(action_gate.ark_runtime, "wait_until_ready"),
-            patch.object(action_gate.time, "monotonic", side_effect=[1.0, 1.1, 1.3]),
-        ):
-            action_gate.before_ark_action()
+    def test_before_action_waits_until_pause_conditions_clear(self):
+        with patch.object(
+            action_gate.ark_runtime, "wait_until_ready"
+        ) as wait_until_ready:
             action_gate.before_ark_action()
             action_gate.before_ark_action()
 
-        self.assertEqual(player_state.check_disconnected.call_count, 2)
+        self.assertEqual(wait_until_ready.call_count, 2)
 
-    def test_recovery_scope_bypasses_state_check(self):
-        player_state = types.SimpleNamespace(check_disconnected=Mock())
-        player_package = types.ModuleType("source.ASA.player")
-        player_package.player_state = player_state
+    def test_input_helpers_wait_before_sending_by_default(self):
+        """Automation cannot send input until its pause gate returns."""
+        from source.utility import utils
 
-        with (
-            patch.dict(sys.modules, {"source.ASA.player": player_package}),
-            patch.object(action_gate.ark_runtime, "wait_until_ready"),
-            action_gate.recovery_scope(),
-        ):
-            action_gate.before_ark_action()
+        for helper in (utils.action_down, utils.key_hold_down):
+            with (
+                self.subTest(helper=helper.__name__),
+                patch.object(action_gate, "before_ark_action", side_effect=RuntimeError("paused")),
+                patch.object(utils.ctypes, "windll") as windll,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "paused"):
+                    helper("Use")
+                windll.user32.PostMessageW.assert_not_called()
+                windll.user32.keybd_event.assert_not_called()
+                windll.user32.SendInput.assert_not_called()
 
-        player_state.check_disconnected.assert_not_called()
+    def test_input_helpers_can_send_without_entering_pause_gate(self):
+        """Auto Keys can send input without waiting for automation pause conditions."""
+        from source.utility import utils
+
+        for helper in (utils.action_down, utils.key_hold_down):
+            with (
+                self.subTest(helper=helper.__name__),
+                patch.object(action_gate, "before_ark_action", side_effect=AssertionError("unexpected pause")),
+                patch.object(utils.local_player, "get_input_settings", return_value="e"),
+                patch.object(utils.windows, "ark_hwnd", return_value=123),
+                patch.object(utils, "keymap_return", return_value=0x45),
+                patch.object(utils.ctypes, "windll") as windll,
+            ):
+                helper("Use", should_pause=False)
+
+                if helper is utils.action_down:
+                    windll.user32.PostMessageW.assert_called_once_with(123, utils.WM_KEYDOWN, 0x45, 0)
+                else:
+                    windll.user32.keybd_event.assert_called_once_with(0x45, 0, 0, 0)
 
 
 if __name__ == "__main__":

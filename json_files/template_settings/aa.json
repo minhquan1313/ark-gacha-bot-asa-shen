@@ -1,7 +1,7 @@
 {
   "name": "aa",
   "type": "template_setting",
-  "version": 1,
+  "version": 4,
   "data": {
     "settings": {
       "ping": 100,
@@ -16,6 +16,8 @@
       "external_berry": false,
       "iguanadon_seed_throw_amount": 0,
       "gacha_feed_delay": 6600,
+      "craft_delay": 600,
+      "gacha_collect_feed_delay": 6600,
       "allow_focus_ark_window": true,
       "focus_ark_window_interval": 5.0,
       "helper_inactive_opacity": 0.3,
@@ -196,7 +198,9 @@
                   "pitch": -19.81
                 },
                 "crouched": false,
-                "items": ["riot"]
+                "items": [
+                  "riot"
+                ]
               },
               {
                 "location": {
@@ -204,7 +208,9 @@
                   "pitch": -19.46
                 },
                 "crouched": false,
-                "items": ["riot"]
+                "items": [
+                  "riot"
+                ]
               },
               {
                 "location": {
@@ -212,7 +218,9 @@
                   "pitch": -25.93
                 },
                 "crouched": false,
-                "items": ["riot"]
+                "items": [
+                  "riot"
+                ]
               },
               {
                 "location": {
@@ -220,7 +228,9 @@
                   "pitch": -24.36
                 },
                 "crouched": false,
-                "items": ["riot"]
+                "items": [
+                  "riot"
+                ]
               },
               {
                 "location": {
@@ -228,7 +238,11 @@
                   "pitch": -22.61
                 },
                 "crouched": false,
-                "items": ["assault", "tree", "gate"]
+                "items": [
+                  "assault",
+                  "tree",
+                  "gate"
+                ]
               }
             ]
           }
@@ -356,9 +370,14 @@
             ]
           }
         }
-      ]
+      ],
+      "depositGeneralData": []
     },
     "gacha": [],
+    "gacha_collect": [],
+    "craft": {
+      "generalCraftData": []
+    },
     "pego": []
   }
 }

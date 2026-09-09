@@ -24,6 +24,49 @@ from source.launcher.utils.settings_store import _normalize_settings
 from source.utility import local_player
 
 
+class KeyCodeTests(unittest.TestCase):
+    def test_named_keys_share_codes_with_ark_aliases(self):
+        """Activation keys and ARK binding names use the same conversion."""
+        from source.utility import utils
+
+        cases = {
+            "BACKSPACE": 0x08, "TAB": 0x09, "ENTER": 0x0D, "return": 0x0D,
+            "ESC": 0x1B, "ESCAPE": 0x1B, "SPACE": 0x20, "spacebar": 0x20,
+            "PAGEUP": 0x21, "PAGEDOWN": 0x22, "END": 0x23, "HOME": 0x24,
+            "LEFT": 0x25, "UP": 0x26, "RIGHT": 0x27, "DOWN": 0x28,
+            "INSERT": 0x2D, "DELETE": 0x2E, "LeftShift": 0xA0,
+            "LeftControl": 0xA2, "One": 0x31, "ThumbMouseButton": 0x05,
+        }
+        for name, expected in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(utils.keymap_return(name), expected)
+                self.assertEqual(auto_keys.activation_key_code(f" {name} "), expected)
+
+    def test_function_keys_and_invalid_names(self):
+        """Both callers support F1 through F24 and reject unknown key names."""
+        from source.utility import utils
+
+        for number in range(1, 25):
+            with self.subTest(number=number):
+                self.assertEqual(utils.keymap_return(f"f{number}"), 0x6F + number)
+                self.assertEqual(auto_keys.activation_key_code(f"F{number}"), 0x6F + number)
+        for name in ("", "F0", "F25", "unknown"):
+            with self.subTest(name=name):
+                self.assertIsNone(utils.keymap_return(name))
+                self.assertIsNone(auto_keys.activation_key_code(name))
+
+    def test_characters_and_default_actions_keep_existing_resolution(self):
+        """Characters still use the keyboard layout and actions retain defaults."""
+        from source.utility import utils
+
+        with patch.object(utils, "_VkKeyScanW", return_value=0x0145) as scan:
+            self.assertEqual(auto_keys.activation_key_code(" E "), 0x45)
+            self.assertEqual(utils.keymap_return("Use"), 0x45)
+            self.assertEqual(scan.call_args_list, [call("e"), call("e")])
+        self.assertEqual(utils.keymap_return("Run"), 0xA0)
+        self.assertEqual(utils.keymap_return("PauseMenu"), 0x1B)
+
+
 class AutoKeysWidgetTests(unittest.TestCase):
     def setUp(self):
         self.app = QApplication.instance() or QApplication([])
@@ -86,6 +129,7 @@ class AutoKeysSettingsTests(unittest.TestCase):
             settings["auto_keys"],
             {
                 "enabled": False,
+                "activation_key": "F1",
                 "interval": 0.25,
                 "hold_duration": 1.0,
                 "actions": {action: True for action in AUTO_KEYS_ACTIONS},
@@ -205,6 +249,40 @@ class AutoKeysPollingTests(unittest.TestCase):
 
         self.runtime._start_repeat.assert_called_once_with(self.binding)
 
+    def test_activation_key_is_required_to_start(self):
+        self.runtime._start_repeat = Mock()
+
+        self.runtime._process_polled_state(self.binding, True, 10.0, False)
+        self.runtime._process_polled_state(self.binding, True, 11.0, True)
+        self.runtime._process_polled_state(self.binding, True, 11.5, False)
+
+        self.runtime._start_repeat.assert_not_called()
+        self.runtime._process_polled_state(self.binding, False, 11.6, True)
+        self.runtime._process_polled_state(self.binding, True, 13.0, True)
+        self.runtime._process_polled_state(self.binding, True, 14.0, True)
+        self.runtime._start_repeat.assert_called_once_with(self.binding)
+
+    def test_key_hold_sends_one_down_and_releases_on_second_press(self):
+        runtime = AutoKeysRuntime(("MoveForward",))
+        binding = ("keyboard", 0x57)
+        runtime.enabled = True
+        runtime.hold_duration = 1.0
+        runtime._bindings = {binding: "MoveForward"}
+        with (
+            patch("source.utility.utils.key_hold_down") as key_hold_down,
+            patch("source.utility.utils.key_hold_up") as key_hold_up,
+        ):
+            runtime._process_polled_state(binding, True, 10.0, True)
+            runtime._process_polled_state(binding, True, 11.0, True)
+            key_hold_down.assert_not_called()
+            runtime._process_polled_state(binding, False, 11.1, True)
+            runtime._process_polled_state(binding, True, 11.2, True)
+            key_hold_up.assert_not_called()
+            runtime._stop_repeat()
+
+        key_hold_down.assert_called_once_with("MoveForward", should_pause=False)
+        key_hold_up.assert_called_once_with("MoveForward")
+
     def test_release_before_duration_cancels_activation(self):
         self.runtime._start_repeat = Mock()
 
@@ -287,8 +365,29 @@ class AutoKeysPollingTests(unittest.TestCase):
         self.assertEqual(resolved_path, input_path)
         self.assertEqual(
             resolved,
-            {"Fire": "LeftMouseButton", "Use": "E", "DropItem": "O"},
+            {
+                "Fire": "LeftMouseButton",
+                "Use": "E",
+                "DropItem": "O",
+                "Crouch": "c",
+                "MoveForward": "w",
+            },
         )
+
+    def test_offline_resolver_uses_default_move_forward_binding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            input_path = Path(tmp) / "Input.ini"
+            input_path.write_text("", encoding="utf-8")
+            with patch(
+                "source.launcher.ark_game_setup.find_game_user_input_path",
+                return_value=input_path,
+            ):
+                resolved, resolved_path = auto_keys.resolve_supported_keys(
+                    ("MoveForward",)
+                )
+
+        self.assertEqual(resolved_path, input_path)
+        self.assertEqual(resolved, {"MoveForward": "w"})
 
     def test_explicit_input_path_does_not_require_running_game(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -317,6 +416,18 @@ class AutoKeysPollingTests(unittest.TestCase):
                 auto_keys_input_path=None,
                 auto_keys_input_mtime=None,
             )
+            launcher.supported_keys_finished = Mock()
+            launcher.supported_keys_finished.emit.side_effect = lambda result: settings_page.SettingsPagesMixin._on_supported_keys_finished(launcher, result)
+            original_refresh = settings_page.SettingsPagesMixin._refresh_auto_keys_supported_keys
+
+            def refresh_and_wait(target: object, force: bool = False):
+                """Wait for the mocked display delivery before editing Input.ini."""
+                original_refresh(target, force=force)
+                deadline = time.monotonic() + 2
+                while target.supported_keys_busy and time.monotonic() < deadline:
+                    time.sleep(0.001)
+                self.assertFalse(target.supported_keys_busy)
+
             resolver = Mock(
                 return_value=(
                     {
@@ -330,10 +441,10 @@ class AutoKeysPollingTests(unittest.TestCase):
             with patch.object(
                 settings_page, "resolve_supported_keys", resolver
             ):
-                settings_page.SettingsPagesMixin._refresh_auto_keys_supported_keys(
+                refresh_and_wait(
                     launcher, force=True
                 )
-                settings_page.SettingsPagesMixin._refresh_auto_keys_supported_keys(
+                refresh_and_wait(
                     launcher
                 )
                 current_stat = input_path.stat()
@@ -341,7 +452,7 @@ class AutoKeysPollingTests(unittest.TestCase):
                     input_path,
                     ns=(current_stat.st_atime_ns, current_stat.st_mtime_ns + 1_000_000),
                 )
-                settings_page.SettingsPagesMixin._refresh_auto_keys_supported_keys(
+                refresh_and_wait(
                     launcher
                 )
 
@@ -363,6 +474,7 @@ class AutoKeysPollingTests(unittest.TestCase):
         }
         launcher._settings_form_action_column = 3
         launcher.settings_form_layout = QGridLayout(container)
+        launcher._refresh_auto_keys_supported_keys = Mock()
         with patch.object(
             settings_page,
             "resolve_supported_keys",
@@ -372,6 +484,11 @@ class AutoKeysPollingTests(unittest.TestCase):
             ),
         ):
             launcher._add_auto_keys_settings(0)
+            launcher._on_supported_keys_finished((
+                id(launcher.auto_keys_supported_binding_labels),
+                {"Fire": "LeftMouseButton", "Use": "E", "DropItem": "O"},
+                Path("Input.ini"), None,
+            ))
 
         all_labels = container.findChildren(QLabel)
         labels = {label.objectName(): label for label in all_labels}
@@ -426,7 +543,8 @@ class AutoKeysPollingTests(unittest.TestCase):
         self.assertIn(f'color: {COLORS["cyan"]};', action_style)
         self.assertIn("font-weight: 900;", action_style)
         grid = launcher.auto_keys_supported_grid_layout
-        for index, action in enumerate(AUTO_KEYS_ACTIONS):
+        repeat_actions = tuple(action for action in AUTO_KEYS_ACTIONS if action != "MoveForward")
+        for index, action in enumerate(repeat_actions):
             pair = index % 2
             row = index // 2
             column = pair * 3
@@ -436,12 +554,12 @@ class AutoKeysPollingTests(unittest.TestCase):
             self.assertIs(binding_item.widget(), binding_labels[action])
             self.assertTrue(action_item.alignment() & Qt.AlignmentFlag.AlignTop)
             self.assertTrue(binding_item.alignment() & Qt.AlignmentFlag.AlignTop)
-        if len(AUTO_KEYS_ACTIONS) % 2:
-            final_row = len(AUTO_KEYS_ACTIONS) // 2
+        if len(repeat_actions) % 2:
+            final_row = len(repeat_actions) // 2
             self.assertIsNone(grid.itemAtPosition(final_row, 3))
             self.assertIsNone(grid.itemAtPosition(final_row, 4))
         supported_title = next(
-            label for label in all_labels if label.text() == "Supported keys"
+            label for label in all_labels if label.text() == "Repeat keys"
         )
         self.assertTrue(supported_title.alignment() & Qt.AlignmentFlag.AlignTop)
         supported_item = launcher.settings_form_layout.itemAt(
@@ -639,7 +757,7 @@ class AutoKeysPollingTests(unittest.TestCase):
         self.runtime._play_beep = Mock()
         self.runtime._notify = Mock()
         fake_utils = types.SimpleNamespace(
-            action_down=lambda _action: None,
+            action_down=lambda _action, *, should_pause=True: None,
             action_up=lambda _action: None,
         )
         self.runtime._pending = self.binding
@@ -667,11 +785,47 @@ class AutoKeysPollingTests(unittest.TestCase):
     def test_focus_loss_stops_active_repeat_with_beep(self):
         self.runtime._active = self.binding
         self.runtime._play_beep = Mock()
+        listener = Mock()
+        self.runtime._input_listener = listener
 
         self.runtime._cancel_for_focus_loss()
 
         self.runtime._play_beep.assert_called_once_with(False)
         self.assertIsNone(self.runtime._active)
+        listener.stop.assert_called_once_with()
+        self.assertIsNone(self.runtime._input_listener)
+
+    def test_listener_events_keep_short_physical_click_transitions(self):
+        listener = Mock()
+        listener.drain.return_value = [
+            ("mouse", 0x01, True),
+            ("mouse", 0x01, False),
+        ]
+        self.runtime._input_listener = listener
+
+        events = self.runtime._apply_physical_events()
+
+        self.assertEqual(
+            events,
+            [("mouse", 0x01, True), ("mouse", 0x01, False)],
+        )
+
+    def test_runtime_failure_unhooks_input_listener(self):
+        listener = Mock()
+        stop_event = threading.Event()
+        refresh_event = threading.Event()
+        self.runtime._input_listener = listener
+        self.runtime._lifecycle_generation = 1
+        self.runtime._poll_stop_event = stop_event
+        self.runtime._binding_refresh_event = refresh_event
+        self.runtime._notify_failure = Mock()
+
+        self.runtime._fail_worker(1, stop_event, refresh_event, RuntimeError("test"))
+
+        listener.stop.assert_called_once_with()
+        self.assertTrue(stop_event.is_set())
+        self.assertTrue(refresh_event.is_set())
+        self.assertIsNone(self.runtime._input_listener)
 
     def test_mouse_repeat_uses_short_pulse_then_configured_interval(self):
         waits = []
@@ -699,7 +853,7 @@ class AutoKeysPollingTests(unittest.TestCase):
             self.runtime._repeat("Fire", mouse_binding)
 
         self.assertEqual(waits, [0.02, 0.25])
-        fake_utils.action_down.assert_called_once_with("Fire")
+        fake_utils.action_down.assert_called_once_with("Fire", should_pause=False)
         fake_utils.action_up.assert_called_once_with("Fire")
         self.assertFalse(self.runtime._last_states[mouse_binding])
 
@@ -721,6 +875,133 @@ class AutoKeysPollingTests(unittest.TestCase):
         with patch.dict(sys.modules, {"winsound": fake_winsound}):
             self.runtime._play_beep(True)
             time.sleep(0.01)
+
+
+class AutoKeysSwitchingTests(unittest.TestCase):
+    def setUp(self):
+        """Prepare supported bindings without starting global input hooks."""
+        self.runtime = AutoKeysRuntime()
+        self.runtime.enabled = True
+        self.runtime._play_beep = Mock()
+        self.use = ("keyboard", 0x45)
+        self.move = ("keyboard", 0x57)
+        self.fire = ("mouse", 0x01)
+        self.runtime._bindings = {
+            self.use: "Use", self.move: "MoveForward", self.fire: "Fire"
+        }
+        self.runtime._active = self.use
+
+    def tearDown(self):
+        """Release any worker or held input created by a switching test."""
+        self.runtime._stop_repeat()
+        self.runtime.enabled = False
+
+    def test_repeat_to_hold_stops_immediately_and_preserves_activation_delay(self):
+        """E stops on F1+W; W qualifies after the delay and holds on release."""
+        with (
+            patch("source.utility.utils.key_hold_down") as down,
+            patch("source.utility.utils.key_hold_up"),
+        ):
+            self.runtime._process_polled_state(self.move, True, 10.0, True)
+            self.assertIsNone(self.runtime._active)
+            self.assertTrue(self.runtime._repeat_stop_event.is_set())
+            self.assertEqual(self.runtime._pending, self.move)
+            self.runtime._process_polled_state(self.move, True, 10.99, True)
+            self.assertIsNone(self.runtime._active)
+            self.runtime._process_polled_state(self.move, True, 11.0, True)
+            self.assertEqual(self.runtime._active, self.move)
+            down.assert_not_called()
+            self.runtime._process_polled_state(self.move, False, 11.1, False)
+            down.assert_called_once_with("MoveForward", should_pause=False)
+            self.runtime._stop_repeat()
+
+    def test_hold_to_repeat_releases_old_key_before_new_activation(self):
+        """An injected W hold is released before E can begin repeating."""
+        self.runtime._active = self.move
+        self.runtime._key_hold_action = "MoveForward"
+        self.runtime._key_hold_injected = True
+        with (
+            patch("source.utility.utils.key_hold_up") as up,
+            patch.object(self.runtime, "_start_repeat") as start,
+        ):
+            self.runtime._process_polled_state(self.use, True, 10.0, True)
+            up.assert_called_once_with("MoveForward")
+            start.assert_not_called()
+            self.runtime._process_polled_state(self.use, True, 11.0, True)
+            start.assert_called_once_with(self.use)
+
+    def test_keyboard_and_mouse_workers_release_before_handoff(self):
+        """Switching interrupts an actual worker's wait and releases its input."""
+        for old, new in ((self.use, self.fire), (self.fire, self.use)):
+            with self.subTest(old=old):
+                pressed = threading.Event()
+                self.runtime.interval = 30.0
+                self.runtime._active = None
+                self.runtime._pending = old
+                self.runtime._last_states = {}
+                with (
+                    patch.object(self.runtime, "_ark_is_foreground", return_value=True),
+                    patch("source.utility.utils.action_down", side_effect=lambda action, *, should_pause=True: pressed.set()),
+                    patch("source.utility.utils.action_up") as up,
+                ):
+                    self.runtime._start_repeat(old)
+                    worker = self.runtime._repeat_thread
+                    try:
+                        self.assertTrue(pressed.wait(1.0))
+                        self.runtime._process_polled_state(new, True, 10.0, True)
+                        self.assertFalse(worker.is_alive())
+                        up.assert_called_once_with(self.runtime._bindings[old])
+                        self.assertEqual(self.runtime._pending, new)
+                        self.assertIsNone(self.runtime._active)
+                    finally:
+                        self.runtime._stop_repeat()
+
+    def test_releasing_either_shortcut_key_cancels_without_resuming(self):
+        """An incomplete replacement shortcut leaves both actions stopped."""
+        for is_down, activation_down in ((False, True), (True, False)):
+            with self.subTest(is_down=is_down):
+                self.runtime._active = self.use
+                self.runtime._last_states = {}
+                self.runtime._process_polled_state(self.move, True, 10.0, True)
+                self.runtime._process_polled_state(self.move, is_down, 10.5, activation_down)
+                self.assertIsNone(self.runtime._active)
+                self.assertIsNone(self.runtime._pending)
+
+    def test_only_fresh_supported_enabled_shortcuts_interrupt(self):
+        """Ordinary, repeated, unsupported, disabled, and synthetic input is ignored."""
+        for case in ("ordinary", "already_down", "unsupported", "disabled", "synthetic"):
+            with self.subTest(case=case):
+                self.runtime._last_states = {self.move: case == "already_down"}
+                self.runtime._selected_actions = set(self.runtime.actions)
+                self.runtime._synthetic_down.clear()
+                binding = self.move
+                if case == "unsupported":
+                    binding = ("keyboard", 0x5A)
+                elif case == "disabled":
+                    self.runtime._selected_actions.remove("MoveForward")
+                elif case == "synthetic":
+                    self.runtime._synthetic_down.add(self.move)
+                self.runtime._process_polled_state(binding, True, 10.0, case != "ordinary")
+                self.assertEqual(self.runtime._active, self.use)
+                self.assertIsNone(self.runtime._pending)
+
+    def test_lifecycle_change_during_cleanup_prevents_pending_activation(self):
+        """A disabled or replaced lifecycle cannot inherit the new shortcut."""
+        for reenabled in (False, True):
+            with self.subTest(reenabled=reenabled):
+                self.runtime.enabled = True
+                self.runtime._active = self.use
+                self.runtime._last_states = {}
+
+                def stop_and_change_lifecycle():
+                    """Simulate disable or disable/enable while cleanup runs."""
+                    self.runtime._active = None
+                    self.runtime.enabled = reenabled
+                    self.runtime._lifecycle_generation += 1
+
+                with patch.object(self.runtime, "_stop_repeat", side_effect=stop_and_change_lifecycle):
+                    self.runtime._process_polled_state(self.move, True, 10.0, True)
+                self.assertIsNone(self.runtime._pending)
 
 
 class AutoKeysAutomationSuspensionTests(unittest.TestCase):

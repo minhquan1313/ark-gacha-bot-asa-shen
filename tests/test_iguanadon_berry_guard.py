@@ -119,6 +119,8 @@ def load_iguanadon_module(external_berry=False):
 
 
 def load_stations_module():
+    from source.utility import utils_simple
+
     logs = types.ModuleType("source.logs.gachalogs")
     logs.logger = Mock()
     teleporter = types.SimpleNamespace(teleport_not_default=Mock())
@@ -136,6 +138,7 @@ def load_stations_module():
     utility.screen = types.SimpleNamespace()
     utility.template = types.SimpleNamespace(check_template=Mock(return_value=False))
     utility.utils = types.SimpleNamespace(zero_center=Mock())
+    utility.utils_simple = utils_simple
     utility.variables = types.SimpleNamespace()
     utility.windows = types.SimpleNamespace()
     iguanadon = types.SimpleNamespace(berry_station=Mock(), iguanadon=Mock())
@@ -156,6 +159,7 @@ def load_stations_module():
             external_berry=False,
             time_to_reberry=0.01,
             gacha_feed_delay=123,
+            gacha_collect_feed_delay=456,
         ),
         "source.logs.gachalogs": logs,
         "source.utility": utility,

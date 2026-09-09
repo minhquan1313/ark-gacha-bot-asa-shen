@@ -59,6 +59,7 @@ from source.launcher.utils.steam_accounts import (
     loginusers_path,
     most_recent_account_name,
 )
+from source.logs import gachalogs as logs
 from source.utility.types import TransferPlayersConfig, TransferRuntimeConfig
 
 DEFAULT_PANELS_EXPANDED = True
@@ -130,6 +131,9 @@ class ServerTransferHelper(WorkerHelperWindow):
         self._register_hotkey()
         self._preload_capture_view()
         self.helper_log_changed.connect(self._refresh_transfer_overlay)
+        self.runner_state_changed.connect(
+            self._refresh_transfer_overlay_for_runner_state
+        )
         self.task_state_changed.connect(self._update_transfer_task_snapshot)
         self.worker_ready.connect(self._on_worker_ready)
         self.worker_finished.connect(self._on_worker_finished)
@@ -422,10 +426,15 @@ class ServerTransferHelper(WorkerHelperWindow):
         toggle.setObjectName("HelperExpandButton")
         index_label = QLabel("")
         index_label.setObjectName("FormLabel")
+        selected = QCheckBox()
+        selected.setChecked(True)
+        selected.setToolTip("Include this dedi pair in the transfer run")
+        selected.setAccessibleName("Include dedi pair")
         summary = QLabel("")
         summary.setObjectName("HelperRowSummary")
         summary.setWordWrap(True)
         header.addWidget(toggle)
+        header.addWidget(selected)
         header.addWidget(index_label)
         header.addWidget(summary, 1)
         layout.addLayout(header)
@@ -470,6 +479,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             "frame": row,
             "toggle": toggle,
             "index_label": index_label,
+            "selected": selected,
             "summary": summary,
             "details": details,
             "yaw": yaw,
@@ -479,6 +489,9 @@ class ServerTransferHelper(WorkerHelperWindow):
         }
         rows = self._dedi_rows_for_side(side)
         rows.append(data)
+        selected.toggled.connect(
+            lambda checked, target=data: self._sync_dedi_selection(target, checked)
+        )
         toggle.clicked.connect(
             lambda checked=False, target=data: self._toggle_dedi_row(target)
         )
@@ -504,6 +517,28 @@ class ServerTransferHelper(WorkerHelperWindow):
         if persist:
             self._persist_dedis()
         return data
+
+    def _sync_dedi_selection(self, row_data: dict, checked: bool):
+        """Mirror a pair's in-memory selection and gray excluded rows."""
+        index = self._dedi_rows_for_side(row_data["side"]).index(row_data)
+        for side in ("resource", "destination"):
+            rows = self._dedi_rows_for_side(side)
+            if index >= len(rows):
+                continue
+            row = rows[index]
+            checkbox = row["selected"]
+            blocked = checkbox.blockSignals(True)
+            checkbox.setChecked(checked)
+            checkbox.blockSignals(blocked)
+            row["frame"].setStyleSheet(
+                ""
+                if checked
+                else (
+                    "QFrame#HelperRow QLabel, QFrame#HelperRow QLineEdit, "
+                    "QFrame#HelperRow QCheckBox, QFrame#HelperRow QPushButton "
+                    "{ color: #8a8a8a; }"
+                )
+            )
 
     def _remove_dedi_row(self, row_data):
         side = row_data.get("side", "resource")
@@ -572,6 +607,14 @@ class ServerTransferHelper(WorkerHelperWindow):
     def start(self):
         if self.is_running() or self.closing:
             return
+        selected_indices = [
+            index
+            for index, row in enumerate(self.resource_dedi_rows)
+            if row["selected"].isChecked()
+        ]
+        if not selected_indices:
+            self.status.setText("Select at least one dedi before starting.")
+            return
         if self.owner.is_program_running() or self.owner.program_stopping:
             self.owner.dialog(
                 "Stop Program First",
@@ -630,6 +673,13 @@ class ServerTransferHelper(WorkerHelperWindow):
             )
             return
         config = dict(config)
+        config["dedis"] = {
+            side: {
+                **route,
+                "items": [route["items"][index] for index in selected_indices],
+            }
+            for side, route in config["dedis"].items()
+        }
         config["start_account"] = start_account
         missing = missing_runtime_inputs(
             config["settings"],
@@ -762,6 +812,10 @@ class ServerTransferHelper(WorkerHelperWindow):
             self.transfer_overlay = None
             self.transfer_refresh_timer.stop()
 
+    def _refresh_transfer_overlay_for_runner_state(self, _state: str):
+        """Refresh transfer UI after a worker pause or resume event."""
+        self._refresh_transfer_overlay()
+
     def _close_transfer_overlay(self):
         """Stop transfer UI refreshes and close the compact overlay safely."""
         self.transfer_refresh_timer.stop()
@@ -773,6 +827,8 @@ class ServerTransferHelper(WorkerHelperWindow):
             overlay.close()
 
     def _set_running_ui(self, running: bool):
+        self.running_ui_active = running
+        self._sync_player_search_warnings()
         if self.switching_player_steam:
             self.running_ui_active = bool(running)
             self.start_stop_button.setEnabled(not running)
@@ -998,7 +1054,13 @@ class ServerTransferHelper(WorkerHelperWindow):
             )
             if switch is not None:
                 switch.setVisible(show_switch)
-                switch.setEnabled(show_switch and not self.switching_player_steam)
+                switch.setEnabled(
+                    show_switch
+                    and not self.switching_player_steam
+                    and not self.worker_launch_pending
+                    and not self.running_ui_active
+                    and not self.is_running()
+                )
             messages = []
             if account > MAX_TRANSFER_RUNTIME_ACCOUNTS:
                 row["frame"].setStyleSheet(
@@ -1033,7 +1095,16 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _switch_player_steam_from_row(self, account: int):
         """Switch a player row's Steam account, then start ARK through the launcher."""
-        if self.is_running():
+        if (
+            self.is_running()
+            or self.worker_launch_pending
+            or self.switching_player_steam
+            or self.running_ui_active
+        ):
+            message = "Cannot switch Steam while another helper operation is running."
+            self.status.setText(message)
+            logs.logger.warning(message)
+            self._sync_player_search_warnings()
             return
         row = next(
             (
@@ -1044,6 +1115,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             None,
         )
         if row is None:
+            self.status.setText(f"Player {account} is no longer configured.")
             return
 
         selected = row["steam"].currentText().strip()
@@ -1106,6 +1178,8 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _restore_after_player_steam_switch(self):
         """Restore Server Transfer controls after a Steam switch worker."""
         self.switching_player_steam = False
+        self.worker_launch_pending = False
+        self.running_ui_active = False
         self.pending_switch_account = ""
         self.pending_switch_row = None
         self.start_stop_button.setEnabled(True)

@@ -4,6 +4,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from source.logs.gachalogs import logger
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = REPOSITORY_ROOT / "manifest.json"
 UPDATER_PATH = REPOSITORY_ROOT / "updater.bat"
@@ -84,14 +86,15 @@ def _decode_output(value: bytes | str | None) -> str:
 
 
 def _run_updater(mode: str) -> subprocess.CompletedProcess[bytes]:
-    """Run updater.bat and return its captured raw Windows command result."""
+    """Capture updater output for Python logging without a competing batch writer."""
     return subprocess.run(
-        ["cmd", "/c", str(UPDATER_PATH), mode],
+        ["cmd", "/d", "/c", "call", str(UPDATER_PATH), mode, "__logged"],
         cwd=REPOSITORY_ROOT,
         capture_output=True,
         text=False,
         timeout=120,
         check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
 
 
@@ -117,23 +120,44 @@ def _load_remote_manifest(updater_output: bytes | str | None) -> UpdateManifest:
 
 def check_for_update() -> UpdateCheckResult:
     """Fetch update metadata and report whether updater.bat found new commits."""
+    logger.info("[UPDATE] Check started.")
     try:
         current = load_manifest()
     except Exception as exc:
+        logger.exception("[UPDATE] Cannot read installed manifest.")
         invalid_manifest = UpdateManifest("0.0.0", "", "", ())
         return UpdateCheckResult(invalid_manifest, invalid_manifest, False, str(exc))
     try:
+        logger.info("[UPDATE] Installed version: %s", current.version)
         updater_result = _run_updater("/check")
         stdout = _decode_output(getattr(updater_result, "stdout", None))
         stderr = _decode_output(getattr(updater_result, "stderr", None))
         returncode = getattr(updater_result, "returncode", None)
+        logger.info(
+            "[UPDATE] Exit code: %s\nstdout:\n%s\nstderr:\n%s",
+            returncode,
+            stdout,
+            stderr,
+        )
         if returncode not in (0, UPDATE_AVAILABLE_CODE):
             message = stderr.strip() or stdout.strip()
             raise RuntimeError(message or "The updater could not check for updates.")
         latest = _load_remote_manifest(stdout)
     except Exception as exc:
+        if isinstance(exc, subprocess.TimeoutExpired):
+            logger.error(
+                "[UPDATE] Timeout output:\nstdout:\n%s\nstderr:\n%s",
+                _decode_output(exc.stdout),
+                _decode_output(exc.stderr),
+            )
+        logger.exception("[UPDATE] Check failed.")
         return UpdateCheckResult(current, current, False, str(exc))
 
+    logger.info(
+        "[UPDATE] Remote version: %s; update available: %s",
+        latest.version,
+        returncode == UPDATE_AVAILABLE_CODE,
+    )
     return UpdateCheckResult(
         current=current,
         latest=latest,

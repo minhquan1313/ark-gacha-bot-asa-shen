@@ -144,6 +144,7 @@ def select_auto_login_account(account_name: str, path: Path | None = None):
             "/f",
         ],
         check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     subprocess.run(
         [
@@ -159,13 +160,18 @@ def select_auto_login_account(account_name: str, path: Path | None = None):
             "/f",
         ],
         check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     return vdf_path
 
 
 def close_steam():
     """Force close Steam before relaunching with the selected auto-login user."""
-    subprocess.run(["taskkill", "/F", "/IM", "steam.exe"], check=False)
+    subprocess.run(
+        ["taskkill", "/F", "/IM", "steam.exe"],
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
 
 
 def launch_steam():
@@ -178,7 +184,12 @@ def launch_steam():
             "start",
             "",
             f"steam://nav/games/details/{ark_game_setup.ARK_STEAM_ID}",
-        ]
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
 
 

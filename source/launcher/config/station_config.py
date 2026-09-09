@@ -3,6 +3,7 @@ import math
 from pathlib import Path
 
 GACHA_CONFIG_PATH = Path("json_files/gacha.json")
+GACHA_COLLECT_CONFIG_PATH = Path("json_files/gacha_collect.json")
 PEGO_CONFIG_PATH = Path("json_files/pego.json")
 GACHA_PAIR_PREFIX = "GACHAPAIR"
 DEFAULT_PEGO_DELAY = 1600
@@ -28,6 +29,14 @@ def default_gacha_entry(name="", teleporter="", side="left"):
     }
 
 
+def default_gacha_collect_entry(name="", teleporter="", side="left", item=""):
+    return {
+        **default_gacha_entry(name, teleporter, side),
+        "item": str(item),
+        "dedi_teleport": "",
+    }
+
+
 def default_pego_entry(index=1, delay=DEFAULT_PEGO_DELAY):
     name = f"pego{int(index)}"
     return {"name": name, "teleporter": name, "delay": int(delay)}
@@ -45,6 +54,24 @@ def load_gacha_config(path=GACHA_CONFIG_PATH, create_missing=True):
 
 def save_gacha_config(entries, path=GACHA_CONFIG_PATH):
     normalized = normalize_gacha_config(entries)
+    _write_json_array(normalized, path)
+    return normalized
+
+
+def load_gacha_collect_config(path=GACHA_COLLECT_CONFIG_PATH, create_missing=True):
+    path = Path(path)
+    if not path.exists():
+        entries = []
+        if create_missing:
+            save_gacha_collect_config(entries, path)
+        return entries
+    return normalize_gacha_collect_config(
+        _read_json_array(path, "Gacha collect config")
+    )
+
+
+def save_gacha_collect_config(entries, path=GACHA_COLLECT_CONFIG_PATH):
+    normalized = normalize_gacha_collect_config(entries)
     _write_json_array(normalized, path)
     return normalized
 
@@ -71,6 +98,25 @@ def normalize_gacha_config(data):
     return [_normalize_gacha_entry(entry, index) for index, entry in enumerate(data, 1)]
 
 
+def conflicting_collection_pairs(entries: list[dict]):
+    """Find pairs whose flat entries disagree about the shared destination."""
+    destinations = {}
+    for entry in entries:
+        destinations.setdefault(entry.get("teleporter", ""), set()).add(
+            entry.get("dedi_teleport", "")
+        )
+    return {teleport for teleport, names in destinations.items() if len(names) > 1}
+
+
+def normalize_gacha_collect_config(data):
+    if not isinstance(data, list):
+        raise ValueError("Gacha collect config must be a JSON array.")
+    return [
+        _normalize_gacha_collect_entry(entry, index)
+        for index, entry in enumerate(data, 1)
+    ]
+
+
 def normalize_pego_config(data):
     if not isinstance(data, list):
         raise ValueError("Pego config must be a JSON array.")
@@ -80,8 +126,8 @@ def normalize_pego_config(data):
 def default_gacha_pair(prefix=GACHA_PAIR_PREFIX, index=1):
     teleporter = f"{prefix}_{int(index)}"
     return [
-        default_gacha_entry(f"{teleporter}_left", teleporter, "left"),
-        default_gacha_entry(f"{teleporter}_right", teleporter, "right"),
+        default_gacha_entry(f"{teleporter}_l", teleporter, "left"),
+        default_gacha_entry(f"{teleporter}_r", teleporter, "right"),
     ]
 
 
@@ -199,6 +245,15 @@ def _normalize_gacha_entry(entry, index):
         "teleporter": str(entry.get("teleporter", "")),
         "side": str(entry.get("side", "left")).lower(),
     }
+    return normalized
+
+
+def _normalize_gacha_collect_entry(entry, index):
+    normalized = _normalize_gacha_entry(entry, index)
+    normalized["item"] = str(entry.get("item", "")) if isinstance(entry, dict) else ""
+    normalized["dedi_teleport"] = (
+        str(entry.get("dedi_teleport", "")) if isinstance(entry, dict) else ""
+    )
     return normalized
 
 

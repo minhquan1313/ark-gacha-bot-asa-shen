@@ -290,7 +290,7 @@ class SwitchSteamHelperTests(unittest.TestCase):
             register_deposit_helper=Mock(),
         )
 
-        with patch("source.launcher.pages.helpers.SwitchSteamHelper", return_value=helper):
+        with patch("source.launcher.switch_steam_helper.SwitchSteamHelper", return_value=helper):
             SettingsGUI.open_switch_steam_helper(launcher)
             SettingsGUI.open_switch_steam_helper(launcher)
 
@@ -357,6 +357,7 @@ class SwitchSteamHelperTests(unittest.TestCase):
         process.stdout = ["Traceback: startup failure\n"]
         process.poll.return_value = None
         process.wait.return_value = 1
+        helper.worker_process = process
         try:
             with (
                 patch.object(helper, "_emit_worker_finished") as finished,
@@ -367,4 +368,5 @@ class SwitchSteamHelperTests(unittest.TestCase):
             process.wait.assert_called_once_with(timeout=1)
             finished.assert_called_once_with("Failed: helper exited with code 1.")
         finally:
+            helper.worker_process = None
             helper.close()

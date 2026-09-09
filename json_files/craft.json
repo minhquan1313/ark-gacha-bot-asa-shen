@@ -1,0 +1,43 @@
+{
+  "generalCraftData": [
+    {
+      "teleport": "GACHACRAFT",
+      "check_on_every_dedi": 3,
+      "dedi": {
+        "items": [
+          {
+            "location": {
+              "yaw": 40.69,
+              "pitch": -33.45
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 40.17,
+              "pitch": -12.28
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 37.37,
+              "pitch": 18.17
+            },
+            "crouched": false
+          }
+        ]
+      },
+      "crafters": [
+        {
+          "location": {
+            "yaw": -80.57,
+            "pitch": -1.08
+          },
+          "crouched": false,
+          "item": "polymer"
+        }
+      ]
+    }
+  ]
+}

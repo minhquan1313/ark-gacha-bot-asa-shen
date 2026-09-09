@@ -18,6 +18,7 @@ from source.launcher.config.constants import (
 from source.launcher.runner_overlay import RunnerOverlay
 from source.launcher.utils.deposit_helper_capture import (
     register_shift_alt_n_hotkey,
+    register_shift_f1_hotkey,
     unregister_hotkey,
 )
 from source.launcher.utils.native_window import (
@@ -25,6 +26,7 @@ from source.launcher.utils.native_window import (
     WindowsMSG,
 )
 from source.launcher.utils.process_control import terminate_process_tree
+from source.launcher.utils.settings_store import save_settings
 from source.launcher.utils.system import (
     calculate_cpu_percent,
     find_window_size,
@@ -79,6 +81,12 @@ class RuntimeGuiMixin:
 
     def _on_auto_keys_state_changed(self, state: str):
         """Render Auto Keys worker lifecycle changes on the Qt GUI thread."""
+        runtime = getattr(self, "auto_keys_runtime", None)
+        current_state = getattr(runtime, "state", state)
+        if isinstance(current_state, str) and current_state != state:
+            return
+        if getattr(self, "shutdown_started", False):
+            return
         self.auto_keys_runtime_state = state
         self._sync_auto_keys_suspension_ui()
 
@@ -151,11 +159,49 @@ class RuntimeGuiMixin:
             unregister_hotkey(int(self.winId()), self.start_stop_hotkey_id)
         self.start_stop_hotkey_registered = False
 
+    def _register_auto_keys_stop_hotkey(self):
+        if not hasattr(ctypes, "windll"):
+            return
+        try:
+            self.auto_keys_stop_hotkey_registered = register_shift_f1_hotkey(
+                int(self.winId()), self.auto_keys_stop_hotkey_id
+            )
+        except Exception:
+            self.auto_keys_stop_hotkey_registered = False
+
+    def _unregister_auto_keys_stop_hotkey(self):
+        if not self.auto_keys_stop_hotkey_registered or not hasattr(ctypes, "windll"):
+            self.auto_keys_stop_hotkey_registered = False
+            return
+        with contextlib.suppress(Exception):
+            unregister_hotkey(int(self.winId()), self.auto_keys_stop_hotkey_id)
+        self.auto_keys_stop_hotkey_registered = False
+
+    def _emergency_disable_auto_keys(self):
+        """Persistently disable Auto Keys from the fixed Shift+F1 emergency hotkey."""
+        auto_keys = dict(self.settings.get("auto_keys", {}))
+        auto_keys["enabled"] = False
+        self.form_values["auto_keys"] = auto_keys
+        self.settings = save_settings({**self.settings, "auto_keys": auto_keys})
+        self.form_values = self.settings.copy()
+        self.auto_keys_runtime.disable(play_stop_beep=True)
+        self._sync_auto_keys_suspension_ui()
+        self.append_log("[AUTO KEYS] Emergency-disabled by Shift+F1.\n")
+
     def _handle_native_hotkey_message(self, message):
-        if not self.start_stop_hotkey_registered:
-            return False
         msg = WindowsMSG.from_address(int(message))
-        if msg.message == WM_HOTKEY and msg.wParam == self.start_stop_hotkey_id:
+        if (
+            getattr(self, "auto_keys_stop_hotkey_registered", False)
+            and msg.message == WM_HOTKEY
+            and msg.wParam == getattr(self, "auto_keys_stop_hotkey_id", -1)
+        ):
+            self._emergency_disable_auto_keys()
+            return True
+        if (
+            self.start_stop_hotkey_registered
+            and msg.message == WM_HOTKEY
+            and msg.wParam == self.start_stop_hotkey_id
+        ):
             self.toggle_program()
             return True
         return False
@@ -227,6 +273,10 @@ class RuntimeGuiMixin:
         suspend_auto_keys = getattr(self, "_suspend_auto_keys_for_automation", None)
         if callable(suspend_auto_keys):
             suspend_auto_keys(token)
+        runtime = getattr(self, "auto_keys_runtime", None)
+        if getattr(runtime, "cleanup_pending", False) is True:
+            QTimer.singleShot(20, self._launch_program_process)
+            return
         try:
             self.runner_launch_pending = False
             self.close_external_helpers()
@@ -272,6 +322,7 @@ class RuntimeGuiMixin:
             self.runner_launch_pending = False
             self.runner_ready_pending = False
             self.runner_loading = False
+            self._resume_auto_keys_after_automation("main-runner")
             self.append_log("[WARN] Runner startup cancelled.\n")
             self._update_start_stop_button()
             self._hide_runner_overlay()
@@ -441,6 +492,7 @@ class RuntimeGuiMixin:
     def _tick(self):
         if self.shutdown_started:
             return
+        self._automatic_update_check()
         self._poll_program_stop()
         self._sync_runner_overlay()
         if self.current_filter in {"QUEUE", "RUNNING"}:

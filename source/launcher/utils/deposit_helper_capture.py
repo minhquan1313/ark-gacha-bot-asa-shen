@@ -7,6 +7,7 @@ from source.launcher.utils import system
 MOD_ALT = 0x0001
 MOD_SHIFT = 0x0004
 KEY_N = 0x4E
+KEY_F1 = 0x70
 
 
 def focus_game_window(
@@ -54,7 +55,7 @@ def view_route_entry(yaw, pitch, crouched):
     from source.ASA.player import player_state
     from source.utility import utils
 
-    utils.get_yaw_pitch()
+    utils.get_yaw_pitch(reset_state=False)
     player_state.human.reset_crouch()
     utils.turn_to(float(yaw), float(pitch))
     if crouched:
@@ -94,6 +95,10 @@ def register_shift_alt_n_hotkey(hwnd, hotkey_id):
     return bool(
         ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, MOD_ALT | MOD_SHIFT, KEY_N)
     )
+
+
+def register_shift_f1_hotkey(hwnd, hotkey_id):
+    return bool(ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, MOD_SHIFT, KEY_F1))
 
 
 def unregister_hotkey(hwnd, hotkey_id):

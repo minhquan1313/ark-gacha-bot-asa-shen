@@ -32,7 +32,6 @@ def ensure_active():
         return False
 
     if inventory.is_turned_on():
-        logs.logger.debug("Transmitter is already ON, no need to turn it on again")
         return True
 
     inventory.turn_on()

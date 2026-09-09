@@ -59,6 +59,7 @@ class ArkWindowValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "2560x1440"):
             validate_ark_window()
 
+    @patch.object(system, "GAME_WINDOW_TITLE", "ArkAscended")
     def test_find_window_size_accepts_ark_title_containing_configured_title(self):
         user32 = _user32_with_windows(
             [
@@ -119,6 +120,7 @@ class ArkWindowValidationTests(unittest.TestCase):
 
         user32.GetForegroundWindow.assert_not_called()
 
+    @patch.object(system, "GAME_WINDOW_TITLE", "ArkAscended")
     def test_focus_window_if_needed_accepts_ark_title_containing_configured_title(self):
         user32 = _user32_with_windows(
             [
@@ -174,9 +176,7 @@ class ArkWindowValidationTests(unittest.TestCase):
             user32.mock_calls.index(call.SetCursorPos(1060, 740)),
             user32.mock_calls.index(call.SetForegroundWindow(123)),
         )
-        user32.AttachThreadInput.assert_has_calls(
-            [call(321, 789, True), call(321, 789, False)]
-        )
+        user32.AttachThreadInput.assert_not_called()
 
     def test_focus_window_if_needed_does_nothing_when_ark_is_foreground(self):
         user32 = Mock()
@@ -213,9 +213,7 @@ class ArkWindowValidationTests(unittest.TestCase):
         user32.GetWindowRect.assert_not_called()
         user32.SetCursorPos.assert_not_called()
         user32.SetForegroundWindow.assert_called_once_with(123)
-        user32.AttachThreadInput.assert_has_calls(
-            [call(321, 789, True), call(321, 789, False)]
-        )
+        user32.AttachThreadInput.assert_not_called()
 
     def test_focus_window_if_needed_does_not_restore_non_minimized_window(self):
         user32 = Mock()
@@ -255,9 +253,7 @@ class ArkWindowValidationTests(unittest.TestCase):
 
         user32.SetCursorPos.assert_not_called()
         user32.SetForegroundWindow.assert_not_called()
-        user32.AttachThreadInput.assert_has_calls(
-            [call(321, 789, True), call(321, 789, False)]
-        )
+        user32.AttachThreadInput.assert_not_called()
 
     def test_focus_window_if_needed_reports_cursor_position_failure(self):
         user32 = Mock()
@@ -286,9 +282,7 @@ class ArkWindowValidationTests(unittest.TestCase):
             focus_window_if_needed("ArkAscended", center_cursor_when_switching=True)
 
         user32.SetForegroundWindow.assert_not_called()
-        user32.AttachThreadInput.assert_has_calls(
-            [call(321, 789, True), call(321, 789, False)]
-        )
+        user32.AttachThreadInput.assert_not_called()
 
     def test_focus_window_if_needed_reports_rejected_activation(self):
         user32 = Mock()
@@ -311,7 +305,9 @@ class ArkWindowValidationTests(unittest.TestCase):
             [call(321, 789, True), call(321, 789, False)]
         )
 
-    def test_focus_window_if_needed_reports_thread_attachment_failure(self):
+    @patch.object(system.time, "sleep")
+    @patch.object(system.time, "monotonic", side_effect=[0, 1, 2, 3, 4, 5])
+    def test_focus_window_if_needed_reports_thread_attachment_failure(self, _clock, _sleep):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
         user32.GetForegroundWindow.return_value = 456
@@ -319,66 +315,66 @@ class ArkWindowValidationTests(unittest.TestCase):
         user32.AttachThreadInput.return_value = False
         kernel32 = Mock()
         kernel32.GetCurrentThreadId.return_value = 321
+        kernel32.GetLastError.return_value = 87
         windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
 
         with (
             patch.object(system.ctypes, "windll", windll),
-            self.assertRaisesRegex(RuntimeError, "foreground thread"),
+            self.assertRaisesRegex(RuntimeError, "last AttachThreadInput error=87") as error,
         ):
             focus_window_if_needed("ArkAscended")
 
-        user32.ShowWindow.assert_not_called()
-        user32.SetForegroundWindow.assert_not_called()
-        user32.AttachThreadInput.assert_called_once_with(321, 789, True)
+        self.assertIn("foreground HWND=456", str(error.exception))
+        self.assertEqual(user32.SetForegroundWindow.call_count, 3)
+        self.assertEqual(user32.AttachThreadInput.call_args_list,
+                         [call(321, 789, True), call(321, 789, True)])
 
-    @patch("source.launcher.system.time.sleep")
-    @patch("source.launcher.system.time.monotonic", side_effect=[0.0, 0.1])
-    def test_focus_window_if_needed_waits_for_delayed_foreground_switch(
-        self, _monotonic, sleep
-    ):
+    @patch.object(system.time, "sleep")
+    @patch.object(system.time, "monotonic", side_effect=[0, 0.1])
+    def test_focus_window_if_needed_waits_for_delayed_foreground_switch(self, _clock, sleep):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
         user32.GetForegroundWindow.side_effect = [456, 456, 123]
-        user32.GetWindowThreadProcessId.return_value = 789
-        user32.AttachThreadInput.return_value = True
-        user32.SetForegroundWindow.return_value = True
-        kernel32 = Mock()
-        kernel32.GetCurrentThreadId.return_value = 321
-        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
-
+        windll = types.SimpleNamespace(user32=user32, kernel32=Mock())
         with patch.object(system.ctypes, "windll", windll):
             self.assertTrue(focus_window_if_needed("ArkAscended"))
-
         sleep.assert_called_once_with(0.01)
-        user32.AttachThreadInput.assert_has_calls(
-            [call(321, 789, True), call(321, 789, False)]
-        )
+        user32.AttachThreadInput.assert_not_called()
 
-    @patch("source.launcher.system.time.sleep")
-    @patch("source.launcher.system.time.monotonic", side_effect=[0.0, 0.25])
-    def test_focus_window_if_needed_reports_foreground_mismatch(
-        self, _monotonic, sleep
-    ):
+    @patch.object(system.time, "sleep")
+    @patch.object(system.time, "monotonic", side_effect=[0, 1, 2])
+    def test_focus_recovers_even_when_thread_attachment_fails(self, _clock, _sleep):
         user32 = Mock()
         user32.FindWindowW.return_value = 123
-        user32.GetForegroundWindow.side_effect = [456, 456]
-        user32.GetWindowThreadProcessId.return_value = 789
-        user32.AttachThreadInput.return_value = True
-        user32.SetForegroundWindow.return_value = True
+        user32.GetForegroundWindow.side_effect = [456, 456, 789, 123]
+        user32.GetWindowThreadProcessId.return_value = 987
+        user32.AttachThreadInput.return_value = False
+        user32.SetForegroundWindow.return_value = False
         kernel32 = Mock()
         kernel32.GetCurrentThreadId.return_value = 321
         windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertTrue(focus_window_if_needed("ArkAscended"))
+        user32.AttachThreadInput.assert_called_once_with(321, 987, True)
+        kernel32.GetLastError.assert_called_once()
+        self.assertEqual(user32.SetForegroundWindow.call_count, 2)
+        user32.GetWindowThreadProcessId.assert_called_once_with(789, None)
 
-        with (
-            patch.object(system.ctypes, "windll", windll),
-            self.assertRaisesRegex(RuntimeError, "did not become foreground"),
-        ):
-            focus_window_if_needed("ArkAscended")
-
-        user32.AttachThreadInput.assert_has_calls(
-            [call(321, 789, True), call(321, 789, False)]
-        )
-        sleep.assert_not_called()
+    @patch.object(system.time, "sleep")
+    @patch.object(system.time, "monotonic", side_effect=[0, 1, 2])
+    def test_focus_detaches_after_successful_retry(self, _clock, _sleep):
+        user32 = Mock()
+        user32.FindWindowW.return_value = 123
+        user32.GetForegroundWindow.side_effect = [456, 456, 789, 123]
+        user32.GetWindowThreadProcessId.return_value = 987
+        user32.AttachThreadInput.return_value = True
+        kernel32 = Mock()
+        kernel32.GetCurrentThreadId.return_value = 321
+        windll = types.SimpleNamespace(user32=user32, kernel32=kernel32)
+        with patch.object(system.ctypes, "windll", windll):
+            self.assertTrue(focus_window_if_needed("ArkAscended"))
+        self.assertEqual(user32.AttachThreadInput.call_args_list,
+                         [call(321, 987, True), call(321, 987, False)])
 
     @patch(
         "source.launcher.utils.deposit_helper_capture.system.focus_window_if_needed",
@@ -563,7 +559,7 @@ class DialogOwnershipTests(unittest.TestCase):
             )
         )
         launcher.dialog.assert_called_once_with(
-            "ArkAscended Required",
+            f"{system.GAME_WINDOW_TITLE} Required",
             "invalid Ark window",
             "error",
             parent=helper,
@@ -578,7 +574,7 @@ class DialogOwnershipTests(unittest.TestCase):
 
         with patch("source.launcher.gui_parts.dialogs.CyberDialog") as cyber_dialog:
             result = SettingsGUI.dialog(
-                Mock(), "ArkAscended Required", "Invalid resolution", parent=parent
+                Mock(), f"{system.GAME_WINDOW_TITLE} Required", "Invalid resolution", parent=parent
             )
 
         self.assertEqual(result, 7)
@@ -594,7 +590,7 @@ class DialogOwnershipTests(unittest.TestCase):
         with patch("source.launcher.gui_parts.dialogs.CyberDialog") as cyber_dialog:
             cyber_dialog.return_value.exec.return_value = 1
             result = SettingsGUI.dialog(
-                Mock(), "ArkAscended Required", "Invalid resolution", parent=parent
+                Mock(), f"{system.GAME_WINDOW_TITLE} Required", "Invalid resolution", parent=parent
             )
 
         self.assertEqual(result, 1)
@@ -602,7 +598,7 @@ class DialogOwnershipTests(unittest.TestCase):
         parent.raise_.assert_called_once_with()
         parent.activateWindow.assert_called_once_with()
         cyber_dialog.assert_called_once_with(
-            parent, "ArkAscended Required", "Invalid resolution", "info"
+            parent, f"{system.GAME_WINDOW_TITLE} Required", "Invalid resolution", "info"
         )
         self.assertIsNone(parent._active_cyber_dialog)
 

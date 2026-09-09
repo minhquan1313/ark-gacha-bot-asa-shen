@@ -3,14 +3,31 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 set "MODE=%~1"
 if /I "%MODE%"=="" set "MODE=/update"
+if /I "%~2"=="__logged" goto :execute
+if not exist "%~dp0source\logs" mkdir "%~dp0source\logs"
+set "UPDATE_LOG=%~dp0source\logs\updater.log"
+echo Update log: "%UPDATE_LOG%"
+set "UPDATE_OUTPUT=%TEMP%\gbot-update-%RANDOM%-%RANDOM%.log"
+>>"%UPDATE_LOG%" echo [%DATE% %TIME%] [UPDATE] Starting %MODE%
+call "%~f0" "%MODE%" __logged >"%UPDATE_OUTPUT%" 2>&1
+set "UPDATE_EXIT=!ERRORLEVEL!"
+type "%UPDATE_OUTPUT%"
+type "%UPDATE_OUTPUT%" >>"%UPDATE_LOG%"
+>>"%UPDATE_LOG%" echo [%DATE% %TIME%] [UPDATE] Finished %MODE%, exit code !UPDATE_EXIT!
+del /q "%UPDATE_OUTPUT%"
+exit /b %UPDATE_EXIT%
+
+:execute
+cd /d "%~dp0"
 set "BRANCH=stable_before_qml"
+set "REMOTE_URL=https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git"
 
 if not exist ".git\" (
   echo Git repository not found.
   echo Initializing repository...
   git init
   if errorlevel 1 goto :git_error
-  git remote add origin https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git >nul 2>&1
+  git remote add origin "%REMOTE_URL%"
   if errorlevel 1 goto :git_error
   git fetch origin %BRANCH%
   if errorlevel 1 goto :git_error
@@ -19,7 +36,7 @@ if not exist ".git\" (
 )
 
 echo Checking update...
-git fetch origin "%BRANCH%" >nul 2>&1
+git fetch origin "%BRANCH%"
 if errorlevel 1 goto :git_error
 
 set "UPDATE_COUNT=0"
@@ -45,6 +62,7 @@ if not "!UPDATE_COUNT!"=="0" (
     if errorlevel 1 (
       echo Restoring conflicting local file: %%F
       git restore --worktree --staged -- "%%F"
+      if errorlevel 1 goto :git_error
     )
   )
   

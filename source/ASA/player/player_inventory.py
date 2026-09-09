@@ -9,6 +9,7 @@ from source.utility.types import RoiRegion
 
 resets = 0  # resets happen when char cannot tp therefore it is a major issue
 inv_slots = {"x": 222, "y": 280, "distance": 93}
+inv_default_grid = 6
 g_last_check_can_transfer: bool = False
 g_last_check_can_drop: bool = False
 
@@ -43,7 +44,7 @@ def is_can_drop():
     global g_last_check_can_drop
 
     g_last_check_can_drop = v = bool(
-        template.check_template("inventory_player_drop", 0.8)
+        template.check_template("inventory_player_drop", 0.7)
     )
     return v
 
@@ -51,7 +52,7 @@ def is_can_drop():
 def is_can_transfer_all():
     global g_last_check_can_transfer
     g_last_check_can_transfer = v = bool(
-        template.check_template("inventory_player_transfer_all", 0.8)
+        template.check_template("inventory_player_transfer_all", 0.7)
     )
     return v
 
@@ -105,6 +106,21 @@ def close():
             break
 
 
+def search_and_transfer(item: str):
+    if is_open():
+        search_in_inventory(item)
+        time.sleep(0.1)
+
+        while is_clear_search():
+            search_in_inventory(item)
+            time.sleep(0.1)
+
+        transfer_all_inventory()
+
+        wait_clear_search(3)
+        time.sleep(0.1)
+
+
 # these functions assume that the inventory is already open
 def search_in_inventory(item: str):
     if is_open():
@@ -142,21 +158,19 @@ def transfer_all_inventory():
 
 def change_filter(type: Literal["all", "resource"] = "all"):
     if is_open():
-        logs.logger.debug("changing filter from our inventory into structure")
+        logs.logger.debug("changing filter in player inventory")
 
         windows.click(
             *get_pixel_loc("filter_player_inventory"),
         )
         time.sleep(0.1)
         coords = get_pixel_loc(f"filter_{type}")
-        windows.click(
-            *coords,
-        )
+        windows.click(*coords)
         time.sleep(0.1)
 
 
-def transfer_first_inventory(slot=2):
-    """Transfer the first item in player inv, 2nd item mean the first one, because the 1st slot is always player implant"""
+def transfer_first_inventory(slot=0):
+    """Becareful of player implant"""
 
     if is_open():
         logs.logger.debug("transfering first item from our inventory into structure")
@@ -170,10 +184,10 @@ def transfer_first_inventory(slot=2):
                 time.sleep(0.05)
         else:
             _slot = max(1, slot)
-            inv_default_grid = 6
             loc_gen = utils_simple.grid_loc_gen(col=inv_default_grid)
 
             c, r = loc_gen(_slot)
+            print(f"transfer_first_inventory: c={c}, r={r}")
             x = inv_slots["x"] + (inv_slots["distance"] * c)
             y = inv_slots["y"] + (inv_slots["distance"] * r)
 
@@ -190,7 +204,6 @@ def popcorn(
     transfer_instead=False,
 ):
     """Drop or transfer items from inventory slots in the selected direction."""
-    inv_default_grid = 6
 
     loc_gen = utils_simple.grid_loc_gen(row=inv_default_grid)
 

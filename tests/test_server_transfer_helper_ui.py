@@ -72,7 +72,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         )
 
         with patch(
-            "source.launcher.pages.helpers.ServerTransferHelper", return_value=helper
+            "source.launcher.server_transfer_helper.ServerTransferHelper", return_value=helper
         ):
             SettingsGUI.open_server_transfer_helper(launcher)
 
@@ -250,6 +250,40 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper._set_running_ui(False)
             helper.close()
 
+    def test_transfer_overlay_shows_paused_state_and_restores_current_task(self) -> None:
+        helper = self._transfer_helper(account_count=1)
+        helper.transfer_task_snapshot = {
+            "running": [{"name": "Acc 1 - Join Resource - 1111"}],
+            "active": [{"name": "Acc 1 - Verify Tribe Log", "state": "READY"}],
+            "waiting": [],
+        }
+
+        try:
+            helper._set_running_ui(True)
+            helper._handle_worker_output('__RUNNER_STATE__ {"state":"PAUSED"}')
+            self.app.processEvents()
+
+            overlay = helper.transfer_overlay
+            self.assertEqual(helper.runner_state, "PAUSED")
+            self.assertEqual(overlay.current_label._full_text, "PAUSED")
+            self.assertEqual(
+                overlay.upcoming_labels[0]._full_text,
+                "Acc 1 - Verify Tribe Log",
+            )
+            self.assertNotIn("__RUNNER_STATE__", helper.worker_debug_lines)
+
+            helper._handle_worker_output('__RUNNER_STATE__ {"state":"RUNNING"}')
+            self.app.processEvents()
+
+            self.assertEqual(helper.runner_state, "RUNNING")
+            self.assertEqual(
+                overlay.current_label._full_text,
+                "Acc 1 - Join Resource - 1111",
+            )
+        finally:
+            helper._set_running_ui(False)
+            helper.close()
+
     def test_transfer_worker_finish_restores_configuration_window(self) -> None:
         helper = self._transfer_helper(account_count=1)
         worker = Mock()
@@ -337,7 +371,7 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         finally:
             helper.close()
 
-    def test_transfer_cards_default_collapsed_and_dedi_has_no_enabled_switch(self):
+    def test_transfer_cards_default_expanded_and_dedi_selected(self):
         helper = self._transfer_helper(account_count=1)
 
         try:
@@ -345,7 +379,103 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             bodies = helper.findChildren(QWidget, "DepositRouteCardBody")
             self.assertGreaterEqual(len(bodies), 3)
             self.assertTrue(all(not body.isHidden() for body in bodies))
-            self.assertNotIn("enabled", helper.dedi_rows[0])
+            self.assertTrue(helper.dedi_rows[0]["selected"].isChecked())
+        finally:
+            helper.close()
+
+    def test_dedi_selection_syncs_without_saving_and_grays_both_rows(self):
+        helper = self._transfer_helper()
+        try:
+            resource = helper.resource_dedi_rows[0]
+            destination = helper.destination_dedi_rows[0]
+            with patch.object(helper, "_persist_dedis") as save:
+                resource["selected"].setChecked(False)
+                for row in (resource, destination):
+                    self.assertFalse(row["selected"].isChecked())
+                    self.assertIn("#8a8a8a", row["frame"].styleSheet())
+                    self.assertTrue(row["selected"].isEnabled())
+                    helper._set_dedi_row_expanded(row, True)
+                    self.assertTrue(row["details"].isEnabled())
+                destination["selected"].setChecked(True)
+                for row in (resource, destination):
+                    self.assertTrue(row["selected"].isChecked())
+                    self.assertEqual(row["frame"].styleSheet(), "")
+                save.assert_not_called()
+        finally:
+            helper.close()
+
+    def test_dedi_selection_survives_edits_sync_and_pair_changes(self):
+        helper = self._transfer_helper()
+        try:
+            helper._add_synced_dedi_pair()
+            helper.resource_dedi_rows[1]["selected"].setChecked(False)
+            helper.resource_dedi_rows[1]["yaw"].setText("25")
+            helper._persist_dedis()
+            helper._calculate_dedis_from_same_structure("destination")
+            helper._calculate_dedis_from_same_structure("resource")
+            helper._remove_dedi_row(helper.resource_dedi_rows[0])
+            helper._add_synced_dedi_pair("destination")
+            for side in ("resource", "destination"):
+                rows = helper._dedi_rows_for_side(side)
+                self.assertFalse(rows[0]["selected"].isChecked())
+                self.assertEqual(rows[0]["index_label"].text(), "D1")
+                self.assertTrue(rows[1]["selected"].isChecked())
+                self.assertEqual(len(helper.config["dedis"][side]["items"]), 2)
+                for item in helper.config["dedis"][side]["items"]:
+                    self.assertEqual(set(item), {"location", "crouched"})
+        finally:
+            helper.close()
+        reopened = self._transfer_helper()
+        try:
+            self.assertTrue(reopened.resource_dedi_rows[0]["selected"].isChecked())
+            self.assertTrue(reopened.destination_dedi_rows[0]["selected"].isChecked())
+        finally:
+            reopened.close()
+
+    def test_start_filters_only_runtime_dedis_and_preserves_selection_after_finish(self):
+        helper = self._transfer_helper(dedi_items=[
+            {"location": {"yaw": yaw, "pitch": 0}, "crouched": False}
+            for yaw in (10, 20, 30)
+        ])
+        try:
+            helper.destination_dedi_rows[1]["selected"].setChecked(False)
+            with (
+                patch("source.launcher.server_transfer_helper.missing_runtime_inputs",
+                      return_value=[]) as validate,
+                patch("source.launcher.server_transfer_helper.focus_game_window"),
+                patch.object(helper, "_write_runtime_config", return_value="runtime.json") as write,
+                patch.object(helper, "_start_worker") as start,
+                patch.object(helper, "_cleanup_runtime_config"),
+                patch.object(helper, "_finish_worker", return_value=False),
+            ):
+                helper.start()
+                runtime = write.call_args.args[0]
+                self.assertIs(validate.call_args.args[1], runtime["dedis"])
+                start.assert_called_once_with("server_transfer", "--config", "runtime.json")
+                for side in ("resource", "destination"):
+                    self.assertEqual(
+                        [float(item["location"]["yaw"]) for item in runtime["dedis"][side]["items"]],
+                        [10, 30],
+                    )
+                    self.assertEqual(len(helper.config["dedis"][side]["items"]), 3)
+                    self.assertEqual(len(helper._dedi_rows_for_side(side)), 3)
+                    for item in runtime["dedis"][side]["items"]:
+                        self.assertEqual(set(item), {"location", "crouched"})
+                helper._on_worker_finished("Stopped.")
+                self.assertFalse(helper.resource_dedi_rows[1]["selected"].isChecked())
+                self.assertFalse(helper.destination_dedi_rows[1]["selected"].isChecked())
+                helper.runtime_config_path = None
+        finally:
+            helper.close()
+
+    def test_start_requires_a_checked_dedi_pair(self):
+        helper = self._transfer_helper()
+        try:
+            helper.resource_dedi_rows[0]["selected"].setChecked(False)
+            with patch.object(helper, "_start_worker") as start:
+                helper.start()
+            start.assert_not_called()
+            self.assertEqual(helper.status.text(), "Select at least one dedi before starting.")
         finally:
             helper.close()
 
@@ -1828,6 +1958,46 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             helper.worker_process = None
             helper.close()
 
+    def test_generic_helper_overlay_shows_paused_state_after_ready(self):
+        with patch(
+            "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            helper = AutoJoinServerHelper(self._worker_owner())
+
+        try:
+            helper._set_running_ui(True)
+            overlay = helper.helper_log_overlay
+            helper._handle_worker_output('__RUNNER_STATE__ {"state":"PAUSED"}')
+            self.app.processEvents()
+
+            self.assertTrue(overlay.loading_active)
+            self.assertFalse(overlay.current_label.isHidden())
+            self.assertEqual(overlay.current_label._full_text, "Loading helper...")
+
+            helper._handle_worker_output("__HELPER_READY__")
+            self.app.processEvents()
+
+            self.assertFalse(overlay.loading_active)
+            self.assertFalse(overlay.current_label.isHidden())
+            self.assertEqual(overlay.current_label._full_text, "PAUSED")
+            self.assertNotIn("__RUNNER_STATE__", helper.worker_debug_lines)
+
+            helper._handle_worker_output('__RUNNER_STATE__ {"state":"RUNNING"}')
+            self.app.processEvents()
+
+            self.assertTrue(overlay.current_label.isHidden())
+            self.assertEqual(helper.runner_state, "RUNNING")
+
+            helper._handle_worker_output('__RUNNER_STATE__ {"state":"INVALID"}')
+            helper._handle_worker_output("__RUNNER_STATE__ invalid")
+            self.app.processEvents()
+
+            self.assertEqual(helper.runner_state, "RUNNING")
+            self.assertFalse(helper.worker_debug_lines)
+        finally:
+            helper.close()
+
     def test_auto_join_afk_join_defaults_enabled_and_passes_flag(self):
         with patch(
             "source.launcher.auto_join_server_helper.register_alt_n_hotkey",
@@ -2255,7 +2425,17 @@ class SharedHelperWindowTests(unittest.TestCase):
                     }
                 ],
                 "depositGrindableData": [],
+                "depositGeneralData": [{
+                    "teleport": "CRAFT1", "check_on_every_dedi": 3,
+                    "dedi": {"items": [{"location": {"yaw": 3.0, "pitch": 4.0}, "crouched": False}]},
+                }],
             },
+            craft_config={"generalCraftData": [{
+                "teleport": "CRAFT1", "check_on_every_dedi": 3,
+                "crafters": [{"location": {"yaw": 1.0, "pitch": 2.0}, "crouched": False, "item": "polymer"}],
+                "dedi": {"items": []},
+            }]},
+            save_deposit_routes=Mock(return_value=True),
             form_values={},
             fields={},
             persist_settings_from_visible_fields=Mock(),
@@ -2300,6 +2480,39 @@ class SharedHelperWindowTests(unittest.TestCase):
                     helper.close()
                 except RuntimeError:
                     pass
+
+    def test_general_and_craft_helpers_edit_and_save_separate_configs(self):
+        owner = self._owner()
+        owner.save_craft_routes = Mock(return_value=True)
+        with patch(
+            "source.launcher.deposit_route_helper.register_alt_n_hotkey",
+            return_value=False,
+        ):
+            craft = DepositRouteHelper(owner, "craft", 0)
+            general = DepositRouteHelper(owner, "general", 0)
+        try:
+            self.assertEqual(craft._title(), "General Craft: CRAFT1")
+            self.assertEqual(general._title(), "General dedi: CRAFT1")
+            self.assertEqual([(row.kind, row.index) for row in craft.row_widgets], [("crafter", 0)])
+            self.assertEqual([(row.kind, row.index) for row in general.row_widgets], [("dedi", 0)])
+            crafted = craft.add_entry("dedi")
+            self.assertIsNotNone(crafted)
+            self.assertEqual(len(craft.route()["dedi"]["items"]), 1)
+            self.assertEqual(len(general.route()["dedi"]["items"]), 1)
+            owner.save_craft_routes.assert_called_once_with(show_log=False)
+            owner.save_deposit_routes.assert_not_called()
+            craft.update_crafter_item(craft.route()["crafters"][0], SimpleNamespace(text=lambda: "element"))
+            self.assertEqual(craft.route()["crafters"][0]["item"], "element")
+            self.assertNotIn("active", craft.route()["crafters"][0])
+            general.update_float(general.route()["dedi"]["items"][0], "yaw", SimpleNamespace(text=lambda: "42"))
+            owner.save_deposit_routes.assert_called_once_with(show_log=False)
+            self.assertEqual(craft.route()["dedi"]["items"][0]["location"]["yaw"], 0)
+            self.assertEqual(general.route()["dedi"]["items"][0]["location"]["yaw"], 42)
+            craft.delete_entry("crafter", 0)
+            self.assertEqual(craft.route()["crafters"], [])
+        finally:
+            craft.close()
+            general.close()
 
 
 if __name__ == "__main__":

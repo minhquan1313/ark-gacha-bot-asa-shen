@@ -232,11 +232,15 @@ def kill_running_ark():
         check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
 
 
 def launch_ark_through_steam():
-    subprocess.Popen(["cmd", "/c", "start", "", ARK_STEAM_URL])
+    subprocess.Popen(
+        ["cmd", "/c", "start", "", ARK_STEAM_URL],
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
 
 
 def _prepare_and_launch_game(

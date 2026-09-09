@@ -51,13 +51,6 @@ def is_can_deposit():
     return has_deposit_button
 
 
-def deposit_first_item():
-    if not is_open():
-        return
-
-    player_inventory.transfer_first_inventory(1)
-
-
 def set_crouch(item: DediStorageState):
     crouched = item.get("crouched", False) if isinstance(item, dict) else False
     if crouched:
@@ -92,7 +85,8 @@ def _capture_deposit():
     normalized_name = capture_name.casefold()
     if normalized_name.startswith("crystal"):
         capture_dedi_deposit_crystal(capture_name)
-    elif normalized_name.startswith("grind"):
+    else:
+        # elif normalized_name.startswith("grind"):
         capture_dedi_deposit_grind(capture_name)
 
 
@@ -113,8 +107,10 @@ def ensure_has_resource():
         # Making sure it's resource filter first
         player_inventory.change_filter("resource")
         time.sleep(0.2)
-        deposit_first_item()
+
+        player_inventory.transfer_first_inventory(0)
         time.sleep(0.2)
+
         # After deposit, change filter back to all(Reset)
         player_inventory.change_filter("all")
 

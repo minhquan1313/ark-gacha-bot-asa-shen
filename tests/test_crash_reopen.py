@@ -46,7 +46,11 @@ launcher_utils_module = _module("source.launcher.utils", system=system_module)
 capture_module = _module(
     "source.launcher.utils.deposit_helper_capture", focus_game_window=Mock()
 )
-windows_module = _module("source.utility.windows", ark_hwnd=Mock(return_value=0))
+windows_module = _module(
+    "source.utility.windows",
+    ark_hwnd=Mock(return_value=0),
+    find_window_by_title=Mock(return_value=0),
+)
 
 sys.modules.pop("source.join_sim.source.crash.crash", None)
 with patch.dict(
@@ -84,6 +88,8 @@ class CrashReopenTests(unittest.TestCase):
         psutil_module.process_iter.return_value = []
         windows_module.ark_hwnd.reset_mock(return_value=True, side_effect=True)
         windows_module.ark_hwnd.return_value = 0
+        windows_module.find_window_by_title.reset_mock(return_value=True, side_effect=True)
+        windows_module.find_window_by_title.return_value = 0
         logger_module.logger.critical.reset_mock(return_value=True, side_effect=True)
         logger_module.logger.warning.reset_mock(return_value=True, side_effect=True)
 
@@ -96,6 +102,20 @@ class CrashReopenTests(unittest.TestCase):
 
         self.assertIs(crash.crash_process, crash_client)
         windows_module.ark_hwnd.assert_not_called()
+        logger_module.logger.critical.assert_called_once_with(
+            "Crash detected", stack_info=True
+        )
+
+    def test_detect_crash_returns_true_for_battleye_required_window(self):
+        windows_module.find_window_by_title.return_value = 123
+
+        self.assertTrue(crash.detect_crash())
+
+        windows_module.find_window_by_title.assert_called_once_with(
+            "BattlEye Required"
+        )
+        windows_module.ark_hwnd.assert_not_called()
+        self.assertTrue(crash.join_sim.should_click)
         logger_module.logger.critical.assert_called_once_with(
             "Crash detected", stack_info=True
         )

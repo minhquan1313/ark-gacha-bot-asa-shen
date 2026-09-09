@@ -156,6 +156,7 @@ class TemplateUiBehaviorTests(unittest.TestCase):
             patch("source.launcher.pages.settings.load_deposit_config", return_value={}),
             patch("source.launcher.pages.settings.load_gacha_config", return_value=[]),
             patch("source.launcher.pages.settings.load_pego_config", return_value=[]),
+            patch("source.launcher.pages.settings.load_craft_config", return_value={"generalCraftData": []}),
         ):
             result = launcher.apply_default_template_to_all_groups()
 
@@ -169,11 +170,12 @@ class TemplateUiBehaviorTests(unittest.TestCase):
                     "PEGO",
                     "DEDI",
                     "GACHA",
+                    "CRAFT",
                     "LAUNCHER",
                 )
             ]
         )
-        self.assertEqual(launcher.change_template_group.call_count, 6)
+        self.assertEqual(launcher.change_template_group.call_count, 7)
 
     def test_template_action_split_button_keeps_import_as_default(self) -> None:
         launcher = SimpleNamespace(

@@ -1,4 +1,5 @@
 import threading
+from datetime import datetime
 
 from source.launcher.pages.common import (
     APP_NAME,
@@ -19,6 +20,7 @@ from source.launcher.pages.common import (
     os,
     utils_simple,
 )
+from source.launcher.utils.update_schedule import UpdateSchedule
 from source.launcher.utils.update_service import (
     REPOSITORY_ROOT,
     UpdateCheckResult,
@@ -265,11 +267,17 @@ class LogsToolsPagesMixin:
         return page
 
     def _automatic_update_check(self):
-        """Start the periodic update check while automatic checks are enabled."""
+        """Check once per local day, including a missed midnight after sleep."""
+        if not getattr(self, "startup_complete", True):
+            return
         if not getattr(self, "shutdown_started", False) and getattr(
             self, "update_auto_check_enabled", True
         ):
-            self._start_update_check(automatic=True)
+            schedule = getattr(self, "update_schedule", None)
+            if schedule is None:
+                self.update_schedule = schedule = UpdateSchedule()
+            if schedule.is_due(datetime.now().astimezone()):
+                self._start_update_check(automatic=True)
 
     def _start_update_check(self, automatic=False):
         """Run the shared updater check without blocking the launcher UI."""
@@ -285,6 +293,13 @@ class LogsToolsPagesMixin:
                 status.show()
                 status.setText("CHECKING FOR UPDATE...")
             return
+        schedule = getattr(self, "update_schedule", None)
+        if schedule is None:
+            self.update_schedule = schedule = UpdateSchedule()
+        try:
+            schedule.record_attempt(datetime.now().astimezone())
+        except OSError as exc:
+            self.append_log(f"[UPDATE] Could not save daily check: {exc}\n")
         self.update_check_in_progress = True
         self.update_check_automatic = automatic
         action = getattr(self, "update_action_button", None)
@@ -303,9 +318,15 @@ class LogsToolsPagesMixin:
 
     def _run_update_check(self, automatic):
         """Execute the update service on a worker thread."""
+        from source.logs.gachalogs import logger
+
+        logger.info(
+            "[UPDATE] %s check requested.", "Automatic" if automatic else "Manual"
+        )
         try:
             result = check_for_update()
         except Exception as exc:
+            logger.exception("[UPDATE] Unexpected check failure.")
             try:
                 current = load_manifest()
             except Exception:
@@ -329,7 +350,7 @@ class LogsToolsPagesMixin:
                 status.show()
                 status.setText("UPDATE CHECK FAILED")
             if changelog is not None:
-                self._set_update_notes(result.error)
+                self._set_update_notes(f"{result.error}\n\nDetails: check logs file")
             if action is not None:
                 action.setText("CHECK UPDATE")
                 action.setEnabled(True)
@@ -352,6 +373,7 @@ class LogsToolsPagesMixin:
             action.setText("UPDATE" if result.update_available else "CHECK UPDATE")
             action.setEnabled(True)
 
+        # ruff: disable[SIM102]
         if automatic and result.update_available:
             if self.confirm(
                 "Update Available",
@@ -359,9 +381,6 @@ class LogsToolsPagesMixin:
                 "UPDATE",
             ):
                 self._request_update_restart()
-            else:
-                self.update_auto_check_enabled = False
-                self.auto_update_timer.stop()
 
     def _handle_update_action(self):
         """Check for updates or begin the restart flow for an available update."""
@@ -371,7 +390,7 @@ class LogsToolsPagesMixin:
             self._start_update_check()
 
     def _request_update_restart(self):
-        """Ask run.bat to restart after its current launcher cleanup completes."""
+        """Ask the Python entry point to restart after launcher cleanup completes."""
         try:
             (REPOSITORY_ROOT / ".update_restart.request").write_text(
                 "restart\n", encoding="utf-8"
