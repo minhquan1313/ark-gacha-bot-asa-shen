@@ -42,7 +42,6 @@ from source.launcher.config.transfer_helper_config import (
     save_transfer_players,
     save_transfer_settings,
     save_transfer_ui_coords,
-    suggested_loop_count,
 )
 from source.launcher.runner_overlay import (
     TransferRunnerOverlay,
@@ -60,6 +59,7 @@ from source.launcher.utils.steam_accounts import (
     loginusers_path,
     most_recent_account_name,
 )
+from source.logs import gachalogs as logs
 from source.utility.types import TransferPlayersConfig, TransferRuntimeConfig
 
 DEFAULT_PANELS_EXPANDED = True
@@ -131,6 +131,9 @@ class ServerTransferHelper(WorkerHelperWindow):
         self._register_hotkey()
         self._preload_capture_view()
         self.helper_log_changed.connect(self._refresh_transfer_overlay)
+        self.runner_state_changed.connect(
+            self._refresh_transfer_overlay_for_runner_state
+        )
         self.task_state_changed.connect(self._update_transfer_task_snapshot)
         self.worker_ready.connect(self._on_worker_ready)
         self.worker_finished.connect(self._on_worker_finished)
@@ -205,7 +208,6 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.status = WrappedStatusLabel("Ready.")
         self.status.setObjectName("HelperStatus")
         layout.addWidget(self.status)
-        self._sync_loop_hint()
         return wrapper
 
     def _running_widget(self):
@@ -259,18 +261,6 @@ class ServerTransferHelper(WorkerHelperWindow):
             label, field = self._setting_field(key, label_text)
             grid.addWidget(label, row, column)
             grid.addWidget(field, row, column + 1)
-        loop_row = len(rows) + 3
-        loop_label = QLabel("Transfer")
-        loop_label.setObjectName("FormLabel")
-        loop_field = self._line_edit(settings.get("loop_count", ""))
-        loop_field.editingFinished.connect(self._persist_settings)
-        loop_field.returnPressed.connect(self._persist_settings)
-        self.setting_fields["loop_count"] = loop_field
-        grid.addWidget(loop_label, loop_row, 0)
-        grid.addWidget(loop_field, loop_row, 1)
-        self.loop_hint = WrappedStatusLabel("")
-        self.loop_hint.setObjectName("HelperStatus")
-        grid.addWidget(self.loop_hint, loop_row + 1, 0, 1, 2)
         grid.setColumnStretch(1, 1)
         self._sync_transfer_start_mode_description()
 
@@ -396,7 +386,6 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _add_synced_dedi_pair(self, side="resource"):
         row = self._add_dedi_row(side=side)
         self._add_dedi_row(side=self._opposite_dedi_side(side))
-        self._autosync_transfer_count(persist=True)
         self._persist_dedis()
         self._focus_dedi_row(row)
 
@@ -415,7 +404,6 @@ class ServerTransferHelper(WorkerHelperWindow):
             else:
                 self._add_dedi_row(side="resource")
                 row = self._add_dedi_row(captured, side="destination")
-            self._autosync_transfer_count(persist=True)
             self._persist_dedis()
             self._focus_dedi_row(row)
             self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
@@ -438,10 +426,15 @@ class ServerTransferHelper(WorkerHelperWindow):
         toggle.setObjectName("HelperExpandButton")
         index_label = QLabel("")
         index_label.setObjectName("FormLabel")
+        selected = QCheckBox()
+        selected.setChecked(True)
+        selected.setToolTip("Include this dedi pair in the transfer run")
+        selected.setAccessibleName("Include dedi pair")
         summary = QLabel("")
         summary.setObjectName("HelperRowSummary")
         summary.setWordWrap(True)
         header.addWidget(toggle)
+        header.addWidget(selected)
         header.addWidget(index_label)
         header.addWidget(summary, 1)
         layout.addLayout(header)
@@ -486,6 +479,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             "frame": row,
             "toggle": toggle,
             "index_label": index_label,
+            "selected": selected,
             "summary": summary,
             "details": details,
             "yaw": yaw,
@@ -495,6 +489,9 @@ class ServerTransferHelper(WorkerHelperWindow):
         }
         rows = self._dedi_rows_for_side(side)
         rows.append(data)
+        selected.toggled.connect(
+            lambda checked, target=data: self._sync_dedi_selection(target, checked)
+        )
         toggle.clicked.connect(
             lambda checked=False, target=data: self._toggle_dedi_row(target)
         )
@@ -506,16 +503,10 @@ class ServerTransferHelper(WorkerHelperWindow):
         for widget in (yaw, pitch, crouched):
             if hasattr(widget, "editingFinished"):
                 widget.editingFinished.connect(
-                    lambda target=data: self._autosync_transfer_count(persist=True)
-                )
-                widget.editingFinished.connect(
                     lambda target=data: self._sync_dedi_summary(target)
                 )
                 widget.editingFinished.connect(self._persist_dedis)
             if hasattr(widget, "toggled"):
-                widget.toggled.connect(
-                    lambda _checked=False: self._autosync_transfer_count(persist=True)
-                )
                 widget.toggled.connect(
                     lambda _checked=False, target=data: self._sync_dedi_summary(target)
                 )
@@ -523,11 +514,31 @@ class ServerTransferHelper(WorkerHelperWindow):
         rows_layout = getattr(self, f"{side}_dedi_rows_layout")
         rows_layout.addWidget(row)
         self._renumber_dedi_rows(side)
-        if hasattr(self, "loop_hint"):
-            self._sync_loop_hint()
         if persist:
             self._persist_dedis()
         return data
+
+    def _sync_dedi_selection(self, row_data: dict, checked: bool):
+        """Mirror a pair's in-memory selection and gray excluded rows."""
+        index = self._dedi_rows_for_side(row_data["side"]).index(row_data)
+        for side in ("resource", "destination"):
+            rows = self._dedi_rows_for_side(side)
+            if index >= len(rows):
+                continue
+            row = rows[index]
+            checkbox = row["selected"]
+            blocked = checkbox.blockSignals(True)
+            checkbox.setChecked(checked)
+            checkbox.blockSignals(blocked)
+            row["frame"].setStyleSheet(
+                ""
+                if checked
+                else (
+                    "QFrame#HelperRow QLabel, QFrame#HelperRow QLineEdit, "
+                    "QFrame#HelperRow QCheckBox, QFrame#HelperRow QPushButton "
+                    "{ color: #8a8a8a; }"
+                )
+            )
 
     def _remove_dedi_row(self, row_data):
         side = row_data.get("side", "resource")
@@ -538,7 +549,6 @@ class ServerTransferHelper(WorkerHelperWindow):
         index = rows.index(row_data)
         self._remove_dedi_row_at("resource", index)
         self._remove_dedi_row_at("destination", index)
-        self._autosync_transfer_count(persist=True)
         self._persist_dedis()
 
     def _remove_dedi_row_at(self, side, index):
@@ -587,63 +597,23 @@ class ServerTransferHelper(WorkerHelperWindow):
         )
 
     def _current_config(self):
-        self._sync_loop_hint()
         self.config["settings"] = save_transfer_settings(self._settings_from_fields())
         self.config["dedis"] = save_transfer_dedis(self._dedis_from_rows())
-        self.config["players"] = self._save_players_from_rows(autosync=False)
+        self.config["players"] = self._save_players_from_rows()
         self.config["ui_coords"] = save_transfer_ui_coords(self.config["ui_coords"])
         self.config["steam_accounts"] = self.steam_accounts
         return self.config
 
-    def _sync_loop_hint(self):
-        if not hasattr(self, "loop_hint"):
-            return
-        try:
-            self.loop_hint.setText(self._loop_count_hint_text())
-        except Exception as exc:
-            self.loop_hint.setText(f"Loop hint unavailable: {exc}")
-
-    def _autosync_transfer_count(self, persist=False):
-        if not hasattr(self, "loop_hint") or "loop_count" not in self.setting_fields:
-            return
-        try:
-            suggested = self._suggested_loop_count()
-            self.setting_fields["loop_count"].setText(str(suggested))
-            self.loop_hint.setText(self._loop_count_hint_text())
-            if persist:
-                self._persist_settings()
-        except Exception as exc:
-            self.loop_hint.setText(f"Loop hint unavailable: {exc}")
-
-    def _suggested_loop_count(self):
-        account_count = len(self.player_rows)
-        active_count = len(self.resource_dedi_rows)
-        if account_count == 0 or active_count == 0:
-            return 1
-        effective_accounts = min(account_count, MAX_TRANSFER_RUNTIME_ACCOUNTS)
-        return suggested_loop_count(active_count, effective_accounts)
-
-    def _loop_count_hint_text(self):
-        account_count = len(self.player_rows)
-        active_count = len(self.resource_dedi_rows)
-        if account_count == 0:
-            return f"{active_count} dedi x 0 account = no runnable accounts."
-        if active_count == 0:
-            return f"0 dedi x {account_count} account = no transfer dedis."
-        effective_accounts = min(account_count, MAX_TRANSFER_RUNTIME_ACCOUNTS)
-        suggested = suggested_loop_count(active_count, effective_accounts)
-        suffix = (
-            f" Only first {effective_accounts} account(s) run."
-            if account_count > effective_accounts
-            else ""
-        )
-        return (
-            f"{active_count} dedi x {effective_accounts} account = "
-            f"{suggested} transfer(s).{suffix}"
-        )
-
     def start(self):
         if self.is_running() or self.closing:
+            return
+        selected_indices = [
+            index
+            for index, row in enumerate(self.resource_dedi_rows)
+            if row["selected"].isChecked()
+        ]
+        if not selected_indices:
+            self.status.setText("Select at least one dedi before starting.")
             return
         if self.owner.is_program_running() or self.owner.program_stopping:
             self.owner.dialog(
@@ -703,6 +673,13 @@ class ServerTransferHelper(WorkerHelperWindow):
             )
             return
         config = dict(config)
+        config["dedis"] = {
+            side: {
+                **route,
+                "items": [route["items"][index] for index in selected_indices],
+            }
+            for side, route in config["dedis"].items()
+        }
         config["start_account"] = start_account
         missing = missing_runtime_inputs(
             config["settings"],
@@ -835,6 +812,10 @@ class ServerTransferHelper(WorkerHelperWindow):
             self.transfer_overlay = None
             self.transfer_refresh_timer.stop()
 
+    def _refresh_transfer_overlay_for_runner_state(self, _state: str):
+        """Refresh transfer UI after a worker pause or resume event."""
+        self._refresh_transfer_overlay()
+
     def _close_transfer_overlay(self):
         """Stop transfer UI refreshes and close the compact overlay safely."""
         self.transfer_refresh_timer.stop()
@@ -846,6 +827,8 @@ class ServerTransferHelper(WorkerHelperWindow):
             overlay.close()
 
     def _set_running_ui(self, running: bool):
+        self.running_ui_active = running
+        self._sync_player_search_warnings()
         if self.switching_player_steam:
             self.running_ui_active = bool(running)
             self.start_stop_button.setEnabled(not running)
@@ -935,10 +918,6 @@ class ServerTransferHelper(WorkerHelperWindow):
                 self.status.setText(str(exc))
                 return
             self.status.setText("Player settings saved.")
-        if persist:
-            self._autosync_transfer_count(persist=True)
-        else:
-            self._sync_loop_hint()
 
     def _add_player_row(self, account):
         row = QFrame()
@@ -1048,7 +1027,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             return v
         return self.config.get("players", {})
 
-    def _save_players_from_rows(self, *_args: object, autosync: bool = True):
+    def _save_players_from_rows(self, *_args: object):
         try:
             players = save_transfer_players(
                 self._players_from_rows(),
@@ -1059,8 +1038,6 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.config["players"] = players
         self.status.setText("Player settings saved.")
         self._sync_player_search_warnings()
-        if autosync:
-            self._autosync_transfer_count(persist=True)
         return players
 
     def _sync_player_search_warnings(self):
@@ -1077,7 +1054,13 @@ class ServerTransferHelper(WorkerHelperWindow):
             )
             if switch is not None:
                 switch.setVisible(show_switch)
-                switch.setEnabled(show_switch and not self.switching_player_steam)
+                switch.setEnabled(
+                    show_switch
+                    and not self.switching_player_steam
+                    and not self.worker_launch_pending
+                    and not self.running_ui_active
+                    and not self.is_running()
+                )
             messages = []
             if account > MAX_TRANSFER_RUNTIME_ACCOUNTS:
                 row["frame"].setStyleSheet(
@@ -1112,7 +1095,16 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _switch_player_steam_from_row(self, account: int):
         """Switch a player row's Steam account, then start ARK through the launcher."""
-        if self.is_running():
+        if (
+            self.is_running()
+            or self.worker_launch_pending
+            or self.switching_player_steam
+            or self.running_ui_active
+        ):
+            message = "Cannot switch Steam while another helper operation is running."
+            self.status.setText(message)
+            logs.logger.warning(message)
+            self._sync_player_search_warnings()
             return
         row = next(
             (
@@ -1123,6 +1115,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             None,
         )
         if row is None:
+            self.status.setText(f"Player {account} is no longer configured.")
             return
 
         selected = row["steam"].currentText().strip()
@@ -1185,6 +1178,8 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _restore_after_player_steam_switch(self):
         """Restore Server Transfer controls after a Steam switch worker."""
         self.switching_player_steam = False
+        self.worker_launch_pending = False
+        self.running_ui_active = False
         self.pending_switch_account = ""
         self.pending_switch_row = None
         self.start_stop_button.setEnabled(True)
@@ -1443,7 +1438,6 @@ class ServerTransferHelper(WorkerHelperWindow):
             row["yaw"].setText(f"{yaw:.2f}")
             row["pitch"].setText(f"{pitch:.2f}")
             self.status.setText(f"Captured yaw {yaw:.2f}, pitch {pitch:.2f}.")
-            self._autosync_transfer_count(persist=True)
             self._sync_dedi_summary(row)
             self._persist_dedis()
         except Exception as exc:

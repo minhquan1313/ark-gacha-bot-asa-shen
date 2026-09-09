@@ -1,13 +1,12 @@
 import time
 
-import pyautogui
-
 import settings
 import source.gacha_bot.config
 from source.ASA.player import buffs, player_inventory, player_state
 from source.ASA.strucutres import bed, teleporter
 from source.logs import gachalogs as logs
 from source.utility import (
+    ark_input,
     local_player,
     template,
     utils,
@@ -70,31 +69,31 @@ def enter_tekpod(allow_eat_implant=True):
         time.sleep(0.3)
 
         use_key = _input_key_char("Use")
-        pyautogui.keyDown(use_key)
+        ark_input.key_down(use_key)
 
         if not template.template_await_true(
             template.check_template_no_bounds, 1, "bed_radical", 0.6
         ):
-            pyautogui.keyUp(use_key)
+            ark_input.key_up(use_key)
             time.sleep(0.5)
             utils.press_key(local_player.get_input_settings("Run"))
 
             utils.zero_center()
             utils.turn_down(15)
             time.sleep(0.3)
-            pyautogui.keyDown(use_key)
+            ark_input.key_down(use_key)
             time.sleep(0.5)
 
         if template.template_await_true(
             template.check_template_no_bounds, 1, "bed_radical", 0.6
         ):
             time.sleep(0.2)
-            windows.move_mouse(
+            windows.game_move_mouse(
                 variables.get_pixel_loc("radical_laydown_x"),
                 variables.get_pixel_loc("radical_laydown_y"),
             )
             time.sleep(0.5)
-            pyautogui.keyUp(use_key)
+            ark_input.key_up(use_key)
             time.sleep(1)
         buff = buffs.check_buffs()
         if buff.check_buffs() == 1:

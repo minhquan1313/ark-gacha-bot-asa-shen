@@ -1,13 +1,12 @@
 import time
 
-import pyautogui
-
 import source.ASA.config
 from source.ASA.player import player_inventory, player_state, tribelog
 from source.ASA.strucutres import teleporter
 from source.gacha_bot import render
 from source.logs import gachalogs as logs
 from source.utility import (
+    ark_input,
     local_player,
     template,
     utils,
@@ -134,9 +133,9 @@ def spawn_in(bed_name: str):
 
         locs = ((1000, 300), (1400, 800))
         for loc in locs:
-            pyautogui.moveTo(*loc, duration=0.5)
-            pyautogui.rightClick(*loc)
-            pyautogui.press("space")
+            ark_input.move_to(*loc, duration=0.5)
+            ark_input.right_click(*loc)
+            ark_input.press("space")
             time.sleep(0.2)
 
         t = 2 if not player_state.uploaded else 15

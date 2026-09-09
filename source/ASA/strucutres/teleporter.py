@@ -1,13 +1,42 @@
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 import settings
 import source.ASA.config
-from source.ASA.player import player_state
+from source.ASA.player import console, player_state
 from source.ASA.strucutres import bed
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, variables, windows
 
 _last_teleporter_name: str = ""
+_suicide_recovery_allowed = ContextVar(
+    "teleporter_suicide_recovery_allowed", default=True
+)
+
+
+@contextmanager
+def prevent_suicide_recovery():
+    """Protect nested teleport calls for this context and restore policy on exit."""
+    token = _suicide_recovery_allowed.set(False)
+    try:
+        yield
+    finally:
+        _suicide_recovery_allowed.reset(token)
+
+
+def _stop_for_manual_recovery(reason: str):
+    """Return to the main menu and stop without destructive teleport recovery."""
+    message = (
+        f"Teleport stopped: {reason}. Manual recovery required; "
+        "suicide recovery is disabled."
+    )
+    logs.logger.error(message)
+    try:
+        console.console_exit_mainmenu()
+    except Exception as exc:
+        raise RuntimeError(message) from exc
+    raise RuntimeError(message)
 
 
 def is_open():
@@ -19,9 +48,8 @@ def is_open_name_prompt():
 
 
 def open():
-    """
-    player should already be looking down at the teleporter this just opens and WILL try and correct if there are issues
-    """
+    """Open the teleporter, stopping before unsafe recovery when suicide is forbidden."""
+    allow_suicide = _suicide_recovery_allowed.get()
     attempts = 0
     dl = utils_simple.get_default_clock()
 
@@ -52,6 +80,9 @@ def open():
             logs.logger.error(
                 f"unable to open up the teleporter after {source.ASA.config.teleporter_open_attempts} attempts, eating implant and trying to reset"
             )
+            if not allow_suicide:
+                _stop_for_manual_recovery("teleporter did not open")
+
             bed.spawn_in(settings.bed_spawn)
             time.sleep(20)
             utils.zero_center()  # reseting the chars pitch/yaw
@@ -107,11 +138,18 @@ def look_down_teleport():
 
 
 def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
+    """Teleport to a named destination, optionally forbidding inventory-loss recovery."""
     global _last_teleporter_name
     _last_teleporter_name = teleporter_name
+    allow_suicide = _suicide_recovery_allowed.get()
 
     fallback_bed_name = fallback_bed_name or settings.bed_spawn
     if not player_state.human.on_tp:
+        # I'm not sure when this if will be called, but I'll keep it here because the original code already include it
+        if not allow_suicide:
+            _stop_for_manual_recovery(
+                "reaching the teleporter requires bed fast travel"
+            )
         look_down_teleport()
         bed.fast_travel(fallback_bed_name)
         time.sleep(0.2)
@@ -126,6 +164,10 @@ def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
         dl = utils_simple.get_default_clock()
         while True:
             if dl():
+                if not allow_suicide:
+                    _stop_for_manual_recovery(
+                        "teleporter destination list did not load"
+                    )
                 player_state.reset_state()
                 time.sleep(0.3)
 
@@ -155,7 +197,8 @@ def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
                     logs.logger.warning(
                         "orange pixel for teleporter ready not found - list not loaded"
                     )
-                    player_state.check_disconnected()
+                    if allow_suicide:
+                        player_state.check_disconnected()
 
             if detected:
                 break

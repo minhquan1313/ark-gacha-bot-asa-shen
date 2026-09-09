@@ -87,6 +87,7 @@ class HomePagesMixin:
         if server_card_item is None:
             raise RuntimeError("Dashboard server card was not created")
         self.dashboard_server_card = server_card_item.widget()
+        self.dashboard_server_card.installEventFilter(self)
         self.active_value = self._stat_card(stats, 1, "ACTIVE QUEUE", "TASKS")
         self.waiting_value = self._stat_card(stats, 2, "WAITING QUEUE", "TASKS")
         self.uptime_value = self._stat_card(stats, 3, "UPTIME", "HH:MM:SS")

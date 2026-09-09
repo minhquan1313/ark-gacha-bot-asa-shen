@@ -1,4 +1,12 @@
+import threading
+
+from PySide6.QtCore import QObject
+from shiboken6 import isValid
+
+from source.gacha_bot.craft_config import load_craft_config, save_craft_config
 from source.launcher.auto_keys import resolve_supported_keys
+from source.launcher.config.constants import KEY_HOLD_ACTIONS
+from source.launcher.config.template_settings import convert_craft_yaw
 from source.launcher.pages.common import (
     AUTO_KEYS_ACTIONS,
     DEFAULT_SETTINGS,
@@ -9,6 +17,7 @@ from source.launcher.pages.common import (
     TEMPLATE_GROUP_SETTING_KEYS,
     AnimatedButton,
     Counter,
+    CyberCheckBox,
     CyberSwitch,
     CyberTemplateConflictDialog,
     CyberTextInputDialog,
@@ -39,6 +48,7 @@ from source.launcher.pages.common import (
     convert_deposit_yaw,
     copy,
     load_deposit_config,
+    load_gacha_collect_config,
     load_gacha_config,
     load_pego_config,
     load_settings,
@@ -50,6 +60,7 @@ from source.launcher.pages.common import (
     resolve_template_reference,
     safe_template_filename,
     save_deposit_config,
+    save_gacha_collect_config,
     save_gacha_config,
     save_pego_config,
     save_settings,
@@ -59,6 +70,46 @@ from source.launcher.pages.common import (
     subprocess,
     write_template,
 )
+
+
+class ActivationKeyButton(AnimatedButton):
+    """Capture one non-modifier keyboard key for the Auto Keys activation gate."""
+
+    def __init__(self, key_name: str, on_capture):
+        super().__init__(f"SET KEY: {key_name}", "secondary")
+        self.key_name = key_name
+        self.on_capture = on_capture
+        self.capturing = False
+        self.clicked.connect(self._begin_capture)
+
+    def _begin_capture(self):
+        self.capturing = True
+        self.setText("PRESS A KEY...")
+        self.setFocus()
+
+    def keyPressEvent(self, event):
+        if not self.capturing:
+            return super().keyPressEvent(event)
+        key = event.key()
+        modifiers = {
+            Qt.Key.Key_Shift,
+            Qt.Key.Key_Control,
+            Qt.Key.Key_Alt,
+            Qt.Key.Key_Meta,
+        }
+        if key in modifiers:
+            return
+        if Qt.Key.Key_F1 <= key <= Qt.Key.Key_F24:
+            name = f"F{key - Qt.Key.Key_F1 + 1}"
+        else:
+            name = event.text().upper().strip()
+        if not name:
+            self.setText("SET KEY: INVALID")
+            return
+        self.key_name = name
+        self.capturing = False
+        self.setText(f"SET KEY: {name}")
+        self.on_capture(name)
 
 
 class SettingsPagesMixin:
@@ -338,16 +389,25 @@ class SettingsPagesMixin:
 
         old_deposit = copy.deepcopy(getattr(self, "deposit_config", None))
         old_gacha = copy.deepcopy(getattr(self, "gacha_config", None))
+        old_gacha_collect = copy.deepcopy(getattr(self, "gacha_collect_config", None))
         old_pego = copy.deepcopy(getattr(self, "pego_config", None))
+        old_craft = copy.deepcopy(getattr(self, "craft_config", None))
         new_deposit = old_deposit
         new_gacha = old_gacha
+        new_gacha_collect = old_gacha_collect
         new_pego = old_pego
+        new_craft = old_craft
         if group_name == "DEDI" and old_deposit is None:
             old_deposit = load_deposit_config()
             new_deposit = old_deposit
         elif group_name == "GACHA" and old_gacha is None:
             old_gacha = load_gacha_config()
             new_gacha = old_gacha
+            old_gacha_collect = load_gacha_collect_config()
+            new_gacha_collect = old_gacha_collect
+        elif group_name == "CRAFT" and old_craft is None:
+            old_craft = load_craft_config()
+            new_craft = old_craft
         elif group_name == "PEGO" and old_pego is None:
             old_pego = load_pego_config()
             new_pego = old_pego
@@ -366,13 +426,30 @@ class SettingsPagesMixin:
             elif group_name == "GACHA":
                 self._ensure_gacha_config()
                 new_gacha = save_gacha_config(template["data"]["gacha"])
+                new_gacha_collect = save_gacha_collect_config(
+                    template["data"]["gacha_collect"]
+                )
+            elif group_name == "CRAFT":
+                new_craft = save_craft_config(
+                    convert_craft_yaw(
+                        template["data"]["craft"],
+                        float(old_settings["station_yaw"]),
+                        False,
+                    )
+                )
             elif group_name == "PEGO":
                 self._ensure_pego_config()
                 new_pego = save_pego_config(template["data"]["pego"])
             new_settings = save_settings(new_settings)
         except (OSError, TypeError, ValueError) as exc:
             self._rollback_template_group(
-                group_name, old_settings, old_deposit, old_gacha, old_pego
+                group_name,
+                old_settings,
+                old_deposit,
+                old_gacha,
+                old_gacha_collect,
+                old_pego,
+                old_craft,
             )
             self.dialog("Template Apply Failed", str(exc), "error")
             return False
@@ -383,6 +460,9 @@ class SettingsPagesMixin:
             self.deposit_config = new_deposit
         elif group_name == "GACHA":
             self.gacha_config = new_gacha
+            self.gacha_collect_config = new_gacha_collect
+        elif group_name == "CRAFT":
+            self.craft_config = new_craft
         elif group_name == "PEGO":
             self.pego_config = new_pego
         self._skip_visible_field_persist = True
@@ -397,7 +477,9 @@ class SettingsPagesMixin:
         old_settings: dict,
         old_deposit: dict | None,
         old_gacha: list[dict] | None,
+        old_gacha_collect: list[dict] | None,
         old_pego: list[dict] | None,
+        old_craft: dict | None = None,
     ):
         """Best-effort restore canonical files after a partial template write."""
         with contextlib.suppress(OSError, TypeError, ValueError):
@@ -408,6 +490,12 @@ class SettingsPagesMixin:
         elif group_name == "GACHA" and old_gacha is not None:
             with contextlib.suppress(OSError, TypeError, ValueError):
                 save_gacha_config(old_gacha)
+            if old_gacha_collect is not None:
+                with contextlib.suppress(OSError, TypeError, ValueError):
+                    save_gacha_collect_config(old_gacha_collect)
+        elif group_name == "CRAFT" and old_craft is not None:
+            with contextlib.suppress(OSError, TypeError, ValueError):
+                save_craft_config(old_craft)
         elif group_name == "PEGO" and old_pego is not None:
             with contextlib.suppress(OSError, TypeError, ValueError):
                 save_pego_config(old_pego)
@@ -417,13 +505,16 @@ class SettingsPagesMixin:
         old_settings = copy.deepcopy(self.settings)
         old_deposit = load_deposit_config()
         old_gacha = load_gacha_config()
+        old_gacha_collect = load_gacha_collect_config()
         old_pego = load_pego_config()
+        old_craft = load_craft_config()
         for group_name in (
             "SERVER",
             "STATIONS",
             "PEGO",
             "DEDI",
             "GACHA",
+            "CRAFT",
             "LAUNCHER",
         ):
             if self.change_template_group(group_name, DEFAULT_TEMPLATE_FILENAME):
@@ -433,7 +524,9 @@ class SettingsPagesMixin:
                 self.form_values = self.settings.copy()
                 self.deposit_config = save_deposit_config(old_deposit)
                 self.gacha_config = save_gacha_config(old_gacha)
+                self.gacha_collect_config = save_gacha_collect_config(old_gacha_collect)
                 self.pego_config = save_pego_config(old_pego)
+                self.craft_config = save_craft_config(old_craft)
             except (OSError, TypeError, ValueError) as exc:
                 self.dialog(
                     "Reset Rollback Failed",
@@ -509,6 +602,8 @@ class SettingsPagesMixin:
                 load_deposit_config(),
                 load_gacha_config(),
                 load_pego_config(),
+                load_gacha_collect_config(),
+                load_craft_config(),
             )
             destination = self._store_template_with_conflict(
                 template, safe_template_filename(str(template["name"]))
@@ -888,9 +983,33 @@ class SettingsPagesMixin:
         self.auto_keys_enabled_field = enabled
         self.auto_keys_interval_field = interval
         self.auto_keys_hold_field = hold_duration
+        activation_key = str(auto_keys.get("activation_key", "F1"))
+        activation_key_button = ActivationKeyButton(
+            activation_key, self._capture_auto_keys_activation_key
+        )
+        activation_key_button.setObjectName("AutoKeysActivationKey")
+        self.auto_keys_activation_key_field = activation_key_button
         sync_suspension_ui = getattr(self, "_sync_auto_keys_suspension_ui", None)
         if callable(sync_suspension_ui):
             sync_suspension_ui()
+        emergency_disable_description = QLabel("Press Shift+F1 to deactivate")
+        emergency_disable_description.setObjectName("AutoKeysTriggerDescription")
+        self._prepare_auto_keys_copy(emergency_disable_description)
+        self.settings_form_layout.addWidget(
+            emergency_disable_description,
+            row_number,
+            1,
+            1,
+            self._settings_form_action_column,
+        )
+        row_number += 1
+        activation_label = QLabel("Activation key")
+        activation_label.setToolTip(
+            "Hold this key with an action binding until the trigger duration ends."
+        )
+        self.settings_form_layout.addWidget(activation_label, row_number, 0)
+        self.settings_form_layout.addWidget(activation_key_button, row_number, 1)
+        row_number += 1
         interval_label = QLabel("Interval (seconds)")
         interval_label.setToolTip("How long to wait between each repeated key press.")
         self.settings_form_layout.addWidget(interval_label, row_number, 0)
@@ -950,7 +1069,7 @@ class SettingsPagesMixin:
         )
         row_number += 1
 
-        supported_label = QLabel("Supported keys")
+        supported_label = QLabel("Repeat keys")
         # supported_label.setObjectName("FormLabel")
         supported_label.setAlignment(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
@@ -967,31 +1086,39 @@ class SettingsPagesMixin:
         supported_layout.setVerticalSpacing(4)
         supported_layout.setColumnStretch(2, 1)
 
-        action_labels = {}
+        action_fields = {}
         binding_labels = {}
-        for index, action in enumerate(AUTO_KEYS_ACTIONS):
+        action_settings = auto_keys.get("actions", {})
+        if not isinstance(action_settings, dict):
+            action_settings = {}
+        repeat_actions = tuple(
+            action for action in AUTO_KEYS_ACTIONS if action not in KEY_HOLD_ACTIONS
+        )
+        for index, action in enumerate(repeat_actions):
             pair = index % 2
             grid_row = index // 2
             action_column = pair * 3
-            action_label = QLabel(action)
-            action_label.setObjectName("AutoKeysSupportedAction")
-            action_label.setMinimumWidth(0)
+            action_field = CyberCheckBox(action)
+            action_field.setObjectName("AutoKeysSupportedAction")
+            action_field.setMinimumWidth(0)
+            action_field.setChecked(bool(action_settings.get(action, True)))
+            action_field.toggled.connect(self.persist_auto_keys_settings)
             binding_label = QLabel("—")
             binding_label.setObjectName("AutoKeysSupportedBinding")
             binding_label.setMinimumWidth(0)
             alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
             supported_layout.addWidget(
-                action_label, grid_row, action_column, alignment=alignment
+                action_field, grid_row, action_column, alignment=alignment
             )
             supported_layout.addWidget(
                 binding_label, grid_row, action_column + 1, alignment=alignment
             )
-            action_labels[action] = action_label
+            action_fields[action] = action_field
             binding_labels[action] = binding_label
 
         self.auto_keys_supported_grid = supported_grid
         self.auto_keys_supported_grid_layout = supported_layout
-        self.auto_keys_supported_action_labels = action_labels
+        self.auto_keys_action_fields = action_fields
         self.auto_keys_supported_binding_labels = binding_labels
         self.auto_keys_input_path = None
         self.auto_keys_input_mtime = None
@@ -1009,8 +1136,29 @@ class SettingsPagesMixin:
             self._settings_form_action_column,
             alignment=Qt.AlignmentFlag.AlignTop,
         )
-        self._refresh_auto_keys_supported_keys(force=True)
         row_number += 1
+        key_hold_label = QLabel("Key Hold")
+        key_hold_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        )
+        key_hold_grid = QWidget()
+        key_hold_layout = QGridLayout(key_hold_grid)
+        key_hold_layout.setContentsMargins(0, 0, 0, 0)
+        for index, action in enumerate(KEY_HOLD_ACTIONS):
+            action_field = CyberCheckBox(action)
+            action_field.setObjectName("AutoKeysSupportedAction")
+            action_field.setChecked(bool(action_settings.get(action, True)))
+            action_field.toggled.connect(self.persist_auto_keys_settings)
+            binding_label = QLabel("â€”")
+            binding_label.setObjectName("AutoKeysSupportedBinding")
+            key_hold_layout.addWidget(action_field, index, 0)
+            key_hold_layout.addWidget(binding_label, index, 1)
+            action_fields[action] = action_field
+            binding_labels[action] = binding_label
+        self.settings_form_layout.addWidget(key_hold_label, row_number, 0)
+        self.settings_form_layout.addWidget(key_hold_grid, row_number, 1)
+        row_number += 1
+        self._refresh_auto_keys_supported_keys(force=True)
         instruction = QLabel()
         instruction.setObjectName("AutoKeysInstruction")
         self._prepare_auto_keys_copy(instruction)
@@ -1059,38 +1207,75 @@ class SettingsPagesMixin:
             return
         unit = "second" if duration == 1 else "seconds"
         label.setText(
-            f"Hold a supported button for {duration:g} {unit} to start pressing "
-            "it automatically. Press the same button again to stop."
+            f"Hold the activation key and a supported button for {duration:g} {unit} "
+            "to start. Repeat keys press automatically; Key Hold keeps its key down. "
+            "Press the same button again to stop."
         )
 
-    def _refresh_auto_keys_supported_keys(self, force=False):
-        """Refresh displayed bindings when the installed Input.ini changes."""
-        binding_labels = getattr(self, "auto_keys_supported_binding_labels", None)
-        if not binding_labels:
-            return
-        input_path = getattr(self, "auto_keys_input_path", None)
-        if not force and input_path is not None:
-            try:
-                mtime = input_path.stat().st_mtime_ns
-            except OSError:
-                mtime = None
-            if mtime == getattr(self, "auto_keys_input_mtime", None):
-                return
+    def _capture_auto_keys_activation_key(self, key_name: str):
+        """Persist a key captured by the Auto Keys activation control."""
+        self.persist_auto_keys_settings()
 
-        resolved, input_path = resolve_supported_keys()
+    def _refresh_auto_keys_supported_keys(self, force: bool = False):
+        """Request binding discovery without filesystem work on Qt's thread."""
+        labels = getattr(self, "auto_keys_supported_binding_labels", None)
+        if not labels or getattr(self, "supported_keys_busy", False):
+            return
+        if getattr(self, "shutdown_started", False):
+            return
+        self.supported_keys_busy = True
+        token = id(labels)
+        path = getattr(self, "auto_keys_input_path", None)
+        previous_mtime = getattr(self, "auto_keys_input_mtime", None)
+        signal = self.supported_keys_finished
+
+        def resolve():
+            """Read file metadata and bindings on the refresh worker."""
+            resolved = None
+            mtime = None
+            try:
+                if path is not None:
+                    with contextlib.suppress(OSError):
+                        mtime = path.stat().st_mtime_ns
+                resolved_path = path
+                if force or path is None or mtime != previous_mtime:
+                    resolved, resolved_path = resolve_supported_keys()
+                    try:
+                        mtime = resolved_path.stat().st_mtime_ns
+                    except (AttributeError, OSError):
+                        mtime = None
+                result = (token, resolved, resolved_path, mtime)
+            except Exception:
+                result = (token, {}, None, None)
+            # ruff: disable[SIM105]
+            try:
+                signal.emit(result)
+            except RuntimeError:
+                pass  # The launcher was deleted during discovery.
+
+        threading.Thread(target=resolve, name="auto-keys-display", daemon=True).start()
+
+    def _on_supported_keys_finished(self, result: tuple):
+        """Apply discovery only to the controls that requested it."""
+        self.supported_keys_busy = False
+        token, resolved, input_path, mtime = result
+        labels = getattr(self, "auto_keys_supported_binding_labels", {})
+        if getattr(self, "shutdown_started", False) or token != id(labels):
+            return
+        if resolved is None:
+            return
         tooltip = str(input_path) if input_path is not None else ""
-        for action, label in binding_labels.items():
+        for action, label in labels.items():
+            if isinstance(label, QObject) and not isValid(label):
+                continue
             binding = resolved.get(action)
             label.setText(f"[{binding}]" if binding else "—")
             label.setToolTip(tooltip)
         self.auto_keys_input_path = input_path
-        try:
-            self.auto_keys_input_mtime = input_path.stat().st_mtime_ns
-        except (AttributeError, OSError):
-            self.auto_keys_input_mtime = None
-        supported_grid = getattr(self, "auto_keys_supported_grid", None)
-        if supported_grid is not None:
-            supported_grid.setToolTip(tooltip)
+        self.auto_keys_input_mtime = mtime
+        grid = getattr(self, "auto_keys_supported_grid", None)
+        if grid is not None and (not isinstance(grid, QObject) or isValid(grid)):
+            grid.setToolTip(tooltip)
 
     def persist_auto_keys_settings(self, _checked=False):
         """Validate, save, and apply the Auto keys settings immediately."""
@@ -1103,16 +1288,33 @@ class SettingsPagesMixin:
             )
             auto_keys = {
                 "enabled": enabled,
+                "activation_key": getattr(
+                    getattr(self, "auto_keys_activation_key_field", None),
+                    "key_name",
+                    self.settings.get("auto_keys", {}).get("activation_key", "F1"),
+                ),
                 "interval": float(self.auto_keys_interval_field.text()),
                 "hold_duration": float(self.auto_keys_hold_field.text()),
+                "actions": {
+                    action: field.isChecked()
+                    for action, field in getattr(
+                        self, "auto_keys_action_fields", {}
+                    ).items()
+                },
             }
+            if not auto_keys["actions"]:
+                current_actions = self.settings.get("auto_keys", {}).get("actions", {})
+                auto_keys["actions"] = {
+                    action: bool(current_actions.get(action, True))
+                    for action in AUTO_KEYS_ACTIONS
+                }
             if auto_keys["interval"] <= 0 or auto_keys["hold_duration"] <= 0:
                 raise ValueError
             self.form_values["auto_keys"] = auto_keys
             self.settings = save_settings(self._collect_settings())
             self.form_values = self.settings.copy()
             runtime = getattr(self, "auto_keys_runtime", None)
-            if runtime is not None:
+            if runtime is not None and getattr(self, "startup_complete", True):
                 runtime.configure(self.settings, allow_enable=not is_suspended)
             sync_suspension_ui = getattr(self, "_sync_auto_keys_suspension_ui", None)
             if callable(sync_suspension_ui):
@@ -1148,6 +1350,9 @@ class SettingsPagesMixin:
         if group_name == "GACHA":
             self._render_gacha_group()
             return
+        if group_name == "CRAFT":
+            self._render_craft_group()
+            return
         if group_name == "PEGO":
             self._render_pego_group()
             return
@@ -1166,7 +1371,9 @@ class SettingsPagesMixin:
             settings = load_settings()
             deposit_config = load_deposit_config()
             gacha_config = load_gacha_config()
+            gacha_collect_config = load_gacha_collect_config()
             pego_config = load_pego_config()
+            craft_config = load_craft_config()
         except Exception as exc:
             self.append_log(f"[ERROR] Unable to refresh JSON config files: {exc}\n")
             self.dialog("Refresh Configs", str(exc), "error")
@@ -1181,7 +1388,9 @@ class SettingsPagesMixin:
             runtime.configure(settings, allow_enable=not is_suspended)
         self.deposit_config = deposit_config
         self.gacha_config = gacha_config
+        self.gacha_collect_config = gacha_collect_config
         self.pego_config = pego_config
+        self.craft_config = craft_config
         self.fields = {}
         self.sync_configured_templates()
         self._skip_visible_field_persist = True

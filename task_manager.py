@@ -1,10 +1,13 @@
 import heapq
 import json
 import time
+from itertools import count
 from threading import Lock
 
 import source.gacha_bot.stations as stations
 import source.logs.gachalogs as logs
+from source.gacha_bot.craft_config import load_craft_config, valid_craft_route
+from source.launcher.config.station_config import conflicting_collection_pairs
 
 global scheduler
 global started
@@ -26,18 +29,21 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-# next exe time, list count, priority, the task
+# next exe time, insertion sequence, priority, the task
 WaitingTaskItem = tuple[float, int, int, stations.base_task]
-# priority, next exe time, list count, the task
+# priority, next exe time, insertion sequence, the task
 ActiveTaskItem = tuple[int, float, int, stations.base_task]
 
 
-class priority_queue_exc:
+class PriorityQueueWait:
     def __init__(self):
         self.queue: list[WaitingTaskItem] = []
+        self._sequence = count()
 
     def add(self, task: stations.base_task, priority: int, execution_time: float):
-        heapq.heappush(self.queue, (execution_time, len(self.queue), priority, task))
+        heapq.heappush(
+            self.queue, (execution_time, next(self._sequence), priority, task)
+        )
 
     def pop(self):
         if not self.is_empty():
@@ -53,12 +59,15 @@ class priority_queue_exc:
         return len(self.queue) == 0
 
 
-class priority_queue_prio:
+class PriorityQueueReady:
     def __init__(self):
         self.queue: list[ActiveTaskItem] = []
+        self._sequence = count()
 
     def add(self, task: stations.base_task, priority: int, execution_time: float):
-        heapq.heappush(self.queue, (priority, execution_time, len(self.queue), task))
+        heapq.heappush(
+            self.queue, (priority, execution_time, next(self._sequence), task)
+        )
 
     def pop(self):
         if not self.is_empty():
@@ -77,8 +86,8 @@ class priority_queue_prio:
 class task_scheduler(metaclass=SingletonMeta):
     def __init__(self):
         if not hasattr(self, "initialized"):
-            self.active_queue = priority_queue_prio()
-            self.waiting_queue = priority_queue_exc()
+            self.active_queue = PriorityQueueReady()
+            self.waiting_queue = PriorityQueueWait()
             self.initialized = True
             self.prev_task_name = ""
             self.running_task = None
@@ -158,11 +167,7 @@ class task_scheduler(metaclass=SingletonMeta):
 
             self.prev_task_name = task.name
             self.running_task = None
-            if task.name != "pause":
-                self.move_to_waiting_queue(task)
-            else:
-                print("pause task skipping adding back ")
-                self.emit_queue_snapshot()
+            self.move_to_waiting_queue(task)
         else:
             self.active_queue.add(task, priority, exec_time)
 
@@ -207,6 +212,35 @@ def prepare():
         direction = entry_gacha["side"]
         task = stations.gacha_station(name, teleporter, direction)
         scheduler.add_task(task)
+
+    collect_data = load_resolution_data("json_files/gacha_collect.json")
+    conflicting_pairs = conflicting_collection_pairs(collect_data)
+    for teleporter in sorted(conflicting_pairs):
+        logs.logger.warning(
+            f"Skipping collection pair {teleporter}: conflicting Dedi selections; reselect Dedi."
+        )
+    for entry in collect_data:
+        teleporter = entry.get("teleporter", "")
+        if teleporter and teleporter not in conflicting_pairs:
+            direction = entry.get("side", "left")
+            name = entry.get("name", f"{teleporter}_{direction}")
+            scheduler.add_task(
+                stations.gacha_collect_station(
+                    name,
+                    teleporter,
+                    direction,
+                    entry.get("item", ""),
+                    entry.get("dedi_teleport", ""),
+                )
+            )
+
+    for index, route in enumerate(load_craft_config()["generalCraftData"]):
+        if valid_craft_route(route):
+            scheduler.add_task(stations.craft_station(route, index))
+        else:
+            logs.logger.warning(
+                f"Skipping craft entry {index + 1}: configure teleport, item, and output dedis."
+            )
 
     scheduler.add_task(stations.render_station())
     logs.logger.info("scheduler prepared")

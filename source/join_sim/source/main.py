@@ -1,7 +1,5 @@
 import time
 
-import pyautogui
-
 import source.join_sim.source.crash.crash as crash
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.menus import (
@@ -13,15 +11,21 @@ from source.join_sim.source.menus import (
     success,
 )
 from source.join_sim.source.utility import recon_utils
-from source.utility import utils_simple, windows
+from source.utility import ark_input, utils_simple, windows
 
 was_in_mainmenu = False
 
 
 def is_menu():
-    return recon_utils.check_template_no_bounds(
-        "escape", 0.7
-    ) or recon_utils.check_template_no_bounds("escape_obscured", 0.7)
+    return is_menu_clear() or is_menu_obscured()
+
+
+def is_menu_clear() -> bool:
+    return recon_utils.check_template_no_bounds("escape", 0.7)
+
+
+def is_menu_obscured():
+    return recon_utils.check_template_no_bounds("escape_obscured", 0.7)
 
 
 def is_logging_in():
@@ -32,6 +36,10 @@ def is_crashed():
     return crash.detect_crash()
 
 
+def is_pause_menu():
+    return recon_utils.check_template("pause_menu", 0.7)
+
+
 should_click = True
 
 
@@ -39,7 +47,10 @@ def join_round(server: str):
     global should_click
     if should_click:
         # This click will skip game intro
-        pyautogui.click(2, 2)
+        ark_input.click(2, 2)
+    else:
+        ark_input.move_to(2, 2)
+
     # Assume
     was_logging_in = is_logging_in()
 
@@ -80,7 +91,7 @@ def join_round(server: str):
         time.sleep(0.5)
 
     if failure.has_failure():
-        pyautogui.click(2, 2)
+        ark_input.click(2, 2)
         time.sleep(0.5)
 
     return False

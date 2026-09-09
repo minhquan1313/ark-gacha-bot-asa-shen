@@ -6,8 +6,9 @@ import threading
 import time
 
 import psutil
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer
 from PySide6.QtWidgets import QApplication
+from shiboken6 import isValid
 
 from source.launcher.config.constants import (
     COLORS,
@@ -31,6 +32,7 @@ from source.launcher.utils.system import (
     get_memory_usage_gb,
 )
 from source.utility.debug_screenshots import cleanup_debug_screenshots_on_program_start
+from source.utility.runner_state import RUNNER_STATE_PREFIX
 from source.utility.utils_simple import start_subprocess
 
 START_GAME_DISABLE_DELAY = 10000
@@ -45,17 +47,40 @@ class RuntimeGuiMixin:
         return bool(getattr(self, "auto_keys_automation_suspensions", set()))
 
     def _sync_auto_keys_suspension_ui(self):
-        """Reflect temporary automation suspension without persisting the switch."""
+        """Reflect suspension and runtime loading without persisting the switch."""
         field = getattr(self, "auto_keys_enabled_field", None)
         if field is None:
             return
+        if isinstance(field, QObject) and not isValid(field):
+            self.auto_keys_enabled_field = None
+            return
         suspended = self._auto_keys_are_suspended()
         configured = bool(self.settings.get("auto_keys", {}).get("enabled", False))
+        runtime = getattr(self, "auto_keys_runtime", None)
+        runtime_state = getattr(
+            self,
+            "auto_keys_runtime_state",
+            getattr(runtime, "state", "disabled"),
+        )
+        starting = configured and not suspended and runtime_state == "starting"
         field.blockSignals(True)
         field.setChecked(configured and not suspended)
+        field.setText("ENABLED")
+        field.set_loading(starting)
         field.setEnabled(not suspended)
-        field.setToolTip("Paused while automation is running" if suspended else "")
+        if suspended:
+            tooltip = "Paused while automation is running"
+        elif starting:
+            tooltip = "Resolving ARK input bindings"
+        else:
+            tooltip = ""
+        field.setToolTip(tooltip)
         field.blockSignals(False)
+
+    def _on_auto_keys_state_changed(self, state: str):
+        """Render Auto Keys worker lifecycle changes on the Qt GUI thread."""
+        self.auto_keys_runtime_state = state
+        self._sync_auto_keys_suspension_ui()
 
     def _suspend_auto_keys_for_automation(self, token: object):
         """Acquire one worker-owned Auto Keys suspension token."""
@@ -172,6 +197,7 @@ class RuntimeGuiMixin:
         try:
             self.queue_snapshot = {"running": [], "active": [], "waiting": []}
             self.running_task_name = None
+            self.runner_state = "RUNNING"
             self.runner_loading = True
             self.runner_launch_pending = True
             self.runner_ready_pending = False
@@ -183,6 +209,7 @@ class RuntimeGuiMixin:
             self.runner_loading = False
             self.runner_launch_pending = False
             self.runner_ready_pending = False
+            self.runner_state = "STOPPED"
             self._hide_runner_overlay()
             self._update_start_stop_button()
             self.dialog("Start Failed", str(exc), "error")
@@ -277,6 +304,7 @@ class RuntimeGuiMixin:
         self.stop_log_tail()
         self._close_output_reader(self.process)
         self.process = None
+        self.runner_state = "STOPPED"
         self.runner_loading = False
         self.runner_launch_pending = False
         self.program_stopping = False
@@ -348,6 +376,9 @@ class RuntimeGuiMixin:
                 break
             if line.strip() == RUNNER_READY_MESSAGE:
                 self.runner_ready.emit()
+                continue
+            if line.startswith(RUNNER_STATE_PREFIX):
+                self._emit_log_line(line)
                 continue
             self._emit_log_line(line)
         if not self.output_reader_stop.is_set():
@@ -472,7 +503,10 @@ class RuntimeGuiMixin:
                 self.cpu_meter.set_percent(cpu_percent or 0)
 
             running = self.process and self.process.poll() is None
-            self.runner_value.setText("RUNNING" if running else "STOPPED")
+            if running:
+                self.runner_value.setText(getattr(self, "runner_state", "RUNNING"))
+            else:
+                self.runner_value.setText("STOPPED")
             self.activity_value.setText(self.last_activity)
             self.clock_value.setText(time.strftime("%I:%M:%S %p"))
 

@@ -89,7 +89,7 @@ roi_regions: dict[RoiRegionKey, RoiRegion] = {
         "width": 600,
         "height": 600,
     },
-    "orange": {"start_x": 528, "start_y": 217, "width": 1, "height": 1},
+    "orange": {"start_x": 540, "start_y": 200, "width": 1, "height": 1},
     "transfer_orange": {"start_x": 220, "start_y": 320, "width": 1, "height": 1},
     "chem_bench": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
     "indi_forge": {"start_x": 825, "start_y": 183, "width": 267, "height": 53},
@@ -215,9 +215,9 @@ blue_bounds: BoundCouple = (90, 30, 200), (100, 255, 255)
 template_l_bounds_overwrite: dict[RoiRegionKey, tuple[int, int, int]] = {
     # saturation to 0 so the white underline will still be tracked
     "beds_title_respawn": (0, 0, 200),
-    "inventory_player_drop": (0, 30, 150),
-    "inventory_drop": (0, 30, 150),
-    "inventory_player_transfer_all": (0, 30, 150),
+    "inventory_player_drop": (90, 30, 130),
+    "inventory_drop": (90, 30, 130),
+    "inventory_player_transfer_all": (90, 30, 130),
     "server_trans_uploaded": (40, 30, 180),
     "item_snow_owl_pellet": (0, 30, 0),
     "item_fertilizer": (0, 30, 0),
@@ -471,7 +471,9 @@ def check_templates(base: RoiRegionKey, items: list[RoiRegionKey], threshold: fl
 
         # DEBUG
         if IS_DEBUG and (
-            DEBUG_ITEM is None or item == DEBUG_ITEM or item in DEBUG_ITEM
+            DEBUG_ITEM is None
+            or item == DEBUG_ITEM
+            or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)
         ):
             import winsound
             from pathlib import Path
@@ -503,7 +505,7 @@ def check_templates(base: RoiRegionKey, items: list[RoiRegionKey], threshold: fl
                 if max_val > threshold:
                     winsound.Beep(frequency=1000, duration=50)
                 else:
-                    winsound.Beep(100, 200)
+                    winsound.Beep(400, 200)
 
         if max_val > threshold:
             return item
@@ -536,7 +538,11 @@ def check_template(item: RoiRegionKey, threshold: float):
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM or item in DEBUG_ITEM):
+    if IS_DEBUG and (
+        DEBUG_ITEM is None
+        or item == DEBUG_ITEM
+        or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)
+    ):
         import winsound
         from pathlib import Path
 
@@ -568,7 +574,7 @@ def check_template(item: RoiRegionKey, threshold: float):
             if max_val > threshold:
                 winsound.Beep(1000, 100)
             else:
-                winsound.Beep(100, 200)
+                winsound.Beep(400, 200)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")
@@ -632,7 +638,7 @@ def check_template_no_bounds(item: RoiRegionKey, threshold: float):
             if max_val > threshold:
                 winsound.Beep(1000, 50)
             else:
-                winsound.Beep(100, 200)
+                winsound.Beep(400, 200)
 
     if max_val > threshold:
         logs.logger.template(f"{item} found:{max_val}")

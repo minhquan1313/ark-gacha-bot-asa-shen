@@ -1,5 +1,6 @@
 import time
 
+import settings
 import source.gacha_bot.config
 from source.ASA.player import player_inventory
 from source.ASA.strucutres import inventory
@@ -43,17 +44,17 @@ def open_gacha_inv(teleporter_name: str, direction, turn_constant):
             break
 
 
-def drop_off_nocrop(
-    teleporter_name: str, direction: str
-):  # change reberry time or you will run out of crops
+def drop_off_nocrop(teleporter_name: str, direction: str, collection_item: str = ""):
+    # change reberry time or you will run out of crops
     turn_constant = 1 if direction == "right" else -1
 
+    utils.turn_up(15)
     utils.turn_right(40 * turn_constant)
     time.sleep(0.2)
 
     open_gacha_inv(teleporter_name, direction, turn_constant)
     if inventory.is_open():
-        _drop_off_nocrop(teleporter_name, direction)
+        _drop_off_nocrop(teleporter_name, direction, collection_item)
         inventory.close()
 
         # Ensure process
@@ -61,18 +62,26 @@ def drop_off_nocrop(
         if inventory.was_server_lag_last_open and inventory.is_open():
             # Server lagged, need redoing
             time.sleep(1)
-            _drop_off_nocrop(teleporter_name, direction)
-
+            _drop_off_nocrop(teleporter_name, direction, collection_item)
+        # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+        if collection_item:
+            player_inventory.search_in_inventory(settings.berry_type)
         player_inventory.transfer_all_inventory()
         capture_gacha_seed_deposit(f"{teleporter_name}_{direction}")
     inventory.close()
 
 
-def _drop_off_nocrop(teleporter_name: str, direction):
-    inventory.search_in_object("pell")
+def _drop_off_nocrop(teleporter_name: str, direction: str, collection_item: str = ""):
+    if collection_item:
+        inventory.search_in_object(collection_item)
+    else:
+        inventory.search_in_object("pell")
     inventory.transfer_all_from()
     inventory.wait_clear_search()
 
     capture_gacha_overcap_before_drop(f"{teleporter_name}_{direction}")
     time.sleep(0.1)
+
+    if collection_item:
+        inventory.search_in_object(settings.berry_type)
     inventory.drop_all_obj()

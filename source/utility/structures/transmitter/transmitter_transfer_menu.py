@@ -1,7 +1,5 @@
 import time
 
-import pyautogui
-
 import settings
 from source.ASA import config
 from source.ASA.player import console, player_inventory, player_state
@@ -10,7 +8,7 @@ from source.gacha_bot import render
 from source.join_sim.source import main
 from source.join_sim.source.menus import success
 from source.logs import gachalogs as logs
-from source.utility import template, utils, utils_simple, windows
+from source.utility import ark_input, template, utils, utils_simple, windows
 from source.utility.structures.transmitter import transmitter
 
 buttons = {
@@ -122,7 +120,7 @@ def search_bar_search(server: str):
     if not is_open():
         return False
 
-    windows.move_mouse(*get_pixel_loc("server_search"))
+    windows.game_move_mouse(*get_pixel_loc("server_search"))
 
     windows.click(*get_pixel_loc("server_search"))
     windows.click(*get_pixel_loc("server_search"))
@@ -319,7 +317,7 @@ def do_join_server(server: str, *, should_go_tekpod=True):
 
                     if is_open():
                         search_bar_search("Joining...")
-                        pyautogui.click(2, 2)
+                        ark_input.click(2, 2)
 
                     if template.template_await_true(sign_of_uploaded, 30):  # noqa: SIM103
                         # Return False intentionally to trigger one additional verification cycle.

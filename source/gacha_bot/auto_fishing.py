@@ -1,12 +1,10 @@
 import time
 from typing import cast
 
-import pyautogui
-
 import source.logs.gachalogs as logs
 from source.ASA.player import player_state
 from source.launcher.utils import deposit_helper_capture
-from source.utility import template, utils, utils_simple
+from source.utility import ark_input, template, utils, utils_simple
 from source.utility.types import RoiRegion, RoiRegionKey
 
 CLICK_INTERVAL = 0.2
@@ -110,7 +108,7 @@ def _cast_until_prompt():
     while not is_key_prompt():
         player_state.check_disconnected()
 
-        pyautogui.click()
+        ark_input.click()
         time.sleep(CLICK_INTERVAL)
 
 

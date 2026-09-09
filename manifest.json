@@ -1,9 +1,15 @@
 {
-  "version": "1.0.3",
-  "released_at": "2026-08-11",
-  "title": "GBot[Shen] - Auto Key and more fixes",
+  "version": "1.0.4",
+  "released_at": "2026-09-09",
+  "title": "Pausable, Gacha collection and Crafters",
   "changelog": [
-    "Added Auto Key tool(Under settings/launcher).",
-    "Requested by IDean, have fun!"
+    "Added Pausable feature, when GBot run, hit ESC ingame or switch tabs to pause GBot.",
+    "If you want to Alt+Tab with Pause, disable [Allow focus ARK window] in Settings/Launcher.",
+    "Added Gacha collection feature(Settings/Gacha/Gacha Collection), you can now collect Gacha items such as Phoenix Silica, snail paste, etc.",
+    "Added Crafters feature(Settings/Craft), you can now craft items such as Polymer, can craft with multiple crafters.",
+    "Added loading animation on startup.",
+    "Rework Autokey, now you can trigger faster with default F1+[key], support 'W' key.",
+    "Optimize Server Transfer, update its detection due to Steam changes.",
+    "Optimize multiple automations and detections."
   ]
 }

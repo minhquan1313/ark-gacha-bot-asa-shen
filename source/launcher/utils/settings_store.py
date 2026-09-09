@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 
 from source.launcher.config.constants import (
+    AUTO_KEYS_ACTIONS,
     DEFAULT_SETTINGS,
     PHONE_MINIMUM_SIZE,
     SETTINGS_FILE,
@@ -18,14 +19,22 @@ def _normalize_settings(data: dict):
     auto_keys = data.get("auto_keys", {})
     if not isinstance(auto_keys, dict):
         auto_keys = {}
+    action_settings = auto_keys.get("actions", {})
+    if not isinstance(action_settings, dict):
+        action_settings = {}
     normalized["auto_keys"] = {
         "enabled": bool(auto_keys.get("enabled", False)),
+        "activation_key": _activation_key(auto_keys.get("activation_key", "F1")),
         "interval": _positive_float(
             auto_keys.get("interval", 0.25), "auto_keys.interval"
         ),
         "hold_duration": _positive_float(
             auto_keys.get("hold_duration", 1.0), "auto_keys.hold_duration"
         ),
+        "actions": {
+            action: bool(action_settings.get(action, True))
+            for action in AUTO_KEYS_ACTIONS
+        },
     }
     normalized.update(
         {
@@ -48,6 +57,14 @@ def _normalize_settings(data: dict):
         PHONE_MINIMUM_SIZE[1], int(normalized["launcher_height"])
     )
     return normalized
+
+
+def _activation_key(value: object):
+    """Normalize the single keyboard key used to arm Auto Keys."""
+    key = str(value).strip().upper()
+    if not key or key in {"SHIFT", "CTRL", "ALT", "WIN", "META"}:
+        return "F1"
+    return key
 
 
 def _positive_float(value: object, name: str):

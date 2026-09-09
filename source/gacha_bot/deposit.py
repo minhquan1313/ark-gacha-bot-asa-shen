@@ -5,7 +5,10 @@ import source.gacha_bot.config
 from source.ASA.player import player_inventory, player_state
 from source.ASA.strucutres import inventory, teleporter
 from source.gacha_bot import pego
-from source.gacha_bot.deposit_config import DEDI_CONFIG_PATH
+from source.gacha_bot.deposit_config import (
+    DEDI_CONFIG_PATH,
+    collection_destination_error,
+)
 from source.gacha_bot.deposit_config import load_deposit_config as load_route_config
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, variables, windows
@@ -17,6 +20,8 @@ from source.utility.debug_screenshots import (
 )
 from source.utility.structures.dedi import dedi
 from source.utility.types import (
+    CrafterStorageState,
+    CraftRoute,
     CrystalDepositRoute,
     DediStorageContainer,
     DediStorageState,
@@ -79,16 +84,20 @@ def _items(container: DediStorageContainer | VaultStorageContainer | VaultStorag
     return container["items"]
 
 
-def _route_teleport_name(route: DepositRouteBase):
+def _route_teleport_name(route: DepositRouteBase | CraftRoute):
     teleport_name = route.get("teleport")
     if not teleport_name:
         raise RuntimeError("Deposit route is missing a teleport name.")
     return teleport_name
 
 
-def _teleport_to_route(route: DepositRouteBase):
+def _teleport_to_route(route: DepositRouteBase | CraftRoute, *, cached=False):
     teleport_name = _route_teleport_name(route)
     logs.logger.debug(f"Teleporting to deposit route {teleport_name}")
+
+    if cached and teleporter._last_teleporter_name == teleport_name:
+        logs.logger.debug(f"Using cached teleport to {teleport_name}")
+        return teleport_name
 
     teleporter.teleport_not_default(teleport_name)
 
@@ -156,6 +165,7 @@ def open_crystals():
 
 
 def drop_useless():
+    player_state.human.reset_crouch()
     player_inventory.open()
     if player_inventory.is_open:
         player_inventory.drop_all_inv()
@@ -167,7 +177,7 @@ def process_fast_dedi(
     route: DepositRouteBase,
     item: DediStorageState,
     index: int,
-    _type: Literal["crystal", "grinder"] = "crystal",
+    _type: str = "crystal",
 ):
     teleport_name = _route_teleport_name(route)
     label = f"{'Crystal' if _type == 'crystal' else 'Grindable'} dedi {index} on teleport {teleport_name}"
@@ -277,7 +287,12 @@ def _process_crystal_routes(
     route: CrystalDepositRoute,
     open_first_route_crystals: bool = False,
 ):
+    global g_is_still_have_items
     route_metadata = _teleport_to_route(route)
+
+    if not pego.is_crystal_hotbar_visible():
+        g_is_still_have_items = False
+        return
 
     if open_first_route_crystals:
         logs.logger.debug("opening crystals")
@@ -303,8 +318,8 @@ def _first_active_grinder_index(routes: list[GrindableDepositRoute]):
 
 def process_dedi_list_route(
     route: DepositRouteBase,
-    route_metadata: str,
-    _type: Literal["crystal", "grinder"] = "crystal",
+    teleporter: str,
+    _type: Literal["crystal", "grinder", "crafter"] = "crystal",
 ):
     global g_is_still_have_items
     if not g_is_still_have_items:
@@ -324,7 +339,7 @@ def process_dedi_list_route(
             continue
 
         with inventory.detect_lag_long_process():
-            dedi.open_deposit_all(route_metadata, item)
+            dedi.open_deposit_all(teleporter, item)
 
             # if not is_last_dedi:
             #     utils.get_yaw_pitch()
@@ -343,6 +358,9 @@ def process_dedi_list_route(
                 for retry_index in range(batch_start_index, index + 1):
                     retry_item = dedi_list[retry_index]
                     process_fast_dedi(route, retry_item, retry_index, _type)
+
+            if not is_last_dedi:
+                utils.get_yaw_pitch(reset_state=False)
 
         batch_start_index = index + 1
     return True
@@ -391,6 +409,109 @@ def _process_grindable_routes(routes: list[GrindableDepositRoute]):
     return True
 
 
+def resolve_collection_destination(dedi_teleport: str):
+    """Resolve one unambiguous, usable teleport before collecting materials."""
+    config = load_deposit_config()
+    error = collection_destination_error(config, dedi_teleport)
+    if error:
+        logs.logger.warning(f"Collection destination {dedi_teleport!r}: {error}")
+        return None
+    for routes in (
+        config["depositCrystalData"],
+        config["depositGrindableData"],
+        config["depositGeneralData"],
+    ):
+        for route in routes:
+            if route["teleport"] == dedi_teleport:
+                return route
+    return None
+
+
+def deposit_collection(route: DepositRouteBase):
+    """Deposit collected materials only into this station's dedicated storage."""
+    global g_is_still_have_items
+    g_is_still_have_items = True
+    _teleport_to_route(route)
+    utils.get_yaw_pitch()
+    return _deposit_collect_items(route, route["dedi"]["items"], "source-item")
+
+
+def _deposit_collect_items(
+    route: DepositRouteBase, items: list[DediStorageState], label: str
+):
+    """Deposit the player's current inventory through one collect-route dedi list."""
+    if not items:
+        logs.logger.warning(
+            f"No {label} dedis configured on collect route {_route_teleport_name(route)}."
+        )
+        return False
+    teleporter = _route_teleport_name(route)
+    collect_route: DepositRouteBase = {
+        "teleport": route["teleport"],
+        "check_on_every_dedi": route["check_on_every_dedi"],
+        "dedi": {"items": items},
+    }
+    return process_dedi_list_route(collect_route, teleporter, "crafter")
+
+
+def open_crafter(crafter: CrafterStorageState):
+    dl = utils_simple.get_default_clock()
+    while not inventory.is_open():
+        if dl():
+            logs.logger.error("Crafter inventory could not be opened.")
+            return False
+
+        inventory.open()
+        if not inventory.is_open():
+            logs.logger.error("Crafter inventory could not be opened, retrying...")
+            player_state.check_state()
+            utils.get_yaw_pitch()
+            _turn_to_object(crafter)
+
+    return True
+
+
+def craft(route: CraftRoute):
+    """Visit one teleport and deposit each crafter's output into shared dedis."""
+    global g_is_still_have_items
+    g_is_still_have_items = True
+    crafters = [crafter for crafter in route["crafters"] if crafter["item"].strip()]
+    dedis = route["dedi"]["items"]
+    if not route["teleport"].strip() or not dedis or not crafters:
+        return False
+    _teleport_to_route(route, cached=True)
+
+    for i, crafter in enumerate(crafters):
+        player_state.check_disconnected()
+        utils.get_yaw_pitch()
+        _turn_to_object(crafter)
+        if not open_crafter(crafter):
+            return False
+        if not inventory.is_turned_on():
+            inventory.turn_on()
+            time.sleep(1)
+        inventory.craft_item(crafter["item"], 12)
+        inventory.transfer_all_from()
+        inventory.wait_clear_search()
+        inventory.close()
+
+        # Ensure the crafter interaction has completed before depositing output.
+        if not open_crafter(crafter):
+            return False
+        inventory.close()
+        g_is_still_have_items = player_inventory.g_last_check_can_drop
+
+        if not g_is_still_have_items:
+            logs.logger.warning(
+                f"Stop craft from crafter {i + 1}[{crafter['item']}] as detected no resource to craft"
+            )
+            return True
+
+        if not _deposit_collect_items(route, dedis, "crafted-item"):
+            return False
+    return True
+
+
 def deposit_all():
     global g_is_still_have_items
     g_is_still_have_items = True
@@ -399,10 +520,13 @@ def deposit_all():
     crystal_routes = deposit_config["depositCrystalData"]
     grindable_routes = deposit_config["depositGrindableData"]
     for index, route in enumerate(crystal_routes):
-        _process_crystal_routes(
-            route,
-            open_first_route_crystals=index == 0,
-        )
+        if g_is_still_have_items:
+            _process_crystal_routes(
+                route,
+                open_first_route_crystals=index == 0,
+            )
+        else:
+            break
 
     return (
         _process_grindable_routes(grindable_routes) if g_is_still_have_items else True

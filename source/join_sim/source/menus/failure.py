@@ -1,10 +1,9 @@
 import time
 
-import pyautogui
-
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.menus import multiplayer_menu
 from source.join_sim.source.utility import recon_utils
+from source.utility import ark_input
 
 buttons = {
     "search_x": 1672,
@@ -47,7 +46,7 @@ def no_sessions():
 
 
 def click_go_back():
-    pyautogui.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
+    ark_input.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
     time.sleep(0.5)
 
 
@@ -56,7 +55,7 @@ def has_failure(should_go_back=True):
     if is_server_full():
         logs.logger.debug("Server full")
 
-        pyautogui.click(get_pixel_loc("cancel_x"), get_pixel_loc("cancel_y"))
+        ark_input.click(get_pixel_loc("cancel_x"), get_pixel_loc("cancel_y"))
         recon_utils.window_still_open_no_bounds("server_full", 0.7, 2)
         time.sleep(0.3)
 
@@ -67,7 +66,7 @@ def has_failure(should_go_back=True):
     if is_red_fail():
         logs.logger.debug("Red fail")
 
-        pyautogui.click(get_pixel_loc("red_okay_x"), get_pixel_loc("red_okay_y"))
+        ark_input.click(get_pixel_loc("red_okay_x"), get_pixel_loc("red_okay_y"))
         recon_utils.window_still_open_no_bounds("red_fail", 0.7, 2)
         time.sleep(0.3)
 

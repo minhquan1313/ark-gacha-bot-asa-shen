@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from source.gacha_bot.craft_config import default_crafter
 from source.gacha_bot.deposit_config import default_dedi_item, default_vault_item
 from source.launcher.components.custom_pyside_component import NoWheelComboBox
 from source.launcher.components.helper_window import BaseHelperWindow
@@ -55,7 +56,7 @@ class DepositHelperGuide(QDialog):
         ),
         (
             "STEP 3 / AIM AT TARGET",
-            "Aim at the dedi, vault, or grinder until the in-game deposit/access prompt is visible.",
+            "Aim at the dedi, vault, grinder, or crafter until the in-game deposit/access prompt is visible.",
             "logo",
         ),
         (
@@ -305,16 +306,25 @@ class DepositRouteHelper(BaseHelperWindow):
 
     @staticmethod
     def _title_for(owner, route_kind, route_index):
-        prefix = "Crystal" if route_kind == "crystal" else "Grindable"
-        key = (
-            "depositCrystalData" if route_kind == "crystal" else "depositGrindableData"
-        )
-        route = owner.deposit_config[key][route_index]
+        prefix, key = DepositRouteHelper._route_metadata(route_kind)
+        config = owner.craft_config if route_kind == "craft" else owner.deposit_config
+        route = config[key][route_index]
         teleport = route.get("teleport", "")
         return f"{prefix}: {teleport or 'NO TELEPORT'}"
 
+    @staticmethod
+    def _route_metadata(route_kind):
+        """Return the display prefix and config key for a helper route kind."""
+        metadata = {
+            "crystal": ("Crystal", "depositCrystalData"),
+            "grindable": ("Grindable", "depositGrindableData"),
+            "general": ("General dedi", "depositGeneralData"),
+            "craft": ("General Craft", "generalCraftData"),
+        }
+        return metadata[route_kind]
+
     def _title(self):
-        prefix = "Crystal" if self.route_kind == "crystal" else "Grindable"
+        prefix, _key = self._route_metadata(self.route_kind)
         route = self.route()
         teleport = route.get("teleport", "")
         return f"{prefix}: {teleport or 'NO TELEPORT'}"
@@ -337,12 +347,13 @@ class DepositRouteHelper(BaseHelperWindow):
         self.sync_window_opacity()
 
     def route(self):
-        key = (
-            "depositCrystalData"
-            if self.route_kind == "crystal"
-            else "depositGrindableData"
+        _prefix, key = self._route_metadata(self.route_kind)
+        config = (
+            self.owner.craft_config
+            if self.route_kind == "craft"
+            else self.owner.deposit_config
         )
-        return self.owner.deposit_config[key][self.route_index]
+        return config[key][self.route_index]
 
     def refresh_rows(self, focus_target=None, preserve_state=True):
         row_state = self._row_state() if preserve_state else {}
@@ -366,10 +377,21 @@ class DepositRouteHelper(BaseHelperWindow):
             for index, entry in enumerate(route["vault"]["items"]):
                 self._add_row("vault", index, entry, focus_target, row_state)
             self._add_combo_row("vault")
-        else:
+        elif self.route_kind == "grindable":
             self._add_section_label("GRINDER", 1)
             self._add_row("grinder", 0, route["grinder"], focus_target, row_state)
             self._add_section_label("DEDIS", len(route["dedi"]["items"]))
+            for index, entry in enumerate(route["dedi"]["items"]):
+                self._add_row("dedi", index, entry, focus_target, row_state)
+            self._add_combo_row("dedi")
+        else:
+            if self.route_kind == "craft":
+                self._add_section_label("CRAFTERS", len(route["crafters"]))
+                for index, crafter in enumerate(route["crafters"]):
+                    self._add_row("crafter", index, crafter, focus_target, row_state)
+                self._add_combo_row("crafter")
+            label = "CRAFTED ITEMS DEDIS" if self.route_kind == "craft" else "DEDIS"
+            self._add_section_label(label, len(route["dedi"]["items"]))
             for index, entry in enumerate(route["dedi"]["items"]):
                 self._add_row("dedi", index, entry, focus_target, row_state)
             self._add_combo_row("dedi")
@@ -442,6 +464,10 @@ class DepositRouteHelper(BaseHelperWindow):
             route["dedi"]["items"].append(default_dedi_item())
             index = len(route["dedi"]["items"]) - 1
             return route["dedi"]["items"][index], index
+        if kind == "crafter" and self.route_kind == "craft":
+            route["crafters"].append(default_crafter())
+            index = len(route["crafters"]) - 1
+            return route["crafters"][index], index
         if kind == "vault" and self.route_kind == "crystal":
             route["vault"]["items"].append(default_vault_item())
             index = len(route["vault"]["items"]) - 1
@@ -458,6 +484,8 @@ class DepositRouteHelper(BaseHelperWindow):
             route["grinder"]["location"] = {"yaw": 0.0, "pitch": 0.0}
             route["grinder"]["crouched"] = False
             route["grinder"]["active"] = False
+        elif kind == "crafter":
+            del route["crafters"][index]
         self.save_and_refresh()
 
     def capture_existing(self, kind, index):
@@ -572,6 +600,8 @@ class DepositRouteHelper(BaseHelperWindow):
             return route["dedi"]["items"][index]
         if kind == "vault":
             return route["vault"]["items"][index]
+        if kind == "crafter":
+            return route["crafters"][index]
         return route["grinder"]
 
     def update_float(self, entry, key, field):
@@ -590,6 +620,11 @@ class DepositRouteHelper(BaseHelperWindow):
 
     def update_active(self, entry, checked):
         entry["active"] = bool(checked)
+        self.save()
+
+    def update_crafter_item(self, entry, field):
+        """Persist the crafted-item search text from a crafter helper row."""
+        entry["item"] = field.text()
         self.save()
 
     def update_vault_item(self, vault, index, combo):
@@ -612,7 +647,12 @@ class DepositRouteHelper(BaseHelperWindow):
         self.save_and_refresh(self._target_for_entry(vault))
 
     def save(self):
-        if self.owner.save_deposit_routes(show_log=False):
+        save_routes = (
+            self.owner.save_craft_routes
+            if self.route_kind == "craft"
+            else self.owner.save_deposit_routes
+        )
+        if save_routes(show_log=False):
             self.status.setText("Saved.")
             return True
         self.status.setText("Save failed.")
@@ -707,6 +747,8 @@ class CollapsibleHelperRow(QFrame):
 
         if self.kind == "vault":
             self._add_vault_items(detail)
+        elif self.kind == "crafter":
+            self._add_crafter_item(detail)
 
         self.details.setVisible(False)
         self.root.addWidget(self.details)
@@ -767,6 +809,23 @@ class CollapsibleHelperRow(QFrame):
         add.clicked.connect(lambda: self.helper.add_vault_item_row(self.entry))
         layout.addWidget(add, alignment=Qt.AlignmentFlag.AlignRight)
 
+    def _add_crafter_item(self, layout):
+        """Add the crafted-item search editor to the crafter row details."""
+        row = QHBoxLayout()
+        label = QLabel("Crafted item")
+        label.setObjectName("FormLabel")
+        field = QLineEdit(str(self.entry.get("item", "")))
+        field.setObjectName("SettingField")
+        field.editingFinished.connect(
+            lambda editor=field: self.helper.update_crafter_item(self.entry, editor)
+        )
+        field.returnPressed.connect(
+            lambda editor=field: self.helper.update_crafter_item(self.entry, editor)
+        )
+        row.addWidget(label)
+        row.addWidget(field, 1)
+        layout.addLayout(row)
+
     def toggle(self):
         self.expanded = not self.expanded
         self.details.setVisible(self.expanded)
@@ -806,7 +865,7 @@ class CollapsibleHelperRow(QFrame):
         suffix = " crouched" if self.entry.get("crouched", False) else ""
         if self.kind == "grinder":
             active = " active" if self.entry.get("active", False) else ""
-            return f"GRINDER   yaw {yaw}   pitch {pitch}{suffix}{active}"
+            return f"{self.kind.upper()}   yaw {yaw}   pitch {pitch}{suffix}{active}"
         return (
             f"{self.kind.upper()} {self.index + 1}   yaw {yaw}   pitch {pitch}{suffix}"
         )
@@ -821,10 +880,11 @@ class AddCaptureRow(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
-        add = helper._icon_button(f"Add {kind.capitalize()}", f"Add blank {kind}")
+        label = "Crafted Dedi" if kind == "crafted_dedi" else kind.capitalize()
+        add = helper._icon_button(f"Add {label}", f"Add blank {label.lower()}")
         add.clicked.connect(lambda checked=False: helper.add_entry(kind))
         capture = helper._icon_button(
-            "Capture Add", f"Capture yaw and pitch for a new {kind}"
+            "Capture Add", f"Capture yaw and pitch for a new {label.lower()}"
         )
         capture.clicked.connect(lambda checked=False: helper.capture_new(kind))
         layout.addWidget(add, 1)

@@ -1,6 +1,8 @@
 import math
 import subprocess
+import sys
 import time
+import weakref
 from typing import Literal, TypeAlias, cast
 
 import settings
@@ -80,6 +82,23 @@ def grid_loc_gen(
     return gen
 
 
+_live_clocks: weakref.WeakSet["TimedOutCounter"] = weakref.WeakSet()
+
+
+def reset_all_clocks():
+    """Restart every live clock with its full configured duration."""
+    for clock in list(_live_clocks):
+        clock.reset()
+
+
+def adjust_clocks_after_pause(paused_at: float, resumed_at: float):
+    """Exclude paused time since each live clock's latest start or reset."""
+    for clock in list(_live_clocks):
+        paused_seconds = max(0.0, resumed_at - max(paused_at, clock._started))
+        clock._started += paused_seconds
+        clock._timeout += paused_seconds
+
+
 class TimedOutCounter:
     """Track whether a configurable timeout duration has elapsed."""
 
@@ -90,6 +109,7 @@ class TimedOutCounter:
     def __init__(self, limit_seconds: float = 3.0):
         self.limit_seconds = limit_seconds
         self.reset()
+        _live_clocks.add(self)
 
     def __call__(self):
         """Return True when the timeout duration has elapsed."""
@@ -99,6 +119,9 @@ class TimedOutCounter:
         """Restart the timeout countdown using the current duration."""
         self._started = time.monotonic()
         self._timeout = self._started + self.limit_seconds
+
+    def force_timed_out(self):
+        self._timeout = time.monotonic() - 1
 
     def eslapsed(self):
         return time.monotonic() - self._started
@@ -140,6 +163,10 @@ def get_default_timeout_value():
 
 def start_subprocess(cmd: list[str], *args, **kwargs):
     """Start a child process while retaining its command and adding its app id."""
+    if sys.platform == "win32":
+        kwargs["creationflags"] = (
+            kwargs.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
+        )
     return subprocess.Popen(
         [*cmd, "--app-id", APP_ID],
         *args,

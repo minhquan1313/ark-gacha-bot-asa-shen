@@ -6,12 +6,70 @@ from source.utility.types import (
     CrystalDepositRoute,
     DediStorageState,
     DepositConfig,
+    DepositRouteBase,
     GrindableDepositRoute,
     GrinderStorageState,
     VaultStorageState,
 )
 
 DEDI_CONFIG_PATH = Path("json_files/dedis.json")
+
+
+def deposit_destination_options(config: DepositConfig):
+    """List each nonblank teleport once for the collection pair selector."""
+    return list(
+        dict.fromkeys(
+            route["teleport"]
+            for routes in (
+                config["depositCrystalData"],
+                config["depositGrindableData"],
+                config["depositGeneralData"],
+            )
+            for route in routes
+            if route["teleport"].strip()
+        )
+    )
+
+
+def validate_deposit_teleports(config: DepositConfig):
+    """Reject ambiguous nonblank destination names when saving configuration."""
+    names = [
+        route["teleport"]
+        for routes in (
+            config["depositCrystalData"],
+            config["depositGrindableData"],
+            config["depositGeneralData"],
+        )
+        for route in routes
+        if route["teleport"].strip()
+    ]
+    if len(names) != len(set(names)):
+        raise ValueError(
+            "Dedi teleport names must be unique across Crystal, Grindable, and General dedi."
+        )
+
+
+def collection_destination_error(config: DepositConfig, teleport: str):
+    """Explain why a selected teleport cannot receive collected materials."""
+    if not teleport.strip():
+        return "Select a Dedi destination."
+    matches = [
+        route
+        for routes in (
+            config["depositCrystalData"],
+            config["depositGrindableData"],
+            config["depositGeneralData"],
+        )
+        for route in routes
+        if route["teleport"] == teleport
+    ]
+    if not matches:
+        return "Station missing. Reselect Dedi."
+    if len(matches) != 1:
+        return "Duplicate teleport name. Rename the stations and reselect Dedi."
+    if not matches[0]["dedi"]["items"]:
+        return "Station has no dedis. Configure it or reselect Dedi."
+    return ""
 
 
 def default_deposit_config(
@@ -38,6 +96,7 @@ def default_deposit_config(
                 "dedi": {"items": []},
             }
         ],
+        "depositGeneralData": [],
     }
 
 
@@ -63,6 +122,16 @@ def default_grindable_route() -> GrindableDepositRoute:
     }
 
 
+def default_general_route():
+    """Create a source-material deposit station for collected items."""
+    route: DepositRouteBase = {
+        "teleport": "",
+        "check_on_every_dedi": 6,
+        "dedi": {"items": []},
+    }
+    return route
+
+
 def default_dedi_item() -> DediStorageState:
     return {"location": {"yaw": 0.0, "pitch": 0.0}, "crouched": False}
 
@@ -77,19 +146,26 @@ def normalize_deposit_config(data: object) -> DepositConfig:
 
     crystal_routes = data.get("depositCrystalData")
     grindable_routes = data.get("depositGrindableData")
+    general_routes = data.get("depositGeneralData")
     if not isinstance(crystal_routes, list):
         raise ValueError("depositCrystalData must be an array.")
     if not isinstance(grindable_routes, list):
         raise ValueError("depositGrindableData must be an array.")
+    if not isinstance(general_routes, list):
+        raise ValueError("depositGeneralData must be an array.")
 
-    return {
+    normalized = {
         "depositCrystalData": [
             _normalize_crystal_route(route) for route in crystal_routes
         ],
         "depositGrindableData": [
             _normalize_grindable_route(route) for route in grindable_routes
         ],
+        "depositGeneralData": [
+            normalize_general_route(route) for route in general_routes
+        ],
     }
+    return cast(DepositConfig, normalized)
 
 
 def load_deposit_config(
@@ -112,7 +188,8 @@ def load_deposit_config(
 
     with path.open("r", encoding="utf-8") as file:
         raw_data = cast(object, json.load(file))
-        return normalize_deposit_config(raw_data)
+        normalized = normalize_deposit_config(raw_data)
+    return normalized
 
 
 def save_deposit_config(
@@ -120,6 +197,7 @@ def save_deposit_config(
 ) -> DepositConfig:
     path = Path(path)
     normalized = normalize_deposit_config(data)
+    validate_deposit_teleports(normalized)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as file:
         json.dump(normalized, file, indent=2)
@@ -152,6 +230,21 @@ def _normalize_grindable_route(route: object) -> GrindableDepositRoute:
     }
 
 
+def normalize_general_route(route: object):
+    """Normalize the shared teleport and dedi fields of a station."""
+    if not isinstance(route, dict):
+        route = {}
+    normalized: DepositRouteBase = {
+        "teleport": str(route.get("teleport", "")),
+        "check_on_every_dedi": _positive_int_value(
+            route.get("check_on_every_dedi", 6), "check_on_every_dedi"
+        ),
+        "dedi": {"items": _normalize_object_items(route.get("dedi", {}))},
+    }
+
+    return normalized
+
+
 def _normalize_object_items(container: object) -> list[DediStorageState]:
     if not isinstance(container, dict):
         return []
@@ -170,15 +263,16 @@ def _normalize_vault_items(container: object) -> list[VaultStorageState]:
     return [_normalize_vault(item) for item in items]
 
 
-def _normalize_grinder(item: object) -> GrinderStorageState:
+def _normalize_grinder(item: object):
     if not isinstance(item, dict):
         item = {}
     normalized = _normalize_object(item)
-    return {
+    obj: GrinderStorageState = {
         "active": bool(item.get("active", False)),
         "location": normalized["location"],
         "crouched": normalized["crouched"],
     }
+    return obj
 
 
 def _normalize_object(item: object) -> DediStorageState:

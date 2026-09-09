@@ -87,8 +87,7 @@ def berry_station():
 
 def _seed_reset():
     inventory.transfer_all_from()  # doing this should prevent the seed not appearing first try
-    player_inventory.search_in_inventory(settings.berry_type)
-    player_inventory.transfer_all_inventory()
+    player_inventory.search_and_transfer(settings.berry_type)
 
 
 def seed(type):
@@ -116,8 +115,8 @@ def seed(type):
             iguanadon_open()
 
         time.sleep(0.1)
-    inventory.close()
 
+    inventory.close()
     utils.press_key("Use")
     time.sleep(2)
 

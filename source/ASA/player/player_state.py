@@ -7,7 +7,7 @@ from source.ASA.strucutres import bed, teleporter
 from source.join_sim.source import main
 from source.join_sim.source.menus import success
 from source.logs import gachalogs as logs
-from source.utility import template, utils, utils_simple
+from source.utility import action_gate, ark_runtime, template, utils, utils_simple
 from source.utility.debug_screenshots import (
     CAPTURE_PLAYER_STATE,
     capture_for,
@@ -98,6 +98,9 @@ def smart_wait_structure_with_teleport(
                 return False
 
             logs.logger.warning("teleporter didnt open retrying now")
+
+            utils.press_key("Jump")
+            time.sleep(1.3)
             # check state of char which should close out of any windows we are in or rejoin the game
             check_state()
 
@@ -114,13 +117,14 @@ def smart_wait_structure_with_teleport(
 
 
 def check_disconnected():
-    if main.is_menu() or main.is_crashed():
+    action_gate.before_ark_action()
+    crashed = main.is_crashed()
+    menu = ark_runtime.is_ark_foreground() and main.is_menu()
+    if crashed or menu:
         logs.enable_log()
 
         logs.logger.critical("We are disconnected from the server", exc_info=True)
-        # DEBUG START
         capture_state("disconnected")
-        # DEBUG END
         main.main_loop(settings.server_number)
         tribelog.close()
         if not bed.is_open():
@@ -128,13 +132,12 @@ def check_disconnected():
             logs.logger.warning(
                 f"joined back into the server waiting {settings.wait_structure_load} seconds to render everything "
             )
-            # DEBUG START
             capture_state("joined")
-            # DEBUG END
             if success.was_has_logs:
                 # letting everything load back in
                 smart_wait_structure_with_teleport()
         return True
+
     return False
 
 
@@ -159,9 +162,11 @@ def reset_state(crouch=True):
 def check_state(*, crouch=True, should_replesh=True, should_wait_structure=True):
     # mainliy checked at the start of every task to check for food / water on the char
     if check_disconnected():
+        utils.was_initialized = False
         return
 
     reset_state(crouch)
+    logs.logger.debug("Checking player buff")
     buff = buffs.check_buffs()
     type = buff.check_buffs()
     if type == 1 or source.gacha_bot.render.render_flag:

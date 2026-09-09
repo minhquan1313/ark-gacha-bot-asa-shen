@@ -13,6 +13,7 @@ from source.launcher.pages.common import (
     default_crystal_route,
     default_dedi_item,
     default_deposit_config,
+    default_general_route,
     default_grindable_route,
     default_vault_item,
     load_deposit_config,
@@ -28,8 +29,12 @@ class DediPagesMixin:
             self.deposit_route_card_expanded = {}
         crystal_routes = self.deposit_config["depositCrystalData"]
         grindable_routes = self.deposit_config["depositGrindableData"]
+        collect_routes = self.deposit_config["depositGeneralData"]
         heading = QLabel(
-            _counted_title("DEDI SETTINGS", len(crystal_routes) + len(grindable_routes))
+            _counted_title(
+                "DEDI SETTINGS",
+                len(crystal_routes) + len(grindable_routes) + len(collect_routes),
+            )
         )
         heading.setObjectName("SectionHeading")
         self.settings_form_layout.addWidget(heading, 0, 0, 1, 3)
@@ -41,22 +46,6 @@ class DediPagesMixin:
         content_layout.setSpacing(12)
         self.settings_form_layout.addWidget(content, 1, 0, 1, 4)
         self._style_template_collection(content, state, template_name, template_error)
-
-        storage_settings, storage_layout = self._panel("DEDI")
-        expand_row = QHBoxLayout()
-        expand_row.setSpacing(8)
-        expand_all = self._button("EXPAND ALL", "secondary")
-        collapse_all = self._button("COLLAPSE ALL", "secondary")
-        expand_all.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        collapse_all.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        expand_all.clicked.connect(lambda: self.set_storage_routes_expanded(True))
-        collapse_all.clicked.connect(lambda: self.set_storage_routes_expanded(False))
-        expand_row.addWidget(expand_all)
-        expand_row.addWidget(collapse_all)
-        storage_layout.addLayout(expand_row)
-        content_layout.addWidget(storage_settings)
 
         crystal_heading = QLabel(
             _counted_title("CRYSTAL DEPOSIT ROUTES", len(crystal_routes))
@@ -85,6 +74,18 @@ class DediPagesMixin:
         )
         add_grindable.clicked.connect(self.add_grindable_route)
         content_layout.addWidget(add_grindable)
+
+        collect_heading = QLabel(_counted_title("GENERAL DEDI", len(collect_routes)))
+        collect_heading.setObjectName("PanelTitle")
+        content_layout.addWidget(collect_heading)
+        for route_index, route in enumerate(collect_routes):
+            content_layout.addWidget(self._general_route_card(route, route_index))
+        add_collect = self._button("ADD GENERAL DEDI", "secondary")
+        add_collect.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        add_collect.clicked.connect(self.add_general_route)
+        content_layout.addWidget(add_collect)
         content_layout.addStretch()
 
     def _crystal_route_card(self, route: dict, route_index: int):
@@ -191,7 +192,36 @@ class DediPagesMixin:
         layout.addWidget(add_dedi)
         return card
 
-    def _deposit_route_card(self, title, remove_handler, helper_handler):
+    def _general_route_card(self, route: dict, route_index: int):
+        card, layout = self._deposit_route_card(
+            _counted_title(
+                f"GENERAL DEDI {route_index + 1}", len(route["dedi"]["items"])
+            ),
+            lambda checked=False, index=route_index: self.remove_general_route(index),
+            lambda checked=False, index=route_index: self.open_deposit_helper(
+                "general", index
+            ),
+        )
+        self._add_route_teleport_field(layout, route)
+        self._add_route_check_interval_field(layout, route)
+        self._add_deposit_subheading(layout, "DEDIS", len(route["dedi"]["items"]))
+        for item_index, item in enumerate(route["dedi"]["items"]):
+            layout.addLayout(
+                self._dedi_row(
+                    item,
+                    lambda checked=False, r=route_index, i=item_index: (
+                        self.remove_general_dedi(r, i)
+                    ),
+                )
+            )
+        add = self._button("ADD DEDI", "secondary")
+        add.clicked.connect(
+            lambda checked=False, index=route_index: self.add_general_dedi(index)
+        )
+        layout.addWidget(add)
+        return card
+
+    def _deposit_route_card(self, title, remove_handler, helper_handler=None):
         card = QFrame()
         card.setObjectName("DepositRouteCard")
         layout = QVBoxLayout(card)
@@ -204,19 +234,19 @@ class DediPagesMixin:
         toggle.setObjectName("HelperIconButton")
         label = QLabel(title)
         label.setObjectName("PanelTitle")
-        helper = self._button("[B]", "secondary")
-        helper.setObjectName("HelperIconButton")
-        helper.setToolTip(
-            "Open helper to add dedi and vault locations the easiest way."
-        )
-        # helper.setFixedSize(38, 30)
-        helper.clicked.connect(helper_handler)
         remove = self._icon_button("icon.trash_junk", "Remove route", "danger")
         remove.clicked.connect(remove_handler)
         header.addWidget(toggle)
         header.addWidget(label)
         header.addStretch()
-        header.addWidget(helper)
+        if helper_handler is not None:
+            helper = self._button("[B]", "secondary")
+            helper.setObjectName("HelperIconButton")
+            helper.setToolTip(
+                "Open helper to add dedi and vault locations the easiest way."
+            )
+            helper.clicked.connect(helper_handler)
+            header.addWidget(helper)
         header.addWidget(remove)
         layout.addLayout(header)
         body = QWidget()
@@ -371,6 +401,7 @@ class DediPagesMixin:
             self.deposit_config = {
                 "depositCrystalData": [default_crystal_route()],
                 "depositGrindableData": [default_grindable_route()],
+                "depositGeneralData": [default_general_route()],
             }
             self.append_log(f"[ERROR] Invalid deposit route config: {exc}\n")
             self.dialog("Invalid Deposit Routes", str(exc), "error")
@@ -386,9 +417,29 @@ class DediPagesMixin:
             self.append_log("[SUCCESS] Deposit routes saved automatically.\n")
         return True
 
+    def save_route_item(self, item: dict):
+        """Save a shared route field to the config that owns its object."""
+
+        def contains(container: object):
+            """Find the edited dictionary by identity without matching equal values."""
+            if container is item:
+                return True
+            if isinstance(container, dict):
+                return any(contains(value) for value in container.values())
+            if isinstance(container, list):
+                return any(contains(value) for value in container)
+            return False
+
+        if contains(getattr(self, "craft_config", {})):
+            return self.save_craft_routes()
+        return self.save_deposit_routes()
+
     def update_deposit_text(self, item, key, field):
+        previous = item.get(key, "")
         item[key] = field.text()
-        self.save_deposit_routes()
+        if not self.save_route_item(item):
+            item[key] = previous
+            field.setText(str(previous))
 
     def update_deposit_float(self, location, key, field):
         previous = location.get(key, 0.0)
@@ -401,7 +452,7 @@ class DediPagesMixin:
                 "Invalid Deposit Route", f"{key} must be a float number.", "error"
             )
             return
-        if not self.save_deposit_routes():
+        if not self.save_route_item(location):
             location[key] = previous
             field.setText(str(previous))
 
@@ -421,19 +472,19 @@ class DediPagesMixin:
                 "Invalid Deposit Route", f"{key} must be a positive integer.", "error"
             )
             return
-        if not self.save_deposit_routes():
+        if not self.save_route_item(item):
             item[key] = previous
             field.setText(str(previous))
 
     def update_deposit_bool(self, item, key, checked):
         item[key] = bool(checked)
-        self.save_deposit_routes()
+        self.save_route_item(item)
 
     def update_deposit_items(self, vault, field):
         vault["items"] = [
             item.strip() for item in field.text().split(",") if item.strip()
         ]
-        self.save_deposit_routes()
+        self.save_route_item(vault)
 
     def add_crystal_route(self):
         self.deposit_config["depositCrystalData"].append(default_crystal_route())
@@ -497,6 +548,34 @@ class DediPagesMixin:
         self.save_deposit_routes()
         self._render_settings_group("DEDI")
 
+    def add_general_route(self):
+        self.deposit_config["depositGeneralData"].append(default_general_route())
+        self.save_deposit_routes()
+        self._render_settings_group("DEDI")
+
+    def remove_general_route(self, route_index):
+        del self.deposit_config["depositGeneralData"][route_index]
+        self.save_deposit_routes()
+        self._render_settings_group("DEDI")
+
+    def add_general_dedi(self, route_index: int):
+        """Add a source-material dedi to a general station."""
+        key = "items"
+        self.deposit_config["depositGeneralData"][route_index]["dedi"][key].append(
+            default_dedi_item()
+        )
+        self.save_deposit_routes()
+        self._render_settings_group("DEDI")
+
+    def remove_general_dedi(self, route_index: int, item_index: int):
+        """Remove a source-material dedi from a general station."""
+        key = "items"
+        del self.deposit_config["depositGeneralData"][route_index]["dedi"][key][
+            item_index
+        ]
+        self.save_deposit_routes()
+        self._render_settings_group("DEDI")
+
     def reset_deposit_routes(self):
         self.deposit_config = default_deposit_config()
         self.save_deposit_routes(show_log=False)
@@ -507,15 +586,3 @@ class DediPagesMixin:
             "Deposit routes were reset and saved.",
             "info",
         )
-
-    def set_storage_routes_expanded(self, expanded):
-        self._ensure_deposit_config()
-        if not hasattr(self, "deposit_route_card_expanded"):
-            self.deposit_route_card_expanded = {}
-        for index, _route in enumerate(self.deposit_config["depositCrystalData"], 1):
-            self.deposit_route_card_expanded[f"CRYSTAL ROUTE {index}"] = bool(expanded)
-        for index, _route in enumerate(self.deposit_config["depositGrindableData"], 1):
-            self.deposit_route_card_expanded[f"GRINDABLE ROUTE {index}"] = bool(
-                expanded
-            )
-        self._render_settings_group("DEDI")

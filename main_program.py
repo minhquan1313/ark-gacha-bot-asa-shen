@@ -60,8 +60,8 @@ async def prepare_bot():
 
     await asyncio.to_thread(task_manager.prepare)
 
-    # Reset mouse position to center of the screen to prevent unintended movements when starting the program.
-    windows.move_mouse(1920 // 2, 1080 // 2)
+    # Reset mouse position to edge of the screen to prevent unintended movements when starting the program.
+    windows.move_mouse(2, 2)
 
     if settings.allow_focus_ark_window:
         focus_window(GAME_WINDOW_TITLE, settings.focus_ark_window_interval)
