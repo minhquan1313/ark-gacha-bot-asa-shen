@@ -19,7 +19,7 @@ exit /b %UPDATE_EXIT%
 
 :execute
 cd /d "%~dp0"
-set "BRANCH=stable_before_qml"
+set "BRANCH=stable_to_play"
 set "REMOTE_URL=https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git"
 
 if not exist ".git\" (
