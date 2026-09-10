@@ -29,6 +29,9 @@ MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
 KEYEVENTF_KEYUP = 0x0002
+KEYEVENTF_EXTENDEDKEY = 0x0001
+KEYEVENTF_SCANCODE = 0x0008
+MAPVK_VK_TO_VSC_EX = 4
 
 keymap = {
     "backspace": 0x08,
@@ -203,19 +206,58 @@ def action_up(input_action):
 
 
 def key_hold_down(input_action: str, *, should_pause: bool = True):
-    """Send a physical key down event, optionally waiting for automation to resume."""
+    """Send a scan-code down event and return its exact release identity."""
     if should_pause:
         action_gate.before_ark_action()
     input_key = local_player.get_input_settings(input_action)
     vk_code = keymap_return(input_key)
-    ctypes.windll.user32.keybd_event(vk_code, 0, 0, 0)
+    if vk_code is None:
+        raise ValueError(f"Unsupported held key: {input_key}")
+    held_key = _held_key_scan_code(vk_code)
+    _send_held_key(held_key, False)
+    return held_key
 
 
-def key_hold_up(input_action):
-    """Release a physical keyboard event started by ``key_hold_down``."""
-    input_key = local_player.get_input_settings(input_action)
-    vk_code = keymap_return(input_key)
-    ctypes.windll.user32.keybd_event(vk_code, 0, KEYEVENTF_KEYUP, 0)
+def key_hold_up(input_action: str | tuple[int, int]):
+    """Release the saved down identity, or resolve an action for legacy callers."""
+    if isinstance(input_action, tuple):
+        held_key = input_action
+    else:
+        input_key = local_player.get_input_settings(input_action)
+        vk_code = keymap_return(input_key)
+        if vk_code is None:
+            raise ValueError(f"Unsupported held key: {input_key}")
+        held_key = _held_key_scan_code(vk_code)
+    _send_held_key(held_key, True)
+
+
+def _held_key_scan_code(vk_code: int):
+    """Map a virtual key to the scan code and flags used for both transitions."""
+    scan = ctypes.windll.user32.MapVirtualKeyW(vk_code, MAPVK_VK_TO_VSC_EX)
+    if not scan:
+        raise ValueError(f"No scan code for held key 0x{vk_code:02X}")
+    flags = KEYEVENTF_SCANCODE
+    if scan & 0xFF00 == 0xE000:
+        flags |= KEYEVENTF_EXTENDEDKEY
+    return scan & 0xFF, flags
+
+
+def _send_held_key(held_key: tuple[int, int], released: bool):
+    """Submit one keyboard transition and reject unsuccessful native injection."""
+    scan, flags = held_key
+    event = windows.INPUT(type=windows.INPUT_KEYBOARD)
+    event.ki = windows.KEYBDINPUT(
+        wVk=0,
+        wScan=scan,
+        dwFlags=flags | (KEYEVENTF_KEYUP if released else 0),
+        time=0,
+        dwExtraInfo=0,
+    )
+    sent = ctypes.windll.user32.SendInput(
+        1, ctypes.byref(event), ctypes.sizeof(windows.INPUT)
+    )
+    if sent != 1:
+        raise OSError("SendInput failed to submit held keyboard input")
 
 
 def press_action(input_action, hold_duration=0.05):

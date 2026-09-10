@@ -43,12 +43,14 @@ class ActionGateTests(unittest.TestCase):
                 patch.object(utils, "keymap_return", return_value=0x45),
                 patch.object(utils.ctypes, "windll") as windll,
             ):
+                windll.user32.MapVirtualKeyW.return_value = 0x12
+                windll.user32.SendInput.return_value = 1
                 helper("Use", should_pause=False)
 
                 if helper is utils.action_down:
                     windll.user32.PostMessageW.assert_called_once_with(123, utils.WM_KEYDOWN, 0x45, 0)
                 else:
-                    windll.user32.keybd_event.assert_called_once_with(0x45, 0, 0, 0)
+                    windll.user32.SendInput.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -269,19 +269,22 @@ class AutoKeysPollingTests(unittest.TestCase):
         runtime.hold_duration = 1.0
         runtime._bindings = {binding: "MoveForward"}
         with (
-            patch("source.utility.utils.key_hold_down") as key_hold_down,
+            patch("source.utility.utils.key_hold_down", return_value=(0x11, 8)) as key_hold_down,
             patch("source.utility.utils.key_hold_up") as key_hold_up,
+            patch.object(runtime, "_ark_is_foreground", return_value=True),
+            patch.object(auto_keys.ctypes.windll.user32, "GetAsyncKeyState", return_value=0),
         ):
             runtime._process_polled_state(binding, True, 10.0, True)
             runtime._process_polled_state(binding, True, 11.0, True)
             key_hold_down.assert_not_called()
             runtime._process_polled_state(binding, False, 11.1, True)
             runtime._process_polled_state(binding, True, 11.2, True)
-            key_hold_up.assert_not_called()
+            self.assertIsNone(runtime._active)
             runtime._stop_repeat()
+            runtime.shutdown()
 
         key_hold_down.assert_called_once_with("MoveForward", should_pause=False)
-        key_hold_up.assert_called_once_with("MoveForward")
+        key_hold_up.assert_called_once_with((0x11, 8))
 
     def test_release_before_duration_cancels_activation(self):
         self.runtime._start_repeat = Mock()
@@ -901,6 +904,8 @@ class AutoKeysSwitchingTests(unittest.TestCase):
         with (
             patch("source.utility.utils.key_hold_down") as down,
             patch("source.utility.utils.key_hold_up"),
+            patch.object(self.runtime, "_ark_is_foreground", return_value=True),
+            patch.object(auto_keys.ctypes.windll.user32, "GetAsyncKeyState", return_value=0),
         ):
             self.runtime._process_polled_state(self.move, True, 10.0, True)
             self.assertIsNone(self.runtime._active)

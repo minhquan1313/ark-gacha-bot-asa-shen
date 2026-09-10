@@ -271,6 +271,8 @@ class AutoKeysRuntime:
         self._key_hold_action = None
         self._key_hold_waiting_for_release = False
         self._key_hold_injected = False
+        self._key_hold_input = None
+        self._key_hold_release_seen = False
         self._input_listener = None
         self._physical_states = {}
 
@@ -659,7 +661,7 @@ class AutoKeysRuntime:
             self._stop_repeat()
 
     def _process_polled_state(self, binding, is_down, now, activation_down=True):
-        key_hold_action_to_start = None
+        key_hold_started = None
         should_start = False
         should_stop = False
         switch_generation = None
@@ -672,14 +674,29 @@ class AutoKeysRuntime:
             if self._active == binding:
                 if self._key_hold_waiting_for_release:
                     if not is_down:
-                        self._key_hold_waiting_for_release = False
-                        self._key_hold_injected = True
-                        self._stop_armed = True
-                        # The following synthetic key-down makes Windows report
-                        # this binding as down. Preserve that state so it is not
-                        # mistaken for a user stop press on the next poll.
-                        self._last_states[binding] = True
-                        key_hold_action_to_start = self._key_hold_action
+                        self._key_hold_release_seen = True
+                        # Hooks run before Windows updates its key state. Defer
+                        # this handoff until a later poll if key-up is still pending.
+                        if (
+                            not ctypes.windll.user32.GetAsyncKeyState(binding[1])
+                            & 0x8000
+                        ):
+                            from source.utility import utils
+
+                            if self.enabled and self._ark_is_foreground():
+                                # Cancellation takes this same lock: no late down
+                                # can land after disable has collected its release.
+                                self._key_hold_input = utils.key_hold_down(
+                                    self._key_hold_action, should_pause=False
+                                )
+                                self._key_hold_injected = True
+                                self._key_hold_waiting_for_release = False
+                                self._stop_armed = True
+                                key_hold_started = self._key_hold_action
+                            else:
+                                should_stop = True
+                    elif self._key_hold_release_seen and not was_down:
+                        should_stop = True
                 elif not self._stop_armed:
                     if not is_down:
                         self._stop_armed = True
@@ -716,10 +733,8 @@ class AutoKeysRuntime:
                 ):
                     self._pending = binding
                     self._pending_started_at = now
-        elif key_hold_action_to_start is not None:
-            from source.utility import utils
-
-            utils.key_hold_down(key_hold_action_to_start, should_pause=False)
+        elif key_hold_started is not None:
+            self._notify(f"Holding {key_hold_started}.")
         elif should_stop:
             self._stop_repeat()
         elif should_start:
@@ -740,6 +755,8 @@ class AutoKeysRuntime:
                 self._key_hold_action = action
                 self._key_hold_waiting_for_release = True
                 self._key_hold_injected = False
+                self._key_hold_input = None
+                self._key_hold_release_seen = False
                 key_hold = True
             else:
                 key_hold = False
@@ -814,9 +831,12 @@ class AutoKeysRuntime:
             thread = self._repeat_thread
             key_hold_action = self._key_hold_action
             key_hold_injected = self._key_hold_injected
+            key_hold_input = self._key_hold_input
             self._key_hold_action = None
             self._key_hold_waiting_for_release = False
             self._key_hold_injected = False
+            self._key_hold_input = None
+            self._key_hold_release_seen = False
 
         def finish_repeat():
             """Await in-flight input before releasing keys and allowing handoff."""
@@ -825,7 +845,9 @@ class AutoKeysRuntime:
             if key_hold_action is not None and key_hold_injected:
                 from source.utility import utils
 
-                utils.key_hold_up(key_hold_action)
+                utils.key_hold_up(
+                    key_hold_input if key_hold_input is not None else key_hold_action
+                )
             if thread is not None and thread is not threading.current_thread():
                 thread.join()
             with self._lock:

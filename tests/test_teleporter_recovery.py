@@ -139,7 +139,7 @@ class TeleporterRecoveryTests(unittest.TestCase):
         self.state.human.on_tp = False
         with patch.object(
             server_transfer, "_run_transfer_helper",
-            side_effect=lambda *_args: teleporter.teleport_not_default("Dedis"),
+            side_effect=lambda *_args, **_kwargs: teleporter.teleport_not_default("Dedis"),
         ):
             with self.assertRaisesRegex(RuntimeError, "Manual recovery required"):
                 server_transfer.run_transfer_helper({})
@@ -148,8 +148,11 @@ class TeleporterRecoveryTests(unittest.TestCase):
         self.bed.fast_travel.assert_called_once_with("Home")
 
     def test_transfer_run_restores_policy_after_normal_return(self):
-        with patch.object(server_transfer, "_run_transfer_helper", return_value=True):
+        with patch.object(server_transfer, "_run_transfer_helper", return_value=True) as run:
             self.assertTrue(server_transfer.run_transfer_helper({}))
+            run.assert_called_with({}, None, multiple_resource=False)
+            self.assertTrue(server_transfer.run_transfer_helper({}, multiple_resource=True))
+            run.assert_called_with({}, None, multiple_resource=True)
         self.state.human.on_tp = False
         teleporter.teleport_not_default("Dedis")
         self.bed.fast_travel.assert_called_once_with("Home")

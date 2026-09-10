@@ -1,3 +1,4 @@
+import json
 import os
 import unittest
 from pathlib import Path
@@ -429,6 +430,39 @@ class ServerTransferHelperUiTests(unittest.TestCase):
         try:
             self.assertTrue(reopened.resource_dedi_rows[0]["selected"].isChecked())
             self.assertTrue(reopened.destination_dedi_rows[0]["selected"].isChecked())
+        finally:
+            reopened.close()
+
+    def test_multiple_resource_is_runtime_only(self):
+        """Pass the checkbox through worker arguments without serializing it."""
+        helper = self._transfer_helper()
+        try:
+            self.assertEqual(helper.multiple_resource_checkbox.text(), "Multiple resource")
+            self.assertFalse(helper.multiple_resource_checkbox.isChecked())
+            for enabled in (False, True):
+                helper.multiple_resource_checkbox.setChecked(enabled)
+                with (
+                    patch("source.launcher.server_transfer_helper.missing_runtime_inputs", return_value=[]),
+                    patch("source.launcher.server_transfer_helper.focus_game_window"),
+                    patch.object(helper, "_write_runtime_config", wraps=helper._write_runtime_config),
+                    patch.object(helper, "_start_worker") as start,
+                    patch.object(helper, "_finish_worker", return_value=False),
+                ):
+                    helper.start()
+                    expected = ["server_transfer", "--config", helper.runtime_config_path]
+                    if enabled:
+                        expected.append("--multiple-resource")
+                    start.assert_called_once_with(*expected)
+                    runtime_json = Path(helper.runtime_config_path).read_text(encoding="utf-8")
+                    self.assertNotIn("multiple_resource", runtime_json)
+                    self.assertNotIn("multiple_resource", json.dumps(helper.config))
+                    helper._on_worker_finished("Stopped.")
+                    self.assertEqual(helper.multiple_resource_checkbox.isChecked(), enabled)
+        finally:
+            helper.close()
+        reopened = self._transfer_helper()
+        try:
+            self.assertFalse(reopened.multiple_resource_checkbox.isChecked())
         finally:
             reopened.close()
 

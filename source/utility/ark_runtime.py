@@ -3,6 +3,7 @@ import ctypes
 import threading
 import time
 
+from source.join_sim.source.crash import crash
 from source.launcher.config.constants import GAME_WINDOW_TITLE
 from source.launcher.utils import system
 from source.utility import utils_simple
@@ -87,7 +88,8 @@ def wait_until_ready():
         return
 
     while _should_pause:
-        if not is_ark_window_open():
+        # if not is_ark_window_open() or crash.detect_crash():
+        if crash.detect_crash():
             _set_running()
             return
 

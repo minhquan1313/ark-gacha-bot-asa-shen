@@ -178,6 +178,9 @@ class ServerTransferHelper(WorkerHelperWindow):
         grid.setVerticalSpacing(8)
         settings_layout.addLayout(grid)
         self._add_setting_fields(grid)
+        self.multiple_resource_checkbox = QCheckBox("Multiple resource types")
+        self.multiple_resource_checkbox.setChecked(False)
+        settings_layout.addWidget(self.multiple_resource_checkbox)
         content_layout.addWidget(settings_card)
 
         players_card, players_layout = self._panel("Player Settings")
@@ -720,7 +723,10 @@ class ServerTransferHelper(WorkerHelperWindow):
         self.starting = True
         try:
             self.runtime_config_path = self._write_runtime_config(config)
-            self._start_worker("server_transfer", "--config", self.runtime_config_path)
+            worker_args = ["server_transfer", "--config", self.runtime_config_path]
+            if self.multiple_resource_checkbox.isChecked():
+                worker_args.append("--multiple-resource")
+            self._start_worker(*worker_args)
         except Exception as exc:
             self.starting = False
             self._set_running_ui(False)

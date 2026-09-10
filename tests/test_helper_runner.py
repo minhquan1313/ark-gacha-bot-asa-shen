@@ -71,18 +71,23 @@ class HelperRunnerReadyTests(unittest.TestCase):
             patch.object(helper_runner.json, "load", return_value=config),
             redirect_stdout(output),
         ):
-            result = helper_runner.run_server_transfer(
-                types.SimpleNamespace(config="runtime.json")
-            )
+            for enabled in (False, True):
+                arguments = ["server_transfer", "--config", "runtime.json"]
+                if enabled:
+                    arguments.append("--multiple-resource")
+                args = helper_runner.build_parser().parse_args(arguments)
+                self.assertEqual(args.multiple_resource, enabled)
+                result = helper_runner.run_server_transfer(args)
+                self.assertEqual(result, 0)
+                runtime.run_transfer_helper.assert_called_with(
+                    transfer_helper_config.normalize_transfer_runtime_config(config),
+                    task_callback=helper_runner.send_task_state,
+                    multiple_resource=enabled,
+                )
 
-        self.assertEqual(result, 0)
-        runtime.run_transfer_helper.assert_called_once_with(
-            config,
-            task_callback=helper_runner.send_task_state,
-        )
         self.assertEqual(
             output.getvalue().splitlines(),
-            [helper_runner.READY_MESSAGE, "__HELPER_COMPLETION__ Finished."],
+            [helper_runner.READY_MESSAGE, "__HELPER_COMPLETION__ Finished."] * 2,
         )
 
     def test_transfer_does_not_emit_ready_when_config_load_fails(self) -> None:
