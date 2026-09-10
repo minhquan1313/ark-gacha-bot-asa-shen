@@ -7,7 +7,53 @@ from source.launcher.config.transfer_helper_config import default_transfer_ui_co
 from source.launcher.utils import steam_switch
 
 
+class ArkConsoleExitTests(unittest.TestCase):
+    def test_window_lifetime_controls_graceful_exit(self):
+        scenarios = [
+            ("absent", [0], [], True, 0),
+            ("closes_early", [123, 0], [False], True, 0),
+            ("still_present", [123, 123, 123], [False, True], False, 1),
+            ("closes_at_deadline", [123, 123, 0], [False, True], True, 1),
+        ]
+        utils = steam_switch.utils
+        for name, handles, ticks, expected, sleep_count in scenarios:
+            with (
+                self.subTest(name=name),
+                patch.object(utils.config, "console_open_attempts", 1),
+                patch.object(utils.windows, "ark_hwnd", side_effect=handles),
+                patch.object(utils.ctypes.windll.user32, "IsWindowVisible", return_value=False),
+                patch.object(utils.deposit_helper_capture, "focus_game_window"),
+                patch.object(utils.console, "console_write", return_value=True) as console_write,
+                patch.object(utils.utils_simple, "get_default_clock", return_value=Mock(side_effect=ticks)) as clock,
+                patch.object(utils.time, "sleep") as sleep,
+            ):
+                self.assertEqual(utils.close_ark_with_console_exit(), expected)
+                self.assertEqual(sleep.call_count, sleep_count)
+                if name == "absent":
+                    clock.assert_not_called()
+                    console_write.assert_not_called()
+                else:
+                    clock.assert_called_once_with(30)
+                    console_write.assert_called_once_with("exit")
+                if sleep_count:
+                    sleep.assert_called_with(0.2)
+
+
 class SteamSwitchTests(unittest.TestCase):
+    def test_successful_graceful_close_skips_force_kill(self):
+        players = {"players": [{"bed_name": "Bed1", "steam_account": "beta"}]}
+        with (
+            patch.object(steam_switch.utils, "close_ark_with_console_exit", return_value=True),
+            patch.object(steam_switch.ark_game_setup, "kill_running_ark") as kill,
+            patch.object(steam_switch, "steam_accounts"),
+            patch.object(steam_switch, "_wait_for_steam_window", return_value=True),
+            patch.object(steam_switch.time, "sleep"),
+        ):
+            steam_switch.switch_steam_account(
+                1, "alpha", players, default_transfer_ui_coords()
+            )
+        kill.assert_not_called()
+
     def test_wait_ignores_main_window_until_sign_in_disappears(self) -> None:
         with (
             patch.object(steam_switch.time, "monotonic", return_value=0.0),
@@ -131,7 +177,7 @@ class SteamSwitchTests(unittest.TestCase):
         self.assertEqual(result, "beta")
         self.assertEqual(accounts.launch_steam.call_count, 3)
         self.assertEqual(accounts.close_steam.call_count, 3)
-        self.assertEqual(ark_setup.kill_running_ark.call_count, 3)
+        self.assertEqual(ark_setup.kill_running_ark.call_count, 2)
         graceful_close.assert_called_once_with()
         self.assertEqual(wait_ready.call_count, 3)
 
@@ -212,7 +258,7 @@ class SteamSwitchTests(unittest.TestCase):
             patch.object(
                 steam_switch.utils,
                 "close_ark_with_console_exit",
-                side_effect=lambda: events.append("graceful_close"),
+                side_effect=lambda: events.append("graceful_close") or False,
             ),
             patch.object(steam_switch, "_wait_for_steam_window", return_value=True),
             patch.object(steam_switch.time, "sleep"),
@@ -246,7 +292,7 @@ class SteamSwitchTests(unittest.TestCase):
             patch.object(
                 steam_switch.utils,
                 "close_ark_with_console_exit",
-                side_effect=lambda: events.append("graceful_close"),
+                side_effect=lambda: events.append("graceful_close") or False,
             ),
             patch.object(steam_switch, "_wait_for_steam_window", return_value=True),
             patch.object(steam_switch.time, "sleep"),

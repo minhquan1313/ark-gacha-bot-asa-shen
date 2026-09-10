@@ -2,8 +2,8 @@ import ctypes
 import time
 
 import settings
-from source.ASA import config
 from source.ASA.player import console
+from source.launcher import ark_game_setup
 from source.launcher.utils import deposit_helper_capture
 from source.logs import gachalogs as logs
 from source.utility import action_gate, utils_simple
@@ -295,33 +295,33 @@ def ctrl_a():  # hotkey for sending ctrl a
 
 
 def close_ark_with_console_exit():
-    """Try closing a visible ARK window through the in-game console."""
+    """Try console exit and wait up to 30 seconds for the ARK window to disappear."""
+    dl = utils_simple.get_default_clock(15)
 
-    for attempt in range(1, config.console_open_attempts + 1):
-        hwnd = windows.ark_hwnd()
-        if not hwnd or not ctypes.windll.user32.IsWindowVisible(hwnd):
-            return True
+    hwnd = windows.ark_hwnd()
+    if not hwnd:
+        return True
 
-        logs.logger.debug(
-            f"closing ARK with console exit {attempt} / {config.console_open_attempts}"
-        )
-        try:
-            deposit_helper_capture.focus_game_window(center_cursor_when_switching=True)
-            # player_state.reset_state()
-            if not console.console_write("exit"):
-                logs.logger.warning("ARK console did not accept the exit command")
-        except Exception as e:
-            logs.logger.warning(f"ARK exit command failed: {e}")
+    logs.logger.debug("Closing ARK with console exit...")
+    try:
+        deposit_helper_capture.focus_game_window(center_cursor_when_switching=True)
+        # player_state.reset_state()
+        if not console.console_write("exit"):
+            logs.logger.warning("ARK console did not accept the exit command")
+    except Exception as e:
+        logs.logger.warning(f"ARK exit command failed: {e}")
 
-    dl = utils_simple.get_default_clock(5)
     while not dl():
         hwnd = windows.ark_hwnd()
-        if not hwnd or not ctypes.windll.user32.IsWindowVisible(hwnd):
+        if not hwnd:
             return True
-        else:
-            time.sleep(0.2)
+        time.sleep(0.2)
+
+    if not windows.ark_hwnd():
+        return True
 
     logs.logger.warning("ARK did not close gracefully; forcing shutdown")
+    ark_game_setup.kill_running_ark()
     return False
 
 

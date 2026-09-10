@@ -47,7 +47,7 @@ def switch_steam_account(
 
             utils.close_ark_with_console_exit()
 
-            ark_game_setup.kill_running_ark()
+            # ark_game_setup.kill_running_ark()
 
         if loginusers is None:
             steam_accounts.select_auto_login_account(target_steam_account)
