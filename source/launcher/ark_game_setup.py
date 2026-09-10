@@ -59,6 +59,8 @@ TARGET_GAME_SETTINGS = {
     "bUseSSAO": "False",
     "bEnableInventoryItemTooltips": "True",
     "bCustomCosmeticsShowAllItems": "False",
+    "bRemoteInventoryShowEngrams": "True", # This help Crafter feature to work
+    "bRemoteInventoryShowCraftables": "True",
     #
     "FrameMultiplier": "1",
     "ScreenPercentage": "0.500000",
