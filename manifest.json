@@ -1,8 +1,9 @@
 {
-  "version": "1.0.5",
+  "version": "1.0.6",
   "released_at": "2026-09-10",
   "title": "Pausable, Gacha collection and Crafters",
   "changelog": [
+    "More fixes to Autokey and server transfer, switch steam.",
     "Added some minor ingame config changes",
     "Added Pausable feature, when GBot run, hit ESC ingame or switch tabs to pause GBot.",
     "If you want to Alt+Tab with Pause, disable [Allow focus ARK window] in Settings/Launcher.",

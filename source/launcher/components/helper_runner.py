@@ -72,7 +72,11 @@ def run_server_transfer(args: argparse.Namespace):
     config = normalize_transfer_runtime_config(raw_config)
     send_ready()
     try:
-        completed = run_transfer_helper(config, task_callback=send_task_state)
+        completed = run_transfer_helper(
+            config,
+            task_callback=send_task_state,
+            multiple_resource=args.multiple_resource,
+        )
     except TransferConfigError as exc:
         logs.logger.error(f"Config blocked: {exc}")
         send_completion(f"Config blocked: {exc}")
@@ -160,6 +164,7 @@ def build_parser():
 
     transfer = subparsers.add_parser("server_transfer")
     transfer.add_argument("--config", required=True)
+    transfer.add_argument("--multiple-resource", action="store_true")
     transfer.set_defaults(func=run_server_transfer)
 
     auto_feed = subparsers.add_parser("auto_feed")

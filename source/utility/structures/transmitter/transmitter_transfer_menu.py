@@ -267,86 +267,92 @@ def do_join_server(server: str, *, should_go_tekpod=True):
             "orange pixel for transmitter server not found likely server is shutdown"
         )
         return False
-    else:
-        logs.logger.debug("Orange detected, ready for transfer")
-        time.sleep(0.1)
 
-        if template.template_await_true(is_join_button_visible, 1):
-            time.sleep(0.1)
-            windows.click(*get_pixel_loc("join_button"))
-            time.sleep(0.2)
+    logs.logger.debug("Orange detected, ready for transfer")
+    time.sleep(0.1)
 
-            if not transfer_timer_handle(should_go_tekpod):
+    can_join = False
+    if template.template_await_true(is_join_button_visible, 1):
+        can_join = True
+    if not can_join:
+        return False
+
+    time.sleep(0.1)
+    windows.click(*get_pixel_loc("join_button"))
+    time.sleep(0.2)
+
+    if not transfer_timer_handle(should_go_tekpod):
+        return False
+
+    dl = utils_simple.get_default_clock(60)
+    while is_open():
+        if dl():
+            close()
+            break
+
+        player_state.uploaded = False
+
+        dl2 = utils_simple.get_default_clock(5)
+        clicked = 1  # Don't change, as previous we already clicked it once, so it should start as 1
+        max_click = 2
+        # Click join button again
+        while not dl2():
+            if template.template_await_true(is_server_join_success, 0.8):
+                player_state.uploaded = True
+                break
+
+            if failure_excess_amount():
+                close()
                 return False
 
-            dl = utils_simple.get_default_clock(60)
-            while is_open():
-                if dl():
-                    close()
-                    break
+            if clicked < max_click:
+                clicked += 1
+                windows.click(
+                    *get_pixel_loc("first_server"),
+                )
+                time.sleep(0.1)
 
-                player_state.uploaded = False
+                windows.click(
+                    *get_pixel_loc("join_button"),
+                )
 
-                dl2 = utils_simple.get_default_clock(5)
-                clicked = 1  # Don't change, as previous we already clicked it once, so it should start as 1
-                max_click = 2
-                while not dl2():
-                    if template.template_await_true(is_server_join_success, 0.8):
-                        player_state.uploaded = True
-                        break
+        if player_state.uploaded:
+            logs.logger.warning("Detected Survival UPLOADED")
 
-                    if failure_excess_amount():
-                        close()
-                        return False
+            time.sleep(2)
 
-                    if clicked < max_click:
-                        clicked += 1
-                        windows.click(
-                            *get_pixel_loc("first_server"),
-                        )
-                        time.sleep(0.1)
+            if is_open():
+                search_bar_search("Joining...")
+                ark_input.click(2, 2)
 
-                        windows.click(
-                            *get_pixel_loc("join_button"),
-                        )
-
-                if player_state.uploaded:
-                    logs.logger.warning("Detected Survival UPLOADED")
-
-                    time.sleep(2)
-
-                    if is_open():
-                        search_bar_search("Joining...")
-                        ark_input.click(2, 2)
-
-                    if template.template_await_true(sign_of_uploaded, 30):  # noqa: SIM103
-                        # Return False intentionally to trigger one additional verification cycle.
-                        return False if bed.is_open_respawn() else True  # noqa: SIM211
-                    else:
-                        # Return True to exit when the upload succeeded but the destination server never loaded.
-                        console.console_exit_mainmenu()
-                        template.template_await_true(sign_of_uploaded, 10)
-                        time.sleep(0.5)
-                        return True
-                elif sign_of_uploaded():
-                    logs.logger.warning("Detected Survival UPLOADED")
-                    player_state.uploaded = True
-                    return True
-                else:
-                    has_failure()
-
-                    if is_open():
-                        windows.click(
-                            *get_pixel_loc("first_server"),
-                        )
-                        time.sleep(0.1)
-
-                        windows.click(
-                            *get_pixel_loc("join_button"),
-                        )
-                    else:
-                        break
-
+            if template.template_await_true(sign_of_uploaded, 30):  # noqa: SIM103
+                # Return False intentionally to trigger one additional verification cycle.
+                return False if bed.is_open_respawn() else True  # noqa: SIM211
+            else:
+                # Return True to exit when the upload succeeded but the destination server never loaded.
+                console.console_exit_mainmenu()
+                template.template_await_true(sign_of_uploaded, 10)
+                time.sleep(0.5)
+                return True
+        elif sign_of_uploaded():
+            logs.logger.warning("Detected Survival UPLOADED")
+            player_state.uploaded = True
+            return True
+        else:
             has_failure()
+
+            if is_open():
+                windows.click(
+                    *get_pixel_loc("first_server"),
+                )
+                time.sleep(0.1)
+
+                windows.click(
+                    *get_pixel_loc("join_button"),
+                )
+            else:
+                break
+
+    has_failure()
 
     return False

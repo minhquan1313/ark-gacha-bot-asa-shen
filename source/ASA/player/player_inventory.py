@@ -183,7 +183,7 @@ def transfer_first_inventory(slot=0):
                 )
                 time.sleep(0.05)
         else:
-            _slot = max(1, slot)
+            _slot = max(0, slot)
             loc_gen = utils_simple.grid_loc_gen(col=inv_default_grid)
 
             c, r = loc_gen(_slot)

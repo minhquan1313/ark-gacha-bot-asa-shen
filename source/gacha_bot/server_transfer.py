@@ -264,15 +264,19 @@ transmitter_teleport = ""
 def run_transfer_helper(
     config: TransferRuntimeConfig,
     task_callback: Callable[[dict], object] | None = None,
+    multiple_resource: bool = False,
 ):
     """Run transfers with inventory-loss recovery disabled for nested teleports."""
     with teleporter.prevent_suicide_recovery():
-        return _run_transfer_helper(config, task_callback)
+        return _run_transfer_helper(
+            config, task_callback, multiple_resource=multiple_resource
+        )
 
 
 def _run_transfer_helper(
     config: TransferRuntimeConfig,
     task_callback: Callable[[dict], object] | None = None,
+    multiple_resource: bool = False,
 ):
     """Execute the transfer cycle under the caller's teleport recovery policy."""
     global account_detect_withdrawed_all
@@ -531,14 +535,14 @@ def _run_transfer_helper(
             task_tracker.start(
                 _transfer_task_label(account, "Deposit R", loop_number=loop_number)
             )
-            if deposit_to_transfer_dedis(dedis, account) is False:
+            if deposit_to_transfer_dedis(dedis, multiple_resource) is False:
                 return False
 
             if hotfix3_recover_after_dedis():
                 task_tracker.start(
                     _transfer_task_label(account, "Recovery", loop_number=loop_number)
                 )
-                if deposit_to_transfer_dedis(dedis, account) is False:
+                if deposit_to_transfer_dedis(dedis, multiple_resource) is False:
                     return False
 
             """
@@ -1001,10 +1005,7 @@ def redo_withdraw_ensure_timer(
     )
 
 
-def deposit_to_transfer_dedis(
-    dedis: TransferDedisConfig,
-    account: int,
-):
+def deposit_to_transfer_dedis(dedis: TransferDedisConfig, multiple_resource=False):
     global list_of_full_dedi
 
     destination_route = dedis["destination"]
@@ -1016,7 +1017,10 @@ def deposit_to_transfer_dedis(
     items: list[DediStorageState] = destination_route["items"]
     for index, item in enumerate(items, 1):
         if index in list_of_full_dedi:
-            continue
+            if multiple_resource and index + 1 not in list_of_full_dedi:
+                pass
+            else:
+                continue
 
         player_inventory.g_last_check_can_transfer = True
 
