@@ -1,7 +1,7 @@
 import os
 import sys
 
-from PySide6.QtCore import QPoint, QRect, Qt, QTimer
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -21,6 +21,7 @@ from source.launcher.components.widgets import (
 )
 from source.launcher.config.constants import (
     APP_TITLE,
+    APP_VERSION,
     ASSETS,
     BREAKPOINT_NARROW_WIDTH,
     ENABLE_NATIVE_CUSTOM_CHROME,
@@ -76,23 +77,25 @@ class WindowGuiMixin:
         self.stack.setObjectName("PageStack")
         body.addWidget(self.stack, 1)
 
-        self.pages = {
-            "welcome": self._welcome_page(),
-            "dashboard": self._dashboard_page(),
-            "setup": self._setup_page(),
-            "settings": self._settings_page(),
-            "logs": self._logs_page(),
-            "tools": self._tools_page(),
-            "update": self._update_page(),
-            "about": self._about_page(),
-        }
-        for page in self.pages.values():
-            self.stack.addWidget(page)
+        self.pages = {}
+        self._page_builders = iter(
+            (
+                ("welcome", self._welcome_page),
+                ("dashboard", self._dashboard_page),
+                ("setup", self._setup_page),
+                ("settings", self._settings_page),
+                ("logs", self._logs_page),
+                ("tools", self._tools_page),
+                ("update", self._update_page),
+                ("about", self._about_page),
+            )
+        )
+        if not self.deferred_startup:
+            for name, builder in self._page_builders:
+                self.pages[name] = builder()
+                self.stack.addWidget(self.pages[name])
 
         self._apply_responsive_layout()
-        sync_status = getattr(self, "_sync_ark_status_labels", None)
-        if callable(sync_status):
-            sync_status()
 
     def _build_sidebar(self):
         sidebar = QFrame()
@@ -153,7 +156,7 @@ class WindowGuiMixin:
             layout.addWidget(button)
 
         layout.addStretch()
-        build = QLabel("BUILD 1.0.0")
+        build = QLabel(f"BUILD {APP_VERSION.lstrip('vV')}")
         build.setObjectName("SidebarMeta")
         status = QLabel("STATUS: READY  +")
         status.setObjectName("SidebarReady")
@@ -165,10 +168,6 @@ class WindowGuiMixin:
     def _build_timer(self):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
-        self.timer.start(1000)
-        self.auto_update_timer = QTimer(self)
-        self.auto_update_timer.timeout.connect(self._automatic_update_check)
-        self.auto_update_timer.start(60 * 60 * 1000)
         self.auto_start_timer = QTimer(self)
         self.auto_start_timer.setSingleShot(True)
         self.auto_start_timer.timeout.connect(self.start_program)
@@ -221,6 +220,7 @@ class WindowGuiMixin:
         self.setGeometry(new_x, new_y, restored_width, restored_height)
         self.is_custom_maximized = False
         self.title_bar.sync_maximize_icon()
+        self._sync_rounded_mask()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -229,6 +229,13 @@ class WindowGuiMixin:
         QTimer.singleShot(0, self._sync_dashboard_actions_width)
 
     def _sync_rounded_mask(self):
+        maximized = getattr(self, "is_custom_maximized", False)
+        for widget in (self.centralWidget(), getattr(self, "title_bar", None)):
+            if widget is not None and widget.property("customMaximized") != maximized:
+                widget.setProperty("customMaximized", maximized)
+                widget.style().unpolish(widget)
+                widget.style().polish(widget)
+                widget.update()
         sync_rounded_window_mask(
             self,
             UI_METRICS["window_radius"],
@@ -264,9 +271,12 @@ class WindowGuiMixin:
             self.timer.stop()
         if hasattr(self, "auto_start_timer"):
             self.auto_start_timer.stop()
-        if hasattr(self, "auto_update_timer"):
-            self.auto_update_timer.stop()
         self._unregister_start_stop_hotkey()
+        unregister_auto_keys_stop_hotkey = getattr(
+            self, "_unregister_auto_keys_stop_hotkey", None
+        )
+        if callable(unregister_auto_keys_stop_hotkey):
+            unregister_auto_keys_stop_hotkey()
         clear_suspensions = getattr(
             self, "_clear_auto_keys_automation_suspensions", None
         )
@@ -387,11 +397,21 @@ class WindowGuiMixin:
                     )
                 )
 
+    def eventFilter(self, watched: QObject, event: QEvent):
+        """Align dashboard actions after the server card receives its final size."""
+        if watched is getattr(self, "dashboard_server_card", None) and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+        ):
+            QTimer.singleShot(0, self._sync_dashboard_actions_width)
+        return super().eventFilter(watched, event)
+
     def show_page(self, name):
         self.stack.setCurrentWidget(self.pages[name])
         if name in self.nav_buttons:
             self.nav_buttons[name].setChecked(True)
         if name == "dashboard":
+            QTimer.singleShot(0, self._sync_dashboard_actions_width)
             self._update_game_restore_button_visibility()
             self._render_logs()
             self._tick()

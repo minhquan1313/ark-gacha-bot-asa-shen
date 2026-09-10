@@ -1,8 +1,9 @@
 {
-  "version": "1.0.4",
-  "released_at": "2026-09-09",
+  "version": "1.0.5",
+  "released_at": "2026-09-10",
   "title": "Pausable, Gacha collection and Crafters",
   "changelog": [
+    "Added some minor ingame config changes",
     "Added Pausable feature, when GBot run, hit ESC ingame or switch tabs to pause GBot.",
     "If you want to Alt+Tab with Pause, disable [Allow focus ARK window] in Settings/Launcher.",
     "Added Gacha collection feature(Settings/Gacha/Gacha Collection), you can now collect Gacha items such as Phoenix Silica, snail paste, etc.",
