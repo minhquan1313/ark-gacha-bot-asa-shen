@@ -72,11 +72,7 @@ class DepositHelperGuide(QDialog):
         self.setStyleSheet(parent.styleSheet())
         self.setWindowTitle("Deposit Helper Guide")
         self.setModal(False)
-        self.setWindowFlags(
-            Qt.WindowType.Tool
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.page_index = 0
         self.drag_position = None
@@ -224,20 +220,11 @@ class DepositHelperGuide(QDialog):
             getattr(self, "header_title", None),
         ):
             return super().eventFilter(watched, event)
-        if (
-            event.type() == QEvent.Type.MouseButtonPress
-            and event.button() == Qt.MouseButton.LeftButton
-        ):
-            self.drag_position = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            )
+        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
             return True
-        if (
-            event.type() == QEvent.Type.MouseMove
-            and self.drag_position is not None
-            and event.buttons() & Qt.MouseButton.LeftButton
-        ):
+        if event.type() == QEvent.Type.MouseMove and self.drag_position is not None and event.buttons() & Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
             return True
@@ -269,9 +256,7 @@ class DepositRouteHelper(BaseHelperWindow):
         self.pending_cursor_position = None
         self.guide_timer = self._single_shot_timer(self.show_guide)
         self.row_focus_timer = self._single_shot_timer(self._apply_pending_focus_row)
-        self.cursor_restore_timer = self._single_shot_timer(
-            self._restore_pending_cursor
-        )
+        self.cursor_restore_timer = self._single_shot_timer(self._restore_pending_cursor)
         self._build_ui()
         self._register_hotkey()
         self.guide_timer.start(0)
@@ -348,11 +333,7 @@ class DepositRouteHelper(BaseHelperWindow):
 
     def route(self):
         _prefix, key = self._route_metadata(self.route_kind)
-        config = (
-            self.owner.craft_config
-            if self.route_kind == "craft"
-            else self.owner.deposit_config
-        )
+        config = self.owner.craft_config if self.route_kind == "craft" else self.owner.deposit_config
         return config[key][self.route_index]
 
     def refresh_rows(self, focus_target=None, preserve_state=True):
@@ -399,17 +380,11 @@ class DepositRouteHelper(BaseHelperWindow):
         if focus_target is None:
             QTimer.singleShot(
                 0,
-                lambda value=scroll_value: self.scroll.verticalScrollBar().setValue(
-                    value
-                ),
+                lambda value=scroll_value: self.scroll.verticalScrollBar().setValue(value),
             )
 
     def _row_state(self):
-        return {
-            (row.kind, row.index): row.expanded
-            for row in self.row_widgets
-            if row.expanded
-        }
+        return {(row.kind, row.index): row.expanded for row in self.row_widgets if row.expanded}
 
     def _add_section_label(self, text, count):
         wrapper = QWidget()
@@ -580,9 +555,7 @@ class DepositRouteHelper(BaseHelperWindow):
         if active:
             self.status.setText(message)
         for widget in self.findChildren(QWidget):
-            if not isinstance(
-                widget, (AnimatedButton, QCheckBox, QLineEdit, QComboBox, CyberSwitch)
-            ):
+            if not isinstance(widget, (AnimatedButton, QCheckBox, QLineEdit, QComboBox, CyberSwitch)):
                 continue
             widget.setEnabled(not active)
         QApplication.processEvents()
@@ -647,11 +620,7 @@ class DepositRouteHelper(BaseHelperWindow):
         self.save_and_refresh(self._target_for_entry(vault))
 
     def save(self):
-        save_routes = (
-            self.owner.save_craft_routes
-            if self.route_kind == "craft"
-            else self.owner.save_deposit_routes
-        )
+        save_routes = self.owner.save_craft_routes if self.route_kind == "craft" else self.owner.save_deposit_routes
         if save_routes(show_log=False):
             self.status.setText("Saved.")
             return True
@@ -698,13 +667,9 @@ class CollapsibleHelperRow(QFrame):
         self.summary = QLabel(self._summary_text())
         self.summary.setObjectName("HelperRowSummary")
         self.summary.setWordWrap(True)
-        capture = self.helper._helper_action_button(
-            CAPTURE_ACTION_ICON, "Capture yaw and pitch"
-        )
+        capture = self.helper._helper_action_button(CAPTURE_ACTION_ICON, "Capture yaw and pitch")
         capture.clicked.connect(self.capture_row)
-        view = self.helper._helper_action_button(
-            VIEW_ACTION_ICON, "View saved yaw and pitch in Ark"
-        )
+        view = self.helper._helper_action_button(VIEW_ACTION_ICON, "View saved yaw and pitch in Ark")
         view.clicked.connect(lambda: self.helper.view_entry(self.entry))
         top.addWidget(self.expand_button)
         top.addWidget(self.summary, 1)
@@ -759,12 +724,8 @@ class CollapsibleHelperRow(QFrame):
         field = QLineEdit(str(self.entry["location"].get(key, 0.0)))
         field.setObjectName("SettingField")
         field.setMinimumWidth(86)
-        field.editingFinished.connect(
-            lambda name=key, editor=field: self._update_float_field(name, editor)
-        )
-        field.returnPressed.connect(
-            lambda name=key, editor=field: self._update_float_field(name, editor)
-        )
+        field.editingFinished.connect(lambda name=key, editor=field: self._update_float_field(name, editor))
+        field.returnPressed.connect(lambda name=key, editor=field: self._update_float_field(name, editor))
         self.float_fields[key] = field
         layout.addWidget(label)
         layout.addWidget(field)
@@ -783,24 +744,12 @@ class CollapsibleHelperRow(QFrame):
             if value and value not in options:
                 combo.addItem(value)
             combo.setCurrentText(value)
-            combo.activated.connect(
-                lambda selected_index, vault=self.entry, index=item_index, widget=combo: (
-                    self.helper.update_vault_item(vault, index, widget)
-                )
-            )
+            combo.activated.connect(lambda selected_index, vault=self.entry, index=item_index, widget=combo: self.helper.update_vault_item(vault, index, widget))
             line_edit = combo.lineEdit()
             if line_edit is not None:
-                line_edit.editingFinished.connect(
-                    lambda vault=self.entry, index=item_index, widget=combo: (
-                        self.helper.update_vault_item(vault, index, widget)
-                    )
-                )
+                line_edit.editingFinished.connect(lambda vault=self.entry, index=item_index, widget=combo: self.helper.update_vault_item(vault, index, widget))
             remove = self.helper._icon_button("-", "Remove this vault item")
-            remove.clicked.connect(
-                lambda checked=False, vault=self.entry, index=item_index: (
-                    self.helper.remove_vault_item_row(vault, index)
-                )
-            )
+            remove.clicked.connect(lambda checked=False, vault=self.entry, index=item_index: self.helper.remove_vault_item_row(vault, index))
             row.addWidget(label)
             row.addWidget(combo, 1)
             row.addWidget(remove)
@@ -816,12 +765,8 @@ class CollapsibleHelperRow(QFrame):
         label.setObjectName("FormLabel")
         field = QLineEdit(str(self.entry.get("item", "")))
         field.setObjectName("SettingField")
-        field.editingFinished.connect(
-            lambda editor=field: self.helper.update_crafter_item(self.entry, editor)
-        )
-        field.returnPressed.connect(
-            lambda editor=field: self.helper.update_crafter_item(self.entry, editor)
-        )
+        field.editingFinished.connect(lambda editor=field: self.helper.update_crafter_item(self.entry, editor))
+        field.returnPressed.connect(lambda editor=field: self.helper.update_crafter_item(self.entry, editor))
         row.addWidget(label)
         row.addWidget(field, 1)
         layout.addLayout(row)
@@ -866,9 +811,7 @@ class CollapsibleHelperRow(QFrame):
         if self.kind == "grinder":
             active = " active" if self.entry.get("active", False) else ""
             return f"{self.kind.upper()}   yaw {yaw}   pitch {pitch}{suffix}{active}"
-        return (
-            f"{self.kind.upper()} {self.index + 1}   yaw {yaw}   pitch {pitch}{suffix}"
-        )
+        return f"{self.kind.upper()} {self.index + 1}   yaw {yaw}   pitch {pitch}{suffix}"
 
 
 class AddCaptureRow(QFrame):
@@ -883,9 +826,7 @@ class AddCaptureRow(QFrame):
         label = "Crafted Dedi" if kind == "crafted_dedi" else kind.capitalize()
         add = helper._icon_button(f"Add {label}", f"Add blank {label.lower()}")
         add.clicked.connect(lambda checked=False: helper.add_entry(kind))
-        capture = helper._icon_button(
-            "Capture Add", f"Capture yaw and pitch for a new {label.lower()}"
-        )
+        capture = helper._icon_button("Capture Add", f"Capture yaw and pitch for a new {label.lower()}")
         capture.clicked.connect(lambda checked=False: helper.capture_new(kind))
         layout.addWidget(add, 1)
         layout.addWidget(capture, 1)

@@ -29,9 +29,7 @@ class SettingsStateGuiMixin:
         game_size = find_window_size(GAME_WINDOW_TITLE)
         button = getattr(self, "start_game_button", None)
         if button is not None:
-            button.setVisible(
-                game_size is None or game_size not in SUPPORTED_GAME_RESOLUTIONS
-            )
+            button.setVisible(game_size is None or game_size not in SUPPORTED_GAME_RESOLUTIONS)
 
     def _unlock_start_game_button(self):
         self._set_start_game_enabled(True)
@@ -62,18 +60,12 @@ class SettingsStateGuiMixin:
 
         try:
             if resolution_only:
-                self.append_log(
-                    "[INFO] Preparing ARK with resolution-only settings...\n"
-                )
-                settings_path = (
-                    ark_game_setup.prepare_and_launch_game_with_display_settings()
-                )
+                self.append_log("[INFO] Preparing ARK with resolution-only settings...\n")
+                settings_path = ark_game_setup.prepare_and_launch_game_with_display_settings()
             else:
                 self.append_log("[INFO] Preparing ARK for 1920x1080 launch...\n")
                 settings_path = ark_game_setup.prepare_and_launch_game()
-            self.append_log(
-                f"[SUCCESS] ARK launch requested through Steam. Config: {settings_path}\n"
-            )
+            self.append_log(f"[SUCCESS] ARK launch requested through Steam. Config: {settings_path}\n")
         except Exception as exc:
             action = "Resolution-only start game" if resolution_only else "Start game"
             self.append_log(f"[ERROR] {action} failed: {exc}\n")
@@ -93,9 +85,7 @@ class SettingsStateGuiMixin:
         try:
             self.append_log("[INFO] Restoring ARK display and config settings...\n")
             settings_path = ark_game_setup.restore_game_settings()
-            self.append_log(
-                f"[SUCCESS] Restored ARK display and config: {settings_path}\n"
-            )
+            self.append_log(f"[SUCCESS] Restored ARK display and config: {settings_path}\n")
         except Exception as exc:
             self.append_log(f"[ERROR] Restore game settings failed: {exc}\n")
             self.dialog("Restore Game Settings Failed", str(exc), "error")
@@ -129,11 +119,7 @@ class SettingsStateGuiMixin:
 
         hint = getattr(self, "auto_start_hint", None)
         if hint is not None:
-            hint.setText(
-                "Start program when launcher opens"
-                if allowed
-                else "Set server number first"
-            )
+            hint.setText("Start program when launcher opens" if allowed else "Set server number first")
 
     def toggle_auto_start_program(self, checked):
         if not self._is_auto_start_allowed():
@@ -197,12 +183,8 @@ class SettingsStateGuiMixin:
                 data[key] = float(value)
             else:
                 data[key] = str(value)
-        data["auto_keys"] = deepcopy(
-            self.form_values.get("auto_keys", DEFAULT_SETTINGS["auto_keys"])
-        )
-        data["helper_inactive_opacity"] = max(
-            0.1, min(1.0, data["helper_inactive_opacity"])
-        )
+        data["auto_keys"] = deepcopy(self.form_values.get("auto_keys", DEFAULT_SETTINGS["auto_keys"]))
+        data["helper_inactive_opacity"] = max(0.1, min(1.0, data["helper_inactive_opacity"]))
         data["time_to_reberry"] = max(0, int(data["time_to_reberry"]))
         for key, default in TEMPLATE_REFERENCE_DEFAULTS.items():
             data[key] = str(self.form_values.get(key, default))
@@ -225,6 +207,10 @@ class SettingsStateGuiMixin:
         return raw_value
 
     def confirm_reset(self):
+        if getattr(self, "current_settings_group", "SERVER") == "GACHA":
+            if self.confirm("Reset Gacha", "Remove all Gacha and Gacha collect stations and switch this page to Manual?", "RESET"):
+                self.reset_gacha_config()
+            return
         if not self.confirm(
             "Apply Default Template",
             f"Apply {DEFAULT_TEMPLATE_FILENAME} to every template-enabled settings group? Station yaw will be preserved.",

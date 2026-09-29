@@ -10,9 +10,7 @@ KEY_N = 0x4E
 KEY_F1 = 0x70
 
 
-def focus_game_window(
-    window_title=GAME_WINDOW_TITLE, center_cursor_when_switching=False
-):
+def focus_game_window(window_title=GAME_WINDOW_TITLE, center_cursor_when_switching=False):
     if not hasattr(ctypes, "windll"):
         raise RuntimeError("Window focusing is only available on Windows.")
     if window_title == GAME_WINDOW_TITLE:
@@ -27,9 +25,7 @@ def capture_ccc_yaw_pitch():
     try:
         from source.ASA.player import console
     except Exception as exc:
-        raise RuntimeError(
-            f"Unable to load existing console capture flow: {exc}"
-        ) from exc
+        raise RuntimeError(f"Unable to load existing console capture flow: {exc}") from exc
 
     data = console.console_ccc(reset_state_before_capture=False)
     if data is None:
@@ -82,9 +78,7 @@ def parse_ccc_yaw_pitch(data):
     try:
         return float(values[3]), float(values[4])
     except ValueError as exc:
-        raise RuntimeError(
-            f"Invalid yaw/pitch in ccc clipboard data: {' '.join(values)}"
-        ) from exc
+        raise RuntimeError(f"Invalid yaw/pitch in ccc clipboard data: {' '.join(values)}") from exc
 
 
 def register_alt_n_hotkey(hwnd, hotkey_id):
@@ -92,9 +86,7 @@ def register_alt_n_hotkey(hwnd, hotkey_id):
 
 
 def register_shift_alt_n_hotkey(hwnd, hotkey_id):
-    return bool(
-        ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, MOD_ALT | MOD_SHIFT, KEY_N)
-    )
+    return bool(ctypes.windll.user32.RegisterHotKey(hwnd, hotkey_id, MOD_ALT | MOD_SHIFT, KEY_N))
 
 
 def register_shift_f1_hotkey(hwnd, hotkey_id):

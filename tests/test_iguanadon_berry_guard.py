@@ -305,7 +305,7 @@ class BerryStationTaskGuardTests(unittest.TestCase):
     def test_station_passes_berry_name_to_collection(self):
         stations, teleporter, iguanadon = load_stations_module()
 
-        stations.gacha_station("gacha1", "GACHA1", "left").execute()
+        stations.gacha_station("GACHA1", "left").execute()
 
         iguanadon.berry_station.assert_called_once_with("BERRIES")
         self.assertEqual(
@@ -316,7 +316,7 @@ class BerryStationTaskGuardTests(unittest.TestCase):
         stations, _, _ = load_stations_module()
 
         self.assertEqual(
-            stations.gacha_station("gacha1", "GACHA1", "left").get_requeue_delay(),
+            stations.gacha_station("GACHA1", "left").get_requeue_delay(),
             123,
         )
 
@@ -324,7 +324,7 @@ class BerryStationTaskGuardTests(unittest.TestCase):
         stations, teleporter, _ = load_stations_module()
         stations.template.check_template.return_value = True
 
-        stations.pego_station("pego1", "PEGO", 100).execute()
+        stations.pego_station(0, "PEGO", 100).execute()
 
         teleporter.teleport_not_default.assert_called_once_with("PEGO")
         stations.deposit.deposit_all.assert_called_once_with(None)

@@ -19,7 +19,16 @@ RUNNER_READY_MESSAGE = "__RUNNER_READY__"
 
 
 class LogsGuiMixin:
+    def _loaded_log_history(self, records: list[str]):
+        """Seed legacy bounded consoles from the new asynchronous initial reader."""
+        self.log_lines = [self._normalize_file_log_line(line) for line in records][-MAX_LAUNCHER_LOG_LINES:] + self.log_lines
+        self.log_lines = self.log_lines[-MAX_LAUNCHER_LOG_LINES:]
+        self._render_logs()
+
     def load_previous_logs(self):
+        if hasattr(self, "logs_page"):
+            self.logs_page.store.start()
+            return
         if not os.path.exists(GACHA_LOG_FILE):
             return
         try:
@@ -50,9 +59,7 @@ class LogsGuiMixin:
             try:
                 if not os.path.exists(GACHA_LOG_FILE):
                     if not missing_logged:
-                        self._emit_log_line(
-                            f"[WARN] Log file not found yet: {GACHA_LOG_FILE}\n"
-                        )
+                        self._emit_log_line(f"[WARN] Log file not found yet: {GACHA_LOG_FILE}\n")
                         missing_logged = True
                     self.log_tail_stop.wait(1)
                     continue
@@ -68,7 +75,7 @@ class LogsGuiMixin:
                     self.log_file_position = f.tell()
 
                 for line in lines:
-                    self._emit_log_line(self._normalize_file_log_line(line))
+                    self.log_bridge.file_line.emit(self._normalize_file_log_line(line))
             except Exception as exc:
                 self._emit_log_line(f"[ERROR] Unable to read live log file: {exc}\n")
                 self.log_tail_stop.wait(2)
@@ -99,7 +106,7 @@ class LogsGuiMixin:
                 return f"[{level}] {line}"
         return line
 
-    def append_log(self, text):
+    def append_log(self, text, from_file=False):
         if text.startswith(RUNNER_STATE_PREFIX):
             try:
                 state = json.loads(text[len(RUNNER_STATE_PREFIX) :]).get("state")
@@ -119,6 +126,7 @@ class LogsGuiMixin:
             if not getattr(self, "runner_loading", False):
                 self._render_logs()
             return
+        original_text = text
         if "Added task" in text and "[QUEUE]" not in text:
             text = f"[QUEUE] {text}"
         elif "CRITICAL" in text.upper() and "[CRITICAL]" not in text:
@@ -132,6 +140,8 @@ class LogsGuiMixin:
         elif "TEMPLATE" in text.upper() and "[TEMPLATE]" not in text:
             text = f"[TEMPLATE] {text}"
 
+        if not from_file and hasattr(self, "logs_page"):
+            self.logs_page.append_local(original_text)
         self.log_lines.append(text)
         if len(self.log_lines) > MAX_LAUNCHER_LOG_LINES:
             self.log_lines = self.log_lines[-MAX_LAUNCHER_LOG_LINES:]
@@ -145,25 +155,21 @@ class LogsGuiMixin:
         self._sync_runner_overlay()
 
     def _render_logs(self):
+        """Coalesce bursts into one GUI-thread presentation update."""
+        if not hasattr(self, "_console_render_timer"):
+            self._console_render_timer = QTimer(self)
+            self._console_render_timer.setSingleShot(True)
+            self._console_render_timer.timeout.connect(self._flush_console_views)
+        if not self._console_render_timer.isActive():
+            self._console_render_timer.start(25)
+
+    def _flush_console_views(self):
+        """Render pending records without touching worker protocol handling."""
+        if getattr(self, "shutdown_started", False):
+            return
         lines = self._filtered_logs()
-        full = self._format_log_lines(lines)
-        preview = self._format_log_lines(lines[-18:])
-        if hasattr(self, "full_log"):
-            self._set_console_html(self.full_log, full)
         if hasattr(self, "dashboard_log"):
-            self._set_console_html(self.dashboard_log, preview)
-
-    def _set_console_html(self, console, html):
-        console.setHtml(html)
-        console.moveCursor(console.textCursor().MoveOperation.End)
-        QTimer.singleShot(
-            0, lambda widget=console: self._scroll_console_to_bottom(widget)
-        )
-
-    @staticmethod
-    def _scroll_console_to_bottom(console):
-        scrollbar = console.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+            self.dashboard_log.update_records(lines[-18:], self._format_log_lines)
 
     def _format_log_lines(self, lines):
         html = []
@@ -183,9 +189,7 @@ class LogsGuiMixin:
                 color = COLORS["dim"]
             elif "[QUEUE]" in line:
                 color = COLORS["muted"]
-            html.append(
-                f'<span style="color:{color}; white-space:pre;">{self._escape(line)}</span>'
-            )
+            html.append(f'<span style="color:{color}; white-space:pre;">{self._escape(line)}</span>')
         return "<br>".join(html)
 
     @staticmethod
@@ -199,21 +203,13 @@ class LogsGuiMixin:
             return self._format_running_snapshot()
         if self.current_filter == "ALL":
             return self.log_lines
-        return [
-            line
-            for line in self.log_lines
-            if f"[{self.current_filter}]" in line or self.current_filter in line.upper()
-        ]
+        return [line for line in self.log_lines if f"[{self.current_filter}]" in line or self.current_filter in line.upper()]
 
     def _format_queue_snapshot(self):
         now = time.time()
         lines = []
-        queued = self.queue_snapshot.get("active", []) + self.queue_snapshot.get(
-            "waiting", []
-        )
-        queued.sort(
-            key=lambda task: float(task.get("execution_time", now)), reverse=True
-        )
+        queued = self.queue_snapshot.get("active", []) + self.queue_snapshot.get("waiting", [])
+        queued.sort(key=lambda task: float(task.get("execution_time", now)), reverse=True)
         for task in queued:
             remaining = max(0, int(float(task.get("execution_time", now)) - now))
             if task.get("state") == "READY" or remaining == 0:
@@ -267,6 +263,9 @@ class LogsGuiMixin:
                 f.truncate(0)
         except Exception as exc:
             self.append_log(f"[ERROR] Unable to clear log file: {exc}\n")
+        else:
+            if hasattr(self, "logs_page"):
+                self.logs_page.store.reload()
 
     def open_logs(self):
         """Open the launcher log file with the operating system's default app."""

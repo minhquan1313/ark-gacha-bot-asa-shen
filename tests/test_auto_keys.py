@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, call, patch
 
-from PySide6.QtCore import QEasingCurve, Qt
+from PySide6.QtCore import QEasingCurve
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication, QGridLayout, QLabel, QWidget
 from shiboken6 import delete, isValid
@@ -486,7 +486,8 @@ class AutoKeysPollingTests(unittest.TestCase):
                 Path("Input.ini"),
             ),
         ):
-            launcher._add_auto_keys_settings(0)
+            card = launcher._add_auto_keys_settings()
+            launcher.settings_form_layout.addWidget(card, 0, 0)
             launcher._on_supported_keys_finished((
                 id(launcher.auto_keys_supported_binding_labels),
                 {"Fire": "LeftMouseButton", "Use": "E", "DropItem": "O"},
@@ -499,25 +500,20 @@ class AutoKeysPollingTests(unittest.TestCase):
         self.assertTrue(labels["AutoKeysWarning"].wordWrap())
         self.assertFalse(labels["AutoKeysWarning"].isHidden())
         self.assertIn(
-            "delay between repeated presses",
+            "Delay between repeated presses",
             labels["AutoKeysIntervalDescription"].text(),
         )
         self.assertIn("must be held", labels["AutoKeysTriggerDescription"].text())
         self.assertTrue(labels["AutoKeysTriggerDescription"].wordWrap())
-        self.assertIn("for 1 second", labels["AutoKeysInstruction"].text())
-        self.assertTrue(labels["AutoKeysInstruction"].wordWrap())
-        self.assertIn("Trigger (seconds)", [label.text() for label in all_labels])
+        self.assertIn("for 1 second", launcher.auto_keys_hold_field.toolTip())
+        self.assertNotIn("AutoKeysInstruction", labels)
+        self.assertIn("Trigger", [label.text() for label in all_labels])
 
         header = container.findChild(QWidget, "AutoKeysHeader")
-        heading = header.findChild(QLabel, "SectionHeading")
-        self.assertEqual(heading.text(), "AUTO KEYS")
-        self.assertIs(header.layout().itemAt(0).widget(), heading)
-        self.assertIsNotNone(header.layout().itemAt(1).spacerItem())
-        self.assertIs(
-            header.layout().itemAt(2).widget(), launcher.auto_keys_enabled_field
-        )
-        self.assertEqual(header.layout().count(), 3)
-        self.assertIsNone(container.findChild(QWidget, "SettingsDivider"))
+        self.assertIn("AUTO KEYS", [label.text() for label in header.findChildren(QLabel)])
+        self.assertTrue(header.isAncestorOf(launcher.auto_keys_enabled_field))
+        self.assertEqual(header.height(), 104)
+        self.assertIsNotNone(container.findChild(QWidget, "SettingsDivider"))
 
         action_fields = launcher.auto_keys_action_fields
         binding_labels = launcher.auto_keys_supported_binding_labels
@@ -546,29 +542,9 @@ class AutoKeysPollingTests(unittest.TestCase):
         self.assertIn(f'color: {COLORS["cyan"]};', action_style)
         self.assertIn("font-weight: 900;", action_style)
         grid = launcher.auto_keys_supported_grid_layout
-        repeat_actions = tuple(action for action in AUTO_KEYS_ACTIONS if action != "MoveForward")
-        for index, action in enumerate(repeat_actions):
-            pair = index % 2
-            row = index // 2
-            column = pair * 3
-            action_item = grid.itemAtPosition(row, column)
-            binding_item = grid.itemAtPosition(row, column + 1)
-            self.assertIs(action_item.widget(), action_fields[action])
-            self.assertIs(binding_item.widget(), binding_labels[action])
-            self.assertTrue(action_item.alignment() & Qt.AlignmentFlag.AlignTop)
-            self.assertTrue(binding_item.alignment() & Qt.AlignmentFlag.AlignTop)
-        if len(repeat_actions) % 2:
-            final_row = len(repeat_actions) // 2
-            self.assertIsNone(grid.itemAtPosition(final_row, 3))
-            self.assertIsNone(grid.itemAtPosition(final_row, 4))
-        supported_title = next(
-            label for label in all_labels if label.text() == "Repeat keys"
-        )
-        self.assertTrue(supported_title.alignment() & Qt.AlignmentFlag.AlignTop)
-        supported_item = launcher.settings_form_layout.itemAt(
-            launcher.settings_form_layout.indexOf(launcher.auto_keys_supported_grid)
-        )
-        self.assertTrue(supported_item.alignment() & Qt.AlignmentFlag.AlignTop)
+        for action, (row, column) in {"Fire": (0, 0), "Use": (0, 2), "DropItem": (1, 0), "Crouch": (1, 2), "Jump": (2, 0), "MoveForward": (3, 0)}.items():
+            self.assertIs(grid.itemAtPosition(row, column).widget(), action_fields[action])
+            self.assertIs(grid.itemAtPosition(row, column + 1).widget(), binding_labels[action])
         self.assertEqual(binding_labels["Fire"].text(), "[LeftMouseButton]")
         self.assertEqual(binding_labels["Use"].text(), "[E]")
         self.assertEqual(binding_labels["DropItem"].text(), "[O]")
@@ -579,7 +555,7 @@ class AutoKeysPollingTests(unittest.TestCase):
         launcher.auto_keys_interval_field.setText("0.15")
         app.processEvents()
 
-        self.assertIn("for 2.5 seconds", labels["AutoKeysInstruction"].text())
+        self.assertIn("for 2.5 seconds", launcher.auto_keys_hold_field.toolTip())
         self.assertTrue(labels["AutoKeysWarning"].isHidden())
         self.assertFalse(labels["AutoKeysIntervalDescription"].isHidden())
 

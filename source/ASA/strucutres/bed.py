@@ -5,15 +5,7 @@ from source.ASA.player import player_inventory, player_state, tribelog
 from source.ASA.strucutres import teleporter
 from source.gacha_bot import render
 from source.logs import gachalogs as logs
-from source.utility import (
-    ark_input,
-    local_player,
-    template,
-    utils,
-    utils_simple,
-    variables,
-    windows,
-)
+from source.utility import ark_input, local_player, template, utils, utils_simple, variables, windows
 
 
 def is_clear_search_death_screen():
@@ -22,20 +14,14 @@ def is_clear_search_death_screen():
 
 def is_open_respawn():
     # if teleporter is open then we are not in the bed spawn screen
-    return (
-        template.check_template("beds_title_respawn", 0.7) and not teleporter.is_open()
-    )
+    return template.check_template("beds_title_respawn", 0.7) and not teleporter.is_open()
 
 
 def is_open():
     # bed title is found in both death and fast travel screens and server transfer spawn screen
     return (
-        (
-            template.check_template("beds_title", 0.7)
-            or template.check_template("beds_title_respawn", 0.7)
-        )
-        and not teleporter.is_open()
-    )  # if teleporter is open then we are not in the bed spawn screen
+        template.check_template("beds_title", 0.7) or template.check_template("beds_title_respawn", 0.7)
+    ) and not teleporter.is_open()  # if teleporter is open then we are not in the bed spawn screen
 
 
 def is_dead():
@@ -46,9 +32,7 @@ def close():
     attempts = 0
     while is_open():
         attempts += 1
-        logs.logger.debug(
-            f"trying to close the bed {attempts} / {source.ASA.config.teleporter_close_attempts}"
-        )
+        logs.logger.debug(f"trying to close the bed {attempts} / {source.ASA.config.teleporter_close_attempts}")
         windows.click(
             variables.get_pixel_loc("back_button_tp_x"),
             variables.get_pixel_loc("back_button_tp_y"),
@@ -57,9 +41,7 @@ def close():
             return time.sleep(0.3)
 
         if attempts >= source.ASA.config.teleporter_close_attempts:
-            logs.logger.error(
-                f"unable to close the bed after {source.ASA.config.teleporter_close_attempts} attempts"
-            )
+            logs.logger.error(f"unable to close the bed after {source.ASA.config.teleporter_close_attempts} attempts")
             break
 
 
@@ -93,12 +75,8 @@ def spawn_in(bed_name: str):
             state = "death screen" if is_dead() else "fast travel screen"
             logs.logger.debug(f"char is in the {state}")
 
-            search_bar_x = variables.get_pixel_loc(
-                "search_bar_bed_dead_x" if is_dead() else "search_bar_bed_alive_x"
-            )
-            windows.click(
-                search_bar_x, variables.get_pixel_loc("search_bar_bed_y")
-            )  # search bar y axis is the same for both death/alive
+            search_bar_x = variables.get_pixel_loc("search_bar_bed_dead_x" if is_dead() else "search_bar_bed_alive_x")
+            windows.click(search_bar_x, variables.get_pixel_loc("search_bar_bed_y"))  # search bar y axis is the same for both death/alive
 
             utils.ctrl_a()  # CTRL A removes all previous data in the search bar
             utils.write(bed_name)
@@ -108,18 +86,11 @@ def spawn_in(bed_name: str):
                 variables.get_pixel_loc("first_bed_slot_x"),
                 variables.get_pixel_loc("first_bed_slot_y"),
             )
-            if (
-                template.template_await_true(template.check_teleporter_orange, 3)
-                and not is_clear_search_death_screen()
-            ):
+            if template.template_await_true(template.check_teleporter_orange, 3) and not is_clear_search_death_screen():
                 break
 
-        if not template.template_await_true(
-            template.check_teleporter_orange, 3
-        ):  # waiting for the bed to appear as ready to spawn in
-            logs.logger.error(
-                "the bed char tried spawning on is not in the ready state or cant be found exiting out of bed screen now"
-            )
+        if not template.template_await_true(template.check_teleporter_orange, 3):  # waiting for the bed to appear as ready to spawn in
+            logs.logger.error("the bed char tried spawning on is not in the ready state or cant be found exiting out of bed screen now")
             close()
             return  # no need to continue with this therefore we should just leave func
 
@@ -142,9 +113,7 @@ def spawn_in(bed_name: str):
         dl = utils_simple.get_default_clock(deadline=t)
         while not dl():
             if template.template_await_true(template.white_flash, 0.5):
-                logs.logger.debug(
-                    f"white flash detected waiting for up too {t} seconds"
-                )
+                logs.logger.debug(f"white flash detected waiting for up too {t} seconds")
                 template.template_await_false(template.white_flash, t)
                 break
             else:
@@ -173,9 +142,7 @@ def fast_travel(bed_name: str):
     if not player_state.human.on_bed:
         # need to go to render bed if on tp
         if player_state.human.on_tp:
-            logs.logger.debug(
-                "char is on a teleporter going to render bed to fast travel"
-            )
+            logs.logger.debug("char is on a teleporter going to render bed to fast travel")
             render.fast_travel_to_render()
             time.sleep(0.2)
             utils.zero_center()
@@ -192,12 +159,8 @@ def fast_travel(bed_name: str):
     if is_open():
         state = "death screen" if is_dead() else "fast travel screen"
         logs.logger.debug(f"char is in the {state}")
-        search_bar_x = variables.get_pixel_loc(
-            "search_bar_bed_dead_x" if is_dead() else "search_bar_bed_alive_x"
-        )
-        windows.click(
-            search_bar_x, variables.get_pixel_loc("search_bar_bed_y")
-        )  # search bar y axis is the same for both death/alive
+        search_bar_x = variables.get_pixel_loc("search_bar_bed_dead_x" if is_dead() else "search_bar_bed_alive_x")
+        windows.click(search_bar_x, variables.get_pixel_loc("search_bar_bed_y"))  # search bar y axis is the same for both death/alive
         utils.ctrl_a()  # CTRL A removes all previous data in the search bar
         utils.write(bed_name)
         time.sleep(0.2)
@@ -206,12 +169,8 @@ def fast_travel(bed_name: str):
             variables.get_pixel_loc("first_bed_slot_y"),
         )
 
-        if not template.template_await_true(
-            template.check_teleporter_orange, 3
-        ):  # waiting for the bed to appear as ready to spawn in
-            logs.logger.error(
-                "the bed char tried spawning on is not in the ready state or cant be found exiting out of bed screen now"
-            )
+        if not template.template_await_true(template.check_teleporter_orange, 3):  # waiting for the bed to appear as ready to spawn in
+            logs.logger.error("the bed char tried spawning on is not in the ready state or cant be found exiting out of bed screen now")
             close()
             return  # no need to continue with this therefore we should just leave func
 

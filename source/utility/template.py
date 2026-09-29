@@ -296,9 +296,7 @@ def temporary_overwrite_regions(
 
 
 def get_region_roi(region: RoiRegion):
-    return screen.get_screen_roi(
-        region["start_x"], region["start_y"], region["width"], region["height"]
-    )
+    return screen.get_screen_roi(region["start_x"], region["start_y"], region["width"], region["height"])
 
 
 def template_await_true(func, sleep_amount: float, *args):
@@ -327,16 +325,8 @@ def _masked_gray_capture(
     lower_boundary=None,
     upper_boundary=None,
 ):
-    lower_boundary = np.array(
-        template_l_bounds_overwrite.get(item, default_bounds[0])
-        if lower_boundary is None
-        else lower_boundary
-    )
-    upper_boundary = np.array(
-        template_u_bounds_overwrite.get(item, default_bounds[1])
-        if upper_boundary is None
-        else upper_boundary
-    )
+    lower_boundary = np.array(template_l_bounds_overwrite.get(item, default_bounds[0]) if lower_boundary is None else lower_boundary)
+    upper_boundary = np.array(template_u_bounds_overwrite.get(item, default_bounds[1]) if upper_boundary is None else upper_boundary)
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
     masked_template = cv2.bitwise_and(roi, roi, mask=mask)
@@ -431,9 +421,7 @@ def templates_preload(items: list[RoiRegionKey]):
         image_path = template_image_overwrite.get(item, item)
         image = cv2.imread(f"assets/icons1080/{image_path}.png")
         if image is None:
-            raise FileNotFoundError(
-                f"Image assets/icons1080/{image_path}.png not found"
-            )
+            raise FileNotFoundError(f"Image assets/icons1080/{image_path}.png not found")
         image = _masked_gray_capture(item, image, lower_boundary, upper_boundary)
         _preloads[item] = image
 
@@ -462,19 +450,13 @@ def check_templates(base: RoiRegionKey, items: list[RoiRegionKey], threshold: fl
             image_path = template_image_overwrite.get(item, item)
             image = cv2.imread(f"assets/icons1080/{image_path}.png")
             if image is None:
-                raise FileNotFoundError(
-                    f"Image assets/icons1080/{image_path}.png not found"
-                )
+                raise FileNotFoundError(f"Image assets/icons1080/{image_path}.png not found")
             image = _masked_gray_capture(item, image, lower_boundary, upper_boundary)
         res = cv2.matchTemplate(gray_roi, image, cv2.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
         # DEBUG
-        if IS_DEBUG and (
-            DEBUG_ITEM is None
-            or item == DEBUG_ITEM
-            or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)
-        ):
+        if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)):
             import winsound
             from pathlib import Path
 
@@ -538,11 +520,7 @@ def check_template(item: RoiRegionKey, threshold: float):
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    if IS_DEBUG and (
-        DEBUG_ITEM is None
-        or item == DEBUG_ITEM
-        or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)
-    ):
+    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)):
         import winsound
         from pathlib import Path
 
@@ -751,9 +729,7 @@ def check_buffs(buff, threshold):
 
     image = cv2.imread(f"assets/icons1080/{buff}.png")
     if image is None:
-        raise FileNotFoundError(
-            f"Template image not found: assets/icons1080/{buff}.png"
-        )
+        raise FileNotFoundError(f"Template image not found: assets/icons1080/{buff}.png")
 
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower_boundary, upper_boundary)
@@ -779,12 +755,8 @@ def check_teleporter_orange():
 
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     pixel_hsv = hsv[0, 0]
-    logs.logger.template(
-        f"check orange {np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)}"
-    )
-    return bool(
-        np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)
-    )
+    logs.logger.template(f"check orange {np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)}")
+    return bool(np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary))
 
 
 def check_transfer_server_orange():
@@ -796,9 +768,7 @@ def check_transfer_server_orange():
 
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
     pixel_hsv = hsv[0, 0]
-    logs.logger.template(
-        f"check orange {np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)}"
-    )
+    logs.logger.template(f"check orange {np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)}")
     return np.all(pixel_hsv >= lower_boundary) and np.all(pixel_hsv <= upper_boundary)
 
 

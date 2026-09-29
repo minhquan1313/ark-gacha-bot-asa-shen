@@ -9,7 +9,7 @@ from source.gacha_bot.deposit_config import (
     default_deposit_config,
 )
 from source.launcher.config.constants import DEFAULT_SETTINGS, TEMPLATE_SETTING_KEYS
-from source.launcher.config.station_config import default_gacha_pair, default_pego_entry
+from source.launcher.config.station_config import default_gacha_entry, default_pego_entry
 from source.launcher.config.template_settings import (
     TEMPLATE_TYPE,
     TemplateCatalog,
@@ -35,7 +35,7 @@ def template_document(name: str = "Example") -> dict:
         "data": {
             "settings": {key: DEFAULT_SETTINGS[key] for key in TEMPLATE_SETTING_KEYS},
             "dedis": default_deposit_config(),
-            "gacha": default_gacha_pair(),
+            "gacha": [default_gacha_entry("GACHAPAIR_1", side) for side in ("left", "right")],
             "pego": [default_pego_entry()],
         },
     }
@@ -116,7 +116,7 @@ class TemplateSettingsTests(unittest.TestCase):
             "Snapshot",
             settings,
             default_deposit_config(),
-            default_gacha_pair(),
+            [default_gacha_entry("GACHAPAIR_1", side) for side in ("left", "right")],
             [default_pego_entry()],
         )
 

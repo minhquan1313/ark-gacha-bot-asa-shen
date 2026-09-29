@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (  # noqa: E402
     QFrame,
     QGridLayout,
     QLabel,
-    QToolButton,
     QWidget,
 )
 from test_template_settings import template_document  # noqa: E402
@@ -177,31 +176,25 @@ class TemplateUiBehaviorTests(unittest.TestCase):
         )
         self.assertEqual(launcher.change_template_group.call_count, 7)
 
-    def test_template_action_split_button_keeps_import_as_default(self) -> None:
+    def test_import_export_uses_combo_actions_and_resets_caption(self) -> None:
         launcher = SimpleNamespace(
             import_template_setting=Mock(),
             export_template_setting=Mock(),
             browse_template_settings=Mock(),
         )
-        launcher._template_action_split_button = MethodType(
-            LauncherPagesMixin._template_action_split_button, launcher
-        )
-
-        button = launcher._template_action_split_button()
-        menu_actions = button.menu().actions()
-
-        self.assertEqual(button.popupMode(), QToolButton.MenuButtonPopup)
-        self.assertEqual(button.defaultAction().text(), "IMPORT")
-        self.assertEqual(
-            [action.text() for action in menu_actions],
-            ["EXPORT TEMPLATE", "BROWSE TEMPLATE FOLDER"],
-        )
-        button.defaultAction().trigger()
-        menu_actions[0].trigger()
-        menu_actions[1].trigger()
-        launcher.import_template_setting.assert_called_once()
+        combo = LauncherPagesMixin._settings_import_export_button(launcher)
+        self.assertEqual(combo.placeholderText(), "IMPORT / EXPORT")
+        self.assertEqual(combo.currentIndex(), -1)
+        self.assertEqual([combo.itemText(i) for i in range(combo.count())],
+                         ["Import Settings", "Export Settings", "Browse Template Folder"])
+        for index in (0, 1, 2, 0):
+            combo.setCurrentIndex(index)
+            combo.activated.emit(index)
+            self.assertEqual(combo.currentIndex(), -1)
+        self.assertEqual(launcher.import_template_setting.call_count, 2)
         launcher.export_template_setting.assert_called_once()
         launcher.browse_template_settings.assert_called_once()
+        combo.close()
 
     def test_selector_displays_names_but_stores_filename_ids(self) -> None:
         catalog = TemplateCatalog(

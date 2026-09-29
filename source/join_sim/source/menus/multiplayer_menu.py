@@ -38,9 +38,7 @@ def clear_search():
 
 
 def wait_clear_search(delay=0.1):
-    return recon_utils.template_await_false(
-        recon_utils.check_template_no_bounds, delay, "search", 0.7
-    )
+    return recon_utils.template_await_false(recon_utils.check_template_no_bounds, delay, "search", 0.7)
 
 
 def is_server_list_loaded():

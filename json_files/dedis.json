@@ -2,7 +2,7 @@
   "depositCrystalData": [
     {
       "teleport": "GACHADEDI1",
-      "check_on_every_dedi": 6,
+      "check_on_every_dedi": 10,
       "dedi": {
         "items": [
           {
@@ -149,6 +149,59 @@
             "location": {
               "yaw": 48.74,
               "pitch": 12.04
+            },
+            "crouched": false
+          }
+        ]
+      },
+      "vault": {
+        "items": []
+      }
+    },
+    {
+      "teleport": "SSteamForge",
+      "check_on_every_dedi": 6,
+      "dedi": {
+        "items": [
+          {
+            "location": {
+              "yaw": 7.68,
+              "pitch": -34.33
+            },
+            "crouched": true
+          },
+          {
+            "location": {
+              "yaw": -48.14,
+              "pitch": -22.78
+            },
+            "crouched": true
+          },
+          {
+            "location": {
+              "yaw": -44.29,
+              "pitch": -17.53
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 7.33,
+              "pitch": -25.06
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": 10.48,
+              "pitch": 19.57
+            },
+            "crouched": false
+          },
+          {
+            "location": {
+              "yaw": -52.86,
+              "pitch": 17.64
             },
             "crouched": false
           }

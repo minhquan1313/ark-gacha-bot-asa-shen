@@ -86,11 +86,7 @@ class BaseHelperWindow(QWidget):
         self.setObjectName("DepositHelperWindow")
         self.setStyleSheet(owner.styleSheet())
         self.setWindowTitle(title)
-        self.setWindowFlags(
-            Qt.WindowType.Window
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.resize(width, height)
@@ -120,9 +116,7 @@ class BaseHelperWindow(QWidget):
         self.header_title = QLabel(title)
         self.header_title.setObjectName("HelperTitle")
         self.header_title.setWordWrap(False)
-        self.header_title.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
+        self.header_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.header_title.installEventFilter(self)
         self._header_title_full_text = title
         self.header_layout.addWidget(self.header_title, 1)
@@ -158,11 +152,7 @@ class BaseHelperWindow(QWidget):
         title = getattr(self, "_header_title_full_text", "")
         width = max(40, self.header_title.width())
         self.header_title.setToolTip(title)
-        self.header_title.setText(
-            self.header_title.fontMetrics().elidedText(
-                title, Qt.TextElideMode.ElideRight, width
-            )
-        )
+        self.header_title.setText(self.header_title.fontMetrics().elidedText(title, Qt.TextElideMode.ElideRight, width))
 
     def _titlebar_button(self, text, tooltip):
         button = AnimatedButton(text, "chrome")
@@ -189,9 +179,7 @@ class BaseHelperWindow(QWidget):
             self.hotkey_label.setText(f"{self.unavailable_hotkey_hint} here")
             return
         try:
-            self.hotkey_registered = self.register_hotkey_func(
-                int(self.winId()), self.hotkey_id
-            )
+            self.hotkey_registered = self.register_hotkey_func(int(self.winId()), self.hotkey_id)
         except Exception:
             self.hotkey_registered = False
         if not self.hotkey_registered:
@@ -305,19 +293,11 @@ class BaseHelperWindow(QWidget):
         guide_active = guide is not None and guide.isActiveWindow()
         guide_hovered = guide is not None and getattr(guide, "mouse_inside", False)
         owner_active = self.owner is not None and self.owner.isActiveWindow()
-        return (
-            self.mouse_inside
-            or guide_hovered
-            or self.isActiveWindow()
-            or guide_active
-            or owner_active
-        )
+        return self.mouse_inside or guide_hovered or self.isActiveWindow() or guide_active or owner_active
 
     def sync_window_opacity(self):
         opacity = float(self.owner.settings.get("helper_inactive_opacity", 0.3))
-        self.setWindowOpacity(
-            1.0 if self._opacity_keep_visible() else max(0.1, min(1.0, opacity))
-        )
+        self.setWindowOpacity(1.0 if self._opacity_keep_visible() else max(0.1, min(1.0, opacity)))
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -339,20 +319,11 @@ class BaseHelperWindow(QWidget):
         header_title = getattr(self, "header_title", None)
         if watched not in (header_frame, header_title):
             return super().eventFilter(watched, event)
-        if (
-            event.type() == QEvent.Type.MouseButtonPress
-            and event.button() == Qt.MouseButton.LeftButton
-        ):
-            self.drag_position = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            )
+        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
             return True
-        if (
-            event.type() == QEvent.Type.MouseMove
-            and self.drag_position is not None
-            and event.buttons() & Qt.MouseButton.LeftButton
-        ):
+        if event.type() == QEvent.Type.MouseMove and self.drag_position is not None and event.buttons() & Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
             return True
@@ -428,9 +399,7 @@ class WorkerHelperWindow(BaseHelperWindow):
             self.worker_launch_pending = False
             self._release_auto_keys_suspension()
             return
-        suspend_auto_keys = getattr(
-            self.owner, "_suspend_auto_keys_for_automation", None
-        )
+        suspend_auto_keys = getattr(self.owner, "_suspend_auto_keys_for_automation", None)
         if callable(suspend_auto_keys) and not self.auto_keys_suspension_active:
             suspend_auto_keys(self)
             self.auto_keys_suspension_active = True
@@ -587,9 +556,7 @@ class WorkerHelperWindow(BaseHelperWindow):
         if overlay is None or overlay.loading_active:
             return
         try:
-            overlay.refresh(
-                {"running": [], "active": [], "waiting": []}, self.helper_log_lines
-            )
+            overlay.refresh({"running": [], "active": [], "waiting": []}, self.helper_log_lines)
         except RuntimeError:
             self.helper_log_overlay = None
 
@@ -617,9 +584,7 @@ class WorkerHelperWindow(BaseHelperWindow):
         if overlay is None:
             return
         try:
-            overlay.refresh(
-                {"running": [], "active": [], "waiting": []}, self.helper_log_lines
-            )
+            overlay.refresh({"running": [], "active": [], "waiting": []}, self.helper_log_lines)
         except RuntimeError:
             self.helper_log_overlay = None
 
@@ -653,9 +618,7 @@ class WorkerHelperWindow(BaseHelperWindow):
         if not self.auto_keys_suspension_active:
             return
         self.auto_keys_suspension_active = False
-        resume_auto_keys = getattr(
-            self.owner, "_resume_auto_keys_after_automation", None
-        )
+        resume_auto_keys = getattr(self.owner, "_resume_auto_keys_after_automation", None)
         if callable(resume_auto_keys):
             resume_auto_keys(self)
 
@@ -714,11 +677,7 @@ class WorkerHelperWindow(BaseHelperWindow):
             with contextlib.suppress(OSError, ValueError):
                 process.stdout.close()
         thread = self.output_reader_thread
-        if (
-            thread is not None
-            and thread is not threading.current_thread()
-            and thread.is_alive()
-        ):
+        if thread is not None and thread is not threading.current_thread() and thread.is_alive():
             thread.join(timeout=1)
         self.output_reader_thread = None
 

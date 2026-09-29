@@ -164,9 +164,7 @@ def get_default_timeout_value():
 def start_subprocess(cmd: list[str], *args, **kwargs):
     """Start a child process while retaining its command and adding its app id."""
     if sys.platform == "win32":
-        kwargs["creationflags"] = (
-            kwargs.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
-        )
+        kwargs["creationflags"] = kwargs.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
     return subprocess.Popen(
         [*cmd, "--app-id", APP_ID],
         *args,

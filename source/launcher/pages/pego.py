@@ -1,15 +1,26 @@
+from functools import partial
+
+from source.launcher.components.settings_actions import (
+    SettingsEntryRow,
+    SettingsHoverActions,
+    SettingsRowActions,
+)
+from source.launcher.components.settings_sections import (
+    SettingsActionButton,
+    SettingsField,
+    SettingsFieldGrid,
+    SettingsSectionCard,
+    SettingsUnitControl,
+    settings_label,
+)
 from source.launcher.pages.common import (
     DEFAULT_PEGO_DELAY,
     DEFAULT_PEGO_SNOW_OWLS_PER_GACHA,
     DEFAULT_PEGO_STATION_SECONDS,
     DEFAULT_PEGO_TARGET_CRYSTALS,
-    QFrame,
     QHBoxLayout,
-    QLabel,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
-    _counted_title,
     calculate_pego_delay,
     default_pego_entry,
     load_pego_config,
@@ -17,201 +28,162 @@ from source.launcher.pages.common import (
     save_pego_config,
     set_all_pego_delays,
 )
+from source.launcher.settings_theme import CARD_SPACING, CONTROL_HEIGHT, ENTRY_ROW_GAP
 
 
 class PegoPagesMixin:
     def _render_pego_group(self):
+        """Present the existing Pego model in the approved Settings shell."""
         self._ensure_pego_config()
         self._ensure_gacha_config()
-
-        heading = QLabel(_counted_title("PEGO SETTINGS", len(self.pego_config)))
-        heading.setObjectName("SectionHeading")
-        self.settings_form_layout.addWidget(heading, 0, 0, 1, 3)
-        state, template_name, template_error = self._add_template_selector("PEGO")
-
+        outer, state = self._approved_settings_content("PEGO")
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(12)
-        self.settings_form_layout.addWidget(content, 1, 0, 1, 4)
-        self._style_template_collection(content, state, template_name, template_error)
+        content_layout.setSpacing(CARD_SPACING)
+        outer.addWidget(content)
+        self._style_template_collection(content, *state)
 
-        controls, controls_layout = self._panel("PEGO DELAYS")
-        delay_row = QHBoxLayout()
-        delay_label = QLabel("set all delays")
-        delay_label.setObjectName("FormLabel")
-        self.pego_bulk_delay_field = self._deposit_line_edit(
-            self.pego_config[-1]["delay"] if self.pego_config else DEFAULT_PEGO_DELAY
+        controls = SettingsSectionCard(
+            "Pego delays",
+            "Configure global pego delay settings",
+            "pego_delays",
+            "clock",
         )
-        set_delay = self._button("SET ALL DELAYS", "secondary")
+        self.pego_bulk_delay_field = self._deposit_line_edit(self.pego_config[-1]["delay"] if self.pego_config else DEFAULT_PEGO_DELAY)
+        self.pego_bulk_delay_field.setFixedHeight(CONTROL_HEIGHT)
+        set_delay = SettingsActionButton("Set all delays", "bolt")
+        set_delay.ensurePolished()
+        set_delay.setMinimumWidth(set_delay.sizeHint().width())
         set_delay.clicked.connect(self.apply_all_pego_delays)
-        delay_row.addWidget(delay_label)
-        delay_row.addWidget(self.pego_bulk_delay_field, 1)
-        delay_row.addWidget(set_delay)
-        expanded = getattr(self, "pego_calculator_expanded", False)
-        calc_toggle = self._button(
-            "v CALCULATOR" if expanded else "> CALCULATOR", "secondary"
-        )
-        delay_row.addWidget(calc_toggle)
-        controls_layout.addLayout(delay_row)
-        calculator = self._pego_calculator_panel()
-        calculator.setVisible(getattr(self, "pego_calculator_expanded", False))
-        calc_toggle.clicked.connect(
-            lambda checked=False, target=calculator, button=calc_toggle: (
-                self._toggle_pego_calculator(target, button)
+        calc_toggle = SettingsActionButton("Calculator", "calculator")
+        calc_toggle.ensurePolished()
+        calc_toggle.setMinimumWidth(calc_toggle.sizeHint().width())
+        calc_toggle.setCheckable(True)
+        calc_toggle.setChecked(getattr(self, "pego_calculator_expanded", False))
+        actions = QWidget()
+        actions_row = QHBoxLayout(actions)
+        actions_row.setContentsMargins(0, 0, 0, 0)
+        actions_row.addWidget(set_delay, 1)
+        actions_row.addWidget(calc_toggle, 1)
+        controls.body.addWidget(
+            SettingsFieldGrid(
+                [
+                    SettingsField(
+                        "Set all delays",
+                        SettingsUnitControl(self.pego_bulk_delay_field, "(s)"),
+                    ),
+                    actions,
+                ]
             )
         )
-        controls_layout.addWidget(calculator)
+        calculator = self._pego_calculator_panel()
+        calculator.setVisible(calc_toggle.isChecked())
+        calc_toggle.clicked.connect(lambda checked=False: self._toggle_pego_calculator(calculator, calc_toggle))
+        controls.body.addWidget(calculator)
         content_layout.addWidget(controls)
-
         content_layout.addWidget(self._pego_section())
-        content_layout.addStretch()
 
     def _pego_section(self):
-        """Group pego entries in a collapsible card with a delete-all action."""
-        section = QFrame()
-        section.setObjectName("DepositRouteCard")
-        layout = QVBoxLayout(section)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(8)
-        expanded = getattr(self, "pego_section_expanded", True)
-        header = QHBoxLayout()
-        toggle = self._button("v" if expanded else ">", "secondary")
-        toggle.setObjectName("HelperIconButton")
-        title = QLabel(f"PEGO ({len(self.pego_config)})")
-        title.setObjectName("PanelTitle")
-        remove = self._icon_button(
-            "icon.trash_junk", "Remove all PEGO entries", "danger"
+        """Show the model count, compact entries, and existing collection actions."""
+        section = SettingsSectionCard(
+            f"Pego ({len(self.pego_config)})",
+            "Configure individual pego teleporters.",
+            "pego_list",
+            "pego",
         )
+        remove = SettingsActionButton("Delete all", "trash", "danger")
         remove.setEnabled(bool(self.pego_config))
         remove.clicked.connect(self.remove_pego_section)
-        header.addWidget(toggle)
-        header.addWidget(title)
-        header.addStretch()
-        header.addWidget(remove)
-        layout.addLayout(header)
+        section.header.layout().addWidget(SettingsHoverActions(section, remove))
         body = QWidget()
         body_layout = QVBoxLayout(body)
         body_layout.setContentsMargins(0, 0, 0, 0)
-        body_layout.setSpacing(8)
-        body.setVisible(expanded)
+        body_layout.setSpacing(ENTRY_ROW_GAP)
         for index, entry in enumerate(self.pego_config):
             body_layout.addWidget(self._pego_card(index, entry))
-        add = self._button("ADD PEGO", "secondary")
-        add.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        add = SettingsActionButton("Add Pego", "pego")
         add.clicked.connect(self.add_pego)
         body_layout.addWidget(add)
 
-        def toggle_body(checked: bool = False):
-            """Toggle the entry list and retain its state across page refreshes."""
-            is_visible = body.isHidden()
-            body.setVisible(is_visible)
-            toggle.setText("v" if is_visible else ">")
-            self.pego_section_expanded = is_visible
-
-        toggle.clicked.connect(toggle_body)
-        layout.addWidget(body)
+        section.body.addWidget(body)
         return section
 
-    def _pego_card(self, entry_index, entry):
-        card = QFrame()
-        card.setObjectName("DepositRouteCard")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 10, 12, 10)
-        layout.setSpacing(8)
-
-        header = QHBoxLayout()
-        title = QLabel(entry.get("name", f"PEGO {entry_index + 1}"))
-        title.setObjectName("PanelTitle")
-        copy = self._button("COPY", "secondary")
-        copy.setObjectName("HelperIconButton")
-        copy.setToolTip("Copy teleport name")
-
-        teleporter = entry.get("teleporter", "")
-        copy.clicked.connect(
-            lambda checked=False, value=teleporter: self.copy_text(value)
-        )
-        remove = self._icon_button("icon.trash_junk", "Remove pego entry", "danger")
-        remove.clicked.connect(
-            lambda checked=False, index=entry_index: self.remove_pego(index)
-        )
-        header.addWidget(title)
-        header.addStretch()
-        header.addWidget(copy)
-        header.addWidget(remove)
-        layout.addLayout(header)
-
-        row = QHBoxLayout()
-        row.setSpacing(8)
-        self._add_station_text_field(
-            row, "name", entry.get("name", ""), entry_index, "pego"
-        )
-        self._add_station_text_field(
-            row, "teleporter", entry.get("teleporter", ""), entry_index, "pego"
-        )
-        self._add_station_text_field(
-            row, "delay", entry.get("delay", ""), entry_index, "pego"
-        )
-        layout.addLayout(row)
-        return card
+    def _pego_card(self, entry_index: int, entry: dict):
+        """Keep entry editors and actions aligned without nested rounded cards."""
+        fields = []
+        editors = {}
+        for key, title in (
+            ("teleporter", "Teleporter"),
+            ("delay", "Delay"),
+        ):
+            field = self._deposit_line_edit(entry.get(key, ""))
+            field.setFixedHeight(CONTROL_HEIGHT)
+            field.setMinimumWidth({"teleporter": 120, "delay": 80}[key])
+            field.setAccessibleName(f"Pego {entry_index + 1} {title}")
+            callback = partial(self.update_station_field, "pego", entry_index, key, field)
+            field.editingFinished.connect(callback)
+            field.returnPressed.connect(callback)
+            editors[key] = field
+            control = SettingsUnitControl(field, "(s)") if key == "delay" else field
+            presentation = SettingsField(title, control, icon="clock" if key == "delay" else "locator")
+            presentation.label.setFixedWidth({"teleporter": 72, "delay": 42}[key])
+            presentation.label.setWordWrap(False)
+            fields.append(presentation)
+        # copy = SettingsActionButton("", "copy")
+        # copy.setToolTip("Copy teleporter name")
+        # copy.clicked.connect(
+        #     lambda checked=False: self.copy_text(editors["teleporter"].text())
+        # )
+        remove = SettingsActionButton("", "trash", "danger")
+        remove.setFixedWidth(CONTROL_HEIGHT)
+        remove.setToolTip("Remove pego entry")
+        remove.clicked.connect(lambda checked=False: self.remove_pego(entry_index))
+        # actions = SettingsRowActions([("Copy", copy), ("Delete", remove)])
+        actions = SettingsRowActions([("Delete", remove)])
+        return SettingsEntryRow(entry_index, fields, actions)
 
     def _pego_calculator_panel(self):
-        panel = QFrame()
-        panel.setObjectName("HelperRow")
+        """Keep the calculator's five inputs and actions in an open, flat layout."""
+        panel = QWidget()
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(8)
-
-        fields = QHBoxLayout()
-        fields.setSpacing(8)
-        self.pego_calc_target_field = self._pego_calculator_field(
-            fields, "target crystals", DEFAULT_PEGO_TARGET_CRYSTALS
-        )
-        self.pego_calc_pego_count_field = self._pego_calculator_field(
-            fields, "pego amount", len(self.pego_config)
-        )
-        self.pego_calc_gacha_count_field = self._pego_calculator_field(
-            fields, "gacha amount", len(self.gacha_config)
-        )
-        self.pego_calc_snow_owl_field = self._pego_calculator_field(
-            fields, "snow owl / gacha", DEFAULT_PEGO_SNOW_OWLS_PER_GACHA
-        )
-        self.pego_calc_station_seconds_field = self._pego_calculator_field(
-            fields, "pego station seconds", DEFAULT_PEGO_STATION_SECONDS
-        )
-        layout.addLayout(fields)
-
+        layout.setContentsMargins(0, 8, 0, 0)
+        fields = []
+        specs = [
+            ("pego_calc_target_field", "Target crystals", DEFAULT_PEGO_TARGET_CRYSTALS),
+            ("pego_calc_pego_count_field", "Pego amount", len(self.pego_config)),
+            ("pego_calc_gacha_count_field", "Gacha amount", len(self.gacha_config)),
+            (
+                "pego_calc_snow_owl_field",
+                "Snow owl / gacha",
+                DEFAULT_PEGO_SNOW_OWLS_PER_GACHA,
+            ),
+            (
+                "pego_calc_station_seconds_field",
+                "Pego station time",
+                DEFAULT_PEGO_STATION_SECONDS,
+            ),
+        ]
+        for name, title, value in specs:
+            field = self._deposit_line_edit(value)
+            field.setFixedHeight(CONTROL_HEIGHT)
+            setattr(self, name, field)
+            control = SettingsUnitControl(field, "(s)") if name == "pego_calc_station_seconds_field" else field
+            fields.append(SettingsField(title, control, stacked=True))
+            field.editingFinished.connect(lambda: self.update_pego_delay_recommendation(show_error=False))
+        layout.addWidget(SettingsFieldGrid(fields))
         result_row = QHBoxLayout()
-        result_row.setSpacing(8)
-        self.pego_calc_result_label = QLabel("recommended delay: 1767s")
-        self.pego_calc_result_label.setObjectName("HelperRowSummary")
-        reset = self._button("RESET", "secondary")
-        apply = self._button("APPLY", "secondary")
+        self.pego_calc_result_label = settings_label("")
+        reset = SettingsActionButton("Reset", "update")
+        apply = SettingsActionButton("Apply", "save")
         reset.clicked.connect(self.reset_pego_delay_calculator)
         apply.clicked.connect(self.apply_pego_delay_recommendation)
         result_row.addWidget(self.pego_calc_result_label, 1)
         result_row.addWidget(reset)
         result_row.addWidget(apply)
         layout.addLayout(result_row)
-
-        for field in self._pego_calculator_fields():
-            field.editingFinished.connect(
-                lambda: self.update_pego_delay_recommendation(show_error=False)
-            )
         self.update_pego_delay_recommendation(show_error=False)
         return panel
-
-    def _pego_calculator_field(
-        self, layout: QHBoxLayout, label_text: str, value: object
-    ):
-        group = QVBoxLayout()
-        label = QLabel(label_text)
-        label.setObjectName("FormLabel")
-        field = self._deposit_line_edit(value)
-        group.addWidget(label)
-        group.addWidget(field)
-        layout.addLayout(group)
-        return field
 
     def _pego_calculator_fields(self):
         return [
@@ -245,12 +217,8 @@ class PegoPagesMixin:
 
     def add_pego(self):
         self._ensure_pego_config()
-        delay = (
-            self.pego_config[-1]["delay"] if self.pego_config else DEFAULT_PEGO_DELAY
-        )
-        self.pego_config.append(
-            default_pego_entry(next_pego_index(self.pego_config), delay)
-        )
+        delay = self.pego_config[-1]["delay"] if self.pego_config else DEFAULT_PEGO_DELAY
+        self.pego_config.append(default_pego_entry(next_pego_index(self.pego_config), delay))
         self.save_pego_config()
         self._render_settings_group("PEGO")
 
@@ -331,7 +299,7 @@ class PegoPagesMixin:
     def _toggle_pego_calculator(self, body: QWidget, button: QWidget):
         visible = body.isHidden()
         body.setVisible(visible)
-        button.setText("v CALCULATOR" if visible else "> CALCULATOR")
+        button.setChecked(visible)
         self.pego_calculator_expanded = visible
 
     def reset_pego_config(self):

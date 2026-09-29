@@ -50,9 +50,7 @@ def close():
     attempts = 0
     while is_open():
         attempts += 1
-        logs.logger.debug(
-            f"Trying to close Transmitter inventory {attempts} / {config.inventory_close_attempts}"
-        )
+        logs.logger.debug(f"Trying to close Transmitter inventory {attempts} / {config.inventory_close_attempts}")
         windows.click(get_pixel_loc("back_x"), get_pixel_loc("back_y"))
 
         if not template.template_await_false(is_open, 2):
@@ -93,9 +91,7 @@ def open():
     ensure_active()
 
     if not is_open():
-        logs.logger.error(
-            f"Can't open transmitter inventory after {config.timeout_deadline}"
-        )
+        logs.logger.error(f"Can't open transmitter inventory after {config.timeout_deadline}")
         return
 
     # Wait for loading
@@ -108,9 +104,7 @@ def open():
             player_state.check_disconnected()
 
     if not is_open_ready():
-        logs.logger.error(
-            f"Transmitter inventory failed to load after {config.timeout_deadline}"
-        )
+        logs.logger.error(f"Transmitter inventory failed to load after {config.timeout_deadline}")
 
 
 def is_item_has_timer():
@@ -125,9 +119,7 @@ def is_item_has_timer():
 
     # If item before(when in transmitter) might has timer OR NOT, and the item in player inventory will never have timer
     # If this function return true, mean it's changed -> still have timer
-    is_still_timer = template.capture_compare_changed(
-        "capture_item_player_second_slot", item_with_timer
-    )
+    is_still_timer = template.capture_compare_changed("capture_item_player_second_slot", item_with_timer)
 
     logs.logger.debug(f"{'Still have timer' if is_still_timer else 'Not have timer'}")
 
@@ -153,9 +145,7 @@ def open_and_has_timer():
             player_state.check_state()
 
         if attempt_inv >= config.inventory_open_attempts:
-            logs.logger.critical(
-                f"Can't open transmitter inventory after {attempt_inv} attempts"
-            )
+            logs.logger.critical(f"Can't open transmitter inventory after {attempt_inv} attempts")
             break
     if not is_open():
         return False
@@ -183,9 +173,7 @@ def open_and_transfer(server_number="0000", *, should_go_tekpod=True):
 
             if transmitter_transfer_menu.is_open():
                 break
-            logs.logger.debug(
-                f"Open transmitter inventory {attempt_inv}/{config.inventory_open_attempts}"
-            )
+            logs.logger.debug(f"Open transmitter inventory {attempt_inv}/{config.inventory_open_attempts}")
             open()
 
             if not is_open():
@@ -193,25 +181,17 @@ def open_and_transfer(server_number="0000", *, should_go_tekpod=True):
                 player_state.check_state()
 
             if attempt_inv >= config.inventory_open_attempts:
-                logs.logger.critical(
-                    f"Can't open transmitter inventory after {attempt_inv} attempts"
-                )
+                logs.logger.critical(f"Can't open transmitter inventory after {attempt_inv} attempts")
                 break
 
-        if (
-            not transmitter_transfer_menu.is_open()
-            and not player_state.uploaded
-            and not is_open()
-        ):
+        if not transmitter_transfer_menu.is_open() and not player_state.uploaded and not is_open():
             return False
 
         # OPEN TRANS SERVER LIST
         transmitter_transfer_menu.open()
 
         # PERFORM TRANSFER, SUCCESS ONLY WHEN IT SHOW BEDS
-        success = transmitter_transfer_menu.do_join_server(
-            str(server_number), should_go_tekpod=should_go_tekpod
-        )
+        success = transmitter_transfer_menu.do_join_server(str(server_number), should_go_tekpod=should_go_tekpod)
         if success:
             logs.logger.debug("Successfully joined destination server!")
             return True

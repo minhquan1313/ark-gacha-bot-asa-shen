@@ -50,26 +50,22 @@ class AutoFeedGuide(QDialog):
     PAGES = [
         (
             "STEP 1 / PREPARE",
-            "Placeholder: position the character safely and make sure the player is "
-            "outside the Tek pod before configuring Baby locations.",
+            "Placeholder: position the character safely and make sure the player is outside the Tek pod before configuring Baby locations.",
             "welcome",
         ),
         (
             "STEP 2 / CAPTURE BABIES",
-            "Placeholder: use Capture Add for a new Baby, or capture and view an "
-            "existing Baby row while aiming at its inventory location.",
+            "Placeholder: use Capture Add for a new Baby, or capture and view an existing Baby row while aiming at its inventory location.",
             "dashboard",
         ),
         (
             "STEP 3 / CHOOSE MODE",
-            "Placeholder: Tek pod mode waits inside the pod. Non-Tek-pod mode shows "
-            "a warning and uses the configured food and water actions.",
+            "Placeholder: Tek pod mode waits inside the pod. Non-Tek-pod mode shows a warning and uses the configured food and water actions.",
             "logo",
         ),
         (
             "STEP 4 / START CYCLE",
-            "Placeholder: the helper feeds every Baby, waits through the feed cycle, "
-            "and repeats until the helper is stopped.",
+            "Placeholder: the helper feeds every Baby, waits through the feed cycle, and repeats until the helper is stopped.",
             "logo_text",
         ),
     ]
@@ -80,11 +76,7 @@ class AutoFeedGuide(QDialog):
         self.setStyleSheet(parent.styleSheet())
         self.setWindowTitle("Auto Baby Feeding Guide")
         self.setModal(False)
-        self.setWindowFlags(
-            Qt.WindowType.Tool
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.page_index = 0
         self.drag_position = None
@@ -230,20 +222,11 @@ class AutoFeedGuide(QDialog):
         header_title = getattr(self, "header_title", None)
         if watched not in (header_frame, header_title):
             return super().eventFilter(watched, event)
-        if (
-            event.type() == QEvent.Type.MouseButtonPress
-            and event.button() == Qt.MouseButton.LeftButton
-        ):
-            self.drag_position = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            )
+        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
             return True
-        if (
-            event.type() == QEvent.Type.MouseMove
-            and self.drag_position is not None
-            and event.buttons() & Qt.MouseButton.LeftButton
-        ):
+        if event.type() == QEvent.Type.MouseMove and self.drag_position is not None and event.buttons() & Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
             return True
@@ -310,9 +293,7 @@ class AutoBabyFeedingHelper(WorkerHelperWindow):
         tek_layout.addWidget(self._label("Station yaw"))
         self.station_yaw = self._field(self.config["station_yaw"])
         tek_layout.addWidget(self.station_yaw, 1)
-        capture = self._helper_action_button(
-            "icon.capture_target", "Capture station yaw"
-        )
+        capture = self._helper_action_button("icon.capture_target", "Capture station yaw")
         capture.clicked.connect(self._capture_station_yaw)
         view = self._helper_action_button("icon.view_eye", "View station yaw")
         view.clicked.connect(self._view_station_yaw)
@@ -343,14 +324,9 @@ class AutoBabyFeedingHelper(WorkerHelperWindow):
             self.feed_cycle,
         ):
             field.editingFinished.connect(self._persist)
-        self.warning = QLabel(
-            "WARNING // NO TEK POD\nMake sure every Baby location is correct before starting."
-        )
+        self.warning = QLabel("WARNING // NO TEK POD\nMake sure every Baby location is correct before starting.")
         self.warning.setWordWrap(True)
-        self.warning.setStyleSheet(
-            "QLabel { color: #FFD166; background: rgba(82, 45, 8, 190); "
-            "border: 1px solid #FF9F1C; padding: 8px; }"
-        )
+        self.warning.setStyleSheet("QLabel { color: #FFD166; background: rgba(82, 45, 8, 190); border: 1px solid #FF9F1C; padding: 8px; }")
         settings_layout.addWidget(self.warning)
         layout.addWidget(settings)
 
@@ -424,11 +400,7 @@ class AutoBabyFeedingHelper(WorkerHelperWindow):
         body_layout.setContentsMargins(0, 0, 0, 0)
         body_layout.setSpacing(8)
         layout.addWidget(body)
-        toggle.clicked.connect(
-            lambda checked=False, target=body, button=toggle: self._toggle_section(
-                target, button
-            )
-        )
+        toggle.clicked.connect(lambda checked=False, target=body, button=toggle: self._toggle_section(target, button))
         self.collapsible_sections.append((body, toggle))
 
         if title == "BABY":
@@ -588,8 +560,7 @@ class AutoBabyFeedingHelper(WorkerHelperWindow):
             dialog = CyberDialog(
                 self,
                 "Start Without Tek Pod?",
-                "You don't have a Tek pod. Make sure Baby locations are correct. "
-                "Do you still want to start now?",
+                "You don't have a Tek pod. Make sure Baby locations are correct. Do you still want to start now?",
                 "warning",
                 confirm_text="START",
                 cancel_text="CANCEL",
@@ -655,9 +626,7 @@ class BabyRow(QFrame):
         self.summary.setWordWrap(True)
         top.addWidget(self.index_label)
         top.addWidget(self.summary, 1)
-        capture = self.helper._helper_action_button(
-            "icon.capture_target", "Capture Baby location"
-        )
+        capture = self.helper._helper_action_button("icon.capture_target", "Capture Baby location")
         capture.clicked.connect(self._capture)
         view = self.helper._helper_action_button("icon.view_eye", "View Baby location")
         view.clicked.connect(self._view)
@@ -712,9 +681,7 @@ class BabyRow(QFrame):
 
     def refresh_summary(self):
         crouch = "on" if self.crouched.isChecked() else "off"
-        self.summary.setText(
-            f"Yaw {self.yaw.text()} | Pitch {self.pitch.text()} | Crouch {crouch}"
-        )
+        self.summary.setText(f"Yaw {self.yaw.text()} | Pitch {self.pitch.text()} | Crouch {crouch}")
 
     @staticmethod
     def _label(text: str) -> QLabel:

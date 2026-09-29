@@ -19,12 +19,8 @@ buttons = {
 }
 
 capture_name: str | None = None
-capture_dedi_deposit_crystal = capture_for(
-    "dedi_deposit_crystal", active=CAPTURE_DEDI_DEPOSIT_CRYSTAL, delay=0.1
-)
-capture_dedi_deposit_grind = capture_for(
-    "dedi_deposit_grind", active=CAPTURE_DEDI_DEPOSIT_GRIND, delay=0.1
-)
+capture_dedi_deposit_crystal = capture_for("dedi_deposit_crystal", active=CAPTURE_DEDI_DEPOSIT_CRYSTAL, delay=0.1)
+capture_dedi_deposit_grind = capture_for("dedi_deposit_grind", active=CAPTURE_DEDI_DEPOSIT_GRIND, delay=0.1)
 
 was_clear_dedi = False
 was_last_dedi_empty = False
@@ -154,9 +150,7 @@ def unsafe_fast_deposit_all(item: DediStorageState):
     capture_name = None
 
 
-def open_deposit_all(
-    teleporter_name: str, item: DediStorageState, *, ensure_resource=True
-):
+def open_deposit_all(teleporter_name: str, item: DediStorageState, *, ensure_resource=True):
     global capture_name
     dl = utils_simple.get_default_clock(multiplier=3)
     attempt = 0
@@ -189,11 +183,7 @@ def open_deposit_all(
                     # NOTHING ON PLAYER INVENTORY, SO NOTHING TO DEPOSIT, RETURN TRUE
                     inventory.close()
                     return True
-        elif (
-            not player_inventory.is_can_transfer_all()
-            and not is_can_deposit()
-            or is_empty()
-        ):
+        elif not player_inventory.is_can_transfer_all() and not is_can_deposit() or is_empty():
             inventory.close()
             return True
 
@@ -207,9 +197,7 @@ def open_deposit_all(
         return True
 
 
-def open_deposit_stack(
-    count: int, teleporter_name: str, item: DediStorageState, *, ensure_resource=True
-):
+def open_deposit_stack(count: int, teleporter_name: str, item: DediStorageState, *, ensure_resource=True):
     global capture_name
 
     if count < 1:
@@ -246,11 +234,7 @@ def open_deposit_stack(
                     # NOTHING ON PLAYER INVENTORY, SO NOTHING TO DEPOSIT, RETURN TRUE
                     inventory.close()
                     return True
-        elif (
-            not player_inventory.is_can_transfer_all()
-            and not is_can_deposit()
-            or is_empty()
-        ):
+        elif not player_inventory.is_can_transfer_all() and not is_can_deposit() or is_empty():
             inventory.close()
             return True
 
@@ -316,18 +300,10 @@ def open_withdraw_all(
             windows.click(*get_pixel_loc("dedi_withdraw"))
 
             is_lagged = ensure_safe_transfer_timer and (
-                inventory.was_server_lag_last_open_long
-                or (
-                    not is_empty()
-                    and not template.template_await_true(
-                        player_inventory.is_can_transfer_all, LAGGED_DETECT
-                    )
-                )
+                inventory.was_server_lag_last_open_long or (not is_empty() and not template.template_await_true(player_inventory.is_can_transfer_all, LAGGED_DETECT))
             )
             if is_lagged:
-                logs.logger.critical(
-                    "Server save detected, redo to make sure no resource loss if transfer server!!!"
-                )
+                logs.logger.critical("Server save detected, redo to make sure no resource loss if transfer server!!!")
 
                 inventory.close()
                 recover_if_problem(teleporter_name, item)

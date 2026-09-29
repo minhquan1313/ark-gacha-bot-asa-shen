@@ -3,6 +3,7 @@
     {
       "teleport": "GACHACRAFT",
       "check_on_every_dedi": 3,
+      "delay": 180,
       "dedi": {
         "items": [
           {
@@ -31,7 +32,15 @@
       "crafters": [
         {
           "location": {
-            "yaw": -80.57,
+            "yaw": -61.09,
+            "pitch": -2.83
+          },
+          "crouched": false,
+          "item": "polymer"
+        },
+        {
+          "location": {
+            "yaw": -154.18,
             "pitch": -1.08
           },
           "crouched": false,

@@ -141,23 +141,15 @@ def _pre_plan(
     if start_mode != "destinate":
         for account in _account_order(account_count, start_account):
             if account_count > 1:
-                tasks.append(
-                    _transfer_task_label(
-                        account, "Steam", _steam_account(players, account)
-                    )
-                )
+                tasks.append(_transfer_task_label(account, "Steam", _steam_account(players, account)))
             tasks.extend(
                 [
                     _transfer_task_label(account, "ARK Ready"),
-                    _transfer_task_label(
-                        account, "Join R", str(settings["resource_server"])
-                    ),
+                    _transfer_task_label(account, "Join R", str(settings["resource_server"])),
                     _transfer_task_label(account, "Wait R Structures"),
                     _transfer_task_label(account, "Check Player"),
                     _transfer_task_label(account, "Withdraw R"),
-                    _transfer_task_label(
-                        account, "Back Tekpod", _bed_name(players, account)
-                    ),
+                    _transfer_task_label(account, "Back Tekpod", _bed_name(players, account)),
                     _transfer_task_label(account, "Enter Tekpod"),
                 ]
             )
@@ -183,21 +175,15 @@ def _pre_plan(
                         str(settings["resource_server"]),
                         loop_number,
                     ),
-                    _transfer_task_label(
-                        account, "Wait R Structures", loop_number=loop_number
-                    ),
-                    _transfer_task_label(
-                        account, "Leave Tekpod", loop_number=loop_number
-                    ),
+                    _transfer_task_label(account, "Wait R Structures", loop_number=loop_number),
+                    _transfer_task_label(account, "Leave Tekpod", loop_number=loop_number),
                     _transfer_task_label(
                         account,
                         "Transfer D",
                         str(settings["destination_server"]),
                         loop_number,
                     ),
-                    _transfer_task_label(
-                        account, "Wait D Bed", loop_number=loop_number
-                    ),
+                    _transfer_task_label(account, "Wait D Bed", loop_number=loop_number),
                     _transfer_task_label(
                         account,
                         "Spawn D Bed",
@@ -216,9 +202,7 @@ def _pre_plan(
                         str(settings["resource_server"]),
                         loop_number,
                     ),
-                    _transfer_task_label(
-                        account, "Wait R Bed", loop_number=loop_number
-                    ),
+                    _transfer_task_label(account, "Wait R Bed", loop_number=loop_number),
                     _transfer_task_label(
                         account,
                         "Spawn R Bed",
@@ -234,9 +218,7 @@ def _pre_plan(
             )
             tasks.extend(
                 [
-                    _transfer_task_label(
-                        account, "Withdraw Next", loop_number=loop_number
-                    ),
+                    _transfer_task_label(account, "Withdraw Next", loop_number=loop_number),
                     _transfer_task_label(
                         account,
                         "Back Tekpod",
@@ -244,9 +226,7 @@ def _pre_plan(
                     ),
                 ]
             )
-            tasks.append(
-                _transfer_task_label(account, "Enter Tekpod", loop_number=loop_number)
-            )
+            tasks.append(_transfer_task_label(account, "Enter Tekpod", loop_number=loop_number))
     return tasks
 
 
@@ -268,9 +248,7 @@ def run_transfer_helper(
 ):
     """Run transfers with inventory-loss recovery disabled for nested teleports."""
     with teleporter.prevent_suicide_recovery():
-        return _run_transfer_helper(
-            config, task_callback, multiple_resource=multiple_resource
-        )
+        return _run_transfer_helper(config, task_callback, multiple_resource=multiple_resource)
 
 
 def _run_transfer_helper(
@@ -301,10 +279,7 @@ def _run_transfer_helper(
         start_account = int(config.get("start_account", 1))
     except (TypeError, ValueError):
         start_account = 1
-    if account_count > 0:
-        start_account = max(1, min(start_account, account_count))
-    else:
-        start_account = 1
+    start_account = max(1, min(start_account, account_count)) if account_count > 0 else 1
     missing = missing_runtime_inputs(
         settings,
         dedis,
@@ -313,9 +288,7 @@ def _run_transfer_helper(
         start_account=start_account,
     )
     if missing:
-        raise TransferConfigError(
-            "Missing transfer helper inputs: " + ", ".join(missing)
-        )
+        raise TransferConfigError("Missing transfer helper inputs: " + ", ".join(missing))
 
     current_steam_account = _steam_account(players, start_account)
     task_tracker = TransferTaskTracker(
@@ -338,16 +311,10 @@ def _run_transfer_helper(
             if is_withdrawed_all:
                 break
             # -=-=-=-=-=-=STARTING AT RESOURCE SERVER - DEFAULT MODE-=-=-=-=-=-=
-            update_global_config(
-                settings, "resource", _bed_name(players, account), dedis
-            )
+            update_global_config(settings, "resource", _bed_name(players, account), dedis)
 
             if account_count > 1:
-                task_tracker.start(
-                    _transfer_task_label(
-                        account, "Steam", _steam_account(players, account)
-                    )
-                )
+                task_tracker.start(_transfer_task_label(account, "Steam", _steam_account(players, account)))
                 current_steam_account = switch_steam_account(
                     account,
                     current_steam_account,
@@ -361,24 +328,13 @@ def _run_transfer_helper(
                 return False
 
             # -=-=-=-=-=-=-=-=-=-=-=-=
-            logs.logger.info(
-                f"Account {account}: joining resource server {settings['resource_server']}."
-            )
-            task_tracker.start(
-                _transfer_task_label(
-                    account, "Join R", str(settings["resource_server"])
-                )
-            )
+            logs.logger.info(f"Account {account}: joining resource server {settings['resource_server']}.")
+            task_tracker.start(_transfer_task_label(account, "Join R", str(settings["resource_server"])))
             if not join_server(settings["resource_server"]):
                 if account_count == 1:
-                    logs.logger.error(
-                        "Account 1: resource join did not complete; stopping without "
-                        "closing ARK."
-                    )
+                    logs.logger.error("Account 1: resource join did not complete; stopping without closing ARK.")
                     return False
-                logs.logger.warning(
-                    f"Account {account}: resource join did not complete; skipping account."
-                )
+                logs.logger.warning(f"Account {account}: resource join did not complete; skipping account.")
                 continue
             # -=-=-=-=-=-=-=-=-=-=-=-=
             if join_main.was_in_mainmenu:
@@ -394,9 +350,7 @@ def _run_transfer_helper(
                 return False
             # TODO: Have a guard here, to make sure it has timer on resource
             # -=-=-=-=-=-=-=-=-=-=-=-=
-            task_tracker.start(
-                _transfer_task_label(account, "Back Tekpod", global_settings.bed_spawn)
-            )
+            task_tracker.start(_transfer_task_label(account, "Back Tekpod", global_settings.bed_spawn))
             go_back_to_bed()
             # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(_transfer_task_label(account, "Enter Tekpod"))
@@ -411,9 +365,7 @@ def _run_transfer_helper(
         if is_withdrawed_all:
             if did_last_transfer_after_withdrawed_all:
                 # Nothing else to withdraw
-                logs.logger.info(
-                    "Nothing else to withdraw for now, so stopping loop..."
-                )
+                logs.logger.info("Nothing else to withdraw for now, so stopping loop...")
                 break
             elif account_detect_withdrawed_all is not None:
                 # This help let all player do last transfer again
@@ -431,9 +383,7 @@ def _run_transfer_helper(
                 continue
 
             # -=-=-=-=-=-=STARTING AT RESOURCE SERVER - DELIVERY TO DESTINATION SERVER-=-=-=-=-=-=
-            update_global_config(
-                settings, "resource", _bed_name(players, account), dedis
-            )
+            update_global_config(settings, "resource", _bed_name(players, account), dedis)
             if account_count > 1:
                 task_tracker.start(
                     _transfer_task_label(
@@ -450,9 +400,7 @@ def _run_transfer_helper(
                     ui_coords,
                     steam_restart_interval=settings.get("steam_restart_interval", 30),
                 )
-            task_tracker.start(
-                _transfer_task_label(account, "ARK Ready", loop_number=loop_number)
-            )
+            task_tracker.start(_transfer_task_label(account, "ARK Ready", loop_number=loop_number))
             if ensure_ark_running(settings, ui_coords) is False:
                 return False
             # -=-=-=-=-=-=-=-=-=-=-=-=
@@ -470,19 +418,11 @@ def _run_transfer_helper(
                 return False
             # -=-=-=-=-=-=-=-=-=-=-=-=
             if start_mode == "default" or join_main.was_in_mainmenu:
-                task_tracker.start(
-                    _transfer_task_label(
-                        account, "Wait R Structures", loop_number=loop_number
-                    )
-                )
+                task_tracker.start(_transfer_task_label(account, "Wait R Structures", loop_number=loop_number))
                 wait_structure_load(was_in_bed=True)
             else:
                 # -=-=-=-=-=-=-=-=-=-=-=-=
-                task_tracker.start(
-                    _transfer_task_label(
-                        account, "Leave Tekpod", loop_number=loop_number
-                    )
-                )
+                task_tracker.start(_transfer_task_label(account, "Leave Tekpod", loop_number=loop_number))
                 player_state.check_state()
                 # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(
@@ -504,13 +444,9 @@ def _run_transfer_helper(
                 else:
                     break
             # -=-=-=-=-=-=HERE WE ARE AT THE DESTINATION SERVER-=-=-=-=-=-=
-            update_global_config(
-                settings, "destination", _bed_name(players, account), dedis
-            )
+            update_global_config(settings, "destination", _bed_name(players, account), dedis)
 
-            task_tracker.start(
-                _transfer_task_label(account, "Wait D Bed", loop_number=loop_number)
-            )
+            task_tracker.start(_transfer_task_label(account, "Wait D Bed", loop_number=loop_number))
             wait_for_bed_screen()
             # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(
@@ -532,16 +468,12 @@ def _run_transfer_helper(
             )
             wait_structure_load(was_in_bed=True)
             # -=-=-=-=-=-=-=-=-=-=-=-=
-            task_tracker.start(
-                _transfer_task_label(account, "Deposit R", loop_number=loop_number)
-            )
+            task_tracker.start(_transfer_task_label(account, "Deposit R", loop_number=loop_number))
             if deposit_to_transfer_dedis(dedis, multiple_resource) is False:
                 return False
 
             if hotfix3_recover_after_dedis():
-                task_tracker.start(
-                    _transfer_task_label(account, "Recovery", loop_number=loop_number)
-                )
+                task_tracker.start(_transfer_task_label(account, "Recovery", loop_number=loop_number))
                 if deposit_to_transfer_dedis(dedis, multiple_resource) is False:
                     return False
 
@@ -552,24 +484,12 @@ def _run_transfer_helper(
             
             ONLY APPLY IF THE CURRENT ACCOUNT IS ACCOUNT 1
             """
-            if (
-                is_withdrawed_all
-                and did_last_transfer_after_withdrawed_all
-                and account == 1
-            ):
+            if is_withdrawed_all and did_last_transfer_after_withdrawed_all and account == 1:
                 # -=-=-=-=-=-=-=-=-=-=-=-=
-                task_tracker.start(
-                    _transfer_task_label(
-                        account, "Back Tekpod", loop_number=loop_number
-                    )
-                )
+                task_tracker.start(_transfer_task_label(account, "Back Tekpod", loop_number=loop_number))
                 go_back_to_bed()
                 # -=-=-=-=-=-=-=-=-=-=-=-=
-                task_tracker.start(
-                    _transfer_task_label(
-                        account, "Enter Tekpod", loop_number=loop_number
-                    )
-                )
+                task_tracker.start(_transfer_task_label(account, "Enter Tekpod", loop_number=loop_number))
                 render.enter_tekpod(allow_eat_implant=False)
 
                 acc_1_last_server = "destination"
@@ -594,12 +514,8 @@ def _run_transfer_helper(
                 "destination",
             )
             # -=-=-=-=-=Here we are back to Resource server-=-=-=-=-=-=-=
-            update_global_config(
-                settings, "resource", _bed_name(players, account), dedis
-            )
-            task_tracker.start(
-                _transfer_task_label(account, "Wait R Bed", loop_number=loop_number)
-            )
+            update_global_config(settings, "resource", _bed_name(players, account), dedis)
+            task_tracker.start(_transfer_task_label(account, "Wait R Bed", loop_number=loop_number))
             wait_for_bed_screen()
             # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(
@@ -622,27 +538,17 @@ def _run_transfer_helper(
             wait_structure_load()
             # Continue only while the resource dedis still have a withdrawal cycle.
             if not is_withdrawed_all:
-                task_tracker.start(
-                    _transfer_task_label(
-                        account, "Withdraw Next", loop_number=loop_number
-                    )
-                )
+                task_tracker.start(_transfer_task_label(account, "Withdraw Next", loop_number=loop_number))
                 if withdraw_from_transfer_dedis(dedis, account) is False:
                     return False
                 # TODO: Have a guard here, to make sure it has timer on resource
                 # -=-=-=-=-=-=-=-=-=-=-=-=
-                task_tracker.start(
-                    _transfer_task_label(
-                        account, "Back Tekpod", loop_number=loop_number
-                    )
-                )
+                task_tracker.start(_transfer_task_label(account, "Back Tekpod", loop_number=loop_number))
                 go_back_to_bed()
             else:
                 utils.zero_center()  # This will fix player aim wrong direction in the enter_tekpod below
             # -=-=-=-=-=-=-=-=-=-=-=-=
-            task_tracker.start(
-                _transfer_task_label(account, "Enter Tekpod", loop_number=loop_number)
-            )
+            task_tracker.start(_transfer_task_label(account, "Enter Tekpod", loop_number=loop_number))
             render.enter_tekpod(allow_eat_implant=False)
 
     # Everything is done, now logging back to original account, which is player 1
@@ -667,9 +573,7 @@ def _run_transfer_helper(
                 ]
             )
         else:
-            cleanup_tasks.append(
-                _transfer_task_label(1, "Join D", str(settings["destination_server"]))
-            )
+            cleanup_tasks.append(_transfer_task_label(1, "Join D", str(settings["destination_server"])))
         cleanup_tasks.extend(
             [
                 _transfer_task_label(final_account, "Wait D Bed"),
@@ -684,9 +588,7 @@ def _run_transfer_helper(
         )
         task_tracker.add_tasks(cleanup_tasks)
         # -=-=-=-=-=-=-=-=-=-=-=-=
-        task_tracker.start(
-            _transfer_task_label(1, "Restore Steam", _steam_account(players, 1))
-        )
+        task_tracker.start(_transfer_task_label(1, "Restore Steam", _steam_account(players, 1)))
         current_steam_account = switch_steam_account(
             1,
             current_steam_account,
@@ -701,43 +603,27 @@ def _run_transfer_helper(
             return False
         # -=-=-=-=-=-=-=-=-=-=-=-=
         if acc_1_last_server == "resource":
-            task_tracker.start(
-                _transfer_task_label(1, "Join R", str(settings["resource_server"]))
-            )
+            task_tracker.start(_transfer_task_label(1, "Join R", str(settings["resource_server"])))
             if not join_server(settings["resource_server"]):
-                logs.logger.error(
-                    "Player 1 restoration failed: resource server join did not complete."
-                )
+                logs.logger.error("Player 1 restoration failed: resource server join did not complete.")
                 return False
             task_tracker.start(_transfer_task_label(final_account, "Wait R Structures"))
             wait_structure_load(was_in_bed=True)
             # -=-=-=-=-=-=-=-=-=-=-=-=
-            task_tracker.start(
-                _transfer_task_label(
-                    final_account, "Transfer D", str(settings["destination_server"])
-                )
-            )
+            task_tracker.start(_transfer_task_label(final_account, "Transfer D", str(settings["destination_server"])))
             transfer_to_server(
                 settings["destination_server"],
                 dedis,
                 "resource",
             )
             # -=-=-=-=-=-=HERE WE ARE AT THE DESTINATION SERVER-=-=-=-=-=-=
-            update_global_config(
-                settings, "destination", _bed_name(players, final_account), dedis
-            )
+            update_global_config(settings, "destination", _bed_name(players, final_account), dedis)
         else:
-            task_tracker.start(
-                _transfer_task_label(1, "Join D", str(settings["destination_server"]))
-            )
+            task_tracker.start(_transfer_task_label(1, "Join D", str(settings["destination_server"])))
             if not join_server(settings["destination_server"]):
-                logs.logger.error(
-                    "Player 1 restoration failed: destination server join did not complete."
-                )
+                logs.logger.error("Player 1 restoration failed: destination server join did not complete.")
                 return False
-            update_global_config(
-                settings, "destination", _bed_name(players, final_account), dedis
-            )
+            update_global_config(settings, "destination", _bed_name(players, final_account), dedis)
         # task_tracker.start(_transfer_task_label(final_account, "Wait D Bed"))
         # wait_for_bed_screen()
         # # -=-=-=-=-=-=-=-=-=-=-=-=
@@ -789,20 +675,14 @@ def ensure_ark_running(
             time.sleep(1)
         if attempt >= attempts:
             break
-        logs.logger.warning(
-            "ARK did not reach a usable window state; relaunching "
-            f"({attempt}/{attempts})."
-        )
+        logs.logger.warning(f"ARK did not reach a usable window state; relaunching ({attempt}/{attempts}).")
         _restart_steam_before_ark_retry(
             steam,
             _settings_int(settings, "steam_restart_interval", 30),
         )
         launched = False
     if last_error is not None:
-        raise RuntimeError(
-            "ARK did not reach a usable window state after "
-            f"{attempts} attempt(s): {last_error}"
-        )
+        raise RuntimeError(f"ARK did not reach a usable window state after {attempts} attempt(s): {last_error}")
     raise RuntimeError(f"ARK did not start after {attempts} attempt(s).")
 
 
@@ -871,11 +751,7 @@ def update_global_config(
         if global_settings.station_pushout_yaw is not None:
             station_pushout_yaw_destination = global_settings.station_pushout_yaw
 
-        global_settings.station_pushout_yaw = (
-            station_pushout_yaw_resource
-            if station_pushout_yaw_resource is not None
-            else None
-        )
+        global_settings.station_pushout_yaw = station_pushout_yaw_resource if station_pushout_yaw_resource is not None else None
 
     else:
         global_settings.server_number = str(settings["destination_server"])
@@ -884,11 +760,7 @@ def update_global_config(
         if global_settings.station_pushout_yaw is not None:
             station_pushout_yaw_resource = global_settings.station_pushout_yaw
 
-        global_settings.station_pushout_yaw = (
-            station_pushout_yaw_destination
-            if station_pushout_yaw_destination is not None
-            else None
-        )
+        global_settings.station_pushout_yaw = station_pushout_yaw_destination if station_pushout_yaw_destination is not None else None
 
 
 def wait_structure_load(was_in_bed=False):
@@ -899,9 +771,7 @@ def wait_structure_load(was_in_bed=False):
         hotfix3_structure_wont_load()
 
 
-def withdraw_from_transfer_dedis(
-    dedis: TransferDedisConfig, account: int, *, ensure_timer=True, should_teleport=True
-):
+def withdraw_from_transfer_dedis(dedis: TransferDedisConfig, account: int, *, ensure_timer=True, should_teleport=True):
     global list_of_withdrawed_dedi
     global is_withdrawed_all
     global account_detect_withdrawed_all
@@ -927,9 +797,7 @@ def withdraw_from_transfer_dedis(
         player_inventory.g_last_check_can_transfer = False
 
         label = f"Transfer dedi {index}"
-        if not dedi.open_withdraw_all(
-            route_teleport_name, item, should_clear_on_empty=True
-        ):
+        if not dedi.open_withdraw_all(route_teleport_name, item, should_clear_on_empty=True):
             logs.logger.error(f"{label} transfer withdraw failed")
             return False
         logs.logger.debug(f"{label} transfer withdraw completed")
@@ -951,11 +819,7 @@ def withdraw_from_transfer_dedis(
 
         is_last_2_dedi_checked = (index - 1) in list_of_withdrawed_dedi
 
-        if (
-            is_last_dedi
-            and is_last_2_dedi_checked
-            and (dedi.was_clear_dedi or dedi.was_last_dedi_empty)
-        ):
+        if is_last_dedi and is_last_2_dedi_checked and (dedi.was_clear_dedi or dedi.was_last_dedi_empty):
             # Last dedi didn't have any resource after take all, and cleared
             list_of_withdrawed_dedi.add(index)
             is_withdrawed_all = True
@@ -1000,9 +864,7 @@ def redo_withdraw_ensure_timer(
             return False
         logs.logger.debug(f"{label} transfer withdraw completed")
 
-    return withdraw_from_transfer_dedis(
-        dedis, account, ensure_timer=False, should_teleport=False
-    )
+    return withdraw_from_transfer_dedis(dedis, account, ensure_timer=False, should_teleport=False)
 
 
 def deposit_to_transfer_dedis(dedis: TransferDedisConfig, multiple_resource=False):
@@ -1197,9 +1059,7 @@ def go_back_to_dedi_and_fix_excess(dedis: TransferDedisConfig):
     items: list[DediStorageState] = resource_route["items"]
     for index, item in enumerate(items, 1):
         label = f"Transfer dedi {index}"
-        if not dedi.open_deposit_stack(
-            3, route_teleport_name, item, ensure_resource=False
-        ):
+        if not dedi.open_deposit_stack(3, route_teleport_name, item, ensure_resource=False):
             logs.logger.error(f"{label} transfer withdraw failed")
             return False
         logs.logger.debug(f"{label} transfer withdraw completed")
@@ -1220,10 +1080,7 @@ def transfer_to_server(
         teleporter.teleport_not_default(transmitter_teleport)
         utils.zero_center()
 
-        logs.logger.info(
-            f"Transferring to server {server} "
-            f"({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS})."
-        )
+        logs.logger.info(f"Transferring to server {server} ({attempt}/{RECOVERABLE_RUNTIME_ATTEMPTS}).")
 
         if transmitter.open_and_transfer(server):
             logs.logger.info(f"Transfer to server {server} requested.")
@@ -1233,9 +1090,7 @@ def transfer_to_server(
             return False
 
         if attempt < RECOVERABLE_RUNTIME_ATTEMPTS:
-            logs.logger.warning(
-                "Transmitter transfer did not complete; recovering player state."
-            )
+            logs.logger.warning("Transmitter transfer did not complete; recovering player state.")
             player_state.check_state()
             utils.zero_center()
             time.sleep(0.5)
@@ -1261,9 +1116,7 @@ def wait_for_bed_screen():
             return True
 
         if success.download():
-            raise RuntimeError(
-                "Can't select character to spawn, please fix it yourself"
-            )
+            raise RuntimeError("Can't select character to spawn, please fix it yourself")
 
         if player_state.check_disconnected():
             dl.reset()
@@ -1286,9 +1139,7 @@ def spawn_bed(name):
 
 def go_back_to_bed():
     if not render.render_flag:
-        logs.logger.debug(
-            f"render flag{render.render_flag} we are trying to get into the pod now"
-        )
+        logs.logger.debug(f"render flag{render.render_flag} we are trying to get into the pod now")
         player_state.reset_state()
         teleporter.teleport_not_default(global_settings.bed_spawn)
     else:

@@ -21,10 +21,7 @@ def _open_crop_plot_inventory():
     attempts = 0
     while not template.check_template("inventory", 0.7):
         attempts += 1
-        logs.logger.debug(
-            f"trying to open crop plot inventory {attempts} / "
-            f"{asa_config.inventory_open_attempts}"
-        )
+        logs.logger.debug(f"trying to open crop plot inventory {attempts} / {asa_config.inventory_open_attempts}")
         inventory.open()
         if inventory.is_open():
             break
@@ -34,28 +31,8 @@ def _open_crop_plot_inventory():
         time.sleep(0.3)
 
 
-def _close_crop_plot_inventory():
-    attempts = 0
-    while template.check_template("inventory", 0.7):
-        attempts += 1
-        logs.logger.debug(
-            f"trying to close crop plot inventory {attempts} / "
-            f"{asa_config.inventory_close_attempts}"
-        )
-        inventory.close()
-        if attempts >= asa_config.inventory_close_attempts:
-            logs.logger.error(
-                f"unable to close the crop plot inventory after {attempts} attempts"
-            )
-            break
-
-
 def is_still_fece():
-    return (
-        template.check_template_no_bounds("item_snow_owl_pellet", 0.8)
-        or template.check_template_no_bounds("item_fertilizer", 0.8)
-        or template.check_template_no_bounds("item_fertilizer_fece", 0.8)
-    )
+    return template.check_template_no_bounds("item_snow_owl_pellet", 0.8) or template.check_template_no_bounds("item_fertilizer", 0.8) or template.check_template_no_bounds("item_fertilizer_fece", 0.8)
 
 
 def wait_for_no_fece_in_crop():
@@ -65,7 +42,7 @@ def wait_for_no_fece_in_crop():
 
 def wait_for_prompt_to_clear():
     logs.logger.info("Aim away from the crop plot to continue...")
-    while template.check_template_no_bounds("crop_plot_prompt", 0.9):
+    while is_open_prompt():
         time.sleep(POLL_INTERVAL)
 
 
@@ -82,7 +59,7 @@ def run_fertilizer_refresh():
                 if is_open():
                     break
                 if inventory.is_open():
-                    _close_crop_plot_inventory()
+                    inventory.close()
                 logs.logger.warning("Crop plot did not open. Aim away and try again.")
                 logs.logger.info("Aim at a crop plot to refresh fertilizer...")
             time.sleep(POLL_INTERVAL)
@@ -95,4 +72,7 @@ def run_fertilizer_refresh():
         player_inventory.transfer_all_inventory()
 
         logs.logger.info("Closing crop plot inventory...")
-        _close_crop_plot_inventory()
+
+        inventory.close()
+        time.sleep(0.5)
+        wait_for_prompt_to_clear()

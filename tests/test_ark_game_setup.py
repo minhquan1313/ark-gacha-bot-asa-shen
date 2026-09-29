@@ -170,6 +170,8 @@ class ArkGameSetupTests(unittest.TestCase):
             ),
             patch.object(ark_game_setup, "restore_state_exists", return_value=True),
             patch.object(ark_game_setup, "load_restore_state", return_value=state),
+            patch.object(ark_game_setup, "save_display_restore_state_once") as save_layout,
+            patch.object(ark_game_setup, "keep_primary_display_only") as isolate,
             patch.object(ark_game_setup, "apply_display_mode") as apply_display,
             patch.object(ark_game_setup, "kill_running_ark") as kill_ark,
             patch.object(ark_game_setup, "patch_game_settings") as patch_settings,
@@ -178,6 +180,8 @@ class ArkGameSetupTests(unittest.TestCase):
             result = ark_game_setup.prepare_and_launch_game()
 
         apply_display.assert_called_once_with(DisplayMode(1920, 1080, 144))
+        save_layout.assert_called_once_with(state)
+        isolate.assert_called_once_with()
         kill_ark.assert_called_once_with()
         self.assertEqual(
             patch_settings.call_args_list,

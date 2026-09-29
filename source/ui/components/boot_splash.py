@@ -78,11 +78,7 @@ class _TransitionSurface(QWidget):
     ):
         """Create a hidden canvas and defer readiness until its first paint returns."""
         super().__init__()
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.Tool
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
@@ -128,25 +124,17 @@ class BootSplash(QWidget):
         """Show a cinematic boot surface centered on the active display."""
         super().__init__()
         self.setWindowTitle("Shen GBot")
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.Tool
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool | Qt.WindowType.WindowStaysOnTopHint)
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.resize(600, 340)
-        self._screen = (
-            QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
-        )
+        self._screen = QApplication.screenAt(QCursor.pos()) or QApplication.primaryScreen()
         geometry = self.geometry()
         geometry.moveCenter(self._screen.availableGeometry().center())
         self.setGeometry(geometry)
         self._logo = QPixmap()
         self._artwork = QPixmap()
-        self._images = _SplashImages(
-            Path(__file__).resolve().parents[3] / "assets/app/image"
-        )
+        self._images = _SplashImages(Path(__file__).resolve().parents[3] / "assets/app/image")
         self._images.loaded.connect(self._apply_images)
         self._first_frame = QTimer(self)
         self._first_frame.setSingleShot(True)
@@ -224,12 +212,7 @@ class BootSplash(QWidget):
 
     def _begin_reveal(self):
         """Prepare the launcher first frame after the cancellable debug hold."""
-        if (
-            self._stopped
-            or self._cancelled
-            or self._window is None
-            or not isValid(self._window)
-        ):
+        if self._stopped or self._cancelled or self._window is None or not isValid(self._window):
             self.cancel()
             return
         window = self._window
@@ -263,12 +246,7 @@ class BootSplash(QWidget):
 
     def _capture_dashboard(self):
         """Capture one settled dashboard frame and start the painted expansion."""
-        if (
-            self._stopped
-            or self._cancelled
-            or self._window is None
-            or not isValid(self._window)
-        ):
+        if self._stopped or self._cancelled or self._window is None or not isValid(self._window):
             self.cancel()
             return
         try:
@@ -315,20 +293,13 @@ class BootSplash(QWidget):
     def _paint_transition(self, painter: QPainter):
         """Keep the replacement's first frame pixel-identical to the compact splash."""
         if not self._reveal_started:
-            painter.drawPixmap(
-                self._origin, self._compact, QRectF(self._compact.rect())
-            )
+            painter.drawPixmap(self._origin, self._compact, QRectF(self._compact.rect()))
         else:
             self._paint_frame(painter)
 
     def _animate_reveal(self, elapsed: float):
         """Expand the painted surface for 500 ms, then blend for 300 ms."""
-        if (
-            self._stopped
-            or self._cancelled
-            or self._window is None
-            or not isValid(self._window)
-        ):
+        if self._stopped or self._cancelled or self._window is None or not isValid(self._window):
             self.cancel()
             return
         curve = QEasingCurve(QEasingCurve.Type.InOutCubic)
@@ -342,9 +313,7 @@ class BootSplash(QWidget):
             origin.width() + (target.width() - origin.width()) * progress,
             origin.height() + (target.height() - origin.height()) * progress,
         )
-        self._fade = curve.valueForProgress(
-            max(0.0, min(1.0, (elapsed - 500.0) / 300.0))
-        )
+        self._fade = curve.valueForProgress(max(0.0, min(1.0, (elapsed - 500.0) / 300.0)))
         self._update_surface()
 
     def _finish_reveal(self):
@@ -418,17 +387,13 @@ class BootSplash(QWidget):
     def mousePressEvent(self, event: QMouseEvent):
         """Allow cancellation through the small custom close control."""
         bounds = QRectF(self.rect())
-        if QRectF(bounds.right() - 32, bounds.top() + 8, 24, 24).contains(
-            event.position()
-        ):
+        if QRectF(bounds.right() - 32, bounds.top() + 8, 24, 24).contains(event.position()):
             self.cancel()
 
     def _transition_click(self, event: QMouseEvent):
         """Hit-test the transition close control in its own canvas coordinates."""
         bounds = self._paint_bounds
-        if QRectF(bounds.right() - 32, bounds.top() + 8, 24, 24).contains(
-            event.position()
-        ):
+        if QRectF(bounds.right() - 32, bounds.top() + 8, 24, 24).contains(event.position()):
             self.cancel()
 
     def paintEvent(self, event: QPaintEvent):
@@ -452,20 +417,12 @@ class BootSplash(QWidget):
         if self._expansion == 1 and self._window is not None:
             mask = self._window.mask()
             if not mask.isEmpty():
-                painter.setClipRegion(
-                    mask.translated(
-                        round(self._destination.x()), round(self._destination.y())
-                    )
-                )
+                painter.setClipRegion(mask.translated(round(self._destination.x()), round(self._destination.y())))
         surface = QPainterPath()
         surface.addRoundedRect(bounds, 12, 12)
         pulse = (math.sin(self._clock.elapsed() / 650.0) + 1.0) / 2.0
         for width, alpha in ((9, 6), (5, 12), (2, 24)):
-            painter.setPen(
-                QPen(
-                    QColor(40, 217, 241, round(alpha * (1.0 - self._expansion))), width
-                )
-            )
+            painter.setPen(QPen(QColor(40, 217, 241, round(alpha * (1.0 - self._expansion))), width))
             painter.drawPath(surface)
         painter.fillPath(surface, QColor("#080f20"))
         painter.save()
@@ -510,33 +467,25 @@ class BootSplash(QWidget):
         font.setPixelSize(20)
         painter.setFont(font)
         painter.setPen(QColor("#69e4f4"))
-        painter.drawText(
-            QRectF(177, 90, 170, 32), Qt.AlignmentFlag.AlignLeft, "STARTING"
-        )
+        painter.drawText(QRectF(177, 90, 170, 32), Qt.AlignmentFlag.AlignLeft, "STARTING")
         font = QFont("Segoe UI")
         font.setPixelSize(12)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 2)
         painter.setFont(font)
         painter.setPen(QColor("#89a8c2"))
-        painter.drawText(
-            QRectF(178, 125, 260, 24), Qt.AlignmentFlag.AlignLeft, "ARK / LAUNCHER"
-        )
+        painter.drawText(QRectF(178, 125, 260, 24), Qt.AlignmentFlag.AlignLeft, "ARK / LAUNCHER")
         font.setPixelSize(32)
         font.setWeight(QFont.Weight.Bold)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 4)
         painter.setFont(font)
         painter.setPen(QColor("#f1faff"))
-        painter.drawText(
-            QRectF(46, 165, 500, 50), Qt.AlignmentFlag.AlignLeft, "SHEN GBOT"
-        )
+        painter.drawText(QRectF(46, 165, 500, 50), Qt.AlignmentFlag.AlignLeft, "SHEN GBOT")
         font.setPixelSize(18)
         font.setWeight(QFont.Weight.Normal)
         font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 0)
         painter.setFont(font)
         painter.setPen(QColor("#b4cbdc"))
-        status = painter.fontMetrics().elidedText(
-            self._status, Qt.TextElideMode.ElideMiddle, 490
-        )
+        status = painter.fontMetrics().elidedText(self._status, Qt.TextElideMode.ElideMiddle, 490)
         painter.drawText(QRectF(48, 224, 490, 30), Qt.AlignmentFlag.AlignLeft, status)
         painter.setPen(QPen(QColor(68, 196, 225, 50), 1))
         painter.drawLine(48, 281, 510, 281)
@@ -573,6 +522,4 @@ class BootSplash(QWidget):
         painter.resetTransform()
         if self._fade and not self._dashboard.isNull():
             painter.setOpacity(self._fade)
-            painter.drawPixmap(
-                self._destination, self._dashboard, QRectF(self._dashboard.rect())
-            )
+            painter.drawPixmap(self._destination, self._dashboard, QRectF(self._dashboard.rect()))

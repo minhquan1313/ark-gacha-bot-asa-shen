@@ -8,10 +8,7 @@ from source.join_sim.source import main
 from source.join_sim.source.menus import success
 from source.logs import gachalogs as logs
 from source.utility import action_gate, ark_runtime, template, utils, utils_simple
-from source.utility.debug_screenshots import (
-    CAPTURE_PLAYER_STATE,
-    capture_for,
-)
+from source.utility.debug_screenshots import CAPTURE_PLAYER_STATE, capture_for
 from source.utility.structures.transmitter import transmitter
 
 uploaded = False
@@ -129,9 +126,7 @@ def check_disconnected():
         tribelog.close()
         if not bed.is_open():
             # Checking in case the upcoming screen is a bed spawn from previous server transfer
-            logs.logger.warning(
-                f"joined back into the server waiting {settings.wait_structure_load} seconds to render everything "
-            )
+            logs.logger.warning(f"joined back into the server waiting {settings.wait_structure_load} seconds to render everything ")
             capture_state("joined")
             if success.was_has_logs:
                 # letting everything load back in
@@ -152,6 +147,7 @@ def reset_state(crouch=True):
     # Ensure not the bed_title from teleport but the actual bed spawn screen
     if template.template_await_false(bed.is_open, 1):
         # guessing the char died will respawn it if the char hasnt died and it just in a tekpod screen it will just exit when it cant find its target bed
+        capture_state("character dead", 1)
         bed.spawn_in(settings.bed_spawn)
 
     if crouch:
@@ -171,14 +167,10 @@ def check_state(*, crouch=True, should_replesh=True, should_wait_structure=True)
     type = buff.check_buffs()
     if type == 1 or source.gacha_bot.render.render_flag:
         # type 1 is when char is in the tekpod
-        logs.logger.debug(
-            f"tekpod buff found on screen leaving tekpod now reason | type : {type} render flag : {source.gacha_bot.render.render_flag}"
-        )
+        logs.logger.debug(f"tekpod buff found on screen leaving tekpod now reason | type : {type} render flag : {source.gacha_bot.render.render_flag}")
         source.gacha_bot.render.leave_tekpod()
     elif (type == 2 or type == 3) and should_replesh:
-        logs.logger.warning(
-            f"tping back to render bed to replenish food and water | 2= water 3= food | reason:{type}"
-        )
+        logs.logger.warning(f"tping back to render bed to replenish food and water | 2= water 3= food | reason:{type}")
         teleporter.teleport_not_default(settings.bed_spawn)
         source.gacha_bot.render.enter_tekpod()
         # assuming 30 seconds should replenish the player back to 100/100

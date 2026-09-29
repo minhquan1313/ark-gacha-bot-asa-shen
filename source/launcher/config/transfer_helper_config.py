@@ -77,12 +77,7 @@ def default_transfer_ui_coords():
 
 
 def default_transfer_players(account_count=1):
-    v: TransferPlayersConfig = {
-        "players": [
-            {"bed_name": name, "steam_account": ""}
-            for name in generated_player_bed_names(int(account_count))
-        ]
-    }
+    v: TransferPlayersConfig = {"players": [{"bed_name": name, "steam_account": ""} for name in generated_player_bed_names(int(account_count))]}
     return v
 
 
@@ -115,9 +110,7 @@ def player_steam_account(players: TransferPlayersConfig, account_index: int):
     return str(player.get("steam_account", "")).strip()
 
 
-def player_bed_name_search_conflicts(
-    players: TransferPlayersConfig, limit: int | None = None
-):
+def player_bed_name_search_conflicts(players: TransferPlayersConfig, limit: int | None = None):
     if not isinstance(players, dict):
         players = {}
     raw_players = players.get("players", [])
@@ -161,9 +154,7 @@ def runtime_account_count(players: TransferPlayersConfig | object):
     return min(player_account_count(players), MAX_TRANSFER_RUNTIME_ACCOUNTS)
 
 
-def load_transfer_settings(
-    path: str | Path = TRANSFER_SETTINGS_PATH, create_missing: bool = True
-):
+def load_transfer_settings(path: str | Path = TRANSFER_SETTINGS_PATH, create_missing: bool = True):
     path = Path(path)
     if not path.exists():
         settings = default_transfer_settings()
@@ -173,10 +164,7 @@ def load_transfer_settings(
     with path.open("r", encoding="utf-8") as file:
         data = cast(object, json.load(file))
     settings = normalize_transfer_settings(data)
-    if create_missing and (
-        not isinstance(data, dict)
-        or any(key not in data for key in DEFAULT_TRANSFER_SETTINGS)
-    ):
+    if create_missing and (not isinstance(data, dict) or any(key not in data for key in DEFAULT_TRANSFER_SETTINGS)):
         _write_json(settings, path)
     return settings
 
@@ -187,9 +175,7 @@ def save_transfer_settings(data: object, path: str | Path = TRANSFER_SETTINGS_PA
     return normalized
 
 
-def load_transfer_dedis(
-    path: str | Path = TRANSFER_DEDIS_PATH, create_missing: bool = True
-):
+def load_transfer_dedis(path: str | Path = TRANSFER_DEDIS_PATH, create_missing: bool = True):
     path = Path(path)
     if not path.exists():
         dedis = default_transfer_dedis()
@@ -246,14 +232,8 @@ def save_transfer_players(
 
 
 def load_transfer_runtime_config(create_missing: bool = True):
-    settings = load_transfer_settings(
-        TRANSFER_SETTINGS_PATH, create_missing=create_missing
-    )
-    player_count_hint = (
-        None
-        if TRANSFER_PLAYERS_PATH.exists()
-        else _old_account_count_hint(TRANSFER_SETTINGS_PATH)
-    )
+    settings = load_transfer_settings(TRANSFER_SETTINGS_PATH, create_missing=create_missing)
+    player_count_hint = None if TRANSFER_PLAYERS_PATH.exists() else _old_account_count_hint(TRANSFER_SETTINGS_PATH)
     dedis = load_transfer_dedis(TRANSFER_DEDIS_PATH, create_missing=create_missing)
 
     v: TransferRuntimeConfig = {
@@ -287,9 +267,7 @@ def normalize_transfer_runtime_config(data: object):
         config["steam_accounts"] = steam_accounts
     if "start_account" in data:
         try:
-            config["start_account"] = _int_min(
-                data["start_account"], "start_account", 1
-            )
+            config["start_account"] = _int_min(data["start_account"], "start_account", 1)
         except ValueError:
             config["start_account"] = 1
     return config
@@ -301,33 +279,15 @@ def normalize_transfer_settings(data: object):
     normalized = default_transfer_settings()
     normalized.update({key: data[key] for key in normalized if key in data})  # type: ignore
     normalized["ping"] = _int_min(normalized["ping"], "ping", 0)
-    normalized["resource_station_yaw"] = _float_value(
-        normalized["resource_station_yaw"], "resource_station_yaw"
-    )
-    normalized["destination_station_yaw"] = _float_value(
-        normalized["destination_station_yaw"], "destination_station_yaw"
-    )
-    normalized["transfer_start_mode"] = _transfer_start_mode(
-        normalized["transfer_start_mode"]
-    )
-    normalized["resource_server"] = _server_number(
-        normalized["resource_server"], "resource_server"
-    )
-    normalized["destination_server"] = _server_number(
-        normalized["destination_server"], "destination_server"
-    )
-    normalized["structure_load_delay"] = _int_min(
-        normalized["structure_load_delay"], "structure_load_delay", 0
-    )
-    normalized["steam_restart_interval"] = _int_min(
-        normalized["steam_restart_interval"], "steam_restart_interval", 1
-    )
-    normalized["ark_window_ready_timeout"] = _int_min(
-        normalized["ark_window_ready_timeout"], "ark_window_ready_timeout", 1
-    )
-    normalized["ark_launch_attempts"] = _int_min(
-        normalized["ark_launch_attempts"], "ark_launch_attempts", 1
-    )
+    normalized["resource_station_yaw"] = _float_value(normalized["resource_station_yaw"], "resource_station_yaw")
+    normalized["destination_station_yaw"] = _float_value(normalized["destination_station_yaw"], "destination_station_yaw")
+    normalized["transfer_start_mode"] = _transfer_start_mode(normalized["transfer_start_mode"])
+    normalized["resource_server"] = _server_number(normalized["resource_server"], "resource_server")
+    normalized["destination_server"] = _server_number(normalized["destination_server"], "destination_server")
+    normalized["structure_load_delay"] = _int_min(normalized["structure_load_delay"], "structure_load_delay", 0)
+    normalized["steam_restart_interval"] = _int_min(normalized["steam_restart_interval"], "steam_restart_interval", 1)
+    normalized["ark_window_ready_timeout"] = _int_min(normalized["ark_window_ready_timeout"], "ark_window_ready_timeout", 1)
+    normalized["ark_launch_attempts"] = _int_min(normalized["ark_launch_attempts"], "ark_launch_attempts", 1)
     return cast(TransferSettings, normalized)
 
 
@@ -337,9 +297,7 @@ def normalize_transfer_players(data: object, account_count: int = 1):
     raw_players = data.get("players", [])
     if not isinstance(raw_players, list):
         raw_players = []
-    account_count = _int_range(
-        account_count, "account_count", 0, MAX_TRANSFER_PLAYER_ROWS
-    )
+    account_count = _int_range(account_count, "account_count", 0, MAX_TRANSFER_PLAYER_ROWS)
     generated = generated_player_bed_names(account_count)
     players = []
     for index in range(account_count):
@@ -400,9 +358,7 @@ def calculate_same_structure_destination_dedis(
     for index, source_item in enumerate(calculated[source_side]["items"]):
         target_items[index] = {
             "location": {
-                "yaw": normalize_yaw(
-                    float(source_item["location"]["yaw"]) + adjustment
-                ),
+                "yaw": normalize_yaw(float(source_item["location"]["yaw"]) + adjustment),
                 "pitch": float(source_item["location"]["pitch"]),
             },
             "crouched": bool(source_item.get("crouched", False)),
@@ -499,11 +455,7 @@ def missing_runtime_inputs(
         missing.append("settings.destination_server must differ from resource_server")
     if player_account_count(players) < 1:
         missing.append("players must include at least one player")
-    missing.extend(
-        steam_account_assignment_issues(
-            players, steam_accounts, start_account=start_account
-        )
-    )
+    missing.extend(steam_account_assignment_issues(players, steam_accounts, start_account=start_account))
     resource_dedis = transfer_dedi_route(dedis, "resource")
     destination_dedis = transfer_dedi_route(dedis, "destination")
     if not resource_dedis.get("teleport"):
@@ -554,15 +506,11 @@ def steam_account_assignment_issues(
         if account_names and account_name not in account_names:
             issues.append(f"players[{index}].steam_account is not available in Steam")
         if account_name in seen:
-            issues.append(
-                f"players[{index}].steam_account duplicates player {seen[account_name]}"
-            )
+            issues.append(f"players[{index}].steam_account duplicates player {seen[account_name]}")
         else:
             seen[account_name] = index
         if index == start_account and most_recent and account_name != most_recent:
-            issues.append(
-                f"players[{index}].steam_account must match the current Steam account"
-            )
+            issues.append(f"players[{index}].steam_account must match the current Steam account")
     return issues
 
 
@@ -624,9 +572,7 @@ def _old_account_count_hint(path: str | Path):
     if not isinstance(data, dict) or "account_count" not in data:
         return 1
     try:
-        return _int_range(
-            data["account_count"], "account_count", 1, MAX_TRANSFER_PLAYER_ROWS
-        )
+        return _int_range(data["account_count"], "account_count", 1, MAX_TRANSFER_PLAYER_ROWS)
     except ValueError:
         return 1
 

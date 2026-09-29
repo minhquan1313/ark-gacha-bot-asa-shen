@@ -40,11 +40,7 @@ class AutoFishingHelper(WorkerHelperWindow):
 
     def _build_ui(self):
         """Build the minimal auto-fishing controls."""
-        self.description = QLabel(
-            "Character should already sit on the chair.\n"
-            "Require game UI scale to be 0.5.\n"
-            "Movement keyboard to default mapping(WASD QE ZXC)"
-        )
+        self.description = QLabel("Character should already sit on the chair.\nRequire game UI scale to be 0.5.\nMovement keyboard to default mapping(WASD QE ZXC)")
         self.description.setObjectName("MutedCopy")
         self.description.setWordWrap(True)
         self.content_layout.addWidget(self.description)

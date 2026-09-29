@@ -80,9 +80,7 @@ def convert_craft_yaw(data: dict, station_yaw: float, exporting: bool):
 def _adjust_item_yaws(items: Iterable[DediStorageState], adjustment: float):
     """Apply a yaw adjustment to route objects in place."""
     for item in items:
-        item["location"]["yaw"] = normalize_yaw(
-            float(item["location"]["yaw"]) + adjustment
-        )
+        item["location"]["yaw"] = normalize_yaw(float(item["location"]["yaw"]) + adjustment)
 
 
 def safe_template_filename(name: str):
@@ -150,9 +148,7 @@ def _normalize_data(raw_data: object):
             key,
             raw_settings.get(
                 key,
-                DEFAULT_SETTINGS[key]
-                if key in {"craft_delay", "gacha_collect_feed_delay"}
-                else None,
+                DEFAULT_SETTINGS[key] if key == "gacha_collect_feed_delay" else None,
             ),
         )
         for key in TEMPLATE_SETTING_KEYS
@@ -161,9 +157,7 @@ def _normalize_data(raw_data: object):
         dedis = normalize_deposit_config(raw_data.get("dedis"))
         validate_deposit_teleports(dedis)
         gacha = normalize_gacha_config(raw_data.get("gacha"))
-        gacha_collect = normalize_gacha_collect_config(
-            raw_data.get("gacha_collect", [])
-        )
+        gacha_collect = normalize_gacha_collect_config(raw_data.get("gacha_collect", []))
         pego = normalize_pego_config(raw_data.get("pego"))
         craft = normalize_craft_config(raw_data.get("craft", {"generalCraftData": []}))
     except (TypeError, ValueError) as exc:
@@ -222,9 +216,7 @@ def build_template(
             "dedis": convert_deposit_yaw(dedis, float(settings["station_yaw"]), True),
             "gacha": copy.deepcopy(gacha),
             "gacha_collect": copy.deepcopy(gacha_collect or []),
-            "craft": convert_craft_yaw(
-                craft or {"generalCraftData": []}, float(settings["station_yaw"]), True
-            ),
+            "craft": convert_craft_yaw(craft or {"generalCraftData": []}, float(settings["station_yaw"]), True),
             "pego": copy.deepcopy(pego),
         },
     }
@@ -246,11 +238,7 @@ def scan_templates(directory: str | Path = TEMPLATE_DIRECTORY):
     error_paths: dict[str, Path] = {}
     if not directory.exists():
         return TemplateCatalog(templates, paths, errors, error_paths)
-    template_paths = (
-        path
-        for path in directory.iterdir()
-        if path.is_file() and path.suffix.lower() == ".json"
-    )
+    template_paths = (path for path in directory.iterdir() if path.is_file() and path.suffix.lower() == ".json")
     for path in sorted(template_paths, key=lambda item: item.name.casefold()):
         template_id = path.name
         try:
@@ -304,25 +292,13 @@ def resolve_template_reference(reference: str, catalog: TemplateCatalog):
     reference = str(reference)
     if not reference:
         return "", ""
-    exact_ids = [
-        template_id
-        for template_id in (*catalog.templates, *catalog.errors)
-        if template_id.casefold() == reference.casefold()
-    ]
+    exact_ids = [template_id for template_id in (*catalog.templates, *catalog.errors) if template_id.casefold() == reference.casefold()]
     if len(exact_ids) == 1:
         return exact_ids[0], ""
-    stem_ids = [
-        template_id
-        for template_id in (*catalog.templates, *catalog.errors)
-        if Path(template_id).stem.casefold() == reference.casefold()
-    ]
+    stem_ids = [template_id for template_id in (*catalog.templates, *catalog.errors) if Path(template_id).stem.casefold() == reference.casefold()]
     if len(stem_ids) == 1:
         return stem_ids[0], ""
-    name_ids = [
-        template_id
-        for template_id, template in catalog.templates.items()
-        if str(template["name"]).casefold() == reference.casefold()
-    ]
+    name_ids = [template_id for template_id, template in catalog.templates.items() if str(template["name"]).casefold() == reference.casefold()]
     if len(name_ids) == 1:
         return name_ids[0], ""
     if len(stem_ids) > 1 or len(name_ids) > 1:

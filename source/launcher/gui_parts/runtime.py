@@ -102,9 +102,7 @@ class RuntimeGuiMixin:
         suspensions.add(token)
         if first_suspension:
             runtime = getattr(self, "auto_keys_runtime", None)
-            self.auto_keys_restore_after_automation = bool(
-                runtime is not None and runtime.suspend_for_automation()
-            )
+            self.auto_keys_restore_after_automation = bool(runtime is not None and runtime.suspend_for_automation())
         self._sync_auto_keys_suspension_ui()
 
     def _resume_auto_keys_after_automation(self, token: object):
@@ -116,11 +114,7 @@ class RuntimeGuiMixin:
         if suspensions:
             self._sync_auto_keys_suspension_ui()
             return
-        should_restore = bool(
-            getattr(self, "auto_keys_restore_after_automation", False)
-            and self.settings.get("auto_keys", {}).get("enabled", False)
-            and not self.shutdown_started
-        )
+        should_restore = bool(getattr(self, "auto_keys_restore_after_automation", False) and self.settings.get("auto_keys", {}).get("enabled", False) and not self.shutdown_started)
         self.auto_keys_restore_after_automation = False
         runtime = getattr(self, "auto_keys_runtime", None)
         if should_restore and runtime is not None:
@@ -145,9 +139,7 @@ class RuntimeGuiMixin:
         if not hasattr(ctypes, "windll"):
             return
         try:
-            self.start_stop_hotkey_registered = register_shift_alt_n_hotkey(
-                int(self.winId()), self.start_stop_hotkey_id
-            )
+            self.start_stop_hotkey_registered = register_shift_alt_n_hotkey(int(self.winId()), self.start_stop_hotkey_id)
         except Exception:
             self.start_stop_hotkey_registered = False
 
@@ -163,9 +155,7 @@ class RuntimeGuiMixin:
         if not hasattr(ctypes, "windll"):
             return
         try:
-            self.auto_keys_stop_hotkey_registered = register_shift_f1_hotkey(
-                int(self.winId()), self.auto_keys_stop_hotkey_id
-            )
+            self.auto_keys_stop_hotkey_registered = register_shift_f1_hotkey(int(self.winId()), self.auto_keys_stop_hotkey_id)
         except Exception:
             self.auto_keys_stop_hotkey_registered = False
 
@@ -190,18 +180,10 @@ class RuntimeGuiMixin:
 
     def _handle_native_hotkey_message(self, message):
         msg = WindowsMSG.from_address(int(message))
-        if (
-            getattr(self, "auto_keys_stop_hotkey_registered", False)
-            and msg.message == WM_HOTKEY
-            and msg.wParam == getattr(self, "auto_keys_stop_hotkey_id", -1)
-        ):
+        if getattr(self, "auto_keys_stop_hotkey_registered", False) and msg.message == WM_HOTKEY and msg.wParam == getattr(self, "auto_keys_stop_hotkey_id", -1):
             self._emergency_disable_auto_keys()
             return True
-        if (
-            self.start_stop_hotkey_registered
-            and msg.message == WM_HOTKEY
-            and msg.wParam == self.start_stop_hotkey_id
-        ):
+        if self.start_stop_hotkey_registered and msg.message == WM_HOTKEY and msg.wParam == self.start_stop_hotkey_id:
             self.toggle_program()
             return True
         return False
@@ -261,12 +243,7 @@ class RuntimeGuiMixin:
             self.dialog("Start Failed", str(exc), "error")
 
     def _launch_program_process(self):
-        if (
-            self.shutdown_started
-            or self.program_stopping
-            or not self.runner_launch_pending
-            or not self.runner_loading
-        ):
+        if self.shutdown_started or self.program_stopping or not self.runner_launch_pending or not self.runner_loading:
             return
 
         token = "main-runner"
@@ -294,9 +271,7 @@ class RuntimeGuiMixin:
             self._update_start_stop_button()
             self.start_log_tail()
             self.output_reader_stop = threading.Event()
-            self.output_reader_thread = threading.Thread(
-                target=self.read_output, args=(self.process,), daemon=True
-            )
+            self.output_reader_thread = threading.Thread(target=self.read_output, args=(self.process,), daemon=True)
             self.output_reader_thread.start()
         except Exception as exc:
             process = getattr(self, "process", None)
@@ -316,9 +291,7 @@ class RuntimeGuiMixin:
             self.dialog("Start Failed", str(exc), "error")
 
     def stop_program(self):
-        if self.runner_loading and (
-            self.process is None or self.process.poll() is not None
-        ):
+        if self.runner_loading and (self.process is None or self.process.poll() is not None):
             self.runner_launch_pending = False
             self.runner_ready_pending = False
             self.runner_loading = False
@@ -341,11 +314,7 @@ class RuntimeGuiMixin:
         if self.process.poll() is not None:
             self._finalize_program_stop()
             return
-        if (
-            self.program_stopping
-            and self.stop_deadline is not None
-            and time.time() >= self.stop_deadline
-        ):
+        if self.program_stopping and self.stop_deadline is not None and time.time() >= self.stop_deadline:
             self.append_log("[WARN] Program did not stop in 5 seconds; killing it.\n")
             self.process.kill()
 
@@ -372,9 +341,7 @@ class RuntimeGuiMixin:
         self._hide_runner_overlay()
 
     def _show_runner_overlay(self):
-        if (
-            not self.is_program_running() and not self.runner_loading
-        ) or self.program_stopping:
+        if (not self.is_program_running() and not self.runner_loading) or self.program_stopping:
             self._hide_runner_overlay()
             return
         overlay = getattr(self, "runner_overlay", None)
@@ -442,11 +409,7 @@ class RuntimeGuiMixin:
             with contextlib.suppress(OSError, ValueError):
                 process.stdout.close()
         thread = self.output_reader_thread
-        if (
-            thread is not None
-            and thread is not threading.current_thread()
-            and thread.is_alive()
-        ):
+        if thread is not None and thread is not threading.current_thread() and thread.is_alive():
             thread.join(timeout=1)
         self.output_reader_thread = None
 
@@ -465,12 +428,7 @@ class RuntimeGuiMixin:
         """Show the populated overlay and release the bot once task state exists."""
         snapshot = getattr(self, "queue_snapshot", {})
         has_tasks = any(snapshot.get(key) for key in ("running", "active", "waiting"))
-        if not (
-            getattr(self, "runner_ready_pending", False)
-            and self.runner_loading
-            and self.is_program_running()
-            and has_tasks
-        ):
+        if not (getattr(self, "runner_ready_pending", False) and self.runner_loading and self.is_program_running() and has_tasks):
             return
         self.runner_loading = False
         self.runner_ready_pending = False
@@ -505,19 +463,12 @@ class RuntimeGuiMixin:
             if refresh_supported is not None:
                 refresh_supported()
         if hasattr(self, "server_value"):
-            server_number = self.form_values.get(
-                "server_number", self.settings.get("server_number", "0")
-            )
+            server_number = self.form_values.get("server_number", self.settings.get("server_number", "0"))
             field = self.fields.get("server_number")
             if field is not None:
                 server_number = field.text()
             self.server_value.setText(str(server_number))
-            self.active_value.setText(
-                str(
-                    len(self.queue_snapshot.get("running", []))
-                    + len(self.queue_snapshot.get("active", []))
-                )
-            )
+            self.active_value.setText(str(len(self.queue_snapshot.get("running", [])) + len(self.queue_snapshot.get("active", []))))
             self.waiting_value.setText(str(len(self.queue_snapshot.get("waiting", []))))
             if self.start_time and self.process and self.process.poll() is None:
                 elapsed = int(time.time() - self.start_time)
@@ -540,6 +491,9 @@ class RuntimeGuiMixin:
                     memory_text = f"{memory[0]:.1f}G / {memory[1]:.1f}G"
                     self.memory_meter.set_percent((memory[0] / memory[1]) * 100)
             self.memory_value.setText(memory_text)
+            memory_percent = getattr(self, "memory_percent_value", None)
+            if memory_percent is not None:
+                memory_percent.setText(f"{self.memory_meter.percent}%" if memory_text != "N/A" else "N/A")
 
             if psutil:
                 cpu_percent = psutil.cpu_percent(interval=None)
@@ -549,9 +503,7 @@ class RuntimeGuiMixin:
                 current_times = get_cpu_times()
                 cpu_percent = calculate_cpu_percent(self._cpu_times, current_times)
                 self._cpu_times = current_times or self._cpu_times
-                self.cpu_value.setText(
-                    f"{cpu_percent:.0f}%" if cpu_percent is not None else "0%"
-                )
+                self.cpu_value.setText(f"{cpu_percent:.0f}%" if cpu_percent is not None else "0%")
                 self.cpu_meter.set_percent(cpu_percent or 0)
 
             running = self.process and self.process.poll() is None
@@ -584,7 +536,13 @@ class RuntimeGuiMixin:
         if title_status is not None:
             title_status.setText(chrome_text)
             title_status.setStyleSheet(f"color: {color};")
+        status_dot = getattr(getattr(self, "title_bar", None), "status_dot", None)
+        if status_dot is not None:
+            status_dot.setStyleSheet(f"color: {color}; font-size: 18px;")
         sidebar_ready = getattr(self, "sidebar_ready", None)
         if sidebar_ready is not None:
             sidebar_ready.setText(sidebar_text)
             sidebar_ready.setStyleSheet(f"color: {color};")
+        hero = getattr(self, "dashboard_hero", None)
+        if hero is not None:
+            hero.set_status("ONLINE" if chrome_text == "SYSTEM READY" else chrome_text, color)

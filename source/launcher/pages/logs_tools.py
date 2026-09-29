@@ -1,24 +1,26 @@
 import threading
+from collections.abc import Callable
 from datetime import datetime
 
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
+
+from source.launcher.components.about_page import CombinedAboutPage
+from source.launcher.components.logs_page import LogsPage
+from source.launcher.components.template_browser import TemplateBrowser
+from source.launcher.components.tools_browser import ToolGalleryCard, ToolsBrowser
+from source.launcher.config import constants as launcher_constants
 from source.launcher.pages.common import (
-    APP_NAME,
-    APP_TITLE,
     APP_VERSION,
     ASSETS,
     ClickableTextEdit,
     QApplication,
-    QGridLayout,
-    QHBoxLayout,
     QLabel,
-    QPixmap,
     QSizePolicy,
     Qt,
-    QVBoxLayout,
-    QWidget,
-    ToolCoverCard,
-    os,
-    utils_simple,
+)
+from source.launcher.utils.building_templates import (
+    TOOL_CATEGORIES,
 )
 from source.launcher.utils.update_schedule import UpdateSchedule
 from source.launcher.utils.update_service import (
@@ -63,139 +65,92 @@ class LogsToolsPagesMixin:
         self.toast("Teleport name copied to clipboard.", "success")
 
     def _logs_page(self):
-        # DEBUG ONLY
-        # def debug_only():
-        #     print("Starting debugging...")
-        #     import psutil
+        """Build the virtualized reader without changing Dashboard filter state."""
 
-        #     for proc in psutil.process_iter(attrs=["name", "exe"]):
-        #         if proc.info["name"] == "CrashReportClient.exe":
-        #             print("Found target process!")
+        def snapshots(view: str):
+            """Expose scheduler data read-only to the Logs page."""
+            if view == "RUNNING":
+                return self._format_running_snapshot()
+            if view == "QUEUE":
+                return self._format_queue_snapshot()
+            return self.queue_snapshot
 
-        # QTimer.singleShot(300, debug_only)
-
-        page, layout = self._page("LogsPage")
-        layout.addWidget(self._page_title("LOGS"))
-        filter_row = QHBoxLayout()
-        filter_row.setSpacing(6)
-        layout.addLayout(filter_row)
-        for name in [
-            "ALL",
-            "INFO",
-            "DEBUG",
-            "WARN",
-            "ERROR",
-            "CRITICAL",
-            "RUNNING",
-            "QUEUE",
-        ]:
-            button = self._button(name, "secondary")
-            button.clicked.connect(
-                lambda checked=False, value=name: self.set_log_filter(value)
-            )
-            filter_row.addWidget(button)
-        filter_row.addStretch()
-        clear = self._button("CLEAR LOGS", "danger")
-        clear.clicked.connect(self.clear_logs)
-        filter_row.addWidget(clear)
-
-        console, console_layout = self._panel()
-        console.setObjectName("ConsolePanel")
-        self.full_log = self._console_widget()
-        console_layout.addWidget(self.full_log)
-        layout.addWidget(console, 1)
-        bottom = QHBoxLayout()
-        test = self._button("TEST CONSOLE COLOURS  >", "secondary")
-        open_logs = self._button("OPEN LOGS", "primary")
-        test.clicked.connect(self.check_colours)
-        open_logs.clicked.connect(self.open_logs)
-        bottom.addWidget(test)
-        bottom.addStretch()
-        bottom.addWidget(open_logs)
-        layout.addLayout(bottom)
-        return page
+        self.logs_page = LogsPage(launcher_constants.GACHA_LOG_FILE, self.clear_logs, self.open_logs, snapshots)
+        self.logs_page.store.initial.connect(self._loaded_log_history)
+        return self.logs_page
 
     def _tools_page(self):
         # QTimer.singleShot(300, self.open_server_transfer_helper)
         page, layout = self._page("ToolsPage")
-        layout.addWidget(self._page_title("TOOLS"))
-        tools_grid = QGridLayout()
-        tools_grid.setContentsMargins(0, 0, 0, 0)
-        tools_grid.setHorizontalSpacing(12)
-        tools_grid.setVerticalSpacing(12)
-        # tools_grid.setColumnStretch(0, 1)
-        # tools_grid.setColumnStretch(1, 1)
-
+        self.tools_gallery = ToolsBrowser()
         auto_join_card = self._tool_cover_card(
             "Auto Join Server",
-            "Enter a server number and retry the existing join flow until the "
-            "character is detected back in-server.",
-            ASSETS["welcome"],
+            "Enter a server number and retry the existing join flow until the character is detected back in-server.",
+            ASSETS["tool.auto_join"],
             self.open_auto_join_server_helper,
         )
         transfer_card = self._tool_cover_card(
             "Server Transfer",
             "Move resources between two servers across multiple Steam accounts(max 4 accounts gives best exp).",
-            "assets/templateHammer/GachaBot - Transfer Base.jpg",
+            ASSETS["tool.transfer_server"],
             self.open_server_transfer_helper,
         )
         fertilizer_card = self._tool_cover_card(
             "Crop Plot Fertilizer Refresh",
             "Refresh crop plot fertilizer with one quick helper.",
-            ASSETS["dashboard"],
+            ASSETS["tool.auto_fertilizer"],
             self.open_fertilizer_refresh_helper,
         )
         fishing_card = self._tool_cover_card(
             "Auto Fishing",
             "Enjoy AFK fishing",
-            ASSETS["dashboard"],
+            ASSETS["tool.auto_fishing"],
             self.open_auto_fishing_helper,
         )
         auto_feed_card = self._tool_cover_card(
             "Auto Baby Feeding",
             "Feed every baby and maintain food and water of character.",
-            ASSETS["welcome"],
+            ASSETS["tool.auto_feed"],
             self.open_auto_feed_helper,
         )
         switch_card = self._tool_cover_card(
             "Switch Steam",
-            "Restart Steam with any saved account, or switch accounts before "
-            "launching ARK.",
-            "assets/templateHammer/GachaBot - Render V3.jpg",
+            "Restart Steam with any saved account, or switch accounts before launching ARK.",
+            ASSETS["tool.switch_steam"],
             self.open_switch_steam_helper,
         )
 
-        loc_gen = utils_simple.grid_loc_gen(col=2)
-        helpers = [
+        for card in (
             auto_join_card,
             fertilizer_card,
             fishing_card,
             auto_feed_card,
             transfer_card,
             switch_card,
-        ]
-        for index, helper in enumerate(helpers):
-            col, row = loc_gen(index)
-            tools_grid.addWidget(helper, row, col)
-
-        layout.addLayout(tools_grid)
-        layout.addStretch()
+        ):
+            self.tools_gallery.add_card(card)
+        layout.addWidget(self.tools_gallery)
         return page
 
-    def _tool_cover_card(self, title, description, image_path, handler):
-        card = ToolCoverCard(image_path)
-        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(16, 14, 16, 14)
-        card_layout.setSpacing(10)
-        copy = QLabel(f"{title}\n{description}")
-        copy.setObjectName("ToolCoverCopy")
-        copy.setWordWrap(True)
-        open_tool = self._button("OPEN TOOL", "primary")
-        open_tool.clicked.connect(handler)
-        card_layout.addWidget(copy, 1, alignment=Qt.AlignmentFlag.AlignBottom)
-        card_layout.addWidget(open_tool, alignment=Qt.AlignmentFlag.AlignBottom)
+    def _tool_cover_card(self, title: str, description: str, image_path: str, handler: Callable):
+        """Build a shared gallery card connected to an existing helper."""
+        card = ToolGalleryCard(
+            title,
+            description,
+            image_path,
+            "Open Tool",
+            TOOL_CATEGORIES.get(title, "Unsorted"),
+        )
+        card.activated.connect(handler)
         return card
+
+    def _btemplates_page(self):
+        """Browse read-only building templates and import only from focused previews."""
+        page, layout = self._page("BTemplatesPage")
+        self.btemplates_gallery = TemplateBrowser(self.toast)
+        layout.addWidget(self.btemplates_gallery)
+        self.btemplates_gallery.load()
+        return page
 
     def _console_widget(self):
         console = ClickableTextEdit()
@@ -204,75 +159,11 @@ class LogsToolsPagesMixin:
         console.copied.connect(lambda: self.toast("Logs copied", "success"))
         return console
 
-    def _update_page(self):
-        page, layout = self._page("UpdatePage")
-        layout.addWidget(self._page_title("CHECK UPDATE"))
-        layout.addStretch()
-        card, card_layout = self._panel()
-        card.setMinimumWidth(0)
-        card.setMaximumWidth(400)
-        card.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Preferred,
-        )
-        icon = QLabel("[GUpdate]")
-        icon.setObjectName("UpdateIcon")
-        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        local_manifest = None
-        local_manifest_error = ""
-        try:
-            current_manifest = load_manifest()
-            current_version = current_manifest.version
-            local_manifest = current_manifest
-        except ValueError as exc:
-            current_version = APP_VERSION.lstrip("vV")
-            local_manifest_error = f"Unable to load local manifest: {exc}"
-        current = QLabel(f"Version: {current_version}")
-        self.update_current_label = current
-        current.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        latest = QLabel("Checking status not started")
-        latest.setObjectName("UpdateLatest")
-        latest.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.update_status_label = latest
-        changelog, changelog_layout = self._panel("RELEASE NOTES")
-        changelog_text = QWidget()
-        changelog_text.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Preferred,
-        )
-        notes_layout = QVBoxLayout(changelog_text)
-        notes_layout.setContentsMargins(0, 0, 0, 0)
-        notes_layout.setSpacing(2)
-        self.update_changelog_label = changelog_text
-        self._set_update_notes(
-            local_manifest_error or self._format_manifest_notes(local_manifest)
-        )
-        changelog.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Preferred,
-        )
-        changelog_layout.addWidget(changelog_text)
-        row = QHBoxLayout()
-        action = self._button("CHECK UPDATE", "primary")
-        action.clicked.connect(self._handle_update_action)
-        self.update_action_button = action
-        row.addWidget(action)
-        card_layout.addWidget(icon)
-        card_layout.addWidget(current)
-        card_layout.addWidget(latest)
-        card_layout.addWidget(changelog)
-        card_layout.addLayout(row)
-        layout.addWidget(card, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addStretch()
-        return page
-
     def _automatic_update_check(self):
         """Check once per local day, including a missed midnight after sleep."""
         if not getattr(self, "startup_complete", True):
             return
-        if not getattr(self, "shutdown_started", False) and getattr(
-            self, "update_auto_check_enabled", True
-        ):
+        if not getattr(self, "shutdown_started", False) and getattr(self, "update_auto_check_enabled", True):
             schedule = getattr(self, "update_schedule", None)
             if schedule is None:
                 self.update_schedule = schedule = UpdateSchedule()
@@ -300,6 +191,9 @@ class LogsToolsPagesMixin:
             schedule.record_attempt(datetime.now().astimezone())
         except OSError as exc:
             self.append_log(f"[UPDATE] Could not save daily check: {exc}\n")
+        if hasattr(self, "about_update_page"):
+            self.about_update_page.set_state("checking")
+            self._refresh_update_timestamp()
         self.update_check_in_progress = True
         self.update_check_automatic = automatic
         action = getattr(self, "update_action_button", None)
@@ -320,9 +214,7 @@ class LogsToolsPagesMixin:
         """Execute the update service on a worker thread."""
         from source.logs.gachalogs import logger
 
-        logger.info(
-            "[UPDATE] %s check requested.", "Automatic" if automatic else "Manual"
-        )
+        logger.info("[UPDATE] %s check requested.", "Automatic" if automatic else "Manual")
         try:
             result = check_for_update()
         except Exception as exc:
@@ -342,6 +234,10 @@ class LogsToolsPagesMixin:
         self.update_check_in_progress = False
         self.update_check_automatic = False
         self.update_available = result.update_available
+        page = getattr(self, "about_update_page", None)
+        if page is not None:
+            page.set_state("error" if result.error else "available" if result.update_available else "current", result.error)
+            self.update_current_label.setText(f"Version {result.current.version}")
         action = getattr(self, "update_action_button", None)
         status = getattr(self, "update_status_label", None)
         changelog = getattr(self, "update_changelog_label", None)
@@ -349,10 +245,10 @@ class LogsToolsPagesMixin:
             if status is not None:
                 status.show()
                 status.setText("UPDATE CHECK FAILED")
-            if changelog is not None:
+            if changelog is not None and page is None:
                 self._set_update_notes(f"{result.error}\n\nDetails: check logs file")
             if action is not None:
-                action.setText("CHECK UPDATE")
+                action.setText("CHECK FOR UPDATE")
                 action.setEnabled(True)
             if automatic:
                 self.toast(result.error, "error")
@@ -363,14 +259,15 @@ class LogsToolsPagesMixin:
             # status.setText(f"{latest_label}\nVersion: {result.latest.version}")
             if result.update_available:
                 status.show()
-                status.setText(f"UPDATE AVAILABLE\nVersion: {result.latest.version}")
+                status.setText("UPDATE AVAILABLE" if page is not None else f"UPDATE AVAILABLE\nVersion: {result.latest.version}")
             else:
-                status.hide()
+                status.show()
+                status.setText("You're up to date!")
         if changelog is not None:
             manifest = result.latest if result.update_available else result.current
-            self._set_update_notes(self._format_manifest_notes(manifest))
+            page.set_manifest(manifest) if page is not None else self._set_update_notes(self._format_manifest_notes(manifest))
         if action is not None:
-            action.setText("UPDATE" if result.update_available else "CHECK UPDATE")
+            action.setText("UPDATE" if result.update_available else "CHECK FOR UPDATE")
             action.setEnabled(True)
 
         # ruff: disable[SIM102]
@@ -392,9 +289,7 @@ class LogsToolsPagesMixin:
     def _request_update_restart(self):
         """Ask the Python entry point to restart after launcher cleanup completes."""
         try:
-            (REPOSITORY_ROOT / ".update_restart.request").write_text(
-                "restart\n", encoding="utf-8"
-            )
+            (REPOSITORY_ROOT / ".update_restart.request").write_text("restart\n", encoding="utf-8")
         except OSError as exc:
             self.dialog("Update Restart Failed", str(exc), "error")
             return
@@ -402,44 +297,41 @@ class LogsToolsPagesMixin:
         self.close()
 
     def _about_page(self):
-        page, layout = self._page("AboutPage")
-        layout.addWidget(self._page_title("ABOUT ME"))
-        layout.addStretch()
-        card, card_layout = self._panel()
-        card.setMaximumWidth(420)
-        logo = QLabel()
-        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if os.path.exists(ASSETS["logo"]):
-            logo.setPixmap(
-                QPixmap(ASSETS["logo"]).scaled(
-                    110,
-                    110,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-        title = QLabel(f"{APP_TITLE}\n{APP_VERSION}")
-        title.setObjectName("AboutTitle")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        author = QLabel('DEVELOPED BY\nShen\n\n"Code. Automate. Dominate."')
-        author.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        connect = QHBoxLayout()
-        for text in ["GITHUB", "WEBSITE"]:
-            button = self._button(text, "secondary")
-            button.clicked.connect(
-                lambda checked=False, name=text: self.toast(
-                    f"{name} link is not configured yet.", "info"
-                )
-            )
-            connect.addWidget(button)
-        thanks = QLabel(f"SPECIAL THANKS TO\nYou, for using {APP_NAME}")
-        thanks.setObjectName("MutedCopy")
-        thanks.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        card_layout.addWidget(logo)
-        card_layout.addWidget(title)
-        card_layout.addWidget(author)
-        card_layout.addLayout(connect)
-        card_layout.addWidget(thanks)
-        layout.addWidget(card, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addStretch()
+        """Build the combined page without scheduling a navigation-triggered check."""
+        manifest = None
+        error = ""
+        try:
+            manifest = load_manifest()
+            version = manifest.version
+        except ValueError as exc:
+            version = APP_VERSION.lstrip("vV")
+            error = f"Unable to load local manifest: {exc}"
+        page = CombinedAboutPage(version, self._handle_update_action, self._open_official_website)
+        self.about_update_page = page
+        self.update_current_label = page.version
+        self.update_status_label = page.status
+        self.update_action_button = page.action
+        self.update_changelog_label = page.notes
+        page.set_manifest(manifest)
+        if error:
+            page.status.setText("Unable to read release information")
+            page.set_state("error", error)
+        if not hasattr(self, "update_schedule"):
+            self.update_schedule = UpdateSchedule()
+        self._refresh_update_timestamp()
         return page
+
+    def _refresh_update_timestamp(self):
+        """Display the persisted attempt timestamp without claiming a cached success."""
+        page = getattr(self, "about_update_page", None)
+        if page is not None:
+            stamp = getattr(getattr(self, "update_schedule", None), "last_timestamp", None)
+            page.last_checked.setText("Last checked: " + (stamp.strftime("%Y-%m-%d %H:%M") if stamp else "Never"))
+
+    def _open_official_website(self):
+        """Use the configured official URL or the requested temporary message."""
+        url = launcher_constants.OFFICIAL_WEBSITE_URL.strip()
+        if url:
+            QDesktopServices.openUrl(QUrl(url))
+        else:
+            self.dialog("Website", "Out of money so no website for now :>", "info")

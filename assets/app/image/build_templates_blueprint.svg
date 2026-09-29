@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="180" viewBox="0 0 1400 180">
+<defs><linearGradient id="bg"><stop stop-color="#031019"/><stop offset="1" stop-color="#062434"/></linearGradient><pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse" patternTransform="skewY(-12)"><path d="M32 0H0V32" fill="none" stroke="#13445c" stroke-width=".5"/></pattern></defs>
+<rect width="1400" height="180" fill="url(#bg)"/><path d="M480 0H1400V180H480Z" fill="url(#grid)"/>
+<g fill="#073246" fill-opacity=".6" stroke="#36dfff" stroke-width="1.6" stroke-linejoin="round">
+<path d="m840 115 90-40 120 42-90 43Zm0 0V42l90-38 120 40v73M930 4v71M960 160V84l90-40M840 42l120 42M855 109V51l73-31 107 36v48M876 100V43m25 45V32m76 116V91m24 44V80m24 45V70"/>
+<path d="m1105 139 85-37 105 34-83 37ZM1105 139V63l20-9v76m87 43V95l20-8v77M1190 102V27l20-9v90M1105 63l107 32 83-38-105-30"/>
+<path d="m660 138 70-31 64 21-71 33Zm15-7 63 21m-42-30 63 21m-25-33-70 31"/>
+<path d="m690 91 0-61 35-16 0 62Zm9-17V39l17-8v34M762 95V30l26 9v64Z"/>
+<path d="m1302 149 50-83 40 14-50 83Zm11-19 39 14m-28-32 39 14m-28-32 39 14"/>
+<path d="m590 92 0-64 18-8 16 6v64l-17 8Zm0-64 17 7 17-9m-17 9v63"/>
+</g><g fill="#93ecff" font-family="monospace" font-size="9" letter-spacing="3"><text x="1090" y="15">MODULAR STRUCTURES</text><text x="840" y="176">FOUNDATIONS / WALLS / PILLARS</text></g></svg>

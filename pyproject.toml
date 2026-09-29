@@ -25,5 +25,5 @@ ignore = [
 
 [tool.ruff]
 extend-exclude = ["tests"]
-
+line-length = 200
 lint.extend-select = ["I", "SIM", "B"]

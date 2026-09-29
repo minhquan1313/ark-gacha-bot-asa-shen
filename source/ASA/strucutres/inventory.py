@@ -5,6 +5,7 @@ from typing import Literal
 import source.ASA.config
 from source.ASA.config import LAGGED_DETECT
 from source.ASA.player import player_inventory, player_state
+from source.ASA.strucutres import teleporter
 from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, variables, windows
 from source.utility.types import RoiRegion
@@ -31,7 +32,7 @@ g_last_check_can_drop = False
 
 
 def is_open():
-    return template.check_template("inventory", 0.7)
+    return bool(template.check_template("inventory", 0.7))
 
 
 def is_clear_search():
@@ -108,18 +109,14 @@ def open(crouch_if_problem=True):
     attempts = 0
     while not is_open():
         attempts += 1
-        logs.logger.debug(
-            f"trying to open strucuture inventory {attempts} / {source.ASA.config.inventory_open_attempts}"
-        )
+        logs.logger.debug(f"trying to open strucuture inventory {attempts} / {source.ASA.config.inventory_open_attempts}")
 
         utils.press_key("AccessInventory")
         template.template_await_true(is_open, 3)
 
         if is_open():
             logs.logger.debug("inventory opened")
-            is_still_loading = template.template_await_false(
-                template.check_template, 3, "waiting_inv", 0.8
-            )
+            is_still_loading = template.template_await_false(template.check_template, 3, "waiting_inv", 0.8)
             if is_still_loading:
                 dl = utils_simple.get_default_clock()
                 while is_open() and not is_ready() and not dl():
@@ -135,9 +132,12 @@ def open(crouch_if_problem=True):
                 was_server_lag_last_open_long = was_server_lag_last_open
 
             return  # DONE
-
-        # check state of the char before redoing
         else:
+            # Hot fix, sometime server is super laggy, so if the teleport being open(on previous check to make sure player is teleported)
+            if teleporter.is_open():
+                teleporter.close()
+                return
+            # check state of the char before redoing
             player_state.check_state(crouch=crouch_if_problem)
 
         was_server_lag_last_open = True
@@ -152,9 +152,7 @@ def close():
     attempts = 0
     while is_open():
         attempts += 1
-        logs.logger.debug(
-            f"trying to close objects inventory {attempts} / {source.ASA.config.inventory_close_attempts}"
-        )
+        logs.logger.debug(f"trying to close objects inventory {attempts} / {source.ASA.config.inventory_close_attempts}")
         player_inventory.is_can_transfer_all()
         player_inventory.is_can_drop()
 
@@ -166,9 +164,7 @@ def close():
             return time.sleep(0.3)
 
         if attempts >= source.ASA.config.inventory_close_attempts:
-            logs.logger.error(
-                f"unable to close the objects inventory after {attempts} attempts"
-            )
+            logs.logger.error(f"unable to close the objects inventory after {attempts} attempts")
             # check state of the char the reason we can do it now is that the latter should spam click close inv
             player_state.check_state()
             break

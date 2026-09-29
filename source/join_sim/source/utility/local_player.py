@@ -29,17 +29,13 @@ def get_base_path():
     except Exception as e:
         print(f"{e} PLEASE OPEN UP ARK TO FIX THIS ERROR THEN RESTART THE SCRIPT")
         time.sleep(10)
-        raise RuntimeError(
-            f"{e} PLEASE OPEN UP ARK TO FIX THIS ERROR THEN RESTART THE SCRIPT"
-        ) from e
+        raise RuntimeError(f"{e} PLEASE OPEN UP ARK TO FIX THIS ERROR THEN RESTART THE SCRIPT") from e
 
 
 def get_user_settings(setting_name):
     base_path = get_base_path()
 
-    settings_path = os.path.join(
-        base_path, "ShooterGame", "Saved", "Config", "Windows", "GameUserSettings.ini"
-    )
+    settings_path = os.path.join(base_path, "ShooterGame", "Saved", "Config", "Windows", "GameUserSettings.ini")
     if not os.path.exists(settings_path):
         raise FileNotFoundError(f"Settings file not found: {settings_path}")
 
@@ -72,9 +68,7 @@ def get_fov():
 def get_input_settings(input_name):
     base_path = get_base_path()
 
-    input_path = os.path.join(
-        base_path, "ShooterGame", "Saved", "Config", "Windows", "input.ini"
-    )
+    input_path = os.path.join(base_path, "ShooterGame", "Saved", "Config", "Windows", "input.ini")
 
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input settings file not found: {input_path}")

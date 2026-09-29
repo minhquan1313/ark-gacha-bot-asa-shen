@@ -46,11 +46,9 @@ from source.launcher.components.widgets import (
     CyberSwitch,
     CyberTemplateConflictDialog,
     CyberTextInputDialog,
-    HeroBanner,
     LoadingSpinner,
     MeterBar,
     SmoothScrollArea,
-    ToolCoverCard,
 )
 from source.launcher.config.constants import (
     APP_NAME,
@@ -60,6 +58,7 @@ from source.launcher.config.constants import (
     AUTO_KEYS_ACTIONS,
     COLORS,
     DEFAULT_SETTINGS,
+    SETTINGS_GROUP_LABELS,
     SETTINGS_GROUPS,
     TEMPLATE_GROUP_REFERENCE_KEYS,
     TEMPLATE_GROUP_SETTING_KEYS,
@@ -71,19 +70,14 @@ from source.launcher.config.station_config import (
     DEFAULT_PEGO_SNOW_OWLS_PER_GACHA,
     DEFAULT_PEGO_STATION_SECONDS,
     DEFAULT_PEGO_TARGET_CRYSTALS,
-    auto_fill_gacha_group,
     calculate_pego_delay,
     default_gacha_collect_entry,
     default_gacha_entry,
-    default_gacha_pair,
     default_pego_entry,
-    gacha_name_from_teleporter,
     grouped_gacha_entries,
     load_gacha_collect_config,
     load_gacha_config,
     load_pego_config,
-    missing_gacha_side,
-    next_gacha_teleporter,
     next_pego_index,
     risky_teleporter_names,
     save_gacha_collect_config,
@@ -130,7 +124,6 @@ __all__ = [
     "DEFAULT_PEGO_TARGET_CRYSTALS",
     "DEFAULT_SETTINGS",
     "DEFAULT_TEMPLATE_FILENAME",
-    "HeroBanner",
     "LoadingSpinner",
     "MeterBar",
     "NoWheelComboBox",
@@ -166,10 +159,9 @@ __all__ = [
     "TEMPLATE_GROUP_REFERENCE_KEYS",
     "TEMPLATE_GROUP_SETTING_KEYS",
     "TemplateCatalog",
-    "ToolCoverCard",
     "_counted_title",
+    "_settings_group_title",
     "_deposit_route_child_count",
-    "auto_fill_gacha_group",
     "build_template",
     "calculate_pego_delay",
     "contextlib",
@@ -181,11 +173,9 @@ __all__ = [
     "default_deposit_config",
     "default_gacha_entry",
     "default_gacha_collect_entry",
-    "default_gacha_pair",
     "default_grindable_route",
     "default_pego_entry",
     "default_vault_item",
-    "gacha_name_from_teleporter",
     "grouped_gacha_entries",
     "load_deposit_config",
     "load_gacha_config",
@@ -193,8 +183,6 @@ __all__ = [
     "load_pego_config",
     "load_settings",
     "migrate_template_references",
-    "missing_gacha_side",
-    "next_gacha_teleporter",
     "next_pego_index",
     "next_unique_template_filename",
     "normalize_template_id",
@@ -216,6 +204,13 @@ __all__ = [
     "utils_simple",
     "write_template",
 ]
+
+
+def _settings_group_title(group_name: str, count: int | str = ""):
+    """Format every settings section title, optionally with its existing count."""
+    label = SETTINGS_GROUP_LABELS.get(group_name, group_name)
+    title = "HELPER" if group_name == "UI" else f"{label} settings"
+    return _counted_title(title, count) if count != "" else title
 
 
 def _counted_title(title: str, count: int | str):

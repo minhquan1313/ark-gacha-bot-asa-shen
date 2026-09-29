@@ -5,7 +5,6 @@ from pathlib import Path
 GACHA_CONFIG_PATH = Path("json_files/gacha.json")
 GACHA_COLLECT_CONFIG_PATH = Path("json_files/gacha_collect.json")
 PEGO_CONFIG_PATH = Path("json_files/pego.json")
-GACHA_PAIR_PREFIX = "GACHAPAIR"
 DEFAULT_PEGO_DELAY = 1600
 VALID_GACHA_SIDES = {"left", "right"}
 
@@ -21,31 +20,31 @@ PEGO_CALIBRATION_SNOW_OWLS_PER_GACHA = 5
 PEGO_CALIBRATION_STATION_SECONDS = 90
 
 
-def default_gacha_entry(name="", teleporter="", side="left"):
+def default_gacha_entry(teleporter: str = "", side: str = "left"):
+    """Create an unnamed side record; runtime owns task names."""
     return {
-        "name": str(name),
         "teleporter": str(teleporter),
         "side": str(side).lower(),
     }
 
 
-def default_gacha_collect_entry(name="", teleporter="", side="left", item=""):
+def default_gacha_collect_entry(teleporter: str = "", side: str = "left", item: str = ""):
+    """Create a collection side with empty destination by default."""
     return {
-        **default_gacha_entry(name, teleporter, side),
+        **default_gacha_entry(teleporter, side),
         "item": str(item),
         "dedi_teleport": "",
     }
 
 
 def default_pego_entry(index=1, delay=DEFAULT_PEGO_DELAY):
-    name = f"pego{int(index)}"
-    return {"name": name, "teleporter": name, "delay": int(delay)}
+    return {"teleporter": f"pego{int(index)}", "delay": int(delay)}
 
 
 def load_gacha_config(path=GACHA_CONFIG_PATH, create_missing=True):
     path = Path(path)
     if not path.exists():
-        entries = default_gacha_pair()
+        entries = []
         if create_missing:
             save_gacha_config(entries, path)
         return entries
@@ -65,9 +64,7 @@ def load_gacha_collect_config(path=GACHA_COLLECT_CONFIG_PATH, create_missing=Tru
         if create_missing:
             save_gacha_collect_config(entries, path)
         return entries
-    return normalize_gacha_collect_config(
-        _read_json_array(path, "Gacha collect config")
-    )
+    return normalize_gacha_collect_config(_read_json_array(path, "Gacha collect config"))
 
 
 def save_gacha_collect_config(entries, path=GACHA_COLLECT_CONFIG_PATH):
@@ -95,40 +92,19 @@ def save_pego_config(entries, path=PEGO_CONFIG_PATH):
 def normalize_gacha_config(data):
     if not isinstance(data, list):
         raise ValueError("Gacha config must be a JSON array.")
-    return [_normalize_gacha_entry(entry, index) for index, entry in enumerate(data, 1)]
-
-
-def conflicting_collection_pairs(entries: list[dict]):
-    """Find pairs whose flat entries disagree about the shared destination."""
-    destinations = {}
-    for entry in entries:
-        destinations.setdefault(entry.get("teleporter", ""), set()).add(
-            entry.get("dedi_teleport", "")
-        )
-    return {teleport for teleport, names in destinations.items() if len(names) > 1}
+    return [_normalize_gacha_entry(entry) for entry in data]
 
 
 def normalize_gacha_collect_config(data):
     if not isinstance(data, list):
         raise ValueError("Gacha collect config must be a JSON array.")
-    return [
-        _normalize_gacha_collect_entry(entry, index)
-        for index, entry in enumerate(data, 1)
-    ]
+    return [_normalize_gacha_collect_entry(entry) for entry in data]
 
 
 def normalize_pego_config(data):
     if not isinstance(data, list):
         raise ValueError("Pego config must be a JSON array.")
     return [_normalize_pego_entry(entry, index) for index, entry in enumerate(data, 1)]
-
-
-def default_gacha_pair(prefix=GACHA_PAIR_PREFIX, index=1):
-    teleporter = f"{prefix}_{int(index)}"
-    return [
-        default_gacha_entry(f"{teleporter}_l", teleporter, "left"),
-        default_gacha_entry(f"{teleporter}_r", teleporter, "right"),
-    ]
 
 
 def grouped_gacha_entries(entries):
@@ -143,51 +119,13 @@ def grouped_gacha_entries(entries):
     return groups
 
 
-def next_gacha_teleporter(entries, prefix=GACHA_PAIR_PREFIX, exclude_teleporter=None):
-    existing = {
-        str(entry.get("teleporter", ""))
-        for entry in entries
-        if str(entry.get("teleporter", "")) != str(exclude_teleporter)
-    }
-    for index in range(1, 1000):
-        candidate = f"{prefix}{index}"
-        if candidate not in existing:
-            return candidate
-    raise ValueError("No available gacha teleporter name from 1 to 999.")
-
-
-def next_gacha_name(entries):
-    return f"gacha{_next_index(entries, 'gacha')}"
-
-
 def next_pego_index(entries):
-    return _next_index(entries, "pego")
-
-
-def missing_gacha_side(group_entries):
-    used = {
-        str(entry.get("side", "")).lower()
-        for entry in group_entries
-        if str(entry.get("side", "")).lower() in VALID_GACHA_SIDES
-    }
-    if "left" not in used:
-        return "left"
-    if "right" not in used:
-        return "right"
-    return None
-
-
-def auto_fill_gacha_group(group_entries, teleporter=None):
-    sides = ["left", "right"]
-    for entry, side in zip(group_entries[:2], sides, strict=False):
-        if teleporter is not None:
-            entry["teleporter"] = str(teleporter)
-        entry["side"] = side
-        entry["name"] = gacha_name_from_teleporter(entry.get("teleporter", ""), side)
-
-
-def gacha_name_from_teleporter(teleporter, side):
-    return f"{str(teleporter)}_{str(side).lower()}"
+    """Choose the first unused default teleporter independently of runtime names."""
+    used = {str(entry.get("teleporter", "")) for entry in entries}
+    index = 1
+    while f"pego{index}" in used:
+        index += 1
+    return index
 
 
 def risky_teleporter_names(entries):
@@ -226,9 +164,7 @@ def calculate_pego_delay(
     snow_owls = _positive_float(snow_owls_per_gacha, "snow owl amount")
     station = _non_negative_float(station_seconds, "pego station seconds")
     baseline_rate = PEGO_CALIBRATION_CRYSTALS / (
-        (PEGO_CALIBRATION_DELAY + PEGO_CALIBRATION_STATION_SECONDS)
-        * (PEGO_CALIBRATION_GACHAS / PEGO_CALIBRATION_PEGOS)
-        * PEGO_CALIBRATION_SNOW_OWLS_PER_GACHA
+        (PEGO_CALIBRATION_DELAY + PEGO_CALIBRATION_STATION_SECONDS) * (PEGO_CALIBRATION_GACHAS / PEGO_CALIBRATION_PEGOS) * PEGO_CALIBRATION_SNOW_OWLS_PER_GACHA
     )
     projected_rate = baseline_rate * (gachas / pegos) * snow_owls
     recommended = math.ceil((target / projected_rate) - station)
@@ -237,23 +173,22 @@ def calculate_pego_delay(
     return int(recommended)
 
 
-def _normalize_gacha_entry(entry, index):
+def _normalize_gacha_entry(entry: dict):
+    """Ignore legacy names while preserving side-record configuration."""
     if not isinstance(entry, dict):
         entry = {}
     normalized = {
-        "name": str(entry.get("name", f"gacha{index}")),
         "teleporter": str(entry.get("teleporter", "")),
         "side": str(entry.get("side", "left")).lower(),
     }
     return normalized
 
 
-def _normalize_gacha_collect_entry(entry, index):
-    normalized = _normalize_gacha_entry(entry, index)
+def _normalize_gacha_collect_entry(entry: dict):
+    """Normalize collection fields without changing legacy side differences."""
+    normalized = _normalize_gacha_entry(entry)
     normalized["item"] = str(entry.get("item", "")) if isinstance(entry, dict) else ""
-    normalized["dedi_teleport"] = (
-        str(entry.get("dedi_teleport", "")) if isinstance(entry, dict) else ""
-    )
+    normalized["dedi_teleport"] = str(entry.get("dedi_teleport", "")) if isinstance(entry, dict) else ""
     return normalized
 
 
@@ -261,25 +196,9 @@ def _normalize_pego_entry(entry, index):
     if not isinstance(entry, dict):
         entry = {}
     return {
-        "name": str(entry.get("name", f"pego{index}")),
         "teleporter": str(entry.get("teleporter", f"pego{index}")),
         "delay": _int_value(entry.get("delay", DEFAULT_PEGO_DELAY), "delay"),
     }
-
-
-def _next_index(entries, prefix):
-    used = set()
-    for entry in entries:
-        name = str(entry.get("name", ""))
-        if not name.startswith(prefix):
-            continue
-        suffix = name[len(prefix) :]
-        if suffix.isdigit():
-            used.add(int(suffix))
-    index = 1
-    while index in used:
-        index += 1
-    return index
 
 
 def _int_value(value, name):

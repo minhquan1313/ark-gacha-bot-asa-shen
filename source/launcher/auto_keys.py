@@ -25,9 +25,7 @@ WM_MBUTTONUP = 0x0208
 WM_QUIT = 0x0012
 LLKHF_INJECTED = 0x10
 LLMHF_INJECTED = 0x01
-HOOKPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
-)
+HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
 MOUSE_VK_CODES = {
     "leftmousebutton": 0x01,
     "rightmousebutton": 0x02,
@@ -77,9 +75,7 @@ class _InputListener:
             if self._thread is not None or self._stop.is_set():
                 return
             self._ready.clear()
-            self._thread = threading.Thread(
-                target=self._run, name="auto-keys-input", daemon=True
-            )
+            self._thread = threading.Thread(target=self._run, name="auto-keys-input", daemon=True)
             self._thread.start()
         self._ready.wait(timeout=2)
         if not self._ready.is_set() or self.error:
@@ -175,18 +171,12 @@ class _InputListener:
         self._thread_id = int(ctypes.windll.kernel32.GetCurrentThreadId())
         keyboard = mouse = None
         try:
-            keyboard = user32.SetWindowsHookExW(
-                WH_KEYBOARD_LL, self._keyboard_callback, None, 0
-            )
+            keyboard = user32.SetWindowsHookExW(WH_KEYBOARD_LL, self._keyboard_callback, None, 0)
             mouse = user32.SetWindowsHookExW(WH_MOUSE_LL, self._mouse_callback, None, 0)
             if not keyboard or not mouse:
                 self.error = "Could not install keyboard and mouse hooks"
             self._ready.set()
-            while (
-                not self.error
-                and not self._stop.is_set()
-                and user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0
-            ):
+            while not self.error and not self._stop.is_set() and user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
                 user32.TranslateMessage(ctypes.byref(message))
                 user32.DispatchMessageW(ctypes.byref(message))
         finally:
@@ -208,9 +198,7 @@ def resolve_supported_keys(actions=AUTO_KEYS_ACTIONS):
     from source.launcher import ark_game_setup
 
     try:
-        input_path = ark_game_setup.find_game_user_input_path(
-            restart_steam_if_missing=False
-        )
+        input_path = ark_game_setup.find_game_user_input_path(restart_steam_if_missing=False)
     except (OSError, RuntimeError):
         return {}, None
 
@@ -282,9 +270,7 @@ class AutoKeysRuntime:
         action_settings = auto_keys.get("actions", {})
         if not isinstance(action_settings, dict):
             action_settings = {}
-        selected_actions = {
-            action for action in self.actions if bool(action_settings.get(action, True))
-        }
+        selected_actions = {action for action in self.actions if bool(action_settings.get(action, True))}
         activation_key = str(auto_keys.get("activation_key", "F1"))
         with self._lock:
             self.interval = float(auto_keys.get("interval", 0.25))
@@ -300,9 +286,7 @@ class AutoKeysRuntime:
                     refresh_event.set()
             active_action = self._bindings.get(self._active)
             pending_action = self._bindings.get(self._pending)
-        if (active_action and active_action not in selected_actions) or (
-            pending_action and pending_action not in selected_actions
-        ):
+        if (active_action and active_action not in selected_actions) or (pending_action and pending_action not in selected_actions):
             self._stop_repeat()
         if allow_enable and bool(auto_keys.get("enabled", False)):
             self.enable()
@@ -446,17 +430,12 @@ class AutoKeysRuntime:
 
     def _report_bindings(self, bindings, selected_actions):
         """Log a binding summary only when the applied selection changes."""
-        binding_signature = tuple(
-            sorted((kind, code, action) for (kind, code), action in bindings.items())
-        )
+        binding_signature = tuple(sorted((kind, code, action) for (kind, code), action in bindings.items()))
         signature = (binding_signature, tuple(selected_actions))
         if signature != self._binding_signature:
             self._binding_signature = signature
             if binding_signature:
-                details = ", ".join(
-                    f"{action} -> {kind}:0x{code:02X}"
-                    for kind, code, action in binding_signature
-                )
+                details = ", ".join(f"{action} -> {kind}:0x{code:02X}" for kind, code, action in binding_signature)
                 self._notify(f"Bindings resolved: {details}.")
             elif not selected_actions:
                 self._notify("No Auto Keys actions are selected.")
@@ -557,20 +536,12 @@ class AutoKeysRuntime:
                 event_binding = (input_kind, vk_code)
                 with self._lock:
                     self._physical_states[event_binding] = is_down
-                    activation_down = bool(
-                        self._physical_states.get(
-                            ("keyboard", self._activation_key_code)
-                        )
-                    )
+                    activation_down = bool(self._physical_states.get(("keyboard", self._activation_key_code)))
                 if event_binding in bindings:
-                    self._process_polled_state(
-                        event_binding, is_down, now, activation_down
-                    )
+                    self._process_polled_state(event_binding, is_down, now, activation_down)
             for binding in bindings:
                 is_down = bool(self._physical_states.get(binding))
-                activation_down = bool(
-                    self._physical_states.get(("keyboard", self._activation_key_code))
-                )
+                activation_down = bool(self._physical_states.get(("keyboard", self._activation_key_code)))
                 self._process_polled_state(binding, is_down, now, activation_down)
             stop_event.wait(POLL_INTERVAL)
 
@@ -585,11 +556,7 @@ class AutoKeysRuntime:
     def _ensure_input_listener(self, generation: int):
         """Start the hook only while this enabled runtime has ARK focus."""
         with self._lock:
-            if (
-                not self.enabled
-                or generation != self._lifecycle_generation
-                or self._input_listener is not None
-            ):
+            if not self.enabled or generation != self._lifecycle_generation or self._input_listener is not None:
                 return
             listener = _InputListener()
             self._input_listener = listener
@@ -608,11 +575,7 @@ class AutoKeysRuntime:
         while self._worker_is_current(generation, stop_event):
             with self._lock:
                 revision = self._binding_revision
-                selected_actions = tuple(
-                    action
-                    for action in self.actions
-                    if action in self._selected_actions
-                )
+                selected_actions = tuple(action for action in self.actions if action in self._selected_actions)
             activation_code = activation_key_code(self.activation_key)
             bindings = self._resolve_bindings(selected_actions)
             with self._lock:
@@ -622,22 +585,14 @@ class AutoKeysRuntime:
                     continue
                 self._activation_key_code = activation_code
                 self._bindings = bindings
-                self._last_states = {
-                    binding: state
-                    for binding, state in self._last_states.items()
-                    if binding in bindings
-                }
+                self._last_states = {binding: state for binding, state in self._last_states.items() if binding in bindings}
             self._report_bindings(bindings, selected_actions)
             return True
         return False
 
     def _worker_is_current(self, generation, stop_event):
         with self._lock:
-            return bool(
-                self.enabled
-                and generation == self._lifecycle_generation
-                and not stop_event.is_set()
-            )
+            return bool(self.enabled and generation == self._lifecycle_generation and not stop_event.is_set())
 
     def _set_state_for_generation(self, generation, state):
         with self._lock:
@@ -677,18 +632,13 @@ class AutoKeysRuntime:
                         self._key_hold_release_seen = True
                         # Hooks run before Windows updates its key state. Defer
                         # this handoff until a later poll if key-up is still pending.
-                        if (
-                            not ctypes.windll.user32.GetAsyncKeyState(binding[1])
-                            & 0x8000
-                        ):
+                        if not ctypes.windll.user32.GetAsyncKeyState(binding[1]) & 0x8000:
                             from source.utility import utils
 
                             if self.enabled and self._ark_is_foreground():
                                 # Cancellation takes this same lock: no late down
                                 # can land after disable has collected its release.
-                                self._key_hold_input = utils.key_hold_down(
-                                    self._key_hold_action, should_pause=False
-                                )
+                                self._key_hold_input = utils.key_hold_down(self._key_hold_action, should_pause=False)
                                 self._key_hold_injected = True
                                 self._key_hold_waiting_for_release = False
                                 self._stop_armed = True
@@ -703,13 +653,7 @@ class AutoKeysRuntime:
                 else:
                     should_stop = is_down and not was_down
             elif self._active is not None:
-                if (
-                    self.enabled
-                    and is_down
-                    and activation_down
-                    and not was_down
-                    and self._bindings.get(binding) in self._selected_actions
-                ):
+                if self.enabled and is_down and activation_down and not was_down and self._bindings.get(binding) in self._selected_actions:
                     switch_generation = self._lifecycle_generation
             elif self._pending == binding:
                 if not is_down or not activation_down:
@@ -724,13 +668,7 @@ class AutoKeysRuntime:
         if switch_generation is not None:
             self._stop_repeat()
             with self._lock:
-                if (
-                    self.enabled
-                    and self._lifecycle_generation == switch_generation
-                    and self._bindings.get(binding) in self._selected_actions
-                    and self._active is None
-                    and self._pending is None
-                ):
+                if self.enabled and self._lifecycle_generation == switch_generation and self._bindings.get(binding) in self._selected_actions and self._active is None and self._pending is None:
                     self._pending = binding
                     self._pending_started_at = now
         elif key_hold_started is not None:
@@ -777,11 +715,7 @@ class AutoKeysRuntime:
                 )
                 self._repeat_thread.start()
         self._play_beep(True)
-        self._notify(
-            f"Release {action} to begin holding it."
-            if key_hold
-            else f"Repeating {action}."
-        )
+        self._notify(f"Release {action} to begin holding it." if key_hold else f"Repeating {action}.")
 
     def _repeat(self, action, binding, stop_event=None):
         from source.utility import utils
@@ -845,9 +779,7 @@ class AutoKeysRuntime:
             if key_hold_action is not None and key_hold_injected:
                 from source.utility import utils
 
-                utils.key_hold_up(
-                    key_hold_input if key_hold_input is not None else key_hold_action
-                )
+                utils.key_hold_up(key_hold_input if key_hold_input is not None else key_hold_action)
             if thread is not None and thread is not threading.current_thread():
                 thread.join()
             with self._lock:
@@ -855,9 +787,7 @@ class AutoKeysRuntime:
                     self._repeat_thread = None
                 self._synthetic_down.clear()
 
-        if (thread is not None or wait_for is not None or key_hold_injected) and (
-            threading.current_thread() is threading.main_thread()
-        ):
+        if (thread is not None or wait_for is not None or key_hold_injected) and (threading.current_thread() is threading.main_thread()):
             self._start_cleanup(finish_repeat)
         else:
             finish_repeat()

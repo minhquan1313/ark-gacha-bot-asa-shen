@@ -1,4 +1,3 @@
-import inspect
 import os
 import unittest
 import sys
@@ -78,19 +77,12 @@ class UpdateUiTests(unittest.TestCase):
 
         SettingsGUI._on_update_check_finished(launcher, result, False)
 
-        launcher.update_status_label.hide.assert_called_once_with()
+        launcher.update_status_label.show.assert_called_once_with()
+        launcher.update_status_label.setText.assert_called_once()
         launcher.update_changelog_label.setText.assert_called_with(
             "Installed release\nReleased: 2026-07-20\n- Local change"
         )
-        launcher.update_action_button.setText.assert_called_with("CHECK UPDATE")
-
-    def test_update_card_has_expanding_width_capped_at_400(self):
-        source = inspect.getsource(SettingsGUI._update_page)
-
-        self.assertIn("card.setMinimumWidth(0)", source)
-        self.assertIn("card.setMaximumWidth(400)", source)
-        self.assertIn("QSizePolicy.Policy.Expanding", source)
-        self.assertIn("QSizePolicy.Policy.Preferred", source)
+        launcher.update_action_button.setText.assert_called_with("CHECK FOR UPDATE")
 
     def test_canceling_automatic_update_keeps_daily_checks(self):
         launcher = self.make_launcher()
@@ -116,7 +108,7 @@ class UpdateUiTests(unittest.TestCase):
 
         SettingsGUI._on_update_check_finished(launcher, result, False)
 
-        launcher.update_action_button.setText.assert_called_with("CHECK UPDATE")
+        launcher.update_action_button.setText.assert_called_with("CHECK FOR UPDATE")
         launcher.update_action_button.setEnabled.assert_called_with(True)
         launcher.update_changelog_label.setText.assert_called_with("network unavailable\n\nDetails: check logs file")
 
@@ -239,18 +231,20 @@ class UpdateUiTests(unittest.TestCase):
             _panel=Mock(side_effect=make_panel),
             _button=Mock(side_effect=lambda text, variant: QPushButton(text)),
             _handle_update_action=Mock(),
+            _open_official_website=Mock(),
+            _refresh_update_timestamp=Mock(),
             _format_manifest_notes=SettingsGUI._format_manifest_notes,
         )
         local = UpdateManifest("1.0.0", "2026-07-20", "Installed", ("Local fix",))
 
         with patch("source.launcher.pages.logs_tools.load_manifest", return_value=local):
             launcher._set_update_notes = lambda text: SettingsGUI._set_update_notes(launcher, text)
-            SettingsGUI._update_page(launcher)
+            SettingsGUI._about_page(launcher)
 
-        self.assertEqual(launcher.update_current_label.text(), "Version: 1.0.0")
+        self.assertEqual(launcher.update_current_label.text(), "Version 1.0.0")
         self.assertEqual(
-            "\n".join(label.text() for label in launcher.update_changelog_label.findChildren(QLabel)),
-            "Installed\nReleased: 2026-07-20\n- Local fix",
+            launcher.update_changelog_label.manifest,
+            local,
         )
 
     def test_page_open_during_check_keeps_notes_and_shows_checking_state(self):

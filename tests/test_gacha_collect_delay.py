@@ -30,8 +30,8 @@ class CollectDelayTests(unittest.TestCase):
             saved = load_settings(path)
             self.assertEqual(
                 [saved[key] for key in (
-                    "gacha_feed_delay", "gacha_collect_feed_delay", "craft_delay"
-                )], [123, 456, 900]
+                    "gacha_feed_delay", "gacha_collect_feed_delay"
+                )], [123, 456]
             )
 
     def test_old_template_default_and_independent_round_trip(self):
@@ -53,12 +53,12 @@ class CollectDelayTests(unittest.TestCase):
     def test_collection_and_craft_use_independent_scheduler_delays(self):
         stations, _, _ = load_stations_module()
         stations.settings.craft_delay = 900
-        collection = stations.gacha_collect_station("one", "PAIR", "left", "stone")
-        craft = stations.craft_station({"teleport": "CRAFT"}, 0)
+        collection = stations.gacha_collect_station("PAIR", "left", "stone")
+        craft = stations.craft_station({"teleport": "CRAFT", "delay": 900}, 0)
         self.assertEqual(collection.get_requeue_delay(), 456)
         self.assertEqual(craft.get_requeue_delay(), 900)
         self.assertEqual(craft.get_priority_level(), 5)
-        self.assertEqual(stations.gacha_station("one", "PAIR", "left").get_requeue_delay(), 123)
+        self.assertEqual(stations.gacha_station("PAIR", "left").get_requeue_delay(), 123)
 
     def test_every_scheduled_collection_run_feeds_and_deposits(self):
         stations, _, _ = load_stations_module()
@@ -66,7 +66,7 @@ class CollectDelayTests(unittest.TestCase):
         stations.deposit.resolve_collection_destination = Mock(return_value=route)
         stations.deposit.deposit_collection = Mock()
         stations.deposit.craft = Mock()
-        task = stations.gacha_collect_station("one", "PAIR", "left", "stone", "chosen")
+        task = stations.gacha_collect_station("PAIR", "left", "stone", "chosen")
         task.execute()
         task.execute()
         self.assertEqual(stations.gacha.drop_off_nocrop.call_count, 2)
@@ -84,6 +84,7 @@ class CollectDelayTests(unittest.TestCase):
 
         launcher = SimpleNamespace(
             gacha_section_expanded={"collect": True},
+            _gacha_records=lambda kind: [],
             _button=lambda text, style: QPushButton(text),
             _icon_button=lambda icon, text, style: QPushButton(text),
             _setting_field=field,
@@ -92,14 +93,12 @@ class CollectDelayTests(unittest.TestCase):
             add_gacha_group=Mock(),
         )
         section = GachaPagesMixin._gacha_section(
-            launcher, "GACHA COLLECT", "collect", [], [],
-            "gacha_collect_feed_delay", "local", "", ""
+            launcher, "collect", ("local", "", "")
         )
         self.assertEqual(fields, ["gacha_collect_feed_delay"])
-        self.assertEqual(
-            [label.text() for label in section.findChildren(QLabel)][1:],
-            ["Feed delay (s)"]
-        )
+        labels = [label.text() for label in section.findChildren(QLabel)]
+        self.assertIn("Feed delay", labels)
+        self.assertIn("(s)", labels)
         section.close()
 
 

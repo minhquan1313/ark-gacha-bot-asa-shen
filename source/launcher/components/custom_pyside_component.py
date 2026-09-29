@@ -1,5 +1,5 @@
 from PySide6.QtCore import QEvent, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QComboBox,
     QStyledItemDelegate,
@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from source.launcher.config.constants import COLORS, UI_METRICS
+from source.launcher.config.constants import ASSETS, COLORS, UI_METRICS
+from source.launcher.dashboard_theme import asset_path
 
 
 class NoWheelComboBox(QComboBox):
@@ -23,11 +24,32 @@ class NoWheelComboBox(QComboBox):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self.property("settingsChevron"):
+            if not hasattr(self, "_settings_chevron"):
+                self._settings_chevron = QIcon(asset_path(ASSETS["icon.chevron_down"]))
+            self._settings_chevron.paint(painter, self.width() - 22, (self.height() - 14) // 2, 14, 14)
+            return
         painter.setPen(QPen(QColor(COLORS["cyan"]), 1.7))
         center_x = self.width() - 15
         center_y = self.height() // 2
         painter.drawLine(center_x - 4, center_y - 2, center_x, center_y + 2)
         painter.drawLine(center_x, center_y + 2, center_x + 4, center_y - 2)
+
+
+def configure_settings_dropdown(combo: QComboBox):
+    """Apply the shared profile dropdown appearance to an existing selector."""
+    from source.launcher.settings_theme import CONTROL_HEIGHT, dropdown_style
+
+    combo.setProperty("settingsChevron", True)
+    combo.setFixedHeight(CONTROL_HEIGHT)
+    combo.setStyleSheet(
+        dropdown_style()
+        + """
+        QComboBox#MissingTemplateSelector { border-color: #FFD166; }
+        QComboBox#ActiveTemplateSelector { border-color: #27F5B0; }
+    """
+    )
+    return combo
 
 
 class _RemovableComboDelegate(QStyledItemDelegate):
@@ -56,9 +78,7 @@ class _RemovableComboDelegate(QStyledItemDelegate):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         if hovered:
             painter.fillRect(remove_rect, QColor(COLORS["red"]))
-        painter.setPen(
-            QPen(QColor(COLORS["text"] if hovered else COLORS["muted"]), 2.0)
-        )
+        painter.setPen(QPen(QColor(COLORS["text"] if hovered else COLORS["muted"]), 2.0))
         center = remove_rect.center()
         painter.drawLine(center.x() - 4, center.y() - 4, center.x() + 4, center.y() + 4)
         painter.drawLine(center.x() + 4, center.y() - 4, center.x() - 4, center.y() + 4)
@@ -97,26 +117,15 @@ class RemovableComboBox(NoWheelComboBox):
         }:
             return False
 
-        position = (
-            event.pos()
-            if event.type() == QEvent.Type.ToolTip
-            else event.position().toPoint()
-        )
+        position = event.pos() if event.type() == QEvent.Type.ToolTip else event.position().toPoint()
         index = self.view().indexAt(position)
-        remove_hovered = index.isValid() and self._remove_delegate.remove_rect(
-            self.view().visualRect(index)
-        ).contains(position)
+        remove_hovered = index.isValid() and self._remove_delegate.remove_rect(self.view().visualRect(index)).contains(position)
         self._set_remove_hovered_row(index.row() if remove_hovered else -1)
 
         if event.type() == QEvent.Type.ToolTip and remove_hovered:
             QToolTip.showText(event.globalPos(), "Remove item", self)
             return True
-        if (
-            remove_hovered
-            and event.type()
-            in {QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease}
-            and event.button() == Qt.MouseButton.LeftButton
-        ):
+        if remove_hovered and event.type() in {QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease} and event.button() == Qt.MouseButton.LeftButton:
             if event.type() == QEvent.Type.MouseButtonRelease:
                 self.item_remove_requested.emit(index.row())
                 QTimer.singleShot(0, self._restore_popup_after_removal)

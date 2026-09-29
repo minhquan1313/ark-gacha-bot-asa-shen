@@ -1,4 +1,5 @@
 /venv
+.artifacts/
 .update_check.json
 .update_check.json.*.tmp
 launcher_logs/

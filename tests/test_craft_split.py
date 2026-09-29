@@ -39,6 +39,7 @@ def current_configs():
         })
         craft["generalCraftData"].append({
             "teleport": name, "check_on_every_dedi": 3,
+            "delay": 180,
             "crafters": [{"item": "polymer", "location": {"yaw": 10.0, "pitch": -5.0}, "crouched": True}],
             "dedi": {"items": [{"location": {"yaw": 30.0, "pitch": 2.0}, "crouched": True}]},
         })
@@ -66,19 +67,20 @@ class CraftRuntimeTests(unittest.TestCase):
 
         stations, _, _ = load_stations_module()
         stations.settings.bed_spawn = "RENDER"
-        stations.settings.craft_delay = 321
         spec = importlib.util.spec_from_file_location("craft_scheduler_under_test", Path(__file__).resolve().parents[1] / "task_manager.py")
         manager = importlib.util.module_from_spec(spec)
         with patch.dict(sys.modules, {"source.gacha_bot.stations": stations}), patch.object(source.gacha_bot, "stations", stations, create=True):
             spec.loader.exec_module(manager)
         craft = current_configs()[1]
+        craft["generalCraftData"][0]["delay"] = 321
+        craft["generalCraftData"][1]["delay"] = 654
         craft["generalCraftData"].append(default_craft_route())
         with patch.object(manager, "load_resolution_data", return_value=[]), patch.object(manager, "load_craft_config", return_value=craft), patch.object(manager, "task_scheduler") as scheduler:
             manager.prepare()
         tasks = [args.args[0] for args in scheduler.return_value.add_task.call_args_list]
         self.assertEqual(len(tasks), 3)  # Both crafters, plus render.
         self.assertEqual([task.route["teleport"] for task in tasks[:2]], ["FIRST", "SECOND"])
-        self.assertEqual([task.get_requeue_delay() for task in tasks[:2]], [321, 321])
+        self.assertEqual([task.get_requeue_delay() for task in tasks[:2]], [321, 654])
         self.assertEqual([task.get_priority_level() for task in tasks[:2]], [5, 5])
         stations.deposit.craft = Mock()
         for task in tasks[:2]:
@@ -89,7 +91,7 @@ class CraftRuntimeTests(unittest.TestCase):
         stations, teleporter, iguanadon = load_stations_module()
         stations.deposit.resolve_collection_destination = Mock(return_value=None)
         stations.deposit.deposit_collection = Mock()
-        stations.gacha_collect_station("one", "PAIR", "left", "paste", "deleted").execute()
+        stations.gacha_collect_station("PAIR", "left", "paste", "deleted").execute()
         stations.deposit.resolve_collection_destination.assert_called_once_with("deleted")
         teleporter.teleport_not_default.assert_not_called()
         iguanadon.iguanadon.assert_not_called()
@@ -155,6 +157,7 @@ class RouteEditor(DediPagesMixin, CraftPagesMixin, GachaPagesMixin, QWidget):
         self._icon_button = lambda icon, text, style: QPushButton(text)
         self._add_template_selector = Mock(return_value=("local", "", ""))
         self._style_template_collection = Mock()
+        self._approved_settings_content = lambda group: (self.settings_form_layout, ("local", "", ""))
         self._setting_field = lambda key: QLineEdit("600")
         self._setting_field_container = lambda widget, *args: widget
         self._render_settings_group = Mock()
@@ -172,8 +175,8 @@ class CraftUiTests(unittest.TestCase):
         editor = RouteEditor()
         editor._render_craft_group()
         labels = [label.text() for label in editor.findChildren(QLabel)]
-        self.assertTrue(any("GENERAL CRAFT" in label for label in labels))
-        self.assertIn("Craft delay (s)", labels)
+        self.assertTrue(any("Craft settings" in label for label in labels))
+        self.assertIn("Delay", labels)
         self.assertFalse(any(button.text() == "ACTIVE" for button in editor.findChildren(QPushButton)))
         with patch("source.launcher.pages.craft.save_craft_config") as save_craft, patch("source.launcher.pages.dedi.save_deposit_config") as save_deposit:
             field = next(field for field in editor.findChildren(QLineEdit) if field.text() == "polymer")
@@ -206,6 +209,6 @@ class CraftUiTests(unittest.TestCase):
             self.assertTrue(launcher.change_template_group("CRAFT", "craft.json"))
         self.assertEqual(launcher.craft_config["generalCraftData"][0]["crafters"][0]["location"]["yaw"], 55.0)
         self.assertEqual(launcher.settings["craft_template"], "craft.json")
-        self.assertEqual(launcher.settings["craft_delay_template"], "craft.json")
+        self.assertNotIn("craft_delay_template", launcher.settings)
         self.assertEqual(launcher.settings["dedis_template"], "")
 

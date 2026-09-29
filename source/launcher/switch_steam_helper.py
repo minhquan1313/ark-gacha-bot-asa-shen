@@ -49,10 +49,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
 
     def _build_ui(self):
         """Build the compact account selector and action controls."""
-        self.description = QLabel(
-            "SWITCH closes ARK before restarting Steam. SWITCH (INSTANT) restarts "
-            "Steam without touching ARK."
-        )
+        self.description = QLabel("SWITCH closes ARK before restarting Steam. SWITCH (INSTANT) restarts Steam without touching ARK.")
         self.description.setObjectName("MutedCopy")
         self.description.setWordWrap(True)
         self.content_layout.addWidget(self.description)
@@ -132,9 +129,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
         self.launcher_start_game_enabled = bool(enabled)
         valid = bool(self._selected_account())
         self.switch_instant_button.setEnabled(valid and not self.switching)
-        self.start_game_button.setEnabled(
-            valid and not self.switching and self.launcher_start_game_enabled
-        )
+        self.start_game_button.setEnabled(valid and not self.switching and self.launcher_start_game_enabled)
 
     def _selection_changed(self, _index: int = -1):
         """Update status copy without disabling valid same-account actions."""
@@ -148,9 +143,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
         if not selected:
             self.status.setText("No Steam accounts are available.")
         elif selected == self.current_account:
-            self.status.setText(
-                f"Current Steam account: {selected}. SWITCH will restart Steam."
-            )
+            self.status.setText(f"Current Steam account: {selected}. SWITCH will restart Steam.")
         else:
             current = self.current_account or "unknown"
             self.status.setText(f"Ready to switch Steam from {current} to {selected}.")
@@ -165,9 +158,7 @@ class SwitchSteamHelper(WorkerHelperWindow):
             accounts = steam_accounts.load_steam_accounts(self.loginusers_file)
             names = {str(account.get("account_name", "")) for account in accounts}
             if selected not in names:
-                raise RuntimeError(
-                    f"Steam account is no longer present in loginusers.vdf: {selected}"
-                )
+                raise RuntimeError(f"Steam account is no longer present in loginusers.vdf: {selected}")
             current = steam_accounts.most_recent_account_name(accounts)
             self._set_accounts(accounts, current, selected)
             return selected, current

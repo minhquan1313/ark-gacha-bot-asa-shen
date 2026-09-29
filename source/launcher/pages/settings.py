@@ -5,7 +5,18 @@ from shiboken6 import isValid
 
 from source.gacha_bot.craft_config import load_craft_config, save_craft_config
 from source.launcher.auto_keys import resolve_supported_keys
-from source.launcher.config.constants import KEY_HOLD_ACTIONS
+from source.launcher.components.settings_sections import (
+    SettingsActionButton,
+    SettingsBreadcrumbHeader,
+    SettingsColumns,
+    SettingsField,
+    SettingsFieldGrid,
+    SettingsSectionCard,
+    SettingsUnitControl,
+    settings_icon,
+    settings_label,
+)
+from source.launcher.config.constants import SETTINGS_GROUP_LABELS
 from source.launcher.config.template_settings import convert_craft_yaw
 from source.launcher.pages.common import (
     AUTO_KEYS_ACTIONS,
@@ -15,7 +26,6 @@ from source.launcher.pages.common import (
     TEMPLATE_DIRECTORY,
     TEMPLATE_GROUP_REFERENCE_KEYS,
     TEMPLATE_GROUP_SETTING_KEYS,
-    AnimatedButton,
     Counter,
     CyberCheckBox,
     CyberSwitch,
@@ -33,16 +43,15 @@ from source.launcher.pages.common import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMenu,
     QSizePolicy,
     QSpacerItem,
     Qt,
-    QToolButton,
     QUrl,
     QVBoxLayout,
     QWidget,
     SmoothScrollArea,
     TemplateCatalog,
+    _settings_group_title,
     build_template,
     contextlib,
     convert_deposit_yaw,
@@ -70,13 +79,14 @@ from source.launcher.pages.common import (
     subprocess,
     write_template,
 )
+from source.launcher.settings_theme import CONTROL_HEIGHT, settings_style
 
 
-class ActivationKeyButton(AnimatedButton):
+class ActivationKeyButton(SettingsActionButton):
     """Capture one non-modifier keyboard key for the Auto Keys activation gate."""
 
     def __init__(self, key_name: str, on_capture):
-        super().__init__(f"SET KEY: {key_name}", "secondary")
+        super().__init__(f"SET KEY: {key_name}", "auto_keys", compact=False)
         self.key_name = key_name
         self.on_capture = on_capture
         self.capturing = False
@@ -99,10 +109,7 @@ class ActivationKeyButton(AnimatedButton):
         }
         if key in modifiers:
             return
-        if Qt.Key.Key_F1 <= key <= Qt.Key.Key_F24:
-            name = f"F{key - Qt.Key.Key_F1 + 1}"
-        else:
-            name = event.text().upper().strip()
+        name = f"F{key - Qt.Key.Key_F1 + 1}" if Qt.Key.Key_F1 <= key <= Qt.Key.Key_F24 else event.text().upper().strip()
         if not name:
             self.setText("SET KEY: INVALID")
             return
@@ -115,11 +122,8 @@ class ActivationKeyButton(AnimatedButton):
 class SettingsPagesMixin:
     def _settings_page(self):
         page, layout = self._page("SettingsPage")
-        header = QHBoxLayout()
-        header.setSpacing(8)
-        header.addWidget(self._page_title("SETTINGS"), 1)
-        header.addWidget(self._template_action_split_button())
-        layout.addLayout(header)
+        page.setStyleSheet(settings_style())
+        self.settings_breadcrumb = SettingsBreadcrumbHeader(self._settings_import_export_button())
 
         shell, shell_layout = self._panel()
         shell.setObjectName("SettingsShell")
@@ -129,7 +133,6 @@ class SettingsPagesMixin:
         content.setContentsMargins(0, 0, 0, 0)
         content.setSpacing(0)
         shell_layout.addLayout(content, 1)
-        layout.addWidget(shell, 1)
 
         self.settings_tabs = QButtonGroup(self)
         self.settings_tabs.setExclusive(True)
@@ -138,13 +141,14 @@ class SettingsPagesMixin:
         tabs.setSpacing(6)
         tab_frame = QFrame()
         tab_frame.setObjectName("SettingsTabs")
-        tab_frame.setMinimumWidth(0)
-        tab_frame.setMaximumWidth(340)
-        tab_frame.setSizePolicy(
-            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
-        )
+        tab_frame.setFixedWidth(164)
+        tab_frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         tab_frame.setLayout(tabs)
-        content.addWidget(tab_frame)
+        self.settings_breadcrumb.set_sidebar(tab_frame)
+        layout.addWidget(
+            SettingsColumns(self.settings_breadcrumb, tab_frame, shell, layout.spacing()),
+            1,
+        )
 
         form_area = SmoothScrollArea()
         form_area.setWidgetResizable(True)
@@ -161,12 +165,21 @@ class SettingsPagesMixin:
         content.addWidget(form_area, 1)
 
         for group_name in SETTINGS_GROUPS:
-            button = AnimatedButton(group_name, "nav")
+            label = SETTINGS_GROUP_LABELS.get(group_name, group_name)
+            icon = {
+                "SERVER": "server",
+                "STATIONS": "antenna",
+                "PEGO": "paw",
+                "DEDI": "cube",
+                "GACHA": "paw",
+                "CRAFT": "tools",
+                "LAUNCHER": "rocket",
+            }[group_name]
+            button = SettingsActionButton("  " + label, icon, "nav")
+            button.setFixedHeight(56)
             button.setObjectName("SettingsTab")
             button.setCheckable(True)
-            button.clicked.connect(
-                lambda checked=False, name=group_name: self._render_settings_group(name)
-            )
+            button.clicked.connect(lambda checked=False, name=group_name: self._render_settings_group(name))
             self.settings_tabs.addButton(button)
             tabs.addWidget(button)
             if group_name == "SERVER":
@@ -174,49 +187,62 @@ class SettingsPagesMixin:
         tabs.addStretch()
 
         footer = QFrame()
-        footer.setObjectName("SettingsFooter")
+        footer.setObjectName("SettingsBottomBar")
         action_bar = QHBoxLayout(footer)
         action_bar.setContentsMargins(12, 8, 12, 8)
         action_bar.setSpacing(8)
-        footer_hint = QLabel("CHANGES SAVE AUTOMATICALLY")
-        footer_hint.setObjectName("SettingsFooterHint")
-        action_bar.addWidget(footer_hint)
-        action_bar.addStretch()
-        refresh_button = self._button("REFRESH", "secondary")
+        footer_hint = QLabel("CHANGES WILL BE SAVED AUTOMATICALLY")
+        footer_hint.setWordWrap(True)
+        footer_hint.setObjectName("SettingsSaveHint")
+        action_bar.addWidget(footer_hint, 1)
+        refresh_button = SettingsActionButton("REFRESH", "update")
+        refresh_button.setFixedWidth(150)
+        self.settings_refresh_button = refresh_button
         refresh_button.clicked.connect(self.refresh_json_configs)
         action_bar.addWidget(refresh_button)
-        reset_button = self._button("RESET", "danger")
+        reset_button = SettingsActionButton("RESET", "trash", "danger")
+        reset_button.setFixedWidth(128)
+        self.settings_reset_button = reset_button
         reset_button.clicked.connect(self.confirm_reset)
         action_bar.addWidget(reset_button)
-        shell_layout.addWidget(footer)
+        layout.addWidget(footer)
         self._render_settings_group("SERVER")
         return page
 
-    def _template_action_split_button(self):
-        """Build the fixed IMPORT action with an EXPORT/BROWSE popup menu."""
-        button = QToolButton()
-        button.setObjectName("TemplateActionSplitButton")
-        button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        button.setArrowType(Qt.ArrowType.DownArrow)
+    def _settings_import_export_button(self):
+        """Use the profile's native combo popup to dispatch existing file actions."""
+        selector = NoWheelComboBox()
+        selector.setObjectName("SettingsImportExport")
+        selector.setProperty("settingsChevron", True)
+        selector.setAccessibleName("Import / Export")
+        selector.setPlaceholderText("IMPORT / EXPORT")
+        selector.setFixedHeight(CONTROL_HEIGHT)
+        actions = []
+        for caption, callback, attribute in (
+            ("Import Settings", self.import_template_setting, "template_import_action"),
+            ("Export Settings", self.export_template_setting, "template_export_action"),
+            (
+                "Browse Template Folder",
+                self.browse_template_settings,
+                "template_browse_action",
+            ),
+        ):
+            action = QAction(caption, selector)
+            action.triggered.connect(callback)
+            setattr(self, attribute, action)
+            actions.append(action)
+            selector.addItem(caption)
+        selector.setCurrentIndex(-1)
 
-        import_action = QAction("IMPORT", button)
-        import_action.triggered.connect(self.import_template_setting)
-        button.setDefaultAction(import_action)
+        def activate(index: int):
+            """Restore the caption before opening dialogs; allow repeated actions."""
+            selector.setCurrentIndex(-1)
+            if 0 <= index < len(actions):
+                actions[index].trigger()
 
-        menu = QMenu(button)
-        menu.setObjectName("TemplateActionMenu")
-        export_action = menu.addAction("EXPORT TEMPLATE")
-        export_action.triggered.connect(self.export_template_setting)
-        browse_action = menu.addAction("BROWSE TEMPLATE FOLDER")
-        browse_action.triggered.connect(self.browse_template_settings)
-        button.setMenu(menu)
-
-        self.template_action_button = button
-        self.template_import_action = import_action
-        self.template_export_action = export_action
-        self.template_browse_action = browse_action
-        return button
+        selector.activated.connect(activate)
+        self.template_action_button = selector
+        return selector
 
     def _template_catalog(self):
         """Rescan versioned template files for the settings UI."""
@@ -226,9 +252,7 @@ class SettingsPagesMixin:
     def _template_group_state(self, group_name: str):
         """Resolve a settings group to manual, active, or missing template state."""
         reference_keys = TEMPLATE_GROUP_REFERENCE_KEYS.get(group_name, ())
-        reference_values = {
-            str(self.form_values.get(key, "")) for key in reference_keys
-        }
+        reference_values = {str(self.form_values.get(key, "")) for key in reference_keys}
         if reference_values == {""} or not reference_values:
             return "manual", "", ""
         if len(reference_values) != 1:
@@ -241,7 +265,7 @@ class SettingsPagesMixin:
         error = catalog.errors.get(str(resolved), resolve_error)
         return "missing", str(resolved or name), error
 
-    def _add_template_selector(self, group_name: str):
+    def _add_template_selector(self, group_name: str, in_header: bool = False):
         """Add the no-wheel template selector beside a settings group heading."""
         state, selected_name, error = self._template_group_state(group_name)
         catalog = self._template_catalog()
@@ -253,48 +277,33 @@ class SettingsPagesMixin:
         selector.setObjectName(selector_name)
         selector.setMinimumWidth(190)
         selector.addItem("Manual", "")
-        display_counts = Counter(
-            str(template["name"]) for template in catalog.templates.values()
-        )
+        display_counts = Counter(str(template["name"]) for template in catalog.templates.values())
         sorted_templates = sorted(
             catalog.templates.items(),
             key=lambda item: (str(item[1]["name"]).casefold(), item[0].casefold()),
         )
         for template_id, template in sorted_templates:
             display_name = str(template["name"])
-            label = (
-                f"{display_name} — {template_id}"
-                if display_counts[display_name] > 1
-                else display_name
-            )
+            label = f"{display_name} — {template_id}" if display_counts[display_name] > 1 else display_name
             selector.addItem(
-                f"V  {label}"
-                if state == "active" and template_id == selected_name
-                else label,
+                f"V  {label}" if state == "active" and template_id == selected_name else label,
                 template_id,
             )
-            selector.setItemData(
-                selector.count() - 1, template_id, Qt.ItemDataRole.ToolTipRole
-            )
+            selector.setItemData(selector.count() - 1, template_id, Qt.ItemDataRole.ToolTipRole)
         if selected_name and selector.findData(selected_name) < 0:
             selector.addItem(f"MISSING: {selected_name}", selected_name)
         if state == "missing" and not selected_name:
             selector.addItem("MIXED ASSIGNMENTS", "__mixed__")
-        current_index = selector.findData(
-            selected_name or ("__mixed__" if state == "missing" else "")
-        )
+        current_index = selector.findData(selected_name or ("__mixed__" if state == "missing" else ""))
         selector.setCurrentIndex(max(0, current_index))
         if error:
             selector.setToolTip(error)
-        selector.currentIndexChanged.connect(
-            lambda _index, combo=selector, group=group_name: self.change_template_group(
-                group, str(combo.currentData())
-            )
-        )
-        action_column = getattr(self, "_settings_form_action_column", 3)
-        self.settings_form_layout.addWidget(
-            selector, 0, action_column, alignment=Qt.AlignmentFlag.AlignRight
-        )
+        selector.currentIndexChanged.connect(lambda _index, combo=selector, group=group_name: self.change_template_group(group, str(combo.currentData())))
+        if in_header:
+            self.settings_breadcrumb.set_profile(selector)
+        else:
+            action_column = getattr(self, "_settings_form_action_column", 3)
+            self.settings_form_layout.addWidget(selector, 0, action_column, alignment=Qt.AlignmentFlag.AlignRight)
         self.template_selector = selector
         return state, selected_name, error
 
@@ -309,9 +318,7 @@ class SettingsPagesMixin:
         if state == "manual":
             return field
         frame = QFrame()
-        frame.setObjectName(
-            "TemplateFieldActive" if state == "active" else "TemplateFieldMissing"
-        )
+        frame.setObjectName("TemplateFieldActive" if state == "active" else "TemplateFieldMissing")
         row = QHBoxLayout(frame)
         row.setContentsMargins(4, 1, 4, 1)
         row.setSpacing(5)
@@ -335,17 +342,13 @@ class SettingsPagesMixin:
         """Style and lock a collection editor when a template is active."""
         if state == "manual":
             return
-        content.setObjectName(
-            "TemplateGroupActive" if state == "active" else "TemplateGroupMissing"
-        )
+        content.setObjectName("TemplateGroupActive" if state == "active" else "TemplateGroupMissing")
         content.setToolTip(f"Using {template_name}" if state == "active" else error)
         content.setEnabled(state != "active")
         content.style().unpolish(content)
         content.style().polish(content)
 
-    def _set_group_template_references(
-        self, settings: dict, group_name: str, template_name: str
-    ):
+    def _set_group_template_references(self, settings: dict, group_name: str, template_name: str):
         """Return settings with every reference for a group assigned together."""
         updated = copy.deepcopy(settings)
         for key in TEMPLATE_GROUP_REFERENCE_KEYS[group_name]:
@@ -357,9 +360,7 @@ class SettingsPagesMixin:
         if template_name == "__mixed__":
             return False
         old_settings = copy.deepcopy(self.settings)
-        new_settings = self._set_group_template_references(
-            old_settings, group_name, template_name
-        )
+        new_settings = self._set_group_template_references(old_settings, group_name, template_name)
         if not template_name:
             try:
                 new_settings = save_settings(new_settings)
@@ -380,9 +381,7 @@ class SettingsPagesMixin:
             self._render_settings_group(group_name)
             self.dialog(
                 "Template Unavailable",
-                catalog.errors.get(
-                    template_name, f'Template "{template_name}" cannot be found.'
-                ),
+                catalog.errors.get(template_name, f'Template "{template_name}" cannot be found.'),
                 "error",
             )
             return False
@@ -426,9 +425,7 @@ class SettingsPagesMixin:
             elif group_name == "GACHA":
                 self._ensure_gacha_config()
                 new_gacha = save_gacha_config(template["data"]["gacha"])
-                new_gacha_collect = save_gacha_collect_config(
-                    template["data"]["gacha_collect"]
-                )
+                new_gacha_collect = save_gacha_collect_config(template["data"]["gacha_collect"])
             elif group_name == "CRAFT":
                 new_craft = save_craft_config(
                     convert_craft_yaw(
@@ -539,9 +536,7 @@ class SettingsPagesMixin:
     def sync_configured_templates(self):
         """Re-materialize valid configured templates after startup or refresh."""
         catalog = self._template_catalog()
-        migrated_settings, migration_errors = migrate_template_references(
-            self.settings, catalog
-        )
+        migrated_settings, migration_errors = migrate_template_references(self.settings, catalog)
         self.template_reference_errors = migration_errors
         if migrated_settings != self.settings:
             self.settings = save_settings(migrated_settings)
@@ -605,9 +600,7 @@ class SettingsPagesMixin:
                 load_gacha_collect_config(),
                 load_craft_config(),
             )
-            destination = self._store_template_with_conflict(
-                template, safe_template_filename(str(template["name"]))
-            )
+            destination = self._store_template_with_conflict(template, safe_template_filename(str(template["name"])))
         except (OSError, TypeError, ValueError) as exc:
             self.dialog("Template Export Failed", str(exc), "error")
             return
@@ -625,9 +618,7 @@ class SettingsPagesMixin:
         """Store a template after resolving name or safe-filename collisions."""
         catalog = self._template_catalog()
         template_id = normalize_template_id(template_id)
-        collision_id, collision_path = self._find_template_collision(
-            template_id, catalog
-        )
+        collision_id, collision_path = self._find_template_collision(template_id, catalog)
         if collision_path is None:
             return write_template(template, template_id)
 
@@ -648,9 +639,7 @@ class SettingsPagesMixin:
                 if rename.exec() != QDialog.DialogCode.Accepted:
                     return None
                 candidate = safe_template_filename(rename.text_value())
-                candidate_id, candidate_path = self._find_template_collision(
-                    candidate, catalog
-                )
+                candidate_id, candidate_path = self._find_template_collision(candidate, catalog)
                 if candidate_path is None:
                     return write_template(template, candidate)
                 self.dialog(
@@ -711,20 +700,12 @@ class SettingsPagesMixin:
             field.blockSignals(True)
             field.setChecked(bool(self.form_values.get(key, default_value)))
             field.blockSignals(False)
-            field.toggled.connect(
-                lambda checked=False, setting_key=key: self.persist_single_setting(
-                    setting_key
-                )
-            )
+            field.toggled.connect(lambda checked=False, setting_key=key: self.persist_single_setting(setting_key))
         else:
             field = QLineEdit(str(self.form_values.get(key, default_value)))
             field.setObjectName("SettingField")
-            field.editingFinished.connect(
-                lambda setting_key=key: self.persist_single_setting(setting_key)
-            )
-            field.returnPressed.connect(
-                lambda setting_key=key: self.persist_single_setting(setting_key)
-            )
+            field.editingFinished.connect(lambda setting_key=key: self.persist_single_setting(setting_key))
+            field.returnPressed.connect(lambda setting_key=key: self.persist_single_setting(setting_key))
         tooltip = setting_tooltip(key)
         if tooltip:
             field.setToolTip(tooltip)
@@ -741,9 +722,7 @@ class SettingsPagesMixin:
     ):
         """Wrap a setting editor with template state when needed."""
         if templated:
-            return self._template_field_widget(
-                field, state, template_name, template_error
-            )
+            return self._template_field_widget(field, state, template_name, template_error)
         return field
 
     def _station_yaw_field_container(self, field: QWidget):
@@ -753,9 +732,12 @@ class SettingsPagesMixin:
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(8)
         row.addWidget(field, 1)
-        helper = self._button("[B]", "secondary")
-        helper.setObjectName("HelperIconButton")
-        helper.setToolTip("Open helper to capture and view render yaw settings.")
+        helper = SettingsActionButton("", "target")
+        helper.setObjectName("PositionCaptureButton")
+        helper.setFixedSize(CONTROL_HEIGHT, CONTROL_HEIGHT)
+        helper.setToolTip("Open position helper")
+        helper.setAccessibleName("Open position helper")
+        self.station_yaw_capture_button = helper
         helper.clicked.connect(self.open_position_render_helper)
         row.addWidget(helper)
         return frame
@@ -766,12 +748,10 @@ class SettingsPagesMixin:
         max_fields: int,
     ):
         """Add a settings heading and template selector for one simple section."""
-        heading = QLabel("HELPER" if group_name == "UI" else f"{group_name} SETTINGS")
+        heading = QLabel(_settings_group_title(group_name))
         heading.setObjectName("SectionHeading")
         self._settings_form_action_column = max((max_fields * 2) - 1, 3)
-        self.settings_form_layout.addWidget(
-            heading, 0, 0, 1, self._settings_form_action_column
-        )
+        self.settings_form_layout.addWidget(heading, 0, 0, 1, self._settings_form_action_column)
         if group_name in TEMPLATE_GROUP_REFERENCE_KEYS:
             return self._add_template_selector(group_name)
         return "manual", "", ""
@@ -796,11 +776,7 @@ class SettingsPagesMixin:
                 label.setToolTip(tooltip)
             col = field_index * 2
             field = self._setting_field(key)
-            content = (
-                self._station_yaw_field_container(field)
-                if key == "station_yaw"
-                else field
-            )
+            content = self._station_yaw_field_container(field) if key == "station_yaw" else field
             self.settings_form_layout.addWidget(label, row_number, col)
             self.settings_form_layout.addWidget(
                 self._setting_field_container(
@@ -855,331 +831,313 @@ class SettingsPagesMixin:
             self._settings_form_action_column + 1,
         )
 
+    def _approved_settings_content(self, group: str):
+        """Mount the scoped content without changing the shared field registry."""
+        state = self._add_template_selector(group, in_header=True)
+        content = QWidget()
+        content.setObjectName("ApprovedSettingsContent")
+        box = QVBoxLayout(content)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(16)
+        self.settings_form_layout.addWidget(content, 0, 0, 1, 4)
+        self.settings_form_layout.setContentsMargins(14, 0, 0, 0)
+        self.settings_form_layout.setRowStretch(0, 0)
+        self.settings_form_layout.setRowStretch(1, 1)
+        self.settings_form_layout.addItem(
+            QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding),
+            1,
+            0,
+            1,
+            4,
+        )
+        return box, state
+
+    def _approved_setting_field(
+        self,
+        key: str,
+        title: str,
+        state: tuple[str, str, str],
+        description: str = "",
+        stacked: bool = False,
+        unit: str = "",
+    ):
+        """Adapt the existing editor, template lock, and autosave connections."""
+        field = self._setting_field(key)
+        field.setFixedHeight(CONTROL_HEIGHT)
+        field.setMinimumWidth(0)
+        control = self._station_yaw_field_container(field) if key == "station_yaw" else field
+        if key in TEMPLATE_GROUP_SETTING_KEYS[self.current_settings_group]:
+            control = self._template_field_widget(control, *state)
+            if control is not field and control.layout() is not None:
+                control.layout().setContentsMargins(0, 0, 0, 0)
+                control.setFixedHeight(CONTROL_HEIGHT)
+        if unit:
+            wrapper = QWidget()
+            row = QHBoxLayout(wrapper)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(10)
+            row.addWidget(control, 1)
+            row.addWidget(settings_label(unit))
+            control = wrapper
+        return SettingsField(title, control, description, stacked)
+
     def _render_server_settings(self):
-        state, template_name, template_error = self._start_settings_section("SERVER", 2)
-        templated_keys = set(TEMPLATE_GROUP_SETTING_KEYS["SERVER"])
-        row = 1
-        row = self._add_setting_row(
-            ("server_number", "ping"),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
+        """Render the approved Server card with the existing three editors."""
+        box, state = self._approved_settings_content("SERVER")
+        card = SettingsSectionCard(
+            "Server settings",
+            "Set the server information for the bot to connect to",
+            "server",
+            "server",
         )
-        row = self._add_setting_row(
-            ("singleplayer",),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
+        grid = SettingsFieldGrid(
+            [
+                self._approved_setting_field(
+                    "server_number",
+                    "Server",
+                    state,
+                    "ARK server number or ID",
+                    stacked=True,
+                ),
+                self._approved_setting_field(
+                    "ping",
+                    "Server ping (ms)",
+                    state,
+                    "Server ping in milliseconds",
+                    stacked=True,
+                ),
+                self._approved_setting_field(
+                    "singleplayer",
+                    "Singleplayer mode",
+                    state,
+                    "Enable if running a singleplayer/local game",
+                    stacked=True,
+                ),
+            ]
         )
-        self._add_settings_spacer(row)
+        card.body.addWidget(grid)
+        info = QFrame()
+        info.setObjectName("ServerInformation")
+        row = QHBoxLayout(info)
+        row.setContentsMargins(18, 18, 18, 18)
+        symbol = QLabel()
+        symbol.setPixmap(settings_icon("about").pixmap(38, 38))
+        row.addWidget(symbol)
+        text = QVBoxLayout()
+        text.addWidget(settings_label("Server Information", "title"))
+        text.addWidget(settings_label("Make sure the server number matches the server where your automation stations are located."))
+        row.addLayout(text, 1)
+        card.body.addWidget(info)
+        box.addWidget(card)
 
     def _render_stations_settings(self):
-        state, template_name, template_error = self._start_settings_section(
-            "STATIONS", 2
+        """Render consistent station cards without changing their saved fields."""
+        box, state = self._approved_settings_content("STATIONS")
+        render = SettingsSectionCard(
+            "RENDER STATION",
+            "Set the render base location for automation.",
+            "render",
+            "bed",
         )
-        templated_keys = set(TEMPLATE_GROUP_SETTING_KEYS["STATIONS"])
-        row = 1
-        row = self._add_settings_divider(row, "RENDER STATION")
-        row = self._add_setting_row(
-            ("bed_spawn", "station_yaw"),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
+        render.body.addWidget(
+            SettingsFieldGrid(
+                [
+                    self._approved_setting_field("bed_spawn", "Bed spawn", state),
+                    self._approved_setting_field("station_yaw", "Station yaw", state),
+                ]
+            )
         )
-        row = self._add_settings_divider(row, "IGUANODON STATION")
-        row = self._add_setting_row(
-            ("iguanadon", "iguanadon_seed_throw_amount"),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
+        box.addWidget(render)
+        iguanodon = SettingsSectionCard(
+            "IGUANODON STATION",
+            "Set the iguanodon location and seed drop settings.",
+            "iguanodon",
+            "iguanodon",
         )
-        row = self._add_settings_divider(row, "BERRY STATION")
-        row = self._add_setting_row(
-            ("berry_station", "berry_type"),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
+        iguanodon.body.addWidget(
+            SettingsFieldGrid(
+                [
+                    self._approved_setting_field("iguanadon", "Iguanodon", state),
+                    self._approved_setting_field("iguanadon_seed_throw_amount", "Seed drop", state),
+                ]
+            )
         )
-        row = self._add_setting_row(
-            ("time_to_reberry", "external_berry"),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
+        box.addWidget(iguanodon)
+        berry = SettingsSectionCard(
+            "BERRY STATION",
+            "Set the berry collection station settings.",
+            "berry",
+            "berry",
         )
-        self._add_settings_spacer(row)
+        berry.body.addWidget(
+            SettingsFieldGrid(
+                [
+                    self._approved_setting_field("berry_station", "Berry station", state),
+                    self._approved_setting_field("berry_type", "Berry name", state),
+                    self._approved_setting_field("time_to_reberry", "Reberry after", state, unit="(s)"),
+                    self._approved_setting_field(
+                        "external_berry",
+                        "Troughs away?",
+                        state,
+                        "True if trough is not in render, but far away",
+                    ),
+                ]
+            )
+        )
+        box.addWidget(berry)
 
     def _render_launcher_settings(self):
-        state, template_name, template_error = self._start_settings_section(
-            "LAUNCHER", 2
+        """Render Launcher settings using existing editors and local Auto Keys."""
+        box, state = self._approved_settings_content("LAUNCHER")
+        card = SettingsSectionCard(
+            "Launcher settings",
+            "Configure ARK launcher behavior and window options.",
+            "launcher",
+            "launcher_settings",
         )
-        templated_keys = set(TEMPLATE_GROUP_SETTING_KEYS["LAUNCHER"])
-        row = 1
-        row = self._add_setting_row(
-            ("auto_start_program", "helper_inactive_opacity"),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
-        )
-        row = self._add_setting_row(
-            ("allow_focus_ark_window", "focus_ark_window_interval"),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
-        )
-        row = self._add_setting_row(
-            ("launcher_width", "launcher_height"),
-            row,
-            state,
-            template_name,
-            template_error,
-            templated_keys,
-        )
-        row = self._add_auto_keys_settings(row)
-        self._add_settings_spacer(row)
+        fields = []
+        for key, title in (
+            ("auto_start_program", "Auto start program"),
+            ("helper_inactive_opacity", "Helper inactive opacity"),
+            ("allow_focus_ark_window", "Allow Ark window focus"),
+            ("focus_ark_window_interval", "Ark window focus interval"),
+            ("launcher_width", "Launcher startup width"),
+            ("launcher_height", "Launcher startup height"),
+        ):
+            field = self._approved_setting_field(key, title, state)
+            field.label.setFixedWidth(190)
+            fields.append(field)
+        card.body.addWidget(SettingsFieldGrid(fields))
+        box.addWidget(card)
+        box.addWidget(self._add_auto_keys_settings())
 
-    def _add_auto_keys_settings(self, row_number: int):
-        """Render the Auto keys runtime controls below Launcher settings."""
-        frame = QFrame()
-        frame.setObjectName("AutoKeysHeader")
-        header = QHBoxLayout(frame)
-        header.setContentsMargins(0, 0, 0, 0)
-        heading = QLabel("AUTO KEYS")
-        heading.setObjectName("SectionHeading")
-        header.addWidget(heading)
-        header.addStretch()
-        enabled = CyberSwitch("ENABLED")
-        enabled.setChecked(
-            bool(self.form_values.get("auto_keys", {}).get("enabled", False))
+    def _add_auto_keys_settings(self):
+        """Lay out existing Auto Keys controls without altering runtime semantics."""
+        card = SettingsSectionCard(
+            "AUTO KEYS",
+            "Configure automatic key presses for launcher flow.",
+            "auto_keys",
+            "auto_keys",
         )
-        enabled.toggled.connect(self.persist_auto_keys_settings)
-        header.addWidget(enabled)
-        self.settings_form_layout.addWidget(
-            frame, row_number, 0, 1, self._settings_form_action_column + 1
-        )
-        row_number += 1
-
+        card.header.setObjectName("AutoKeysHeader")
         auto_keys = self.form_values.get("auto_keys", {})
+        enabled = CyberSwitch("ENABLED")
+        enabled.setChecked(bool(auto_keys.get("enabled", False)))
+        enabled.toggled.connect(self.persist_auto_keys_settings)
+        enabled_box = QVBoxLayout()
+        enabled_box.setSpacing(3)
+        enabled_box.addWidget(enabled, alignment=Qt.AlignmentFlag.AlignRight)
+        emergency_hint = settings_label("Press Shift+F1 to deactivate")
+        emergency_hint.setWordWrap(False)
+        enabled_box.addWidget(emergency_hint)
+        card.header.layout().addLayout(enabled_box)
+        self.auto_keys_enabled_field = enabled
+
         interval = QLineEdit(str(auto_keys.get("interval", 0.25)))
         hold_duration = QLineEdit(str(auto_keys.get("hold_duration", 1.0)))
         for field in (interval, hold_duration):
             field.setObjectName("SettingField")
+            field.setFixedHeight(CONTROL_HEIGHT)
+            field.setMinimumWidth(0)
             field.editingFinished.connect(self.persist_auto_keys_settings)
-        self.auto_keys_enabled_field = enabled
         self.auto_keys_interval_field = interval
         self.auto_keys_hold_field = hold_duration
-        activation_key = str(auto_keys.get("activation_key", "F1"))
         activation_key_button = ActivationKeyButton(
-            activation_key, self._capture_auto_keys_activation_key
+            str(auto_keys.get("activation_key", "F1")),
+            self._capture_auto_keys_activation_key,
         )
         activation_key_button.setObjectName("AutoKeysActivationKey")
         self.auto_keys_activation_key_field = activation_key_button
         sync_suspension_ui = getattr(self, "_sync_auto_keys_suspension_ui", None)
         if callable(sync_suspension_ui):
             sync_suspension_ui()
-        emergency_disable_description = QLabel("Press Shift+F1 to deactivate")
-        emergency_disable_description.setObjectName("AutoKeysTriggerDescription")
-        self._prepare_auto_keys_copy(emergency_disable_description)
-        self.settings_form_layout.addWidget(
-            emergency_disable_description,
-            row_number,
-            1,
-            1,
-            self._settings_form_action_column,
-        )
-        row_number += 1
-        activation_label = QLabel("Activation key")
-        activation_label.setToolTip(
-            "Hold this key with an action binding until the trigger duration ends."
-        )
-        self.settings_form_layout.addWidget(activation_label, row_number, 0)
-        self.settings_form_layout.addWidget(activation_key_button, row_number, 1)
-        row_number += 1
-        interval_label = QLabel("Interval (seconds)")
-        interval_label.setToolTip("How long to wait between each repeated key press.")
-        self.settings_form_layout.addWidget(interval_label, row_number, 0)
-        self.settings_form_layout.addWidget(interval, row_number, 1)
-        row_number += 1
-        interval_description = QLabel(
-            "The interval is the delay between repeated presses—for example: "
-            "press E → wait X seconds → press E again."
-        )
-        interval_description.setObjectName("AutoKeysIntervalDescription")
-        self._prepare_auto_keys_copy(interval_description)
-        self.settings_form_layout.addWidget(
-            interval_description,
-            row_number,
-            1,
-            1,
-            self._settings_form_action_column,
-        )
-        row_number += 1
-        interval_warning = QLabel(
-            "Intervals below 0.15 seconds may increase the risk of being banned "
-            "under ARK's anti-macro Code of Conduct."
-        )
-        interval_warning.setObjectName("AutoKeysWarning")
-        self._prepare_auto_keys_copy(interval_warning)
-        self.auto_keys_interval_warning = interval_warning
-        interval.textChanged.connect(self._refresh_auto_keys_interval_warning)
-        self._refresh_auto_keys_interval_warning()
-        self.settings_form_layout.addWidget(
-            interval_warning,
-            row_number,
-            1,
-            1,
-            self._settings_form_action_column,
-        )
-        row_number += 1
-        hold_label = QLabel("Trigger (seconds)")
-        hold_label.setToolTip(
-            "How long the physical key must be held before repeating starts."
-        )
-        self.settings_form_layout.addWidget(hold_label, row_number, 0)
-        self.settings_form_layout.addWidget(hold_duration, row_number, 1)
-        row_number += 1
-        hold_description = QLabel(
-            "How long the button must be held before Auto Keys activates. For "
-            "example, with a 1-second hold duration, holding Left Mouse Button "
-            "for at least 1 second starts repeating it until you press it again."
-        )
-        hold_description.setObjectName("AutoKeysTriggerDescription")
-        self._prepare_auto_keys_copy(hold_description)
-        self.settings_form_layout.addWidget(
-            hold_description,
-            row_number,
-            1,
-            1,
-            self._settings_form_action_column,
-        )
-        row_number += 1
 
-        supported_label = QLabel("Repeat keys")
-        # supported_label.setObjectName("FormLabel")
-        supported_label.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
-        )
+        activation = SettingsField("Activation key", SettingsUnitControl(activation_key_button))
+        activation.label.setFixedWidth(180)
+        card.body.addWidget(SettingsFieldGrid([activation, QWidget()]))
+        for title, field, description, object_name in (
+            (
+                "Interval",
+                interval,
+                "Delay between repeated presses.\nExample: press E → wait X seconds → press E again.",
+                "AutoKeysIntervalDescription",
+            ),
+            (
+                "Trigger",
+                hold_duration,
+                "How long a key must be held before Auto Keys starts.\nExample: with a 1-second trigger, holding Left Mouse Button for 1 second starts repeating it until pressed again.",
+                "AutoKeysTriggerDescription",
+            ),
+        ):
+            unit_control = SettingsUnitControl(field, "(s)")
+            entry = SettingsField(title, unit_control)
+            entry.label.setFixedWidth(180)
+            copy = QWidget()
+            copy_layout = QVBoxLayout(copy)
+            copy_layout.setContentsMargins(0, 0, 0, 0)
+            label = settings_label(description)
+            label.setObjectName(object_name)
+            copy_layout.addWidget(label)
+            if field is interval:
+                warning = settings_label("Intervals below 0.15 seconds may increase the risk of being banned under ARK's anti-macro Code of Conduct.")
+                warning.setObjectName("AutoKeysWarning")
+                self.auto_keys_interval_warning = warning
+                copy_layout.addWidget(warning)
+                interval.textChanged.connect(self._refresh_auto_keys_interval_warning)
+                self._refresh_auto_keys_interval_warning()
+            card.body.addWidget(SettingsFieldGrid([entry, copy]))
+
+        divider = QFrame()
+        divider.setObjectName("SettingsDivider")
+        divider.setFrameShape(QFrame.Shape.HLine)
+        divider.setFixedHeight(1)
+        card.body.addWidget(divider)
         supported_grid = QWidget()
         supported_grid.setObjectName("AutoKeysSupportedGrid")
-        supported_grid.setMinimumWidth(0)
-        supported_grid.setSizePolicy(
-            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
-        )
         supported_layout = QGridLayout(supported_grid)
         supported_layout.setContentsMargins(0, 0, 0, 0)
-        supported_layout.setHorizontalSpacing(8)
-        supported_layout.setVerticalSpacing(4)
-        supported_layout.setColumnStretch(2, 1)
-
-        action_fields = {}
-        binding_labels = {}
+        supported_layout.setHorizontalSpacing(18)
+        supported_layout.setVerticalSpacing(6)
+        supported_layout.setColumnStretch(1, 1)
+        supported_layout.setColumnStretch(3, 1)
         action_settings = auto_keys.get("actions", {})
         if not isinstance(action_settings, dict):
             action_settings = {}
-        repeat_actions = tuple(
-            action for action in AUTO_KEYS_ACTIONS if action not in KEY_HOLD_ACTIONS
-        )
-        for index, action in enumerate(repeat_actions):
-            pair = index % 2
-            grid_row = index // 2
-            action_column = pair * 3
+        action_fields, binding_labels = {}, {}
+        positions = {
+            "Fire": (0, 0),
+            "Use": (0, 2),
+            "DropItem": (1, 0),
+            "Crouch": (1, 2),
+            "Jump": (2, 0),
+            "MoveForward": (3, 0),
+        }
+        for index, action in enumerate(AUTO_KEYS_ACTIONS):
             action_field = CyberCheckBox(action)
             action_field.setObjectName("AutoKeysSupportedAction")
-            action_field.setMinimumWidth(0)
             action_field.setChecked(bool(action_settings.get(action, True)))
             action_field.toggled.connect(self.persist_auto_keys_settings)
-            binding_label = QLabel("—")
+            binding_label = settings_label("?")
             binding_label.setObjectName("AutoKeysSupportedBinding")
-            binding_label.setMinimumWidth(0)
-            alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
-            supported_layout.addWidget(
-                action_field, grid_row, action_column, alignment=alignment
-            )
-            supported_layout.addWidget(
-                binding_label, grid_row, action_column + 1, alignment=alignment
-            )
+            row, column = positions.get(action, (4 + index, 0))
+            supported_layout.addWidget(action_field, row, column)
+            supported_layout.addWidget(binding_label, row, column + 1)
             action_fields[action] = action_field
             binding_labels[action] = binding_label
-
         self.auto_keys_supported_grid = supported_grid
         self.auto_keys_supported_grid_layout = supported_layout
         self.auto_keys_action_fields = action_fields
         self.auto_keys_supported_binding_labels = binding_labels
         self.auto_keys_input_path = None
         self.auto_keys_input_mtime = None
-        self.settings_form_layout.addWidget(
-            supported_label,
-            row_number,
-            0,
-            alignment=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
-        )
-        self.settings_form_layout.addWidget(
-            supported_grid,
-            row_number,
-            1,
-            1,
-            self._settings_form_action_column,
-            alignment=Qt.AlignmentFlag.AlignTop,
-        )
-        row_number += 1
-        key_hold_label = QLabel("Key Hold")
-        key_hold_label.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
-        )
-        key_hold_grid = QWidget()
-        key_hold_layout = QGridLayout(key_hold_grid)
-        key_hold_layout.setContentsMargins(0, 0, 0, 0)
-        for index, action in enumerate(KEY_HOLD_ACTIONS):
-            action_field = CyberCheckBox(action)
-            action_field.setObjectName("AutoKeysSupportedAction")
-            action_field.setChecked(bool(action_settings.get(action, True)))
-            action_field.toggled.connect(self.persist_auto_keys_settings)
-            binding_label = QLabel("â€”")
-            binding_label.setObjectName("AutoKeysSupportedBinding")
-            key_hold_layout.addWidget(action_field, index, 0)
-            key_hold_layout.addWidget(binding_label, index, 1)
-            action_fields[action] = action_field
-            binding_labels[action] = binding_label
-        self.settings_form_layout.addWidget(key_hold_label, row_number, 0)
-        self.settings_form_layout.addWidget(key_hold_grid, row_number, 1)
-        row_number += 1
+        repeat = SettingsField("Repeat keys", supported_grid)
+        repeat.label.setFixedWidth(180)
+        repeat.label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        card.body.addWidget(repeat)
         self._refresh_auto_keys_supported_keys(force=True)
-        instruction = QLabel()
-        instruction.setObjectName("AutoKeysInstruction")
-        self._prepare_auto_keys_copy(instruction)
-        self.auto_keys_instruction_label = instruction
         hold_duration.textChanged.connect(self._refresh_auto_keys_instruction)
         self._refresh_auto_keys_instruction()
-        self.settings_form_layout.addWidget(
-            instruction,
-            row_number,
-            1,
-            1,
-            self._settings_form_action_column,
-        )
-        return row_number + 1
-
-    @staticmethod
-    def _prepare_auto_keys_copy(label: QLabel):
-        """Allow Auto Keys guidance to wrap without widening the Settings page."""
-        label.setWordWrap(True)
-        label.setMinimumWidth(0)
-        label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        return card
 
     def _refresh_auto_keys_interval_warning(self, _text: str = ""):
         """Show the advisory warning only for parsed intervals below 0.15 seconds."""
@@ -1195,7 +1153,7 @@ class SettingsPagesMixin:
 
     def _refresh_auto_keys_instruction(self, _text: str = ""):
         """Show the current hold duration in the Auto Keys usage instruction."""
-        label = getattr(self, "auto_keys_instruction_label", None)
+        label = getattr(self, "auto_keys_hold_field", None)
         field = getattr(self, "auto_keys_hold_field", None)
         if label is None or field is None:
             return
@@ -1206,10 +1164,8 @@ class SettingsPagesMixin:
         if duration <= 0:
             return
         unit = "second" if duration == 1 else "seconds"
-        label.setText(
-            f"Hold the activation key and a supported button for {duration:g} {unit} "
-            "to start. Repeat keys press automatically; Key Hold keeps its key down. "
-            "Press the same button again to stop."
+        label.setToolTip(
+            f"Hold the activation key and a supported button for {duration:g} {unit} to start. Repeat keys press automatically; Key Hold keeps its key down. Press the same button again to stop."
         )
 
     def _capture_auto_keys_activation_key(self, key_name: str):
@@ -1281,11 +1237,7 @@ class SettingsPagesMixin:
         """Validate, save, and apply the Auto keys settings immediately."""
         try:
             is_suspended = getattr(self, "_auto_keys_are_suspended", lambda: False)()
-            enabled = (
-                bool(self.settings.get("auto_keys", {}).get("enabled", False))
-                if is_suspended
-                else self.auto_keys_enabled_field.isChecked()
-            )
+            enabled = bool(self.settings.get("auto_keys", {}).get("enabled", False)) if is_suspended else self.auto_keys_enabled_field.isChecked()
             auto_keys = {
                 "enabled": enabled,
                 "activation_key": getattr(
@@ -1295,19 +1247,11 @@ class SettingsPagesMixin:
                 ),
                 "interval": float(self.auto_keys_interval_field.text()),
                 "hold_duration": float(self.auto_keys_hold_field.text()),
-                "actions": {
-                    action: field.isChecked()
-                    for action, field in getattr(
-                        self, "auto_keys_action_fields", {}
-                    ).items()
-                },
+                "actions": {action: field.isChecked() for action, field in getattr(self, "auto_keys_action_fields", {}).items()},
             }
             if not auto_keys["actions"]:
                 current_actions = self.settings.get("auto_keys", {}).get("actions", {})
-                auto_keys["actions"] = {
-                    action: bool(current_actions.get(action, True))
-                    for action in AUTO_KEYS_ACTIONS
-                }
+                auto_keys["actions"] = {action: bool(current_actions.get(action, True)) for action in AUTO_KEYS_ACTIONS}
             if auto_keys["interval"] <= 0 or auto_keys["hold_duration"] <= 0:
                 raise ValueError
             self.form_values["auto_keys"] = auto_keys
@@ -1342,6 +1286,15 @@ class SettingsPagesMixin:
             if widget:
                 widget.deleteLater()
         self.fields = {}
+        if hasattr(self, "settings_breadcrumb"):
+            self.settings_breadcrumb.set_group(group_name)
+            for button in self.settings_tabs.buttons():
+                button.setChecked(button.text().strip() == SETTINGS_GROUP_LABELS[group_name])
+        self.settings_form_layout.setContentsMargins(28, 20, 28, 20)
+        for index in range(self.settings_form_layout.rowCount()):
+            self.settings_form_layout.setRowStretch(index, 0)
+        for index in range(self.settings_form_layout.columnCount()):
+            self.settings_form_layout.setColumnStretch(index, 0)
 
         self._settings_form_action_column = 3
         if group_name == "DEDI":

@@ -236,9 +236,7 @@ def _windows_process_alive(pid):
 
     exit_code = ctypes.c_ulong()
     try:
-        if not ctypes.windll.kernel32.GetExitCodeProcess(
-            handle, ctypes.byref(exit_code)
-        ):
+        if not ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
             return False
         return exit_code.value == 259
     finally:

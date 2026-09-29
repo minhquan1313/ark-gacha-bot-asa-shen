@@ -18,7 +18,7 @@ berry_station = True
 did_collect_tek_troughs = False
 
 
-class base_task(ABC):
+class BaseTask(ABC):
     def __init__(self):
         self.has_run_before = False
         self.name = ""
@@ -55,9 +55,8 @@ def _iguanodon_seed():
         teleporter.teleport_not_default(settings.berry_station)
         if settings.external_berry:
             logs.logger.debug("sleeping for 20 seconds as external")
-            time.sleep(
-                settings.wait_structure_load
-            )  # letting station spawn in if you have to tp away
+            # letting station spawn in if you have to tp away
+            time.sleep(settings.wait_structure_load)
         utils.zero_center()
 
         iguanadon.berry_station()
@@ -72,19 +71,18 @@ def _iguanodon_seed():
 
     utils.zero_center()
     if settings.external_berry and temp:  # quick fix for level 1 bug
-        logs.logger.debug(
-            "reconnecting because of level 1 bug - you chose external berry will sleep for 60 seconds as a way to ensure that we are fully loaded in"
-        )
+        logs.logger.debug("reconnecting because of level 1 bug - you chose external berry will sleep for 60 seconds as a way to ensure that we are fully loaded in")
         console.console_write("reconnect")
         # takes a while for the reonnect to actually go into action
         time.sleep(settings.wait_reconnect)
     iguanadon.iguanadon()
 
 
-class gacha_station(base_task):
-    def __init__(self, name, teleporter_name, direction):
+class GachaStation(BaseTask):
+    def __init__(self, teleporter_name: str, direction: str):
+        """Name a feeding task from its teleport and side at runtime."""
         super().__init__()
-        self.name = name
+        self.name = f"Gacha.{teleporter_name}.{direction[0]}"
         self.teleporter_name = teleporter_name  # also the same as bed name for y
         self.direction = direction
 
@@ -104,18 +102,17 @@ class gacha_station(base_task):
         return settings.gacha_feed_delay
 
 
-class gacha_collect_station(base_task):
+class GachaCollectStation(BaseTask):
     def __init__(
         self,
-        name: str,
         teleporter_name: str,
         direction: str,
         item: str,
         dedi_teleport: str = "",
     ):
-        """Configure one collection task and its shared deposit destination."""
+        """Configure one collection side and its independent deposit destination."""
         super().__init__()
-        self.name = f"C.{name}"
+        self.name = f"Collect.{teleporter_name}.{direction[0]}"
         self.teleporter_name = teleporter_name
         self.direction = direction
         self.item = item
@@ -125,9 +122,7 @@ class gacha_collect_station(base_task):
         """Feed, collect, and deposit at the selected station without crafting."""
         route = deposit.resolve_collection_destination(self.dedi_teleport)
         if not self.item.strip() or route is None:
-            logs.logger.warning(
-                f"Skipping {self.name}: configure an item and a valid Dedi destination."
-            )
+            logs.logger.warning(f"Skipping {self.name}: configure an item and a valid Dedi destination.")
             return
         player_state.check_state()
         _iguanodon_seed()
@@ -143,12 +138,12 @@ class gacha_collect_station(base_task):
         return settings.gacha_collect_feed_delay
 
 
-class craft_station(base_task):
+class CraftStation(BaseTask):
     def __init__(self, route: CraftRoute, index: int):
         """Schedule one configured crafter independently of gacha collection."""
         super().__init__()
         self.route = route
-        self.name = f"Craft.{index + 1}.{route['teleport']}"
+        self.name = f"Craft.{route['teleport']}"
 
     def execute(self):
         """Craft and deposit this station's output."""
@@ -163,14 +158,15 @@ class craft_station(base_task):
         return 5
 
     def get_requeue_delay(self):
-        """Use the shared interval configured on the Craft page."""
-        return settings.craft_delay
+        """Requeue this entry using its own configured interval."""
+        return self.route["delay"]
 
 
-class pego_station(base_task):
-    def __init__(self, name, teleporter_name, delay):
+class PegoStation(BaseTask):
+    def __init__(self, index: int, teleporter_name: str, delay: int):
+        """Derive a unique queue name from entry order and its teleporter."""
         super().__init__()
-        self.name = name
+        self.name = f"Pego.{teleporter_name}"
         self.teleporter_name = teleporter_name
         self.delay = delay
         # self.is_first_run = True
@@ -208,7 +204,7 @@ class pego_station(base_task):
         return self.delay
 
 
-class render_station(base_task):
+class RenderStation(BaseTask):
     def __init__(self):
         super().__init__()
         self.name = settings.bed_spawn
@@ -219,9 +215,7 @@ class render_station(base_task):
         berry_station = True
 
         if not source.gacha_bot.render.render_flag:
-            logs.logger.debug(
-                f"render flag{render.render_flag} we are trying to get into the pod now"
-            )
+            logs.logger.debug(f"render flag{render.render_flag} we are trying to get into the pod now")
             player_state.reset_state()
             teleporter.teleport_not_default(settings.bed_spawn)
             render.enter_tekpod()

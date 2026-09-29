@@ -20,6 +20,7 @@ class UpdateScheduleTests(unittest.TestCase):
         schedule.record_attempt(self.now)
         restored = UpdateSchedule(self.path)
         self.assertFalse(restored.is_due(self.now))
+        self.assertEqual(restored.last_timestamp, self.now)
         self.assertTrue(restored.is_due(self.now + timedelta(seconds=1)))
         self.assertTrue(restored.is_due(self.now + timedelta(days=3)))
         self.assertEqual(list(self.path.parent.glob("*.tmp")), [])

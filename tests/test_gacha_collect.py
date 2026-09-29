@@ -25,9 +25,9 @@ class CollectStationTests(unittest.TestCase):
         events.attach_mock(stations.deposit.deposit_collection, "deposit")
         with patch.object(stations.time, "time", return_value=100):
             for side in ("left", "right"):
-                task = stations.gacha_collect_station(side, "PAIR", side, "stone")
+                task = stations.gacha_collect_station("PAIR", side, "stone")
                 task.execute()
-                self.assertEqual(task.name, f"C.{side}")
+                self.assertEqual(task.name, f"Collect.PAIR.{side}")
                 self.assertEqual(task.get_priority_level(), 4)
                 self.assertEqual(task.get_requeue_delay(), 900)
         self.assertEqual(events.mock_calls, [
@@ -44,7 +44,7 @@ class CollectStationTests(unittest.TestCase):
         stations.deposit.deposit_collection = Mock()
         stations.deposit.resolve_collection_destination = Mock(return_value={"id": "selected"})
         with patch.object(stations.logs.logger, "warning") as warning:
-            stations.gacha_collect_station("one", "PAIR", "left", "").execute()
+            stations.gacha_collect_station("PAIR", "left", "").execute()
         teleporter.teleport_not_default.assert_not_called()
         iguanadon.iguanadon.assert_not_called()
         stations.deposit.deposit_collection.assert_not_called()
@@ -60,7 +60,7 @@ class CollectStationTests(unittest.TestCase):
         events.attach_mock(stations.console.console_write, "console")
         events.attach_mock(iguanadon.iguanadon, "seeds")
         with patch.object(stations.time, "sleep") as sleep:
-            stations.gacha_station("one", "PAIR", "left").execute()
+            stations.gacha_station("PAIR", "left").execute()
         self.assertEqual(events.mock_calls, [call.console("reconnect"), call.seeds()])
         self.assertEqual(sleep.call_args_list, [call(20), call(60)])
         stations.gacha.drop_off_nocrop.assert_called_once_with("PAIR", "left")
@@ -146,7 +146,7 @@ class CollectConfigurationTests(unittest.TestCase):
         tasks = [args.args[0] for args in scheduler.return_value.add_task.call_args_list]
         self.assertEqual(len(tasks), 3)  # Two collect tasks plus render.
         self.assertEqual([task.name for task in tasks[:2]],
-                         ["C.one", "C.two"])
+                         ["Collect.PAIR.left", "Collect.PAIR.right"])
         self.assertEqual([(task.teleporter_name, task.direction, task.item)
                           for task in tasks[:2]],
                          [("PAIR", "left", "stone"), ("PAIR", "right", "wood")])

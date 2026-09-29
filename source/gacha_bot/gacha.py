@@ -12,12 +12,8 @@ from source.utility.debug_screenshots import (
     capture_for,
 )
 
-capture_gacha_seed_deposit = capture_for(
-    "gacha_seed_deposit", active=CAPTURE_GACHA_SEED
-)
-capture_gacha_overcap_before_drop = capture_for(
-    "gacha_overcap_before_drop", active=CAPTURE_GACHA_OVERCAP
-)
+capture_gacha_seed_deposit = capture_for("gacha_seed_deposit", active=CAPTURE_GACHA_SEED)
+capture_gacha_overcap_before_drop = capture_for("gacha_overcap_before_drop", active=CAPTURE_GACHA_OVERCAP)
 
 
 def open_gacha_inv(teleporter_name: str, direction, turn_constant):
@@ -26,9 +22,7 @@ def open_gacha_inv(teleporter_name: str, direction, turn_constant):
     while not inventory.is_open():
         inventory.open()
         attempt += 1
-        logs.logger.debug(
-            f"the {direction} gacha at {teleporter_name} could not be accessed retrying {attempt} / {source.gacha_bot.config.gacha_attempts}"
-        )
+        logs.logger.debug(f"the {direction} gacha at {teleporter_name} could not be accessed retrying {attempt} / {source.gacha_bot.config.gacha_attempts}")
 
         if inventory.is_open():
             return
@@ -38,9 +32,7 @@ def open_gacha_inv(teleporter_name: str, direction, turn_constant):
         time.sleep(0.2)
 
         if dl():
-            logs.logger.error(
-                f"the {direction} gacha at {teleporter_name} could not be accesssed after {attempt} attempts"
-            )
+            logs.logger.error(f"the {direction} gacha at {teleporter_name} could not be accesssed after {attempt} attempts")
             break
 
 

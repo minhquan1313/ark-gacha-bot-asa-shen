@@ -328,45 +328,6 @@ class LauncherDashboardTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def make_gacha_render_launcher(self):
-        launcher = SimpleNamespace(
-            gacha_group_expanded={},
-            copy_text=Mock(),
-            auto_fill_gacha_group=Mock(),
-            remove_gacha_group=Mock(),
-            add_gacha_to_group=Mock(),
-        )
-        launcher._button = lambda text, _variant: QPushButton(text)
-        launcher._icon_button = MethodType(SettingsGUI._icon_button, launcher)
-        launcher._deposit_line_edit = lambda value: QLineEdit(str(value))
-        launcher.update_gacha_group_teleporter = Mock()
-        launcher._gacha_row_card = lambda _index, _entry: QWidget()
-        launcher._gacha_group_card = MethodType(SettingsGUI._gacha_group_card, launcher)
-        return launcher
-
-    def test_full_gacha_group_hides_add_gacha_button(self):
-        launcher = self.make_gacha_render_launcher()
-        group = [
-            (0, {"name": "left", "teleporter": "GACHAPAIR_1", "side": "left"}),
-            (1, {"name": "right", "teleporter": "GACHAPAIR_1", "side": "right"}),
-        ]
-
-        card = launcher._gacha_group_card("GACHAPAIR_1", group, set())
-
-        self.assertNotIn(
-            "ADD GACHA", [button.text() for button in card.findChildren(QPushButton)]
-        )
-
-    def test_partial_gacha_group_shows_add_gacha_button(self):
-        launcher = self.make_gacha_render_launcher()
-        group = [(0, {"name": "left", "teleporter": "GACHAPAIR_1", "side": "left"})]
-
-        card = launcher._gacha_group_card("GACHAPAIR_1", group, set())
-
-        self.assertIn(
-            "ADD GACHA", [button.text() for button in card.findChildren(QPushButton)]
-        )
-
     def test_success_toast_is_modeless_and_auto_closes(self):
         launcher = SimpleNamespace()
         dialog = Mock()
@@ -393,75 +354,6 @@ class LauncherDashboardTests(unittest.TestCase):
         SettingsGUI.toast(launcher, "Needs attention", "warning")
 
         launcher.dialog.assert_called_once_with(APP_NAME, "Needs attention", "warning")
-
-    def test_start_program_button_tooltip_mentions_hotkey(self):
-        buttons = [Mock(), Mock(), Mock(), Mock()]
-        restore_button = Mock()
-        launcher = SimpleNamespace(
-            _page=Mock(return_value=(Mock(), Mock())),
-            _stat_card=Mock(return_value=Mock()),
-            _panel=Mock(return_value=(Mock(), Mock())),
-            _button=Mock(side_effect=buttons),
-            _icon_button=Mock(return_value=restore_button),
-            toggle_program=Mock(),
-            start_game=Mock(),
-            start_game_with_display_settings=Mock(),
-            restore_game_settings=Mock(),
-            clear_game_restore_settings=Mock(),
-            toggle_auto_start_program=Mock(),
-            _update_auto_start_switch=Mock(),
-            _update_start_stop_button=Mock(),
-            _update_start_game_button_visibility=Mock(),
-            _update_game_restore_button_visibility=Mock(),
-            _console_widget=Mock(return_value=Mock()),
-            set_log_filter=Mock(),
-            show_page=Mock(),
-            _footer_stat=Mock(
-                side_effect=[(Mock(), Mock()), (Mock(), Mock()), Mock(), Mock(), Mock()]
-            ),
-            _sync_dashboard_actions_width=Mock(),
-        )
-
-        with (
-            patch("source.launcher.pages.home.HeroBanner"),
-            patch("source.launcher.pages.home.QGridLayout") as grid,
-            patch("source.launcher.pages.home.QHBoxLayout"),
-            patch("source.launcher.pages.home.QFrame"),
-            patch("source.launcher.pages.home.QVBoxLayout"),
-            patch("source.launcher.pages.home.CyberSwitch") as switch,
-            patch("source.launcher.pages.home.QLabel"),
-            patch("source.launcher.pages.home.QTimer"),
-        ):
-            grid.return_value.itemAtPosition.return_value.widget.return_value = Mock()
-            switch.return_value.toggled.connect = Mock()
-            SettingsGUI._dashboard_page(launcher)
-
-        launcher.start_stop_button.setToolTip.assert_called_once_with(
-            "Hotkey: Shift + Alt + N"
-        )
-        launcher.start_game_button.setToolTip.assert_called_once_with(
-            "Left-click: apply all automation settings and start ARK. "
-            "Right-click: apply only 1920x1080 and fullscreen settings."
-        )
-        launcher.start_game_button.setContextMenuPolicy.assert_called_once_with(
-            Qt.ContextMenuPolicy.CustomContextMenu
-        )
-        launcher.start_game_button.clicked.connect.assert_called_once_with(
-            launcher.start_game
-        )
-        right_click = launcher.start_game_button.customContextMenuRequested.connect.call_args.args[
-            0
-        ]
-        right_click(Mock())
-        launcher.start_game_with_display_settings.assert_called_once_with()
-        launcher._icon_button.assert_called_once_with(
-            "icon.restore_settings",
-            "Restore the original display mode and ARK config. "
-            "Right-click to clear saved restore data.",
-            "danger",
-        )
-        self.assertIs(launcher.restore_game_settings_button, restore_button)
-        launcher._update_start_game_button_visibility.assert_called_once_with()
 
     def test_icon_button_sets_icon_and_width_without_fixed_size(self):
         button = Mock()

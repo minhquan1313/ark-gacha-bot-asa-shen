@@ -52,7 +52,8 @@ class LauncherRegressionTests(unittest.TestCase):
             QTest.qWait(20)
             launcher.show_page("dashboard")
             QTest.qWait(20)
-            self.assertEqual(launcher.dashboard_actions_card.width(), launcher.dashboard_server_card.width())
+            expected_ratio = 26 / 74 if launcher.width() >= 1100 else 1
+            self.assertAlmostEqual(launcher.dashboard_actions_card.width() / launcher.dashboard_console_panel.width(), expected_ratio, delta=0.025)
         self.assertTrue(launcher.title_bar.property("customMaximized"))
         self.assertTrue(launcher.centralWidget().property("customMaximized"))
         self.assertTrue(launcher.mask().isEmpty())
@@ -60,7 +61,7 @@ class LauncherRegressionTests(unittest.TestCase):
         QTest.qWait(20)
         self.assertFalse(launcher.title_bar.property("customMaximized"))
         self.assertFalse(launcher.mask().isEmpty())
-        self.assertEqual(launcher.dashboard_actions_card.width(), launcher.dashboard_server_card.width())
+        self.assertAlmostEqual(launcher.dashboard_actions_card.width() / launcher.dashboard_console_panel.width(), 26 / 74, delta=0.025)
 
     def test_build_uses_installed_manifest_and_invalid_version_is_unknown(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -76,7 +77,7 @@ class LauncherRegressionTests(unittest.TestCase):
             labels = [label.text() for label in launcher.findChildren(QLabel)]
             self.assertIn("BUILD 1.0.3", labels)
             self.assertIn("v1.0.3", labels)
-            self.assertIn("Version: 1.0.3", labels)
+            self.assertIn("Version 1.0.3", labels)
             self.assertNotIn("BUILD 1.0.0", labels)
 
 

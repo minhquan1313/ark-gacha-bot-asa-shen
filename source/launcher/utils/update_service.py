@@ -58,9 +58,7 @@ def _manifest_from_document(document: dict, source: str) -> UpdateManifest:
     _version_tuple(version)
     if not isinstance(released_at, str) or not isinstance(title, str):
         raise ValueError(f"{source} has invalid release metadata.")
-    if not isinstance(changelog, list) or not all(
-        isinstance(item, str) for item in changelog
-    ):
+    if not isinstance(changelog, list) or not all(isinstance(item, str) for item in changelog):
         raise ValueError(f"{source} changelog must be a list of strings.")
     return UpdateManifest(version, released_at, title, tuple(changelog))
 
@@ -162,6 +160,5 @@ def check_for_update() -> UpdateCheckResult:
         current=current,
         latest=latest,
         update_available=returncode == UPDATE_AVAILABLE_CODE,
-        version_is_newer=_version_tuple(latest.version)
-        > _version_tuple(current.version),
+        version_is_newer=_version_tuple(latest.version) > _version_tuple(current.version),
     )

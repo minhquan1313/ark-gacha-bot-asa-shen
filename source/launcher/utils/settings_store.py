@@ -25,37 +25,17 @@ def _normalize_settings(data: dict):
     normalized["auto_keys"] = {
         "enabled": bool(auto_keys.get("enabled", False)),
         "activation_key": _activation_key(auto_keys.get("activation_key", "F1")),
-        "interval": _positive_float(
-            auto_keys.get("interval", 0.25), "auto_keys.interval"
-        ),
-        "hold_duration": _positive_float(
-            auto_keys.get("hold_duration", 1.0), "auto_keys.hold_duration"
-        ),
-        "actions": {
-            action: bool(action_settings.get(action, True))
-            for action in AUTO_KEYS_ACTIONS
-        },
+        "interval": _positive_float(auto_keys.get("interval", 0.25), "auto_keys.interval"),
+        "hold_duration": _positive_float(auto_keys.get("hold_duration", 1.0), "auto_keys.hold_duration"),
+        "actions": {action: bool(action_settings.get(action, True)) for action in AUTO_KEYS_ACTIONS},
     }
-    normalized.update(
-        {
-            key: str(data.get(key, default))
-            for key, default in TEMPLATE_REFERENCE_DEFAULTS.items()
-        }
-    )
-    normalized["helper_inactive_opacity"] = max(
-        0.1, min(1.0, float(normalized.get("helper_inactive_opacity", 0.3)))
-    )
+    normalized.update({key: str(data.get(key, default)) for key, default in TEMPLATE_REFERENCE_DEFAULTS.items()})
+    normalized["helper_inactive_opacity"] = max(0.1, min(1.0, float(normalized.get("helper_inactive_opacity", 0.3))))
     normalized["ping"] = max(0, _int_value(normalized["ping"], "ping"))
-    normalized["iguanadon_seed_throw_amount"] = max(
-        0, int(normalized["iguanadon_seed_throw_amount"])
-    )
+    normalized["iguanadon_seed_throw_amount"] = max(0, int(normalized["iguanadon_seed_throw_amount"]))
     normalized["time_to_reberry"] = max(0, int(normalized["time_to_reberry"]))
-    normalized["launcher_width"] = max(
-        PHONE_MINIMUM_SIZE[0], int(normalized["launcher_width"])
-    )
-    normalized["launcher_height"] = max(
-        PHONE_MINIMUM_SIZE[1], int(normalized["launcher_height"])
-    )
+    normalized["launcher_width"] = max(PHONE_MINIMUM_SIZE[0], int(normalized["launcher_width"]))
+    normalized["launcher_height"] = max(PHONE_MINIMUM_SIZE[1], int(normalized["launcher_height"]))
     return normalized
 
 

@@ -38,10 +38,7 @@ class FertilizerRefreshHelper(WorkerHelperWindow):
         self.worker_finished.connect(self._on_worker_finished)
 
     def _build_ui(self):
-        self.description = QLabel(
-            "Aim at a crop plot and this tool opens its inventory, transfers everything "
-            "to your player inventory, then transfers everything back into the crop plot."
-        )
+        self.description = QLabel("Aim at a crop plot and this tool opens its inventory, transfers everything to your player inventory, then transfers everything back into the crop plot.")
         self.description.setObjectName("MutedCopy")
         self.description.setWordWrap(True)
         self.content_layout.addWidget(self.description)
