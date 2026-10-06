@@ -22,10 +22,7 @@ def cleanup_app_processes(app_id: str):
         if process.pid in protected_pids:
             continue
         command = process.info["cmdline"] or []
-        tagged = any(
-            command[index : index + 2] == ["--app-id", app_id]
-            for index in range(len(command) - 1)
-        )
+        tagged = any(command[index : index + 2] == ["--app-id", app_id] for index in range(len(command) - 1))
         if (process.info["name"] or "").lower() not in names or not tagged:
             continue
         with contextlib.suppress(psutil.AccessDenied, psutil.NoSuchProcess):

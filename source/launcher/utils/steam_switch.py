@@ -29,9 +29,7 @@ def switch_steam_account(
     with ark_runtime.temporary_disable():
         target_steam_account = player_steam_account(players, target_account)
         if not target_steam_account:
-            raise RuntimeError(
-                f"Player {target_account} has no Steam account assigned."
-            )
+            raise RuntimeError(f"Player {target_account} has no Steam account assigned.")
         if target_steam_account == current_steam_account and not force_restart:
             return current_steam_account
 
@@ -70,17 +68,12 @@ def switch_steam_account(
             try:
                 steam_accounts.launch_steam()
                 if _wait_for_steam_window(window_title, readiness_seconds):
-                    logs.logger.info(
-                        f"Steam is visible and maximized for {target_steam_account}."
-                    )
+                    logs.logger.info(f"Steam is visible and maximized for {target_steam_account}.")
                     return target_steam_account
             except Exception as exc:
                 logs.logger.warning(f"Steam launch attempt {attempt} failed: {exc}")
 
-            logs.logger.warning(
-                "Steam was not visible and maximized within "
-                f"{readiness_seconds} seconds; restarting (attempt {attempt + 1})."
-            )
+            logs.logger.warning(f"Steam was not visible and maximized within {readiness_seconds} seconds; restarting (attempt {attempt + 1}).")
             if close_ark:
                 ark_game_setup.kill_running_ark()
             steam_accounts.close_steam()

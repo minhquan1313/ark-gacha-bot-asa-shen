@@ -1,7 +1,7 @@
 import os
 import sys
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, Qt, QTimer
+from PySide6.QtCore import QPoint, QRect, Qt, QTimer
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from source.launcher.components.dashboard import SidebarButton, SidebarFrame
 from source.launcher.components.widgets import (
     AnimatedButton,
     TitleBar,
@@ -28,6 +29,7 @@ from source.launcher.config.constants import (
     UI_METRICS,
     WINDOW_RESIZE_BORDER_PX,
 )
+from source.launcher.dashboard_theme import asset_path, shell_style
 from source.launcher.styles import launcher_style_sheet
 from source.launcher.utils.native_window import (
     HTBOTTOM,
@@ -52,6 +54,7 @@ RUNNER_READY_MESSAGE = "__RUNNER_READY__"
 
 class WindowGuiMixin:
     def _build_ui(self):
+        self._shell_scale = None
         self.setStyleSheet(launcher_style_sheet())
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         root = QWidget()
@@ -84,9 +87,9 @@ class WindowGuiMixin:
                 ("dashboard", self._dashboard_page),
                 ("setup", self._setup_page),
                 ("settings", self._settings_page),
-                ("logs", self._logs_page),
+                ("btemplates", self._btemplates_page),
                 ("tools", self._tools_page),
-                ("update", self._update_page),
+                ("logs", self._logs_page),
                 ("about", self._about_page),
             )
         )
@@ -98,19 +101,20 @@ class WindowGuiMixin:
         self._apply_responsive_layout()
 
     def _build_sidebar(self):
-        sidebar = QFrame()
+        sidebar = SidebarFrame()
         sidebar.setObjectName("Sidebar")
         sidebar.setFixedWidth(190)
         layout = QVBoxLayout(sidebar)
-        layout.setContentsMargins(12, 18, 12, 18)
+        self.sidebar_layout = layout
+        layout.setContentsMargins(16, 28, 16, 24)
         layout.setSpacing(8)
 
         logo = QLabel()
         self.sidebar_logo = logo
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        if os.path.exists(ASSETS["logo"]):
+        if os.path.exists(asset_path(ASSETS["logo"])):
             logo.setPixmap(
-                QPixmap(ASSETS["logo"]).scaled(
+                QPixmap(asset_path(ASSETS["logo"])).scaled(
                     88,
                     88,
                     Qt.AspectRatioMode.KeepAspectRatio,
@@ -124,31 +128,26 @@ class WindowGuiMixin:
 
         layout.addWidget(logo)
         layout.addWidget(brand)
-        layout.addSpacing(18)
+        # self.sidebar_tagline = QLabel("AUTOMATION REDEFINED")
+        # self.sidebar_tagline.setObjectName("SidebarTagline")
+        # self.sidebar_tagline.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # layout.addWidget(self.sidebar_tagline)
+        layout.addSpacing(10)
 
         self.pc_nav_labels = {
             "dashboard": "DASHBOARD",
             # "setup": "SETUP GUIDE",
             "settings": "SETTINGS",
-            "logs": "LOGS",
+            "btemplates": "B.TEMPLATE",
             "tools": "TOOLS",
-            "update": "CHECK UPDATE",
-            "about": "ABOUT ME",
-        }
-        self.narrow_nav_labels = {
-            "dashboard": "DASH",
-            "setup": "SETUP",
-            "settings": "SET",
             "logs": "LOGS",
-            "tools": "TOOLS",
-            "update": "UPDATE",
             "about": "ABOUT",
         }
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
         for key, label in self.pc_nav_labels.items():
-            button = AnimatedButton(label, "nav")
-            button.setObjectName("NavButton")
+            button = SidebarButton(label, key)
+            button.setObjectName("DashboardNavButton")
             button.setCheckable(True)
             button.clicked.connect(lambda checked=False, name=key: self.show_page(name))
             self.nav_group.addButton(button)
@@ -163,6 +162,10 @@ class WindowGuiMixin:
         self.sidebar_ready = status
         layout.addWidget(build)
         layout.addWidget(status)
+        copyright_label = QLabel("SHEN GBOT\nALL RIGHTS RESERVED.")
+        copyright_label.setObjectName("SidebarCopyright")
+        self.sidebar_copyright = copyright_label
+        layout.addWidget(copyright_label)
         return sidebar
 
     def _build_timer(self):
@@ -173,18 +176,11 @@ class WindowGuiMixin:
         self.auto_start_timer.timeout.connect(self.start_program)
 
     def _schedule_auto_start(self):
-        if (
-            self.settings.get("auto_start_program", False)
-            and self._is_auto_start_allowed()
-        ):
-            self.append_log(
-                "[INFO] Auto start enabled. Starting program after launcher initialization.\n"
-            )
+        if self.settings.get("auto_start_program", False) and self._is_auto_start_allowed():
+            self.append_log("[INFO] Auto start enabled. Starting program after launcher initialization.\n")
             self.auto_start_timer.start(1000)
         elif self.settings.get("auto_start_program", False):
-            self.append_log(
-                "[WARN] Auto start is enabled but server number is not configured.\n"
-            )
+            self.append_log("[WARN] Auto start is enabled but server number is not configured.\n")
 
     def toggle_max_restore(self):
         if self.is_custom_maximized:
@@ -267,19 +263,19 @@ class WindowGuiMixin:
         if self.shutdown_started:
             return
         self.shutdown_started = True
+        if hasattr(self, "logs_page"):
+            self.logs_page.stop()
         if hasattr(self, "timer"):
             self.timer.stop()
         if hasattr(self, "auto_start_timer"):
             self.auto_start_timer.stop()
+        if hasattr(self, "_console_render_timer"):
+            self._console_render_timer.stop()
         self._unregister_start_stop_hotkey()
-        unregister_auto_keys_stop_hotkey = getattr(
-            self, "_unregister_auto_keys_stop_hotkey", None
-        )
+        unregister_auto_keys_stop_hotkey = getattr(self, "_unregister_auto_keys_stop_hotkey", None)
         if callable(unregister_auto_keys_stop_hotkey):
             unregister_auto_keys_stop_hotkey()
-        clear_suspensions = getattr(
-            self, "_clear_auto_keys_automation_suspensions", None
-        )
+        clear_suspensions = getattr(self, "_clear_auto_keys_automation_suspensions", None)
         if clear_suspensions is not None:
             clear_suspensions()
         runtime = getattr(self, "auto_keys_runtime", None)
@@ -373,40 +369,49 @@ class WindowGuiMixin:
         return QRect(top_left, widget.size())
 
     def _apply_responsive_layout(self):
-        if not hasattr(self, "is_narrow_layout"):
+        """Scale the shell independently of the existing page content styles."""
+        if not hasattr(self, "sidebar") or not hasattr(self, "nav_buttons"):
             return
+        scale = max(0.78125, min(1.0, self.width() / 1536, self.height() / 1024))
         is_narrow = self.width() < BREAKPOINT_NARROW_WIDTH
-        if is_narrow == self.is_narrow_layout and hasattr(self, "sidebar"):
+        key = (round(scale, 3), is_narrow)
+        if key == getattr(self, "_shell_scale", None):
             return
+        self._shell_scale = key
         self.is_narrow_layout = is_narrow
-        labels = self.narrow_nav_labels if is_narrow else self.pc_nav_labels
-        self.sidebar.setFixedWidth(96 if is_narrow else 190)
-        for key, button in self.nav_buttons.items():
-            button.setText(labels[key])
-        if hasattr(self, "sidebar_brand"):
-            self.sidebar_brand.setVisible(not is_narrow)
-        if hasattr(self, "sidebar_logo"):
-            size = 54 if is_narrow else 88
-            if os.path.exists(ASSETS["logo"]):
-                self.sidebar_logo.setPixmap(
-                    QPixmap(ASSETS["logo"]).scaled(
-                        size,
-                        size,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                )
-
-    def eventFilter(self, watched: QObject, event: QEvent):
-        """Align dashboard actions after the server card receives its final size."""
-        if watched is getattr(self, "dashboard_server_card", None) and event.type() in (
-            QEvent.Type.Resize,
-            QEvent.Type.Show,
+        self.setStyleSheet(launcher_style_sheet() + shell_style(scale))
+        self.sidebar.setFixedWidth(76 if is_narrow else round(234 * scale))
+        self.sidebar_layout.setContentsMargins(round(16 * scale), round(30 * scale), round(10 * scale), round(24 * scale))
+        self.sidebar_layout.setSpacing(round(10 * scale))
+        self.title_bar.setFixedHeight(round(52 * scale))
+        for button in (
+            self.title_bar.minimize_button,
+            self.title_bar.maximize_button,
+            self.title_bar.close_button,
         ):
-            QTimer.singleShot(0, self._sync_dashboard_actions_width)
-        return super().eventFilter(watched, event)
+            button.setFixedSize(round(52 * scale), round(52 * scale) - 1)
+        for key, button in self.nav_buttons.items():
+            button.setText("" if is_narrow else "   " + self.pc_nav_labels[key])
+            button.set_scale(scale)
+        for widget in (
+            self.sidebar_brand,
+            # self.sidebar_tagline,
+            self.sidebar_copyright,
+        ):
+            widget.setVisible(not is_narrow)
+        size = 50 if is_narrow else round(120 * scale)
+        self.sidebar_logo.setPixmap(
+            QPixmap(asset_path(ASSETS["logo"])).scaled(
+                size,
+                size,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
 
     def show_page(self, name):
+        if name == "update":
+            name = "about"
         self.stack.setCurrentWidget(self.pages[name])
         if name in self.nav_buttons:
             self.nav_buttons[name].setChecked(True)
@@ -415,8 +420,6 @@ class WindowGuiMixin:
             self._update_game_restore_button_visibility()
             self._render_logs()
             self._tick()
-        elif name == "update":
-            self._start_update_check()
 
     def _panel(self, title=None):
         panel = QFrame()

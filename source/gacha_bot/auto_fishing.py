@@ -114,9 +114,7 @@ def _cast_until_prompt():
 
 def _find_requested_key():
     """Return the first visible fishing key template and mapped key."""
-    t_name = template.check_templates(
-        "fishing_press_prompt", [k for k in FISHING_KEY_TEMPLATES], PRESS_KEY_THRESHOLD
-    )
+    t_name = template.check_templates("fishing_press_prompt", [k for k in FISHING_KEY_TEMPLATES], PRESS_KEY_THRESHOLD)
     if t_name is not None:
         z = FISHING_KEY_TEMPLATES.get(t_name)
         return t_name, cast(str, z)

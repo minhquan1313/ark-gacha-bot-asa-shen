@@ -62,9 +62,7 @@ def _feed_baby(baby: dict) -> None:
 
 def _feed_pass(babies: list[dict]) -> None:
     """Leave Tek pod if needed and feed every configured Baby once."""
-    player_state.check_state(
-        crouch=False, should_replesh=False, should_wait_structure=False
-    )
+    player_state.check_state(crouch=False, should_replesh=False, should_wait_structure=False)
     for index, baby in enumerate(babies, 1):
         logs.logger.info("Feeding Baby %s", index)
         _feed_baby(baby)
@@ -131,8 +129,6 @@ def run_auto_feed(config: dict) -> bool:
         if config["tek_pod"]:
             _wait_in_tekpod(config["feed_cycle"])
         else:
-            _wait_without_tekpod(
-                config["feed_cycle"], config["food_slot"], config["water_slot"]
-            )
+            _wait_without_tekpod(config["feed_cycle"], config["food_slot"], config["water_slot"])
         if not config["tek_pod"]:
             utils.turn_to(float(settings.station_yaw), 0.0)

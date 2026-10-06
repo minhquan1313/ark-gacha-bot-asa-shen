@@ -9,6 +9,7 @@ from source.gacha_bot.deposit_config import (
 from source.utility.types import CraftConfig, CrafterStorageState, CraftRoute
 
 CRAFT_CONFIG_PATH = Path("json_files/craft.json")
+DEFAULT_CRAFT_DELAY = 180
 
 
 def default_crafter():
@@ -25,6 +26,7 @@ def default_craft_route():
     """Create a shared teleport and output dedis with one initial crafter."""
     route: CraftRoute = {
         **default_general_route(),
+        "delay": DEFAULT_CRAFT_DELAY,
         "crafters": [default_crafter()],
     }
     return route
@@ -42,6 +44,9 @@ def normalize_craft_config(data: object):
         if not isinstance(crafters, list):
             raise ValueError("Craft entry crafters must be an array.")
         normalized_crafters: list[CrafterStorageState] = []
+        delay = raw.get("delay", DEFAULT_CRAFT_DELAY)
+        if isinstance(delay, bool) or not isinstance(delay, int) or delay < 0:
+            raise ValueError("Craft delay must be a non-negative integer in seconds.")
         for crafter in crafters:
             if not isinstance(crafter, dict):
                 crafter = {}
@@ -54,6 +59,7 @@ def normalize_craft_config(data: object):
         routes.append(
             {
                 **normalize_general_route(raw),
+                "delay": delay,
                 "crafters": normalized_crafters,
             }
         )
@@ -61,10 +67,8 @@ def normalize_craft_config(data: object):
     return config
 
 
-def load_craft_config(
-    path: str | Path = CRAFT_CONFIG_PATH, create_missing: bool = True
-):
-    """Load the current craft station format without rewriting existing files."""
+def load_craft_config(path: str | Path = CRAFT_CONFIG_PATH, create_missing: bool = True):
+    """Validate routes and persist missing delays while preserving unrelated data."""
     path = Path(path)
     if not path.exists():
         config: CraftConfig = {"generalCraftData": []}
@@ -74,6 +78,12 @@ def load_craft_config(
     with path.open(encoding="utf-8") as file:
         raw = json.load(file)
     config = normalize_craft_config(raw)
+    missing = [route for route in raw["generalCraftData"] if "delay" not in route]
+    if missing:
+        for route in missing:
+            route["delay"] = DEFAULT_CRAFT_DELAY
+        with path.open("w", encoding="utf-8") as file:
+            json.dump(raw, file, indent=2)
     return config
 
 
@@ -89,8 +99,4 @@ def save_craft_config(data: object, path: str | Path = CRAFT_CONFIG_PATH):
 
 def valid_craft_route(route: CraftRoute):
     """Require enough information to run a crafter and deposit its output."""
-    return bool(
-        route["teleport"].strip()
-        and any(crafter["item"].strip() for crafter in route["crafters"])
-        and route["dedi"]["items"]
-    )
+    return bool(route["teleport"].strip() and any(crafter["item"].strip() for crafter in route["crafters"]) and route["dedi"]["items"])

@@ -9,7 +9,10 @@ from source.launcher.utils import steam_accounts
 from source.utility.screen import (
     DisplayMode,
     apply_display_mode,
+    capture_display_config,
     get_current_display_mode,
+    keep_primary_display_only,
+    restore_display_config,
 )
 
 RESTORE_STATE_PATH = Path("json_files/ark_start_game_restore.json")
@@ -19,9 +22,7 @@ ARK_PROCESS_NAME = "ArkAscended.exe"
 ARK_STEAM_ID = "2399830"
 ARK_STEAM_URL = f"steam://rungameid/{ARK_STEAM_ID}"
 ARK_INSTALL_DIR_NAME = "ARK Survival Ascended"
-GAME_SETTINGS_RELATIVE_PATH = Path(
-    "ShooterGame/Saved/Config/Windows/GameUserSettings.ini"
-)
+GAME_SETTINGS_RELATIVE_PATH = Path("ShooterGame/Saved/Config/Windows/GameUserSettings.ini")
 GAME_INPUT_RELATIVE_PATH = Path("ShooterGame/Saved/Config/Windows/Input.ini")
 
 TARGET_GAME_DISPLAY_SETTINGS = {
@@ -35,6 +36,8 @@ TARGET_GAME_SETTINGS = {
     "FoliageInteractionQuantityLimit": "0.500000",
     "GraphicsQuality": "5",
     "bEnableFootstepParticles": "False",
+    "bEnableFootstepDecals": "False",
+    "bEnableLowLightEnhancement": "False",
     "AdvancedGraphicsQuality": "0",
     "MasterAudioVolume": "0.050000",
     "FoliageInteractionDistanceLimit": "0.500000",
@@ -77,6 +80,11 @@ TARGET_GAME_SETTINGS = {
     "sg.ShadowQuality": "0",
     "sg.AntiAliasingQuality": "0",
     "sg.ShadingQuality": "1",
+    #
+    "bDisableLightShafts": "True",
+    "bDisableBloom": "True",
+    "bDisableMenuTransitions": "True",
+    "bDisableHLOD": "False",
 }
 TARGET_GAME_INPUT_SETTINGS = {
     #
@@ -98,11 +106,7 @@ def parse_steam_library_paths(vdf_text):
 
 def find_game_user_settings_path(steam_dir=None):
     try:
-        steam_root = (
-            Path(steam_dir)
-            if steam_dir is not None
-            else steam_accounts.find_running_steam_dir()
-        )
+        steam_root = Path(steam_dir) if steam_dir is not None else steam_accounts.find_running_steam_dir()
     except steam_accounts.SteamNotRunning:
         steam_accounts.restart_steam()
         steam_root = steam_accounts.find_running_steam_dir()
@@ -111,9 +115,7 @@ def find_game_user_settings_path(steam_dir=None):
     if not library_vdf.exists():
         raise RuntimeError(f"Steam library file was not found: {library_vdf}")
 
-    library_paths = parse_steam_library_paths(
-        library_vdf.read_text(encoding="utf-8", errors="replace")
-    )
+    library_paths = parse_steam_library_paths(library_vdf.read_text(encoding="utf-8", errors="replace"))
     if not library_paths:
         raise RuntimeError(f"No Steam library paths were found in {library_vdf}")
 
@@ -134,11 +136,7 @@ def find_game_user_settings_path(steam_dir=None):
 def find_game_user_input_path(steam_dir=None, restart_steam_if_missing=True):
     """Locate ARK Input.ini through Steam libraryfolders.vdf."""
     try:
-        steam_root = (
-            Path(steam_dir)
-            if steam_dir is not None
-            else steam_accounts.find_running_steam_dir()
-        )
+        steam_root = Path(steam_dir) if steam_dir is not None else steam_accounts.find_running_steam_dir()
     except steam_accounts.SteamNotRunning:
         if not restart_steam_if_missing:
             raise
@@ -149,9 +147,7 @@ def find_game_user_input_path(steam_dir=None, restart_steam_if_missing=True):
     if not library_vdf.exists():
         raise RuntimeError(f"Steam library file was not found: {library_vdf}")
 
-    library_paths = parse_steam_library_paths(
-        library_vdf.read_text(encoding="utf-8", errors="replace")
-    )
+    library_paths = parse_steam_library_paths(library_vdf.read_text(encoding="utf-8", errors="replace"))
     if not library_paths:
         raise RuntimeError(f"No Steam library paths were found in {library_vdf}")
 
@@ -174,9 +170,7 @@ def load_restore_state(state_path=RESTORE_STATE_PATH):
         return json.load(file)
 
 
-def save_restore_state_once(
-    settings_path, state_path=RESTORE_STATE_PATH, backup_path=CONFIG_BACKUP_PATH
-):
+def save_restore_state_once(settings_path, state_path=RESTORE_STATE_PATH, backup_path=CONFIG_BACKUP_PATH):
     state_path = Path(state_path)
     if state_path.exists():
         return load_restore_state(state_path)
@@ -202,9 +196,20 @@ def backup_game_settings_once(settings_path, backup_path=CONFIG_BACKUP_PATH):
     return backup_path
 
 
-def patch_game_settings(
-    settings_path, target_settings: dict[str, str] = TARGET_GAME_SETTINGS
-):
+def save_display_restore_state_once(state: dict, state_path: Path = RESTORE_STATE_PATH):
+    """Add the original monitor layout without replacing existing restore settings."""
+    if "display_config" in state:
+        return
+    updated = {**state, "display_config": capture_display_config()}
+    state_path = Path(state_path)
+    temporary_path = state_path.with_suffix(".tmp")
+    with temporary_path.open("w", encoding="utf-8") as file:
+        json.dump(updated, file, indent=2)
+    temporary_path.replace(state_path)
+    state.update(updated)
+
+
+def patch_game_settings(settings_path, target_settings: dict[str, str] = TARGET_GAME_SETTINGS):
     settings_path = Path(settings_path)
     lines = settings_path.read_text(encoding="utf-8", errors="replace").splitlines()
     remaining = dict(target_settings)  # Deep copy obj
@@ -246,7 +251,9 @@ def launch_ark_through_steam():
 
 
 def _prepare_and_launch_game(
-    target_settings: dict[str, str], target_input_settings: dict[str, str]
+    target_settings: dict[str, str],
+    target_input_settings: dict[str, str],
+    primary_only: bool = False,
 ):
     """Prepare ARK with the selected config maps and launch it through Steam."""
     settings_path = find_game_user_settings_path()
@@ -257,10 +264,11 @@ def _prepare_and_launch_game(
     else:
         backup_game_settings_once(settings_path, CONFIG_BACKUP_PATH)
         state = save_restore_state_once(settings_path, backup_path=CONFIG_BACKUP_PATH)
+    if primary_only:
+        save_display_restore_state_once(state)
+        keep_primary_display_only()
     original_mode = state["display_mode"]
-    apply_display_mode(
-        DisplayMode(width=1920, height=1080, frequency=int(original_mode["frequency"]))
-    )
+    apply_display_mode(DisplayMode(width=1920, height=1080, frequency=int(original_mode["frequency"])))
     kill_running_ark()
     patch_game_settings(settings_path, target_settings)
     if input_path is not None:
@@ -275,7 +283,7 @@ def _prepare_and_launch_game(
 
 def prepare_and_launch_game():
     """Prepare ARK with all automation settings and launch it through Steam."""
-    return _prepare_and_launch_game(TARGET_GAME_SETTINGS, TARGET_GAME_INPUT_SETTINGS)
+    return _prepare_and_launch_game(TARGET_GAME_SETTINGS, TARGET_GAME_INPUT_SETTINGS, primary_only=True)
 
 
 def prepare_and_launch_game_with_display_settings():
@@ -308,14 +316,17 @@ def restore_game_settings(state_path=RESTORE_STATE_PATH):
 
     kill_running_ark()
 
+    if "display_config" in state:
+        restore_display_config(state["display_config"])
     display = state["display_mode"]
-    apply_display_mode(
-        DisplayMode(
-            width=int(display["width"]),
-            height=int(display["height"]),
-            frequency=int(display["frequency"]),
-        )
+    original_mode = DisplayMode(
+        width=int(display["width"]),
+        height=int(display["height"]),
+        frequency=int(display["frequency"]),
     )
+    # Preserve the layout's exact scaling/timing when it already restored this mode.
+    if "display_config" not in state or get_current_display_mode() != original_mode:
+        apply_display_mode(original_mode)
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     if backup_path.exists():

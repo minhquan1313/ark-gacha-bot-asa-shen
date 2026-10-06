@@ -33,12 +33,8 @@ from source.utility.types import (
 )
 
 capture_route_ready = capture_for("deposit_route_ready", active=CAPTURE_ROUTE_READY)
-capture_grinder_after_withdraw = capture_for(
-    "grinder_after_withdraw", active=CAPTURE_GRINDER_WITHDRAW, delay=0
-)
-capture_vault_after_transfer = capture_for(
-    "vault_after_transfer", active=CAPTURE_VAULT_TRANSFER, delay=0
-)
+capture_grinder_after_withdraw = capture_for("grinder_after_withdraw", active=CAPTURE_GRINDER_WITHDRAW, delay=0)
+capture_vault_after_transfer = capture_for("vault_after_transfer", active=CAPTURE_VAULT_TRANSFER, delay=0)
 
 g_is_still_have_items = True
 
@@ -139,13 +135,9 @@ def _open_inventory_template(
     inventory.open()
     attempt = 0
     dl = utils_simple.get_default_clock()
-    while not template.template_await_true(
-        template.check_template, 1, template_name, 0.7
-    ):
+    while not template.template_await_true(template.check_template, 1, template_name, 0.7):
         attempt += 1
-        logs.logger.error(
-            f"{object_name} was not opened; retrying {attempt}/{source.gacha_bot.config.grinder_attempts}"
-        )
+        logs.logger.error(f"{object_name} was not opened; retrying {attempt}/{source.gacha_bot.config.grinder_attempts}")
         inventory.close()
         _restore_route_view()
         _turn_to_object(route_object)
@@ -276,11 +268,12 @@ def _grinder_1():
     if template.template_await_true(is_grinder_grindable, 1):
         time.sleep(0.1)
 
-        windows.click(
-            variables.get_pixel_loc("grinder_grind_all_x"),
-            variables.get_pixel_loc("grinder_grind_all_y"),
-        )
-        time.sleep(0.1)
+        for _ in range(2):
+            windows.click(
+                variables.get_pixel_loc("grinder_grind_all_x"),
+                variables.get_pixel_loc("grinder_grind_all_y"),
+            )
+            time.sleep(0.1)
 
 
 def _process_crystal_routes(
@@ -290,11 +283,11 @@ def _process_crystal_routes(
     global g_is_still_have_items
     route_metadata = _teleport_to_route(route)
 
-    if not pego.is_crystal_hotbar_visible():
-        g_is_still_have_items = False
-        return
-
     if open_first_route_crystals:
+        # Later routes handle the contents of crystals already opened here.
+        if not pego.is_crystal_hotbar_visible():
+            g_is_still_have_items = False
+            return
         logs.logger.debug("opening crystals")
         open_crystals()
 
@@ -350,10 +343,7 @@ def process_dedi_list_route(
 
             # Case when user put check on every dedi = 1, so we need to ignore this loop
             if inventory.was_server_lag_last_open_long and batch_start_index <= index:
-                logs.logger.warning(
-                    f"Server lag detected - retrying dedi from "
-                    f"{batch_start_index + 1} to {index + 1}"
-                )
+                logs.logger.warning(f"Server lag detected - retrying dedi from {batch_start_index + 1} to {index + 1}")
                 utils.zero_center()
                 for retry_index in range(batch_start_index, index + 1):
                     retry_item = dedi_list[retry_index]
@@ -368,17 +358,12 @@ def process_dedi_list_route(
 
 def _process_grindable_routes(routes: list[GrindableDepositRoute]):
     if len(routes) == 0:
-        logs.logger.warning(
-            "No grindable routes configured in depositGrindableData; skipping grindable deposits."
-        )
+        logs.logger.warning("No grindable routes configured in depositGrindableData; skipping grindable deposits.")
         return True
 
     active_index = _first_active_grinder_index(routes)
     if active_index is None:
-        logs.logger.error(
-            "No active grinder found in depositGrindableData; dropping useless inventory "
-            "at the first grindable teleport and skipping grindable routes."
-        )
+        logs.logger.error("No active grinder found in depositGrindableData; dropping useless inventory at the first grindable teleport and skipping grindable routes.")
         route_metadata = _teleport_to_route(routes[0])
         drop_useless()
         return True
@@ -436,14 +421,10 @@ def deposit_collection(route: DepositRouteBase):
     return _deposit_collect_items(route, route["dedi"]["items"], "source-item")
 
 
-def _deposit_collect_items(
-    route: DepositRouteBase, items: list[DediStorageState], label: str
-):
+def _deposit_collect_items(route: DepositRouteBase, items: list[DediStorageState], label: str):
     """Deposit the player's current inventory through one collect-route dedi list."""
     if not items:
-        logs.logger.warning(
-            f"No {label} dedis configured on collect route {_route_teleport_name(route)}."
-        )
+        logs.logger.warning(f"No {label} dedis configured on collect route {_route_teleport_name(route)}.")
         return False
     teleporter = _route_teleport_name(route)
     collect_route: DepositRouteBase = {
@@ -496,15 +477,15 @@ def craft(route: CraftRoute):
         inventory.close()
 
         # Ensure the crafter interaction has completed before depositing output.
-        if not open_crafter(crafter):
+        if player_inventory.g_last_check_can_drop:
+            pass
+        elif not open_crafter(crafter):
             return False
         inventory.close()
         g_is_still_have_items = player_inventory.g_last_check_can_drop
 
         if not g_is_still_have_items:
-            logs.logger.warning(
-                f"Stop craft from crafter {i + 1}[{crafter['item']}] as detected no resource to craft"
-            )
+            logs.logger.warning(f"Stop craft from crafter {i + 1}[{crafter['item']}] as detected no resource to craft")
             return True
 
         if not _deposit_collect_items(route, dedis, "crafted-item"):
@@ -528,6 +509,7 @@ def deposit_all():
         else:
             break
 
-    return (
-        _process_grindable_routes(grindable_routes) if g_is_still_have_items else True
-    )
+    if g_is_still_have_items:
+        return _process_grindable_routes(grindable_routes)
+    else:
+        return True

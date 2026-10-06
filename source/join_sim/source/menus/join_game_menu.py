@@ -30,9 +30,7 @@ def register_template_roi():
 
     registered = True
 
-    recon_utils.register_roi(
-        {button: join_game_location.copy() for button in join_game_buttons}
-    )
+    recon_utils.register_roi({button: join_game_location.copy() for button in join_game_buttons})
 
 
 def get_pixel_loc(location):

@@ -44,9 +44,7 @@ def validate_deposit_teleports(config: DepositConfig):
         if route["teleport"].strip()
     ]
     if len(names) != len(set(names)):
-        raise ValueError(
-            "Dedi teleport names must be unique across Crystal, Grindable, and General dedi."
-        )
+        raise ValueError("Dedi teleport names must be unique across Crystal, Grindable, and General dedi.")
 
 
 def collection_destination_error(config: DepositConfig, teleport: str):
@@ -72,9 +70,7 @@ def collection_destination_error(config: DepositConfig, teleport: str):
     return ""
 
 
-def default_deposit_config(
-    crystal_teleport: str = "", grindable_teleport: str = ""
-) -> DepositConfig:
+def default_deposit_config(crystal_teleport: str = "", grindable_teleport: str = "") -> DepositConfig:
     return {
         "depositCrystalData": [
             {
@@ -155,15 +151,9 @@ def normalize_deposit_config(data: object) -> DepositConfig:
         raise ValueError("depositGeneralData must be an array.")
 
     normalized = {
-        "depositCrystalData": [
-            _normalize_crystal_route(route) for route in crystal_routes
-        ],
-        "depositGrindableData": [
-            _normalize_grindable_route(route) for route in grindable_routes
-        ],
-        "depositGeneralData": [
-            normalize_general_route(route) for route in general_routes
-        ],
+        "depositCrystalData": [_normalize_crystal_route(route) for route in crystal_routes],
+        "depositGrindableData": [_normalize_grindable_route(route) for route in grindable_routes],
+        "depositGeneralData": [normalize_general_route(route) for route in general_routes],
     }
     return cast(DepositConfig, normalized)
 
@@ -181,9 +171,7 @@ def load_deposit_config(
         if create_missing:
             save_deposit_config(config, path)
         if raise_on_missing:
-            raise FileNotFoundError(
-                f"{path} was missing. A default file was created; configure it before running deposit."
-            )
+            raise FileNotFoundError(f"{path} was missing. A default file was created; configure it before running deposit.")
         return config
 
     with path.open("r", encoding="utf-8") as file:
@@ -192,9 +180,7 @@ def load_deposit_config(
     return normalized
 
 
-def save_deposit_config(
-    data: object, path: str | Path = DEDI_CONFIG_PATH
-) -> DepositConfig:
+def save_deposit_config(data: object, path: str | Path = DEDI_CONFIG_PATH) -> DepositConfig:
     path = Path(path)
     normalized = normalize_deposit_config(data)
     validate_deposit_teleports(normalized)
@@ -209,9 +195,7 @@ def _normalize_crystal_route(route: object) -> CrystalDepositRoute:
         route = {}
     return {
         "teleport": str(route.get("teleport", "")),
-        "check_on_every_dedi": _positive_int_value(
-            route.get("check_on_every_dedi", 6), "check_on_every_dedi"
-        ),
+        "check_on_every_dedi": _positive_int_value(route.get("check_on_every_dedi", 6), "check_on_every_dedi"),
         "dedi": {"items": _normalize_object_items(route.get("dedi", {}))},
         "vault": {"items": _normalize_vault_items(route.get("vault", {}))},
     }
@@ -222,9 +206,7 @@ def _normalize_grindable_route(route: object) -> GrindableDepositRoute:
         route = {}
     return {
         "teleport": str(route.get("teleport", "")),
-        "check_on_every_dedi": _positive_int_value(
-            route.get("check_on_every_dedi", 6), "check_on_every_dedi"
-        ),
+        "check_on_every_dedi": _positive_int_value(route.get("check_on_every_dedi", 6), "check_on_every_dedi"),
         "grinder": _normalize_grinder(route.get("grinder", {})),
         "dedi": {"items": _normalize_object_items(route.get("dedi", {}))},
     }
@@ -236,9 +218,7 @@ def normalize_general_route(route: object):
         route = {}
     normalized: DepositRouteBase = {
         "teleport": str(route.get("teleport", "")),
-        "check_on_every_dedi": _positive_int_value(
-            route.get("check_on_every_dedi", 6), "check_on_every_dedi"
-        ),
+        "check_on_every_dedi": _positive_int_value(route.get("check_on_every_dedi", 6), "check_on_every_dedi"),
         "dedi": {"items": _normalize_object_items(route.get("dedi", {}))},
     }
 

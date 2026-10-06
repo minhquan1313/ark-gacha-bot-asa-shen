@@ -34,9 +34,7 @@ class DialogsGuiMixin:
             return
 
         colour = console_output.output_mean_colour()
-        self.append_log(
-            f"[INFO] Average console colour: {colour}. Set console.json lower_bound to average - 5 and upper_bound to average + 5.\n"
-        )
+        self.append_log(f"[INFO] Average console colour: {colour}. Set console.json lower_bound to average - 5 and upper_bound to average + 5.\n")
 
     def require_ark_window(self, action, dialog_parent=None):
         try:
@@ -90,13 +88,7 @@ class DialogsGuiMixin:
         if not hasattr(self, "_toast_dialogs"):
             self._toast_dialogs = []
         self._toast_dialogs.append(dialog)
-        dialog.finished.connect(
-            lambda _result, item=dialog: (
-                self._toast_dialogs.remove(item)
-                if item in self._toast_dialogs
-                else None
-            )
-        )
+        dialog.finished.connect(lambda _result, item=dialog: self._toast_dialogs.remove(item) if item in self._toast_dialogs else None)
         QTimer.singleShot(3000, dialog.accept)
         dialog.show()
 

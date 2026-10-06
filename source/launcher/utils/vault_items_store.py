@@ -7,9 +7,7 @@ VAULT_ITEMS_FILE = Path("json_files/vault_items.json")
 DEFAULT_VAULT_ITEMS = ["riot", "assault", "gate", "tree"]
 
 
-def load_vault_items(
-    deposit_config: DepositConfig | None = None, path: str | Path = VAULT_ITEMS_FILE
-):
+def load_vault_items(deposit_config: DepositConfig | None = None, path: str | Path = VAULT_ITEMS_FILE):
     path = Path(path)
     items = []
     if path.exists():
@@ -26,9 +24,7 @@ def load_vault_items(
 
 def save_vault_items(items, path: str | Path = VAULT_ITEMS_FILE):
     path = Path(path)
-    values = sorted(
-        {str(item).strip() for item in items if str(item).strip()}, key=str.lower
-    )
+    values = sorted({str(item).strip() for item in items if str(item).strip()}, key=str.lower)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as file:
         json.dump(values, file, indent=2)

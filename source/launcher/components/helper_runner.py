@@ -114,9 +114,7 @@ def run_switch_steam(args: argparse.Namespace):
     accounts = steam_accounts.load_steam_accounts(loginusers)
     account_names = {str(account["account_name"]) for account in accounts}
     if args.account not in account_names:
-        raise RuntimeError(
-            f"Steam account was not found in loginusers.vdf: {args.account}"
-        )
+        raise RuntimeError(f"Steam account was not found in loginusers.vdf: {args.account}")
     current_account = steam_accounts.most_recent_account_name(accounts)
     players = {
         "players": [{"bed_name": "", "steam_account": args.account}],

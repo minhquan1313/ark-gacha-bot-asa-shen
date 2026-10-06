@@ -17,11 +17,7 @@ def open(overwrite_amount=0):
         attempts += 1
         utils.press_key("ShowTribeManager")
         time.sleep(0.1)
-        if (
-            attempts >= source.ASA.config.tribelog_open_attempts
-            if overwrite_amount == 0
-            else overwrite_amount + 1
-        ):
+        if attempts >= (source.ASA.config.tribelog_open_attempts if overwrite_amount == 0 else overwrite_amount + 1):
             logs.logger.warning(f"tribelogs didnt open in {attempts} attempts")
             break
 
@@ -30,9 +26,7 @@ def close():
     attempts = 0
     while is_open():
         attempts += 1
-        logs.logger.debug(
-            f"trying to close out of the tribelog screen {attempts} / {source.ASA.config.tribelog_close_attempts} "
-        )
+        logs.logger.debug(f"trying to close out of the tribelog screen {attempts} / {source.ASA.config.tribelog_close_attempts} ")
         windows.click(
             variables.get_pixel_loc("close_inv_x"),
             variables.get_pixel_loc("close_inv_y"),
@@ -41,9 +35,7 @@ def close():
             return time.sleep(0.3)
 
         if attempts >= source.ASA.config.inventory_close_attempts:
-            logs.logger.error(
-                f"unable to close the objects inventory after {attempts} attempts"
-            )
+            logs.logger.error(f"unable to close the objects inventory after {attempts} attempts")
             # check state of the char the reason we can do it now is that the latter should spam click close inv
             player_state.check_state()
             break

@@ -17,9 +17,7 @@ class check_buffs:
         attempts = 0
         while self.is_open():
             attempts += 1
-            logs.logger.debug(
-                f"trying to open up the buff menu {attempts} / {source.ASA.config.buff_open_attempts}"
-            )
+            logs.logger.debug(f"trying to open up the buff menu {attempts} / {source.ASA.config.buff_open_attempts}")
             windows.click(
                 variables.get_pixel_loc("buff_button_x"),
                 variables.get_pixel_loc("buff_button_y"),

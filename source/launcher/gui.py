@@ -89,6 +89,7 @@ class SettingsGUI(
         self.auto_keys_runtime_state = "disabled"
         self.log_bridge = LogBridge()
         self.log_bridge.line.connect(self.append_log)
+        self.log_bridge.file_line.connect(lambda text: self.append_log(text, from_file=True))
         self.auto_keys_failure.connect(self._handle_auto_keys_failure)
         self.auto_keys_state_changed.connect(self._on_auto_keys_state_changed)
         self.auto_keys_runtime = AutoKeysRuntime(

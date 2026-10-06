@@ -8,12 +8,7 @@ from source.launcher.config.constants import GACHA_LOG_FILE
 TEMPLATE_LEVEL = 5
 logging.addLevelName(TEMPLATE_LEVEL, "TEMPLATE")
 
-ExcInfoType = (
-    bool
-    | BaseException
-    | tuple[type[BaseException], BaseException, TracebackType | None]
-    | None
-)
+ExcInfoType = bool | BaseException | tuple[type[BaseException], BaseException, TracebackType | None] | None
 
 
 class LoggerExtended(logging.Logger):
@@ -74,9 +69,7 @@ def clear_log():
 
 def _clean_up_on_start():
     with open(file_name, "rb") as file:
-        line_count = sum(
-            chunk.count(b"\n") for chunk in iter(lambda: file.read(1024 * 1024), b"")
-        )
+        line_count = sum(chunk.count(b"\n") for chunk in iter(lambda: file.read(1024 * 1024), b""))
 
     if line_count > 100_000:
         clear_log()

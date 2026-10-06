@@ -1,11 +1,7 @@
-import os
-
 from PySide6.QtCore import (
     QEasingCurve,
     QEvent,
     QObject,
-    QPoint,
-    QPointF,
     QRect,
     QRectF,
     QSize,
@@ -15,7 +11,6 @@ from PySide6.QtCore import (
     Signal,
 )
 from PySide6.QtGui import (
-    QBrush,
     QColor,
     QEnterEvent,
     QFont,
@@ -25,7 +20,6 @@ from PySide6.QtGui import (
     QPaintEvent,
     QPen,
     QPixmap,
-    QPolygon,
     QRegion,
 )
 from PySide6.QtWidgets import (
@@ -52,6 +46,7 @@ from source.launcher.config.constants import (
     COLORS,
     FONT_SIZES,
     TITLE_BAR_HEIGHT,
+    TOGGLE_TRANSITION_MS,
     UI_COLORS,
     UI_FONTS,
     UI_METRICS,
@@ -131,6 +126,7 @@ class RoundedShellFrame(QFrame):
 
 class LogBridge(QObject):
     line = Signal(str)
+    file_line = Signal(str)
 
 
 class WrappedStatusLabel(QLabel):
@@ -216,12 +212,7 @@ class ClickableTextEdit(QTextEdit):
             return False
         scrollbar = self.verticalScrollBar()
         step = scrollbar.singleStep() * 3
-        start = (
-            int(self._scroll_animation.endValue())
-            if self._scroll_animation is not None
-            and self._scroll_animation.state() == QVariantAnimation.State.Running
-            else scrollbar.value()
-        )
+        start = int(self._scroll_animation.endValue()) if self._scroll_animation is not None and self._scroll_animation.state() == QVariantAnimation.State.Running else scrollbar.value()
         target = start - int(delta_y / 120 * step)
         target = max(scrollbar.minimum(), min(scrollbar.maximum(), target))
         if target == scrollbar.value():
@@ -234,9 +225,7 @@ class ClickableTextEdit(QTextEdit):
         self._scroll_target = target
         self._scroll_animation.setStartValue(scrollbar.value())
         self._scroll_animation.setEndValue(target)
-        self._scroll_animation.valueChanged.connect(
-            lambda value: scrollbar.setValue(int(value))
-        )
+        self._scroll_animation.valueChanged.connect(lambda value: scrollbar.setValue(int(value)))
         self._scroll_animation.start()
         return True
 
@@ -256,12 +245,7 @@ class SmoothScrollArea(QScrollArea):
             return
         scrollbar = self.verticalScrollBar()
         step = scrollbar.singleStep() * 3
-        start = (
-            int(self._scroll_animation.endValue())
-            if self._scroll_animation is not None
-            and self._scroll_animation.state() == QVariantAnimation.State.Running
-            else scrollbar.value()
-        )
+        start = int(self._scroll_animation.endValue()) if self._scroll_animation is not None and self._scroll_animation.state() == QVariantAnimation.State.Running else scrollbar.value()
         target = start - int(delta_y / 120 * step)
         target = max(scrollbar.minimum(), min(scrollbar.maximum(), target))
         if target == scrollbar.value():
@@ -275,9 +259,7 @@ class SmoothScrollArea(QScrollArea):
         self._scroll_target = target
         self._scroll_animation.setStartValue(scrollbar.value())
         self._scroll_animation.setEndValue(target)
-        self._scroll_animation.valueChanged.connect(
-            lambda value: scrollbar.setValue(int(value))
-        )
+        self._scroll_animation.valueChanged.connect(lambda value: scrollbar.setValue(int(value)))
         self._scroll_animation.start()
         event.accept()
 
@@ -288,7 +270,10 @@ class CyberCheckBox(QCheckBox):
     def __init__(self, text: str = "", parent: QWidget | None = None):
         super().__init__(text, parent)
         self._check_progress = 1.0 if self.isChecked() else 0.0
-        self._check_animation = None
+        self._check_animation = QVariantAnimation(self)
+        self._check_animation.setDuration(TOGGLE_TRANSITION_MS)
+        self._check_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._check_animation.valueChanged.connect(self._set_check_progress)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setMinimumHeight(24)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
@@ -299,26 +284,22 @@ class CyberCheckBox(QCheckBox):
 
     def sizeHint(self):
         text_width = self.fontMetrics().horizontalAdvance(self.text())
-        return QSize(18 + (8 + text_width if self.text() else 0), 24)
+        return QSize(20 + (8 + text_width if self.text() else 0), 24)
 
     def setChecked(self, checked: bool):
         was_checked = self.isChecked()
         signals_blocked = self.signalsBlocked()
         super().setChecked(checked)
         if signals_blocked and checked != was_checked:
+            self._check_animation.stop()
             self._check_progress = 1.0 if checked else 0.0
             self.update()
 
     def _animate_check(self, checked: bool):
-        """Animate the indicator fill when the checked state changes."""
-        if self._check_animation is not None:
-            self._check_animation.stop()
-        self._check_animation = QVariantAnimation(self)
-        self._check_animation.setDuration(140)
-        self._check_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        """Reverse the reusable animation from its current visual progress."""
+        self._check_animation.stop()
         self._check_animation.setStartValue(self._check_progress)
         self._check_animation.setEndValue(1.0 if checked else 0.0)
-        self._check_animation.valueChanged.connect(self._set_check_progress)
         self._check_animation.start()
 
     def _set_check_progress(self, value: float):
@@ -340,7 +321,7 @@ class CyberCheckBox(QCheckBox):
 
         indicator_size = 18
         indicator = QRectF(
-            0,
+            1.0,
             (self.height() - indicator_size) / 2,
             indicator_size,
             indicator_size,
@@ -367,9 +348,9 @@ class CyberCheckBox(QCheckBox):
             painter.setPen(check_pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             path = QPainterPath()
-            path.moveTo(4.5, indicator.center().y())
-            path.lineTo(8.0, indicator.bottom() - 4.5)
-            path.lineTo(14.0, indicator.top() + 4.5)
+            path.moveTo(indicator.left() + 4.5, indicator.center().y())
+            path.lineTo(indicator.left() + 8.0, indicator.bottom() - 4.5)
+            path.lineTo(indicator.left() + 14.0, indicator.top() + 4.5)
             painter.drawPath(path)
 
         if self.hasFocus():
@@ -377,10 +358,10 @@ class CyberCheckBox(QCheckBox):
             focus_color.setAlpha(115)
             painter.setPen(QPen(focus_color, 1, Qt.PenStyle.DotLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 4, 4)
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4)
 
         if self.text():
-            text_x = indicator_size + 8
+            text_x = indicator_size + 9
             painter.setPen(QColor(COLORS["cyan"] if enabled else COLORS["muted"]))
             painter.setFont(self.font())
             painter.drawText(
@@ -397,7 +378,10 @@ class CyberSwitch(QCheckBox):
     def __init__(self, text="", parent=None):
         super().__init__(text, parent)
         self._knob_progress = 0.0
-        self._switch_animation = None
+        self._switch_animation = QVariantAnimation(self)
+        self._switch_animation.setDuration(TOGGLE_TRANSITION_MS)
+        self._switch_animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._switch_animation.valueChanged.connect(self._set_knob_progress)
         self._loading = False
         self._loading_progress = 0.0
         self._loading_animation = QVariantAnimation(self)
@@ -424,6 +408,7 @@ class CyberSwitch(QCheckBox):
         signals_blocked = self.signalsBlocked()
         super().setChecked(checked)
         if signals_blocked and checked != was_checked:
+            self._switch_animation.stop()
             self._knob_progress = 1.0 if checked else 0.0
             self.update()
 
@@ -459,35 +444,27 @@ class CyberSwitch(QCheckBox):
         self._loading_progress = float(value)
         self.update()
 
-    def _animate_toggle(self, checked):
-        start = self._knob_progress
-        end = 1.0 if checked else 0.0
-        if self._switch_animation is not None:
-            self._switch_animation.stop()
-        self._switch_animation = QVariantAnimation(self)
-        self._switch_animation.setDuration(140)
-        self._switch_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._switch_animation.setStartValue(start)
-        self._switch_animation.setEndValue(end)
-
-        def update(value):
-            self._knob_progress = float(value)
-            self.update()
-
-        self._switch_animation.valueChanged.connect(update)
+    def _animate_toggle(self, checked: bool):
+        """Reverse the reusable animation without snapping the knob position."""
+        self._switch_animation.stop()
+        self._switch_animation.setStartValue(self._knob_progress)
+        self._switch_animation.setEndValue(1.0 if checked else 0.0)
         self._switch_animation.start()
+
+    def _set_knob_progress(self, value: float):
+        """Paint fractional knob positions on each Qt animation frame."""
+        self._knob_progress = float(value)
+        self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
         track_x = 3
-        track_y = max(3, (self.height() - 22) // 2)
-        track = QRect(track_x, track_y, 50, 22)
+        track_y = max(3.0, (self.height() - 22) / 2)
+        track = QRectF(track_x, track_y, 50, 22)
         track_color = self._blend("#101820", "#0E3A4D", self._knob_progress)
-        border_color = self._blend(
-            COLORS["border"], COLORS["cyan"], self._knob_progress
-        )
+        border_color = self._blend(COLORS["border"], COLORS["cyan"], self._knob_progress)
         knob_color = self._blend(COLORS["muted"], COLORS["cyan"], self._knob_progress)
 
         painter.setPen(Qt.PenStyle.NoPen)
@@ -495,9 +472,7 @@ class CyberSwitch(QCheckBox):
         painter.drawRoundedRect(track, 10, 10)
 
         if self._loading:
-            sweep_center = (
-                track.left() - 18 + self._loading_progress * (track.width() + 36)
-            )
+            sweep_center = track.left() - 18 + self._loading_progress * (track.width() + 36)
             sweep = QLinearGradient(sweep_center - 14, 0, sweep_center + 14, 0)
             transparent = QColor(COLORS["cyan"])
             transparent.setAlpha(0)
@@ -517,14 +492,14 @@ class CyberSwitch(QCheckBox):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRoundedRect(track, 10, 10)
 
-        knob_x = track_x + 4 + round(23 * self._knob_progress)
+        knob_x = track_x + 4 + 23 * self._knob_progress
         knob_y = track_y + 4
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(knob_color)
-        painter.drawEllipse(knob_x, knob_y, 14, 14)
+        painter.drawEllipse(QRectF(knob_x, knob_y, 14, 14))
 
         if self.text():
-            text_x = track.right() + 12
+            text_x = round(track.right() + 12)
             painter.setPen(QColor(COLORS["text"]))
             painter.setFont(self.font())
             painter.drawText(
@@ -541,12 +516,8 @@ class CyberSwitch(QCheckBox):
         start_color = QColor(start)
         end_color = QColor(end)
         red = round(start_color.red() + (end_color.red() - start_color.red()) * ratio)
-        green = round(
-            start_color.green() + (end_color.green() - start_color.green()) * ratio
-        )
-        blue = round(
-            start_color.blue() + (end_color.blue() - start_color.blue()) * ratio
-        )
+        green = round(start_color.green() + (end_color.green() - start_color.green()) * ratio)
+        blue = round(start_color.blue() + (end_color.blue() - start_color.blue()) * ratio)
         return QColor(red, green, blue)
 
 
@@ -575,9 +546,7 @@ class MeterBar(QWidget):
         painter.drawRoundedRect(total_rect, 2, 2)
 
         used_rect = QRect(0, rail_y, used_width, 5)
-        painter.setBrush(
-            QColor(COLORS["yellow"] if self.percent >= 80 else self.accent)
-        )
+        painter.setBrush(QColor(COLORS["yellow"] if self.percent >= 80 else self.accent))
         painter.drawRoundedRect(used_rect, 2, 2)
 
 
@@ -596,9 +565,7 @@ class AnimatedButton(QPushButton):
         self._loading_timer.setInterval(80)
         self._loading_timer.timeout.connect(self._advance_loading_spinner)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFont(
-            QFont(UI_FONTS["display"], FONT_SIZES["button"], QFont.Weight.Bold)
-        )
+        self.setFont(QFont(UI_FONTS["display"], FONT_SIZES["button"], QFont.Weight.Bold))
         self._apply_style()
         self.toggled.connect(self._handle_toggled)
 
@@ -709,47 +676,21 @@ class AnimatedButton(QPushButton):
         self._animation.setEndValue(1.0)
 
         def update(value):
-            self._colors = {
-                key: self._mix_color(start[key], target[key], value)
-                for key in ("bg", "fg", "border")
-            }
+            self._colors = {key: self._mix_color(start[key], target[key], value) for key in ("bg", "fg", "border")}
             self._apply_style()
 
         self._animation.valueChanged.connect(update)
         self._animation.start()
 
     def _apply_style(self):
-        selector = (
-            f"QPushButton#{self.objectName()}" if self.objectName() else "QPushButton"
-        )
+        selector = f"QPushButton#{self.objectName()}" if self.objectName() else "QPushButton"
         is_expand = self.objectName() == "HelperExpandButton"
-        min_height = (
-            "0px"
-            if self.variant in ("chrome", "close")
-            else (
-                f"{UI_METRICS['helper_expand_height']}px"
-                if is_expand
-                else f"{UI_METRICS['control_height']}px"
-            )
-        )
-        padding = (
-            "0px"
-            if self.variant in ("chrome", "close") or is_expand
-            else UI_METRICS["control_padding"]
-        )
-        compact_size = (
-            f"min-width: {UI_METRICS['helper_expand_width']}px; "
-            f"max-width: {UI_METRICS['helper_expand_width'] + 2}px;"
-            if is_expand
-            else ""
-        )
+        min_height = "0px" if self.variant in ("chrome", "close") else (f"{UI_METRICS['helper_expand_height']}px" if is_expand else f"{UI_METRICS['control_height']}px")
+        padding = "0px" if self.variant in ("chrome", "close") or is_expand else UI_METRICS["control_padding"]
+        compact_size = f"min-width: {UI_METRICS['helper_expand_width']}px; max-width: {UI_METRICS['helper_expand_width'] + 2}px;" if is_expand else ""
         is_chrome = self.variant in ("chrome", "close")
         border = "none" if is_chrome else f"1px solid {self._colors['border']}"
-        disabled_border = (
-            "none"
-            if is_chrome
-            else f"1px solid {BUTTON_STYLES[self.variant]['disabled']['border']}"
-        )
+        disabled_border = "none" if is_chrome else f"1px solid {BUTTON_STYLES[self.variant]['disabled']['border']}"
         radius = "0px" if is_chrome else f"{UI_METRICS['radius_sm']}px"
         self.setStyleSheet(f"""
             {selector} {{
@@ -781,12 +722,8 @@ class AnimatedButton(QPushButton):
         start_color = QColor(start)
         end_color = QColor(end)
         red = round(start_color.red() + (end_color.red() - start_color.red()) * ratio)
-        green = round(
-            start_color.green() + (end_color.green() - start_color.green()) * ratio
-        )
-        blue = round(
-            start_color.blue() + (end_color.blue() - start_color.blue()) * ratio
-        )
+        green = round(start_color.green() + (end_color.green() - start_color.green()) * ratio)
+        blue = round(start_color.blue() + (end_color.blue() - start_color.blue()) * ratio)
         return QColor(red, green, blue).name()
 
 
@@ -822,54 +759,6 @@ class ChromeIconButton(AnimatedButton):
         self.update()
 
 
-class ToolCoverCard(QFrame):
-    """Paint an image-led tool card with a dark readability overlay."""
-
-    def __init__(self, image_path="", parent=None):
-        super().__init__(parent)
-        self.image_path = image_path
-        self.pixmap = (
-            QPixmap(image_path)
-            if image_path and os.path.exists(image_path)
-            else QPixmap()
-        )
-        self.setObjectName("ToolCoverCard")
-        self.setMinimumHeight(UI_METRICS["tool_cover_min_height"])
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-    def paintEvent(self, event: QPaintEvent):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = self.rect()
-        radius = UI_METRICS["radius_lg"]
-        path = QPainterPath()
-        path.addRoundedRect(QRectF(rect), radius, radius)
-        painter.setClipPath(path)
-        painter.fillRect(rect, QColor("#03070C"))
-
-        if not self.pixmap.isNull():
-            art = self.pixmap.scaled(
-                rect.width(),
-                rect.height(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            painter.drawPixmap(
-                (rect.width() - art.width()) // 2,
-                (rect.height() - art.height()) // 2,
-                art,
-            )
-
-        overlay = QLinearGradient(QPointF(0, 0), QPointF(rect.width(), rect.height()))
-        overlay.setColorAt(0.0, QColor(3, 7, 12, 230))
-        overlay.setColorAt(0.55, QColor(3, 7, 12, 160))
-        overlay.setColorAt(1.0, QColor(3, 7, 12, 92))
-        painter.fillRect(rect, QBrush(overlay))
-        painter.setClipping(False)
-        painter.setPen(QPen(QColor(0, 216, 255, 70), 1))
-        painter.drawRoundedRect(rect.adjusted(0, 0, -1, -1), radius, radius)
-
-
 class TitleBar(QFrame):
     def __init__(self, window):
         super().__init__()
@@ -882,6 +771,18 @@ class TitleBar(QFrame):
         layout.setContentsMargins(14, 0, 0, 0)
         layout.setSpacing(8)
 
+        from source.launcher.dashboard_theme import asset_path
+
+        logo = QLabel()
+        logo.setPixmap(
+            QPixmap(asset_path(ASSETS["logo"])).scaled(
+                24,
+                24,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+        )
+        layout.addWidget(logo)
         title = QLabel(APP_TITLE)
         title.setObjectName("ChromeTitle")
         version = QLabel(APP_VERSION)
@@ -893,6 +794,9 @@ class TitleBar(QFrame):
         layout.addWidget(title)
         layout.addWidget(version)
         layout.addStretch()
+        self.status_dot = QLabel("\u25cf")
+        self.status_dot.setStyleSheet("color: #27F5B0; font-size: 18px;")
+        layout.addWidget(self.status_dot)
         layout.addWidget(status)
         layout.addSpacing(10)
 
@@ -907,24 +811,14 @@ class TitleBar(QFrame):
         layout.addWidget(self.close_button)
 
     def mousePressEvent(self, event):
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and self.window.is_custom_maximized
-        ):
+        if event.button() == Qt.MouseButton.LeftButton and self.window.is_custom_maximized:
             ratio = event.position().x() / max(1, self.width())
-            self.window.start_drag_from_custom_maximized(
-                event.globalPosition().toPoint(), ratio
-            )
-            self.drag_position = (
-                event.globalPosition().toPoint() - self.window.frameGeometry().topLeft()
-            )
+            self.window.start_drag_from_custom_maximized(event.globalPosition().toPoint(), ratio)
+            self.drag_position = event.globalPosition().toPoint() - self.window.frameGeometry().topLeft()
             event.accept()
 
     def mouseMoveEvent(self, event):
-        if (
-            getattr(self, "drag_position", None)
-            and event.buttons() & Qt.MouseButton.LeftButton
-        ):
+        if getattr(self, "drag_position", None) and event.buttons() & Qt.MouseButton.LeftButton:
             self.window.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
 
@@ -938,9 +832,7 @@ class TitleBar(QFrame):
             event.accept()
 
     def sync_maximize_icon(self):
-        self.maximize_button.set_icon(
-            "restore" if self.window.is_custom_maximized else "maximize"
-        )
+        self.maximize_button.set_icon("restore" if self.window.is_custom_maximized else "maximize")
 
 
 class CyberDialog(QDialog):
@@ -1099,10 +991,7 @@ class CyberTemplateConflictDialog(QDialog):
         layout.setSpacing(14)
         heading = QLabel("TEMPLATE ALREADY EXISTS")
         heading.setObjectName("DialogTitle")
-        body = QLabel(
-            f'A template conflicts with "{template_name}". Replace the existing '
-            "template or keep both under a new incoming name?"
-        )
+        body = QLabel(f'A template conflicts with "{template_name}". Replace the existing template or keep both under a new incoming name?')
         body.setObjectName("DialogMessage")
         body.setWordWrap(True)
         actions = QHBoxLayout()
@@ -1120,105 +1009,3 @@ class CyberTemplateConflictDialog(QDialog):
         layout.addWidget(body)
         layout.addLayout(actions)
         self.setFixedWidth(520)
-
-
-class HeroBanner(QFrame):
-    BANNER_HEIGHT = 180
-
-    ART_HEIGHT = 480
-    ART_RIGHT_MARGIN = 8
-    ART_TOP = -96
-
-    BACKDROP_TOP_WIDTH = 520
-    BACKDROP_BOTTOM_WIDTH = 420
-    BACKDROP_OPACITY = 120
-    BACKDROP_FADE_START = 0.4
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.logo = (
-            QPixmap(ASSETS["logo"]) if os.path.exists(ASSETS["logo"]) else QPixmap()
-        )
-        self.art = (
-            QPixmap(ASSETS["dashboard"])
-            if os.path.exists(ASSETS["dashboard"])
-            else QPixmap()
-        )
-        self.setObjectName("HeroBanner")
-        self.setMinimumHeight(self.BANNER_HEIGHT)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = self.rect()
-        painter.fillRect(rect, QColor("#03070C"))
-
-        if not self.art.isNull():
-            # Object fit cover
-            # art = self.art.scaled(
-            #     rect.width(),
-            #     rect.height(),
-            #     Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            #     Qt.TransformationMode.SmoothTransformation,
-            # )
-
-            # Object fixed
-            art = self.art.scaledToHeight(
-                self.ART_HEIGHT, Qt.TransformationMode.SmoothTransformation
-            )
-
-            painter.drawPixmap(
-                rect.width() - art.width() - self.ART_RIGHT_MARGIN,
-                self.ART_TOP,
-                art,
-            )
-
-        backdrop = QPolygon(
-            [
-                QPoint(0, 0),
-                QPoint(self.BACKDROP_TOP_WIDTH, 0),
-                QPoint(self.BACKDROP_BOTTOM_WIDTH, rect.height()),
-                QPoint(0, rect.height()),
-            ]
-        )
-        edge_height = rect.height()
-        edge_width = self.BACKDROP_TOP_WIDTH - self.BACKDROP_BOTTOM_WIDTH
-        edge_normal_length_squared = edge_height**2 + edge_width**2
-        edge_offset = edge_height * self.BACKDROP_TOP_WIDTH
-        backdrop_gradient = QLinearGradient(
-            QPointF(0, 0),
-            QPointF(
-                edge_height * edge_offset / edge_normal_length_squared,
-                edge_width * edge_offset / edge_normal_length_squared,
-            ),
-        )
-        backdrop_color = QColor("#03070C")
-        backdrop_color.setAlpha(self.BACKDROP_OPACITY)
-        backdrop_transparent = QColor("#03070C")
-        backdrop_transparent.setAlpha(0)
-        backdrop_gradient.setColorAt(0, backdrop_color)
-        backdrop_gradient.setColorAt(self.BACKDROP_FADE_START, backdrop_color)
-        backdrop_gradient.setColorAt(1, backdrop_transparent)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QBrush(backdrop_gradient))
-        painter.drawPolygon(backdrop)
-
-        painter.setPen(QColor(COLORS["cyan"]))
-        painter.drawLine(0, rect.height() - 2, rect.width(), rect.height())
-
-        painter.setPen(QColor(COLORS["cyan"]))
-        painter.setFont(
-            QFont(UI_FONTS["display"], FONT_SIZES["section_heading"], QFont.Weight.Bold)
-        )
-        painter.drawText(28, 42, "WELCOME BACK,")
-        painter.setPen(QColor(COLORS["text"]))
-        painter.setFont(
-            QFont(UI_FONTS["display"], FONT_SIZES["welcome_title"], QFont.Weight.Bold)
-        )
-        painter.drawText(28, 88, f"{APP_TITLE}.")
-        painter.setPen(QColor(COLORS["muted"]))
-        painter.setFont(QFont(UI_FONTS["mono"], FONT_SIZES["chrome_status"]))
-        painter.drawText(28, 128, "SYSTEM STATUS")
-        painter.setPen(QColor(COLORS["green"]))
-        painter.setFont(QFont(UI_FONTS["mono"], FONT_SIZES["form"], QFont.Weight.Bold))
-        painter.drawText(165, 128, "ONLINE")

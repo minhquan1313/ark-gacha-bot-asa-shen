@@ -16,7 +16,6 @@
       "external_berry": false,
       "iguanadon_seed_throw_amount": 0,
       "gacha_feed_delay": 6600,
-      "craft_delay": 600,
       "gacha_collect_feed_delay": 6600,
       "allow_focus_ark_window": true,
       "focus_ark_window_interval": 5.0,

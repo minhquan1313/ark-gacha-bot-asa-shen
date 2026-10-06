@@ -15,12 +15,14 @@ class UpdateSchedule:
         """Load the last local check date, treating invalid caches as absent."""
         self.path = path
         self.last_date = None
+        self.last_timestamp = None
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
             stamp = datetime.fromisoformat(document["timestamp"])
             saved_date = date.fromisoformat(document["date"])
             if stamp.date() == saved_date:
                 self.last_date = saved_date
+                self.last_timestamp = stamp
         except (OSError, ValueError, TypeError, KeyError):
             pass
 
@@ -31,6 +33,7 @@ class UpdateSchedule:
     def record_attempt(self, now: datetime):
         """Remember an attempt even if persisting its atomic cache fails."""
         self.last_date = now.date()
+        self.last_timestamp = now
         temporary = self.path.with_name(f"{self.path.name}.{os.getpid()}.tmp")
         try:
             temporary.write_text(

@@ -51,9 +51,7 @@ def close():
     attempts = 0
     while is_open():
         attempts += 1
-        logs.logger.debug(
-            f"Trying to close Transmitter menu inventory {attempts} / {config.inventory_close_attempts}"
-        )
+        logs.logger.debug(f"Trying to close Transmitter menu inventory {attempts} / {config.inventory_close_attempts}")
         windows.click(*get_pixel_loc("back_menu"))
         time.sleep(0.2)
 
@@ -63,9 +61,7 @@ def close():
             return time.sleep(0.3)
 
         if attempts >= config.inventory_close_attempts:
-            logs.logger.error(
-                f"Unable to close Transmitter menu after {attempts} attempts"
-            )
+            logs.logger.error(f"Unable to close Transmitter menu after {attempts} attempts")
             # check state of the char the reason we can do it now is that the latter should spam click close inv
             player_state.check_disconnected()
             break
@@ -76,9 +72,7 @@ def is_clear_search():
 
 
 def wait_clear_search(delay=0.1):
-    return template.template_await_false(
-        template.check_template_no_bounds, delay, "transmitter_server_search", 0.7
-    )
+    return template.template_await_false(template.check_template_no_bounds, delay, "transmitter_server_search", 0.7)
 
 
 def is_server_list_loaded():
@@ -94,9 +88,7 @@ def is_join_button_visible():
 
 
 def wait_server_list_loaded(delay=10):
-    return template.template_await_true(
-        template.check_template_no_bounds, delay, "server_list_trans_loaded", 0.7
-    )
+    return template.template_await_true(template.check_template_no_bounds, delay, "server_list_trans_loaded", 0.7)
 
 
 def refresh():
@@ -138,9 +130,7 @@ def failure_is_connection_failed():
 
 
 def failure_excess_amount():
-    transmitter.was_excess_amount = template.check_template(
-        "transmitter_server_excess", 0.8
-    )
+    transmitter.was_excess_amount = template.check_template("transmitter_server_excess", 0.8)
     # transmitter.was_excess_amount = False
     return transmitter.was_excess_amount
 
@@ -157,9 +147,7 @@ def failure_is_attempting():
 def has_failure():
     if failure_is_connection_failed():
         if not player_state.uploaded:
-            logs.logger.warning(
-                "Server connection timeout but player still not uploaded"
-            )
+            logs.logger.warning("Server connection timeout but player still not uploaded")
             windows.click(
                 *get_pixel_loc("failure_connection_accept"),
             )
@@ -171,9 +159,7 @@ def has_failure():
                 *get_pixel_loc("failure_connection_accept"),
             )
 
-            time.sleep(
-                10
-            )  # Wait 10s, maybe after 10s, the screen will turn to other server
+            time.sleep(10)  # Wait 10s, maybe after 10s, the screen will turn to other server
 
             if is_open() or transmitter.is_open():
                 console.console_write("open MainMenu")
@@ -237,9 +223,7 @@ def sign_of_uploaded():
 def do_join_server(server: str, *, should_go_tekpod=True):
     if not is_open():
         time.sleep(0.5)
-        logs.logger.debug(
-            "Don't detect transmitter server menu, maybe already joined server, checking..."
-        )
+        logs.logger.debug("Don't detect transmitter server menu, maybe already joined server, checking...")
         return success.joined_server()
 
     dl = utils_simple.get_default_clock()
@@ -263,9 +247,7 @@ def do_join_server(server: str, *, should_go_tekpod=True):
     windows.click(*get_pixel_loc("first_server"))
 
     if not template.template_await_true(template.check_transfer_server_orange, 1):
-        logs.logger.warning(
-            "orange pixel for transmitter server not found likely server is shutdown"
-        )
+        logs.logger.warning("orange pixel for transmitter server not found likely server is shutdown")
         return False
 
     logs.logger.debug("Orange detected, ready for transfer")

@@ -43,17 +43,13 @@ def is_clear_search():
 def is_can_drop():
     global g_last_check_can_drop
 
-    g_last_check_can_drop = v = bool(
-        template.check_template("inventory_player_drop", 0.7)
-    )
+    g_last_check_can_drop = v = bool(template.check_template("inventory_player_drop", 0.7))
     return v
 
 
 def is_can_transfer_all():
     global g_last_check_can_transfer
-    g_last_check_can_transfer = v = bool(
-        template.check_template("inventory_player_transfer_all", 0.7)
-    )
+    g_last_check_can_transfer = v = bool(template.check_template("inventory_player_transfer_all", 0.7))
     return v
 
 
@@ -65,9 +61,7 @@ def open():
     attempts = 0
     while not is_open():
         attempts += 1
-        logs.logger.debug(
-            f"trying to open player inventory {attempts} / {config.inventory_open_attempts}"
-        )
+        logs.logger.debug(f"trying to open player inventory {attempts} / {config.inventory_open_attempts}")
         utils.press_key("ShowMyInventory")
         if template.template_await_true(is_open, 3):
             logs.logger.debug("inventory opened")
@@ -85,9 +79,7 @@ def close():
     attempts = 0
     while is_open():
         attempts += 1
-        logs.logger.debug(
-            f"trying to close objects inventory {attempts} / {config.inventory_close_attempts}"
-        )
+        logs.logger.debug(f"trying to close objects inventory {attempts} / {config.inventory_close_attempts}")
 
         is_can_transfer_all()
 
@@ -99,26 +91,25 @@ def close():
             return time.sleep(0.3)
 
         if attempts >= config.inventory_close_attempts:
-            logs.logger.error(
-                f"unable to close the objects inventory after {attempts} attempts"
-            )
+            logs.logger.error(f"unable to close the objects inventory after {attempts} attempts")
             # check state of the char the reason we can do it now is that the latter should spam click close inv
             break
 
 
 def search_and_transfer(item: str):
-    if is_open():
+    if not is_open():
+        return
+    search_in_inventory(item)
+    time.sleep(0.1)
+
+    while is_clear_search():
         search_in_inventory(item)
         time.sleep(0.1)
 
-        while is_clear_search():
-            search_in_inventory(item)
-            time.sleep(0.1)
+    transfer_all_inventory()
 
-        transfer_all_inventory()
-
-        wait_clear_search(3)
-        time.sleep(0.1)
+    wait_clear_search(3)
+    time.sleep(0.1)
 
 
 # these functions assume that the inventory is already open
@@ -169,6 +160,44 @@ def change_filter(type: Literal["all", "resource"] = "all"):
         time.sleep(0.1)
 
 
+def assign_to_hotbar(inv_slot=0, hotbar_slot=0):
+    if hotbar_slot > 9 or hotbar_slot < 0:
+        raise ValueError(f"Hotbar_slot expect from 0-9, got {hotbar_slot}")
+
+    loc_gen = utils_simple.grid_loc_gen(col=inv_default_grid)
+    c, r = loc_gen(inv_slot)
+
+    x = inv_slots["x"] + (inv_slots["distance"] * c)
+    y = inv_slots["y"] + (inv_slots["distance"] * r)
+    logs.logger.debug(f"Assigning inv {inv_slot} to hotbar {hotbar_slot} | C{c}/R{r}")
+    windows.move_mouse(x, y)
+    time.sleep(0.1)
+    utils.press_key(f"UseItem{hotbar_slot + 1}")
+    time.sleep(0.2)
+
+
+def search_and_assign_to_hotbar(item: str, hotbar_slots: list[int] | None = None):
+    """hotbar_slots values from 0-9, ex [0,4,9]"""
+    if not is_open() or not isinstance(hotbar_slots, list):
+        return
+    search_in_inventory(item)
+    time.sleep(0.1)
+
+    while is_clear_search():
+        search_in_inventory(item)
+        time.sleep(0.1)
+
+    windows.move_mouse(2, 2)
+    windows.click(2, 2)
+
+    for x in range(len(hotbar_slots)):
+        windows.move_mouse(2, 2)
+        time.sleep(0.1)
+        assign_to_hotbar(x % 6, hotbar_slots[x])
+
+    time.sleep(0.1)
+
+
 def transfer_first_inventory(slot=0):
     """Becareful of player implant"""
 
@@ -187,7 +216,7 @@ def transfer_first_inventory(slot=0):
             loc_gen = utils_simple.grid_loc_gen(col=inv_default_grid)
 
             c, r = loc_gen(_slot)
-            print(f"transfer_first_inventory: c={c}, r={r}")
+            logs.logger.debug(f"transfer_first_inventory: c={c}, r={r}")
             x = inv_slots["x"] + (inv_slots["distance"] * c)
             y = inv_slots["y"] + (inv_slots["distance"] * r)
 
@@ -245,9 +274,7 @@ def implant_eat():
 
     while not template.check_template("death_regions", 0.7):
         attempts += 1
-        logs.logger.debug(
-            f"trying to eat player implant {attempts} / {config.suicide_attempts}"
-        )
+        logs.logger.debug(f"trying to eat player implant {attempts} / {config.suicide_attempts}")
 
         utils.zero_center()
         open()
@@ -279,9 +306,7 @@ def implant_eat():
             variables.get_pixel_loc("close_inv_y"),
         )
 
-        if not template.template_await_true(
-            template.check_template, 10, "death_regions", 0.7
-        ):
+        if not template.template_await_true(template.check_template, 10, "death_regions", 0.7):
             # check state of the char before redoing
             player_state.check_state()
 

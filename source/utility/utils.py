@@ -105,9 +105,7 @@ def keymap_return(key_input: str):
     """Resolve an ARK action, named key, F1-F24, or character to a virtual-key code."""
     key = key_input.lower()
 
-    if (
-        key in default_keymap
-    ):  # this would only be triggered if the input.ini file is empty || base key mpa
+    if key in default_keymap:  # this would only be triggered if the input.ini file is empty || base key mpa
         key = default_keymap[key]
         if key in keymap:
             return keymap[key]
@@ -169,9 +167,7 @@ def _send_mouse_button(input_key, pressed):
         time=0,
         dwExtraInfo=0,
     )
-    ctypes.windll.user32.SendInput(
-        1, ctypes.byref(input_event), ctypes.sizeof(windows.INPUT)
-    )
+    ctypes.windll.user32.SendInput(1, ctypes.byref(input_event), ctypes.sizeof(windows.INPUT))
     return True
 
 
@@ -253,9 +249,7 @@ def _send_held_key(held_key: tuple[int, int], released: bool):
         time=0,
         dwExtraInfo=0,
     )
-    sent = ctypes.windll.user32.SendInput(
-        1, ctypes.byref(event), ctypes.sizeof(windows.INPUT)
-    )
+    sent = ctypes.windll.user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(windows.INPUT))
     if sent != 1:
         raise OSError("SendInput failed to submit held keyboard input")
 
@@ -270,15 +264,15 @@ def press_action(input_action, hold_duration=0.05):
         action_up(input_action)
 
 
-def post_charecter(char):
-    action_gate.before_ark_action()
+def _post_charecter(char):
+    # NO GATE HERE, IT WILL CAUSE ERROR ON RUNTIME
     ctypes.windll.user32.PostMessageW(windows.ark_hwnd(), WM_CHAR, ord(char), 0)
 
 
 def write(text):
     action_gate.before_ark_action()
     for c in text:
-        post_charecter(c)
+        _post_charecter(c)
 
 
 def ctrl_a():  # hotkey for sending ctrl a
@@ -655,6 +649,12 @@ def turn_to(yaw: float, pitch: float):
 
     global current_yaw
     global current_pitch
+    global was_initialized
+
+    if not was_initialized:
+        get_yaw_pitch()
+        was_initialized = True
+
     inital_pitch = current_pitch
     inital_yaw = current_yaw
 

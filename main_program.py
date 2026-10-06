@@ -65,9 +65,7 @@ async def prepare_bot():
 
     if settings.allow_focus_ark_window:
         focus_window(GAME_WINDOW_TITLE, settings.focus_ark_window_interval)
-        print(
-            f"[INFO] {GAME_WINDOW_TITLE} auto-focus enabled every {max(0.1, settings.focus_ark_window_interval)} seconds."
-        )
+        print(f"[INFO] {GAME_WINDOW_TITLE} auto-focus enabled every {max(0.1, settings.focus_ark_window_interval)} seconds.")
     else:
         print(f"[INFO] {GAME_WINDOW_TITLE} auto-focus disabled.")
         focus_window(GAME_WINDOW_TITLE, is_repeat_once=True)

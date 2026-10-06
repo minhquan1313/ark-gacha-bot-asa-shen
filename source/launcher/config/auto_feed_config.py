@@ -38,9 +38,7 @@ def normalize_auto_feed(raw: object) -> dict:
         if result[key] == 0:
             result[key] = -1
         if result[key] != -1 and not 1 <= result[key] <= 10:
-            raise ValueError(
-                f"{key.replace('_', ' ').capitalize()} must be -1 or 1-10."
-            )
+            raise ValueError(f"{key.replace('_', ' ').capitalize()} must be -1 or 1-10.")
     babies = []
     for baby in result.get("babies", []):
         if not isinstance(baby, dict):

@@ -37,9 +37,7 @@ async def main():
         task_manager = await main_program.prepare_bot()
         print(RUNNER_READY_MESSAGE, flush=True)
         if not wait_for_launcher_ack(RUNNER_OVERLAY_ACK_TIMEOUT_SECONDS):
-            message = (
-                "Runner overlay was not ready; offline runner will not start tasks."
-            )
+            message = "Runner overlay was not ready; offline runner will not start tasks."
             print(f"[ERROR] {message}", flush=True)
             logs.logger.error(message)
             return

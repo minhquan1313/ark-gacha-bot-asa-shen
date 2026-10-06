@@ -193,10 +193,7 @@ class HelperPagesMixin:
     def find_deposit_helper(self, route_kind, route_index):
         for helper in list(getattr(self, "external_helpers", [])):
             try:
-                if (
-                    helper.route_kind == route_kind
-                    and helper.route_index == route_index
-                ):
+                if helper.route_kind == route_kind and helper.route_index == route_index:
                     return helper
             except RuntimeError:
                 self.forget_deposit_helper(helper)
@@ -207,9 +204,7 @@ class HelperPagesMixin:
             self.external_helpers = []
         if helper not in self.external_helpers:
             self.external_helpers.append(helper)
-        helper.destroyed.connect(
-            lambda _=None, tracked=helper: self.forget_deposit_helper(tracked)
-        )
+        helper.destroyed.connect(lambda _=None, tracked=helper: self.forget_deposit_helper(tracked))
 
     def forget_deposit_helper(self, helper):
         helpers = getattr(self, "external_helpers", [])

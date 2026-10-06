@@ -11,9 +11,7 @@ from source.utility.debug_screenshots import CAPTURE_IGUANADON_SEED, capture_for
 
 IGUANODON_REMOTE_LAG_THRESHOLD_SECONDS = 3.0
 
-capture_iguanadon_seed_withdraw = capture_for(
-    "iguanadon_seed_withdraw", active=CAPTURE_IGUANADON_SEED
-)
+capture_iguanadon_seed_withdraw = capture_for("iguanadon_seed_withdraw", active=CAPTURE_IGUANADON_SEED)
 should_drop_useless = False
 
 
@@ -26,9 +24,7 @@ def _recover_berry_station():
 
     if settings.external_berry:
         logs.logger.debug("sleeping for 20 seconds as external")
-        time.sleep(
-            settings.wait_structure_load
-        )  # letting station spawn in if you have to tp away
+        time.sleep(settings.wait_structure_load)  # letting station spawn in if you have to tp away
     utils.zero_center()
 
 
@@ -57,15 +53,10 @@ def berry_collection(turn_down=0):
             inventory.close()
             return
 
-        logs.logger.error(
-            f"tek trough was not opened; retrying {attempt} / "
-            f"{source.gacha_bot.config.tek_trough_attempts}"
-        )
+        logs.logger.error(f"tek trough was not opened; retrying {attempt} / {source.gacha_bot.config.tek_trough_attempts}")
         # if failed to open inventory
         if dl():
-            logs.logger.critical(
-                "tek trough failed to open; suiciding and restarting berry station"
-            )
+            logs.logger.critical("tek trough failed to open; suiciding and restarting berry station")
 
             dl.reset()
 
@@ -102,11 +93,7 @@ def seed(type):
                 time.sleep(1)
                 _seed_reset()
 
-        if (
-            type == 2
-            and stations.did_collect_tek_troughs
-            and player_inventory.is_can_drop()
-        ):
+        if type == 2 and stations.did_collect_tek_troughs and player_inventory.is_can_drop():
             time.sleep(0.2)
             player_inventory.drop_all_inv()  # doing this second time round to drop everything else that is not needed by the bot
 
@@ -151,16 +138,12 @@ def iguanadon_open():
     inventory.open()
     while not inventory.is_open():
         attempt += 1
-        logs.logger.debug(
-            f"the iguanadon could not be accessed retrying {attempt} / {source.gacha_bot.config.iguanadon_attempts}"
-        )
+        logs.logger.debug(f"the iguanadon could not be accessed retrying {attempt} / {source.gacha_bot.config.iguanadon_attempts}")
         utils.zero_center()
         time.sleep(0.2)
         inventory.open()
         if attempt >= source.gacha_bot.config.iguanadon_attempts:
-            logs.logger.error(
-                f"the iguanadon could not be accesssed after {attempt} attempts"
-            )
+            logs.logger.error(f"the iguanadon could not be accesssed after {attempt} attempts")
             break
 
 

@@ -6,9 +6,7 @@ from source.launcher.pages.common import (
 
 
 class BasePagesMixin:
-    def _icon_button(
-        self, icon_key, tooltip="", variant="secondary", width=36, icon_size=32
-    ):
+    def _icon_button(self, icon_key, tooltip="", variant="secondary", width=36, icon_size=32):
         button = self._button("", variant)
         button.setObjectName("HelperIconButton")
         button.setIcon(QIcon(ASSETS[icon_key]))

@@ -1,17 +1,6 @@
 {
-  "version": "1.0.6",
-  "released_at": "2026-09-10",
-  "title": "Pausable, Gacha collection and Crafters",
-  "changelog": [
-    "More fixes to Autokey and server transfer, switch steam.",
-    "Added some minor ingame config changes",
-    "Added Pausable feature, when GBot run, hit ESC ingame or switch tabs to pause GBot.",
-    "If you want to Alt+Tab with Pause, disable [Allow focus ARK window] in Settings/Launcher.",
-    "Added Gacha collection feature(Settings/Gacha/Gacha Collection), you can now collect Gacha items such as Phoenix Silica, snail paste, etc.",
-    "Added Crafters feature(Settings/Craft), you can now craft items such as Polymer, can craft with multiple crafters.",
-    "Added loading animation on startup.",
-    "Rework Autokey, now you can trigger faster with default F1+[key], support 'W' key.",
-    "Optimize Server Transfer, update its detection due to Steam changes.",
-    "Optimize multiple automations and detections."
-  ]
+  "version": "1.1.0",
+  "released_at": "2026-10-06",
+  "title": "Welcome to GBot 1.1",
+  "changelog": ["Fully rework UI to version 1.1! This update brings a complete overhaul of the user interface, making it more intuitive and user-friendly.", "More optimize to GBot", "Fix some bugs of GBot"]
 }

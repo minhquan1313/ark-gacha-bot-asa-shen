@@ -52,9 +52,7 @@ class PositionRenderHelper(BaseHelperWindow):
         self.capture_in_progress = False
         self.pending_cursor_position = None
         self.guide_timer = self._single_shot_timer(self.show_guide)
-        self.cursor_restore_timer = self._single_shot_timer(
-            self._restore_pending_cursor
-        )
+        self.cursor_restore_timer = self._single_shot_timer(self._restore_pending_cursor)
         self._build_ui()
         self._register_hotkey()
         self.guide_timer.start(0)
@@ -86,9 +84,7 @@ class PositionRenderHelper(BaseHelperWindow):
         value = QLabel(str(self.owner.settings.get(key, 0.0)))
         value.setObjectName("HelperStatus")
         setattr(self, f"{key}_value_label", value)
-        capture = self._helper_action_button(
-            "icon.capture_target", f"Capture current yaw for {key}"
-        )
+        capture = self._helper_action_button("icon.capture_target", f"Capture current yaw for {key}")
         capture.clicked.connect(lambda checked=False, name=key: self.capture(name))
         view = self._helper_action_button("icon.view_eye", f"View saved yaw for {key}")
         view.clicked.connect(lambda checked=False, name=key: self.view(name))

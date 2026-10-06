@@ -33,6 +33,7 @@ Before implementing:
 - Add type annotations to all function parameters, but omit return annotations and let the IDE infer them. Avoid using Any or None as parameter types.
 - When creating a new function, always add a concise docstring that clearly explains the function’s purpose. Whenever practical, include a short and concrete usage example in the docstring.
 - The most importance is code must be readable, linear code still a good code.
+- Don't write one-time function that solve only 1 feature, if that function seem reusable in the future, try to write it in generic way with param so it can be reuse, for example, focus X window, write a function to focus a windows with title param, then call it with "X" as title param.
 
 Ask: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 

@@ -29,9 +29,7 @@ from source.launcher.config.constants import (
 
 RUNNER_OVERLAY_UPCOMING_LIMIT = 3
 RUNNER_OVERLAY_LOG_LIMIT = 3
-RUNNER_LOG_PREFIX = re.compile(
-    r"^(?:\[[A-Z]+\]\s*)?(?P<timestamp>\d{2}:\d{2}:\d{2})\s+-\s+"
-)
+RUNNER_LOG_PREFIX = re.compile(r"^(?:\[[A-Z]+\]\s*)?(?P<timestamp>\d{2}:\d{2}:\d{2})\s+-\s+")
 
 
 def format_runner_overlay(
@@ -45,11 +43,7 @@ def format_runner_overlay(
         current = "PAUSED"
     else:
         running = snapshot.get("running", [])
-        if running:
-            # current = f"Running {running[0].get('name', 'unknown')}"
-            current = f"{running[0].get('name', 'unknown')}"
-        else:
-            current = "Waiting for running task..."
+        current = f"{running[0].get('name', 'unknown')}" if running else "Waiting for running task..."
 
     queued = snapshot.get("active", []) + snapshot.get("waiting", [])
     queued.sort(key=lambda task: float(task.get("execution_time", now)))
@@ -158,11 +152,7 @@ class RunnerOverlay(QWidget):
 
         self.setObjectName("RunnerOverlayWindow")
         self.setWindowTitle(f"{APP_TITLE} Runner")
-        self.setWindowFlags(
-            Qt.WindowType.Tool
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowOpacity(1.0)
@@ -390,20 +380,11 @@ class RunnerOverlay(QWidget):
             getattr(self, "clock_label", None),
         ):
             return super().eventFilter(watched, event)
-        if (
-            event.type() == QEvent.Type.MouseButtonPress
-            and event.button() == Qt.MouseButton.LeftButton
-        ):
-            self.drag_position = (
-                event.globalPosition().toPoint() - self.frameGeometry().topLeft()
-            )
+        if event.type() == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
+            self.drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
             return True
-        if (
-            event.type() == QEvent.Type.MouseMove
-            and self.drag_position is not None
-            and event.buttons() & Qt.MouseButton.LeftButton
-        ):
+        if event.type() == QEvent.Type.MouseMove and self.drag_position is not None and event.buttons() & Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self.drag_position)
             event.accept()
             return True
@@ -452,9 +433,7 @@ class HelperRunnerOverlay(RunnerOverlay):
         """Show only the helper log section after worker loading completes."""
         super().refresh(snapshot, log_lines)
         self.loading_row.hide()
-        self.current_label.setVisible(
-            getattr(self.owner, "runner_state", "RUNNING") == "PAUSED"
-        )
+        self.current_label.setVisible(getattr(self.owner, "runner_state", "RUNNING") == "PAUSED")
         for label in self.upcoming_labels:
             label.hide()
         self._resize_to_content_height()

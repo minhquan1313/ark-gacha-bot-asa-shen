@@ -63,9 +63,7 @@ def parse_loginusers(vdf_text: str):
 
 def sorted_steam_accounts(accounts: list[SteamAccount]):
     """Sort accounts by current-account status, then by newest timestamp."""
-    return sorted(
-        accounts, key=lambda account: (not account.most_recent, -account.timestamp)
-    )
+    return sorted(accounts, key=lambda account: (not account.most_recent, -account.timestamp))
 
 
 def most_recent_account_name(
@@ -239,9 +237,7 @@ def _focus_visible_steam_window():
 
 
 def _focus_steam_window_maximized(window_title: str):
-    if not system.focus_window_if_needed(
-        window_title, center_cursor_when_switching=True
-    ):
+    if not system.focus_window_if_needed(window_title, center_cursor_when_switching=True):
         return False
     hwnd = ctypes.windll.user32.FindWindowW(None, window_title)
     if not hwnd:

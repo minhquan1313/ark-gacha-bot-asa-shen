@@ -49,9 +49,7 @@ def find_window_handle(window_title: str, contains: bool = False):
     needle = window_title.casefold()
     matched_hwnd = 0
 
-    enum_windows_proc = ctypes.WINFUNCTYPE(
-        wintypes.BOOL, wintypes.HWND, wintypes.LPARAM
-    )
+    enum_windows_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
     def callback(hwnd, _lparam):
         nonlocal matched_hwnd
@@ -76,9 +74,7 @@ def _should_match_window_title_contains(window_title: str):
 
 
 def find_window_size(window_title):
-    hwnd = find_window_handle(
-        window_title, contains=_should_match_window_title_contains(window_title)
-    )
+    hwnd = find_window_handle(window_title, contains=_should_match_window_title_contains(window_title))
     if not hwnd:
         return None
 
@@ -89,14 +85,10 @@ def find_window_size(window_title):
     return rect.right - rect.left, rect.bottom - rect.top
 
 
-def focus_window_if_needed(
-    window_title: str, center_cursor_when_switching: bool = False
-):
+def focus_window_if_needed(window_title: str, center_cursor_when_switching: bool = False):
     """Activate a window with bounded retries and verify foreground ownership."""
     user32 = ctypes.windll.user32
-    hwnd = find_window_handle(
-        window_title, contains=_should_match_window_title_contains(window_title)
-    )
+    hwnd = find_window_handle(window_title, contains=_should_match_window_title_contains(window_title))
     if not hwnd:
         return False
     foreground_hwnd = user32.GetForegroundWindow()
@@ -109,9 +101,7 @@ def focus_window_if_needed(
         rect = wintypes.RECT()
         if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
             raise RuntimeError(f"Unable to read {window_title} window position.")
-        if not user32.SetCursorPos(
-            (rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2
-        ):
+        if not user32.SetCursorPos((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2):
             raise RuntimeError("Unable to center the mouse cursor.")
 
     kernel32 = ctypes.windll.kernel32
@@ -133,15 +123,9 @@ def focus_window_if_needed(
                 foreground_hwnd = user32.GetForegroundWindow()
                 if foreground_hwnd == hwnd:
                     return True
-                foreground_thread_id = user32.GetWindowThreadProcessId(
-                    foreground_hwnd, None
-                )
+                foreground_thread_id = user32.GetWindowThreadProcessId(foreground_hwnd, None)
                 if foreground_thread_id and foreground_thread_id != current_thread_id:
-                    attached = bool(
-                        user32.AttachThreadInput(
-                            current_thread_id, foreground_thread_id, True
-                        )
-                    )
+                    attached = bool(user32.AttachThreadInput(current_thread_id, foreground_thread_id, True))
                     if not attached:
                         attachment_error = kernel32.GetLastError()
                 if user32.IsIconic(hwnd):
@@ -166,9 +150,7 @@ def focus_window_if_needed(
 
     foreground_hwnd = user32.GetForegroundWindow()
     foreground_pid = wintypes.DWORD()
-    foreground_thread_id = user32.GetWindowThreadProcessId(
-        foreground_hwnd, ctypes.byref(foreground_pid)
-    )
+    foreground_thread_id = user32.GetWindowThreadProcessId(foreground_hwnd, ctypes.byref(foreground_pid))
     foreground_title = ctypes.create_unicode_buffer(512)
     user32.GetWindowTextW(foreground_hwnd, foreground_title, len(foreground_title))
     raise RuntimeError(
@@ -185,13 +167,8 @@ def validate_ark_window():
     if game_size is None:
         raise RuntimeError(f"{GAME_WINDOW_TITLE} window was not found.")
     if game_size not in SUPPORTED_GAME_RESOLUTIONS:
-        supported_sizes = ", ".join(
-            f"{width}x{height}" for width, height in SUPPORTED_GAME_RESOLUTIONS
-        )
-        raise RuntimeError(
-            f"Detected {GAME_WINDOW_TITLE} size: {game_size[0]}x{game_size[1]}. "
-            f"{GAME_WINDOW_TITLE} must run at one of: {supported_sizes}."
-        )
+        supported_sizes = ", ".join(f"{width}x{height}" for width, height in SUPPORTED_GAME_RESOLUTIONS)
+        raise RuntimeError(f"Detected {GAME_WINDOW_TITLE} size: {game_size[0]}x{game_size[1]}. {GAME_WINDOW_TITLE} must run at one of: {supported_sizes}.")
     return game_size
 
 
@@ -214,9 +191,7 @@ def get_cpu_times():
     kernel = wintypes.FILETIME()
     user = wintypes.FILETIME()
 
-    if not ctypes.windll.kernel32.GetSystemTimes(
-        ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)
-    ):
+    if not ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)):
         return None
 
     return _filetime_to_int(idle), _filetime_to_int(kernel), _filetime_to_int(user)

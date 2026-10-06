@@ -65,25 +65,13 @@ from source.utility.types import TransferPlayersConfig, TransferRuntimeConfig
 DEFAULT_PANELS_EXPANDED = True
 PLAYER_SEARCH_WARNING_COLOR = "#ffb020"
 IGNORED_PLAYER_COLOR = "#ff4d6d"
-PLAYER_ONE_STEAM_MISMATCH_MESSAGE = (
-    "Relog Steam with this account before starting; ARK is currently controlled by "
-    "another Steam user."
-)
+PLAYER_ONE_STEAM_MISMATCH_MESSAGE = "Relog Steam with this account before starting; ARK is currently controlled by another Steam user."
 CAPTURE_ACTION_ICON = "icon.capture_target"
 VIEW_ACTION_ICON = "icon.view_eye"
-SAME_STRUCTURE_TOOLTIP = (
-    "If destinate deposit outpost has the same setup, this will automatically "
-    "calculate the yaw pitch and crouch for your destinate dedis!"
-)
+SAME_STRUCTURE_TOOLTIP = "If destinate deposit outpost has the same setup, this will automatically calculate the yaw pitch and crouch for your destinate dedis!"
 TRANSFER_START_MODE_DESCRIPTIONS = {
-    "default": (
-        "Recommended. Start from resource server -> Withdraw -> Transfer to "
-        "destinate server."
-    ),
-    "destinate": (
-        "Optional. Assume all characters are filled with resources, start transfer "
-        "to destinate server."
-    ),
+    "default": ("Recommended. Start from resource server -> Withdraw -> Transfer to destinate server."),
+    "destinate": ("Optional. Assume all characters are filled with resources, start transfer to destinate server."),
 }
 
 
@@ -109,9 +97,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             "active": [],
             "waiting": [],
         }
-        self.config: TransferRuntimeConfig = load_transfer_runtime_config(
-            create_missing=True
-        )
+        self.config: TransferRuntimeConfig = load_transfer_runtime_config(create_missing=True)
         self.config["dedis"] = normalize_transfer_dedis(self.config["dedis"])
         self._reload_steam_accounts()
 
@@ -131,9 +117,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         self._register_hotkey()
         self._preload_capture_view()
         self.helper_log_changed.connect(self._refresh_transfer_overlay)
-        self.runner_state_changed.connect(
-            self._refresh_transfer_overlay_for_runner_state
-        )
+        self.runner_state_changed.connect(self._refresh_transfer_overlay_for_runner_state)
         self.task_state_changed.connect(self._update_transfer_task_snapshot)
         self.worker_ready.connect(self._on_worker_ready)
         self.worker_finished.connect(self._on_worker_finished)
@@ -184,10 +168,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         content_layout.addWidget(settings_card)
 
         players_card, players_layout = self._panel("Player Settings")
-        players_description = WrappedStatusLabel(
-            "Tek pod and teleporter names must match for each player. "
-            "The transfer helper searches that shared name."
-        )
+        players_description = WrappedStatusLabel("Tek pod and teleporter names must match for each player. The transfer helper searches that shared name.")
         players_description.setObjectName("HelperStatus")
         players_layout.addWidget(players_description)
         self.players_layout = QVBoxLayout()
@@ -242,9 +223,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         mode_index = mode_field.findData(settings.get("transfer_start_mode", "default"))
         mode_field.setCurrentIndex(max(0, mode_index))
         mode_field.currentIndexChanged.connect(lambda _index: self._persist_settings())
-        mode_field.currentIndexChanged.connect(
-            self._sync_transfer_start_mode_description
-        )
+        mode_field.currentIndexChanged.connect(self._sync_transfer_start_mode_description)
         self.setting_fields["transfer_start_mode"] = mode_field
         grid.addWidget(mode_label, 0, 0)
         grid.addWidget(mode_field, 0, 1)
@@ -271,9 +250,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         card, layout = self._panel(title)
         route = self.config["dedis"].get(side, {})
         server_key = f"{side if side == 'resource' else 'destination'}_server"
-        server_label_text = (
-            "Resource server" if side == "resource" else "Destination server"
-        )
+        server_label_text = "Resource server" if side == "resource" else "Destination server"
         server_label, server_field = self._setting_field(server_key, server_label_text)
         layout.addLayout(self._labeled_row_widget(server_label, server_field))
         transmitter = self._line_edit(route.get("transmitter_teleport", ""))
@@ -282,11 +259,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         setattr(self, f"{side}_transmitter_teleport", transmitter)
         calculate = AnimatedButton("Sync", "secondary")
         calculate.setToolTip(SAME_STRUCTURE_TOOLTIP)
-        calculate.clicked.connect(
-            lambda checked=False, target_side=side: (
-                self._calculate_dedis_from_same_structure(target_side)
-            )
-        )
+        calculate.clicked.connect(lambda checked=False, target_side=side: self._calculate_dedis_from_same_structure(target_side))
         setattr(self, f"{side}_same_structure_calculate", calculate)
         calculate_description = WrappedStatusLabel(SAME_STRUCTURE_TOOLTIP)
         calculate_description.setObjectName("HelperStatus")
@@ -310,12 +283,8 @@ class ServerTransferHelper(WorkerHelperWindow):
         yaw_row.setSpacing(4)
         yaw_row.setContentsMargins(0, 0, 0, 0)
         yaw_row.addWidget(station_yaw, 1)
-        capture_yaw = self._helper_action_button(
-            CAPTURE_ACTION_ICON, f"Capture {side} yaw"
-        )
-        capture_yaw.clicked.connect(
-            lambda checked=False, target=station_yaw: self._capture_station_yaw(target)
-        )
+        capture_yaw = self._helper_action_button(CAPTURE_ACTION_ICON, f"Capture {side} yaw")
+        capture_yaw.clicked.connect(lambda checked=False, target=station_yaw: self._capture_station_yaw(target))
         yaw_row.addWidget(capture_yaw)
         yaw_widget = QWidget()
         yaw_widget.setLayout(yaw_row)
@@ -329,9 +298,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         setattr(self, f"{side}_dedi_rows_layout", rows_layout)
         if side == "resource":
             self.dedi_rows_layout = rows_layout
-        divider = self._dedi_section_divider(
-            side, f"{title} Dedis", len(route.get("items", []))
-        )
+        divider = self._dedi_section_divider(side, f"{title} Dedis", len(route.get("items", [])))
         layout.addWidget(divider)
         layout.addLayout(rows_layout)
         for item in route.get("items", []):
@@ -342,18 +309,10 @@ class ServerTransferHelper(WorkerHelperWindow):
         actions_row.setContentsMargins(8, 8, 8, 8)
         actions_row.setSpacing(6)
         add_dedi = AnimatedButton("Add Dedi", "secondary")
-        add_dedi.clicked.connect(
-            lambda checked=False, target_side=side: self._add_synced_dedi_pair(
-                target_side
-            )
-        )
+        add_dedi.clicked.connect(lambda checked=False, target_side=side: self._add_synced_dedi_pair(target_side))
         capture_add = AnimatedButton("Capture Add", "primary")
         capture_add.setToolTip(f"Capture yaw and pitch, then add a new {side} dedi.")
-        capture_add.clicked.connect(
-            lambda checked=False, target_side=side: self._capture_add_synced_dedi_pair(
-                target_side
-            )
-        )
+        capture_add.clicked.connect(lambda checked=False, target_side=side: self._capture_add_synced_dedi_pair(target_side))
         actions_row.addWidget(add_dedi, 1)
         actions_row.addWidget(capture_add, 1)
         layout.addWidget(actions_frame)
@@ -376,11 +335,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         return wrapper
 
     def _dedi_rows_for_side(self, side):
-        return (
-            self.destination_dedi_rows
-            if side == "destination"
-            else self.resource_dedi_rows
-        )
+        return self.destination_dedi_rows if side == "destination" else self.resource_dedi_rows
 
     @staticmethod
     def _opposite_dedi_side(side):
@@ -453,12 +408,8 @@ class ServerTransferHelper(WorkerHelperWindow):
         pitch = self._line_edit(item.get("location", {}).get("pitch", 0.0))
         crouched = QCheckBox("Crouched")
         crouched.setChecked(bool(item.get("crouched", False)))
-        capture = self._helper_action_button(
-            CAPTURE_ACTION_ICON, "Capture yaw and pitch"
-        )
-        view = self._helper_action_button(
-            VIEW_ACTION_ICON, "View saved yaw and pitch in Ark"
-        )
+        capture = self._helper_action_button(CAPTURE_ACTION_ICON, "Capture yaw and pitch")
+        view = self._helper_action_button(VIEW_ACTION_ICON, "View saved yaw and pitch in Ark")
         remove = AnimatedButton("-", "danger")
         remove.setObjectName("HelperIconButton")
         yaw_label = QLabel("Yaw")
@@ -492,27 +443,17 @@ class ServerTransferHelper(WorkerHelperWindow):
         }
         rows = self._dedi_rows_for_side(side)
         rows.append(data)
-        selected.toggled.connect(
-            lambda checked, target=data: self._sync_dedi_selection(target, checked)
-        )
-        toggle.clicked.connect(
-            lambda checked=False, target=data: self._toggle_dedi_row(target)
-        )
+        selected.toggled.connect(lambda checked, target=data: self._sync_dedi_selection(target, checked))
+        toggle.clicked.connect(lambda checked=False, target=data: self._toggle_dedi_row(target))
         remove.clicked.connect(lambda: self._remove_dedi_row(data))
-        capture.clicked.connect(
-            lambda checked=False, target=data: self._capture_dedi(target)
-        )
+        capture.clicked.connect(lambda checked=False, target=data: self._capture_dedi(target))
         view.clicked.connect(lambda checked=False, target=data: self._view_dedi(target))
         for widget in (yaw, pitch, crouched):
             if hasattr(widget, "editingFinished"):
-                widget.editingFinished.connect(
-                    lambda target=data: self._sync_dedi_summary(target)
-                )
+                widget.editingFinished.connect(lambda target=data: self._sync_dedi_summary(target))
                 widget.editingFinished.connect(self._persist_dedis)
             if hasattr(widget, "toggled"):
-                widget.toggled.connect(
-                    lambda _checked=False, target=data: self._sync_dedi_summary(target)
-                )
+                widget.toggled.connect(lambda _checked=False, target=data: self._sync_dedi_summary(target))
                 widget.toggled.connect(lambda _checked=False: self._persist_dedis())
         rows_layout = getattr(self, f"{side}_dedi_rows_layout")
         rows_layout.addWidget(row)
@@ -533,15 +474,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             blocked = checkbox.blockSignals(True)
             checkbox.setChecked(checked)
             checkbox.blockSignals(blocked)
-            row["frame"].setStyleSheet(
-                ""
-                if checked
-                else (
-                    "QFrame#HelperRow QLabel, QFrame#HelperRow QLineEdit, "
-                    "QFrame#HelperRow QCheckBox, QFrame#HelperRow QPushButton "
-                    "{ color: #8a8a8a; }"
-                )
-            )
+            row["frame"].setStyleSheet("" if checked else ("QFrame#HelperRow QLabel, QFrame#HelperRow QLineEdit, QFrame#HelperRow QCheckBox, QFrame#HelperRow QPushButton { color: #8a8a8a; }"))
 
     def _remove_dedi_row(self, row_data):
         side = row_data.get("side", "resource")
@@ -594,10 +527,7 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _sync_dedi_summary(self, row_data):
         crouch_text = "Crouch on" if row_data["crouched"].isChecked() else "Crouch off"
-        row_data["summary"].setText(
-            f"Yaw {row_data['yaw'].text()} | "
-            f"Pitch {row_data['pitch'].text()} | {crouch_text}"
-        )
+        row_data["summary"].setText(f"Yaw {row_data['yaw'].text()} | Pitch {row_data['pitch'].text()} | {crouch_text}")
 
     def _current_config(self):
         self.config["settings"] = save_transfer_settings(self._settings_from_fields())
@@ -610,11 +540,7 @@ class ServerTransferHelper(WorkerHelperWindow):
     def start(self):
         if self.is_running() or self.closing:
             return
-        selected_indices = [
-            index
-            for index, row in enumerate(self.resource_dedi_rows)
-            if row["selected"].isChecked()
-        ]
+        selected_indices = [index for index, row in enumerate(self.resource_dedi_rows) if row["selected"].isChecked()]
         if not selected_indices:
             self.status.setText("Select at least one dedi before starting.")
             return
@@ -636,20 +562,12 @@ class ServerTransferHelper(WorkerHelperWindow):
                 parent=self,
             )
             return
-        player_conflicts = self._runtime_player_search_conflicts(
-            self._players_from_rows()
-        )
+        player_conflicts = self._runtime_player_search_conflicts(self._players_from_rows())
         if player_conflicts:
-            conflict_lines = self._format_player_search_conflicts(
-                player_conflicts, self._players_from_rows()
-            )
-            message = "Player bed/teleport names are not search-safe:\n" + "\n".join(
-                f"- {line}" for line in conflict_lines
-            )
+            conflict_lines = self._format_player_search_conflicts(player_conflicts, self._players_from_rows())
+            message = "Player bed/teleport names are not search-safe:\n" + "\n".join(f"- {line}" for line in conflict_lines)
             self.status.setText("Player bed/teleport names are not search-safe.")
-            self.owner.dialog(
-                "Transfer Helper Not Ready", message, "warning", parent=self
-            )
+            self.owner.dialog("Transfer Helper Not Ready", message, "warning", parent=self)
             return
         players = self._players_from_rows()
         self._refresh_steam_account_warnings()
@@ -659,21 +577,15 @@ class ServerTransferHelper(WorkerHelperWindow):
             lines = []
             for index in sorted(steam_issues):
                 lines.append(f"Player {index + 1}: {' '.join(steam_issues[index])}")
-            message = "Player Steam accounts are not ready:\n" + "\n".join(
-                f"- {line}" for line in lines
-            )
+            message = "Player Steam accounts are not ready:\n" + "\n".join(f"- {line}" for line in lines)
             self.status.setText("Player Steam accounts are not ready.")
-            self.owner.dialog(
-                "Transfer Helper Not Ready", message, "warning", parent=self
-            )
+            self.owner.dialog("Transfer Helper Not Ready", message, "warning", parent=self)
             return
         try:
             config = self._current_config()
         except ValueError as exc:
             self.status.setText(str(exc))
-            self.owner.dialog(
-                "Invalid Transfer Config", str(exc), "warning", parent=self
-            )
+            self.owner.dialog("Invalid Transfer Config", str(exc), "warning", parent=self)
             return
         config = dict(config)
         config["dedis"] = {
@@ -692,17 +604,11 @@ class ServerTransferHelper(WorkerHelperWindow):
             start_account=start_account,
         )
         if missing:
-            message = "Missing required transfer helper inputs:\n" + "\n".join(
-                f"- {item}" for item in missing
-            )
+            message = "Missing required transfer helper inputs:\n" + "\n".join(f"- {item}" for item in missing)
             self.status.setText("Missing required transfer helper inputs.")
-            self.owner.dialog(
-                "Transfer Helper Not Ready", message, "warning", parent=self
-            )
+            self.owner.dialog("Transfer Helper Not Ready", message, "warning", parent=self)
             return
-        if start_account > 1 and not self._confirm_start_from_current_player(
-            start_account
-        ):
+        if start_account > 1 and not self._confirm_start_from_current_player(start_account):
             self.status.setText("Start canceled.")
             return
 
@@ -732,9 +638,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             self._set_running_ui(False)
             self._cleanup_runtime_config()
             self.status.setText(f"Cannot start transfer helper: {exc}")
-            self.owner.dialog(
-                "Transfer Helper Start Failed", str(exc), "error", parent=self
-            )
+            self.owner.dialog("Transfer Helper Start Failed", str(exc), "error", parent=self)
 
     def stop(self):
         if not self.is_running():
@@ -892,15 +796,10 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _refresh_player_rows(self, persist=False):
         if not hasattr(self, "players_layout"):
             return
-        if self.player_rows:
-            source_players = self._players_from_rows()
-        else:
-            source_players = self.config.get("players", {})
+        source_players = self._players_from_rows() if self.player_rows else self.config.get("players", {})
         account_count = max(1, len(source_players.get("players", [])))
         try:
-            self.config["players"] = normalize_transfer_players(
-                source_players, account_count
-            )
+            self.config["players"] = normalize_transfer_players(source_players, account_count)
         except ValueError as exc:
             self.status.setText(str(exc))
             return
@@ -934,15 +833,11 @@ class ServerTransferHelper(WorkerHelperWindow):
         label = QLabel(f"P{account}")
         label.setObjectName("FormLabel")
 
-        name = self._line_edit(
-            self.config["players"]["players"][account - 1]["bed_name"]
-        )
+        name = self._line_edit(self.config["players"]["players"][account - 1]["bed_name"])
         name.editingFinished.connect(self._save_players_from_rows)
         name.editingFinished.connect(self._sync_player_search_warnings)
         copy = self._helper_button("C", "Copy Bed/teleport name")
-        copy.clicked.connect(
-            lambda checked=False, field=name: self._copy_name(field.text())
-        )
+        copy.clicked.connect(lambda checked=False, field=name: self._copy_name(field.text()))
         remove = AnimatedButton("X", "danger")
         remove.setObjectName("HelperIconButton")
         info = QHBoxLayout()
@@ -963,9 +858,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             account_name = str(steam_account.get("account_name", "")).strip()
             if account_name:
                 steam.addItem(account_name)
-        current_steam = str(
-            self.config["players"]["players"][account - 1].get("steam_account", "")
-        ).strip()
+        current_steam = str(self.config["players"]["players"][account - 1].get("steam_account", "")).strip()
         if current_steam and steam.findText(current_steam) == -1:
             steam.addItem(current_steam)
         steam.setCurrentText(current_steam)
@@ -976,11 +869,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         layout.addLayout(steam_row)
         switch = AnimatedButton("Switch", "secondary")
         switch.setVisible(False)
-        switch.clicked.connect(
-            lambda checked=False, target_account=account: (
-                self._switch_player_steam_from_row(target_account)
-            )
-        )
+        switch.clicked.connect(lambda checked=False, target_account=account: self._switch_player_steam_from_row(target_account))
         layout.addWidget(switch)
         self.players_layout.addWidget(row)
         row_data = {
@@ -992,17 +881,13 @@ class ServerTransferHelper(WorkerHelperWindow):
             "account": account,
         }
         self.player_rows.append(row_data)
-        remove.clicked.connect(
-            lambda checked=False, target=row_data: self._remove_player_row(target)
-        )
+        remove.clicked.connect(lambda checked=False, target=row_data: self._remove_player_row(target))
 
     def _add_player_row_from_button(self):
         players = self._players_from_rows().get("players", [])
         next_account = len(players) + 1
         players.append({"bed_name": "", "steam_account": ""})
-        self.config["players"] = normalize_transfer_players(
-            {"players": players}, next_account
-        )
+        self.config["players"] = normalize_transfer_players({"players": players}, next_account)
         self.player_rows = []
         self._refresh_player_rows(persist=True)
 
@@ -1055,37 +940,18 @@ class ServerTransferHelper(WorkerHelperWindow):
             switch = row.get("switch")
             configured_steam = row["steam"].currentText().strip()
             row_steam_issues = steam_issues.get(index, [])
-            show_switch = bool(configured_steam) and (
-                not most_recent or configured_steam != most_recent
-            )
+            show_switch = bool(configured_steam) and (not most_recent or configured_steam != most_recent)
             if switch is not None:
                 switch.setVisible(show_switch)
-                switch.setEnabled(
-                    show_switch
-                    and not self.switching_player_steam
-                    and not self.worker_launch_pending
-                    and not self.running_ui_active
-                    and not self.is_running()
-                )
+                switch.setEnabled(show_switch and not self.switching_player_steam and not self.worker_launch_pending and not self.running_ui_active and not self.is_running())
             messages = []
             if account > MAX_TRANSFER_RUNTIME_ACCOUNTS:
-                row["frame"].setStyleSheet(
-                    f"QFrame#HelperRow {{ border-color: {IGNORED_PLAYER_COLOR}; }}"
-                )
-                messages.append(
-                    f"Account {account} is ignored. Runtime support is currently "
-                    f"limited to {MAX_TRANSFER_RUNTIME_ACCOUNTS} accounts."
-                )
+                row["frame"].setStyleSheet(f"QFrame#HelperRow {{ border-color: {IGNORED_PLAYER_COLOR}; }}")
+                messages.append(f"Account {account} is ignored. Runtime support is currently limited to {MAX_TRANSFER_RUNTIME_ACCOUNTS} accounts.")
             elif index in steam_issues:
-                row["frame"].setStyleSheet(
-                    f"QFrame#HelperRow {{ border-color: {IGNORED_PLAYER_COLOR}; }}"
-                )
+                row["frame"].setStyleSheet(f"QFrame#HelperRow {{ border-color: {IGNORED_PLAYER_COLOR}; }}")
             elif index in conflicts:
-                row["frame"].setStyleSheet(
-                    "QFrame#HelperRow { "
-                    f"border-color: {PLAYER_SEARCH_WARNING_COLOR}; "
-                    "}"
-                )
+                row["frame"].setStyleSheet(f"QFrame#HelperRow {{ border-color: {PLAYER_SEARCH_WARNING_COLOR}; }}")
             else:
                 row["frame"].setStyleSheet("")
 
@@ -1101,23 +967,14 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _switch_player_steam_from_row(self, account: int):
         """Switch a player row's Steam account, then start ARK through the launcher."""
-        if (
-            self.is_running()
-            or self.worker_launch_pending
-            or self.switching_player_steam
-            or self.running_ui_active
-        ):
+        if self.is_running() or self.worker_launch_pending or self.switching_player_steam or self.running_ui_active:
             message = "Cannot switch Steam while another helper operation is running."
             self.status.setText(message)
             logs.logger.warning(message)
             self._sync_player_search_warnings()
             return
         row = next(
-            (
-                player_row
-                for player_row in self.player_rows
-                if player_row["account"] == account
-            ),
+            (player_row for player_row in self.player_rows if player_row["account"] == account),
             None,
         )
         if row is None:
@@ -1136,15 +993,9 @@ class ServerTransferHelper(WorkerHelperWindow):
             self.status.setText(f"Cannot read Steam accounts: {exc}")
             return
 
-        account_names = {
-            str(steam_account.get("account_name", "")).strip()
-            for steam_account in accounts
-            if isinstance(steam_account, dict)
-        }
+        account_names = {str(steam_account.get("account_name", "")).strip() for steam_account in accounts if isinstance(steam_account, dict)}
         if selected not in account_names:
-            self.status.setText(
-                f"Steam account is no longer present in loginusers.vdf: {selected}"
-            )
+            self.status.setText(f"Steam account is no longer present in loginusers.vdf: {selected}")
             return
 
         self.switching_player_steam = True
@@ -1222,16 +1073,9 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _start_steam_issue_map(self, players: dict, start_account: int):
         """Return Steam issues that should block this start attempt."""
-        issues = {
-            index: list(values)
-            for index, values in self._player_steam_issue_map(players).items()
-        }
+        issues = {index: list(values) for index, values in self._player_steam_issue_map(players).items()}
         if start_account > 1 and 0 in issues:
-            issues[0] = [
-                issue
-                for issue in issues[0]
-                if issue != PLAYER_ONE_STEAM_MISMATCH_MESSAGE
-            ]
+            issues[0] = [issue for issue in issues[0] if issue != PLAYER_ONE_STEAM_MISMATCH_MESSAGE]
             if not issues[0]:
                 issues.pop(0)
         return issues
@@ -1241,11 +1085,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         dialog = CyberDialog(
             self,
             f"Start From Player {start_account}?",
-            (
-                f"Steam is currently logged in as Player {start_account}, not Player 1. "
-                f"Starting now will begin at Player {start_account} and skip earlier "
-                "players for the current pass. Continue?"
-            ),
+            (f"Steam is currently logged in as Player {start_account}, not Player 1. Starting now will begin at Player {start_account} and skip earlier players for the current pass. Continue?"),
             "confirm",
             confirm_text="START",
             cancel_text="CANCEL",
@@ -1255,11 +1095,7 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _player_steam_issue_map(self, players):
         rows = players.get("players", []) if isinstance(players, dict) else []
         issues = {index: [] for index in range(len(rows))}
-        account_names = {
-            str(account.get("account_name", "")).strip()
-            for account in self.steam_accounts
-            if isinstance(account, dict)
-        }
+        account_names = {str(account.get("account_name", "")).strip() for account in self.steam_accounts if isinstance(account, dict)}
         most_recent = most_recent_account_name(self.steam_accounts)
         seen = {}
         for index, player in enumerate(rows):
@@ -1270,31 +1106,21 @@ class ServerTransferHelper(WorkerHelperWindow):
                 issues[index].append("Steam account is required.")
                 continue
             if account_names and account_name not in account_names:
-                issues[index].append(
-                    "Steam account is not available in loginusers.vdf."
-                )
+                issues[index].append("Steam account is not available in loginusers.vdf.")
             if account_name in seen:
-                issues[index].append(
-                    f"Steam account duplicates player {seen[account_name] + 1}."
-                )
+                issues[index].append(f"Steam account duplicates player {seen[account_name] + 1}.")
             else:
                 seen[account_name] = index
             if index == 0 and most_recent and account_name != most_recent:
                 issues[index].append(PLAYER_ONE_STEAM_MISMATCH_MESSAGE)
         if self.steam_accounts_error:
             for index in issues:
-                issues[index].append(
-                    f"Steam accounts unavailable: {self.steam_accounts_error}"
-                )
+                issues[index].append(f"Steam accounts unavailable: {self.steam_accounts_error}")
         return {index: values for index, values in issues.items() if values}
 
     def _runtime_player_search_conflicts(self, players):
         conflicts = player_bed_name_search_conflicts(players)
-        return {
-            index: matches
-            for index, matches in conflicts.items()
-            if index < MAX_TRANSFER_RUNTIME_ACCOUNTS
-        }
+        return {index: matches for index, matches in conflicts.items() if index < MAX_TRANSFER_RUNTIME_ACCOUNTS}
 
     def _format_player_search_conflicts(self, conflicts, players):
         rows = players.get("players", [])
@@ -1309,11 +1135,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         return lines
 
     def _settings_from_fields(self):
-        return {
-            key: self._setting_field_value(field)
-            for key, field in self.setting_fields.items()
-            if key != "account_count"
-        }
+        return {key: self._setting_field_value(field) for key, field in self.setting_fields.items() if key != "account_count"}
 
     def _setting_field_value(self, field: object):
         if isinstance(field, NoWheelComboBox):
@@ -1324,9 +1146,7 @@ class ServerTransferHelper(WorkerHelperWindow):
     def _sync_transfer_start_mode_description(self, *_args: object):
         field = self.setting_fields["transfer_start_mode"]
         mode = str(self._setting_field_value(field)).strip()
-        description = TRANSFER_START_MODE_DESCRIPTIONS.get(
-            mode, TRANSFER_START_MODE_DESCRIPTIONS["default"]
-        )
+        description = TRANSFER_START_MODE_DESCRIPTIONS.get(mode, TRANSFER_START_MODE_DESCRIPTIONS["default"])
         field.setToolTip(description)
         if hasattr(self, "transfer_start_mode_label"):
             self.transfer_start_mode_label.setToolTip(description)
@@ -1378,17 +1198,13 @@ class ServerTransferHelper(WorkerHelperWindow):
         if self._persist_dedis():
             target_label = "Destination" if target_side == "destination" else "Resource"
             source_label = "resource" if source_side == "resource" else "destination"
-            self.status.setText(
-                f"{target_label} dedis calculated from {source_label} structure."
-            )
+            self.status.setText(f"{target_label} dedis calculated from {source_label} structure.")
 
     def _calculate_destination_dedis(self):
         self._calculate_dedis_from_same_structure("destination")
 
     def _apply_dedi_route(self, side, route):
-        for row, item in zip(
-            self._dedi_rows_for_side(side), route.get("items", []), strict=False
-        ):
+        for row, item in zip(self._dedi_rows_for_side(side), route.get("items", []), strict=False):
             location = item.get("location", {})
             row["yaw"].setText(str(location.get("yaw", 0.0)))
             row["pitch"].setText(str(location.get("pitch", 0.0)))
@@ -1399,9 +1215,7 @@ class ServerTransferHelper(WorkerHelperWindow):
 
     def _persist_settings(self):
         try:
-            self.config["settings"] = save_transfer_settings(
-                self._settings_from_fields()
-            )
+            self.config["settings"] = save_transfer_settings(self._settings_from_fields())
         except ValueError as exc:
             self.status.setText(str(exc))
             return False
@@ -1476,9 +1290,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         layout.setSpacing(8)
         header = QHBoxLayout()
         expanded = DEFAULT_PANELS_EXPANDED
-        toggle = self._helper_button(
-            "v" if expanded else ">", f"Expand or collapse {title.lower()}"
-        )
+        toggle = self._helper_button("v" if expanded else ">", f"Expand or collapse {title.lower()}")
         toggle.setObjectName("HelperExpandButton")
         label = QLabel(title)
         label.setObjectName("SettingsDividerLabel")
@@ -1496,11 +1308,7 @@ class ServerTransferHelper(WorkerHelperWindow):
         body_layout.setContentsMargins(0, 0, 0, 0)
         body_layout.setSpacing(8)
         body.setVisible(expanded)
-        toggle.clicked.connect(
-            lambda checked=False, target=body, button=toggle: self._toggle_panel(
-                target, button
-            )
-        )
+        toggle.clicked.connect(lambda checked=False, target=body, button=toggle: self._toggle_panel(target, button))
         layout.addWidget(body)
         panel.body_widget = body
         panel.toggle_button = toggle

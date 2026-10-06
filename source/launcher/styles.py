@@ -199,6 +199,11 @@ def launcher_style_sheet():
             border-right: 1px solid {UI_COLORS["border_soft"]};
             border-top-left-radius: {UI_METRICS["radius_lg"]}px;
         }}
+        QScrollArea#GalleryScroll, QScrollArea#GalleryScroll > QWidget,
+        QWidget#GalleryContent {{
+            background: transparent;
+            border: none;
+        }}
         QScrollArea#SettingsScroll {{
             background: transparent;
             border: none;
@@ -533,13 +538,6 @@ def launcher_style_sheet():
         QComboBox#HelperCombo QAbstractItemView::item {{
             min-height: {UI_METRICS["control_height"]}px;
             padding: {UI_METRICS["control_padding"]};
-        }}
-        QLabel#ToolCoverCopy {{
-            color: {COLORS["text"]};
-            font-family: {UI_FONTS["display"]};
-            font-size: {FONT_SIZES["panel_title"]}px;
-            font-weight: 900;
-            background: transparent;
         }}
         QCheckBox {{
             color: {COLORS["text"]};

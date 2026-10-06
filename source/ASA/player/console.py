@@ -37,9 +37,7 @@ def _open_clipboard():
 
 
 def is_open():
-    return template.console_strip_check(
-        template.console_strip_bottom()
-    ) or template.console_strip_check(template.console_strip_middle())
+    return template.console_strip_check(template.console_strip_bottom()) or template.console_strip_check(template.console_strip_middle())
 
 
 def enter_data(data: str):
@@ -128,9 +126,7 @@ def console_ccc(reset_state_before_capture: bool = True):
     attempts = 0
     while data is None:
         attempts += 1
-        logs.logger.debug(
-            f"trying to get ccc data {attempts} / {source.ASA.config.console_ccc_attempts}"
-        )
+        logs.logger.debug(f"trying to get ccc data {attempts} / {source.ASA.config.console_ccc_attempts}")
         if reset_state_before_capture:
             player_state.reset_state()  # reset state at the start to make sure we can open up the console window
         count = 0
@@ -156,9 +152,7 @@ def console_ccc(reset_state_before_capture: bool = True):
 
             if not command_entered:
                 if attempts >= source.ASA.config.console_ccc_attempts:
-                    logs.logger.error(
-                        f"CCC could not access the clipboard after {attempts} attempts"
-                    )
+                    logs.logger.error(f"CCC could not access the clipboard after {attempts} attempts")
                     console_reset()
                     break
                 continue
@@ -184,9 +178,7 @@ def console_ccc(reset_state_before_capture: bool = True):
                 data = None
 
         if data is None and attempts >= source.ASA.config.console_ccc_attempts:
-            logs.logger.error(
-                f"CCC is still returning invalid data after {attempts} attempts"
-            )
+            logs.logger.error(f"CCC is still returning invalid data after {attempts} attempts")
             # When somehow console has some weird value command already there, and the compare function of is_open will never return true,
             # then we have to try and open the console with the key press then press Enter to clear that current command
             # so the command console will be clear and ready for the is_open to check again.
@@ -210,9 +202,7 @@ def console_write(text: str):
             console_reset()
 
         if attempts >= source.ASA.config.console_open_attempts:
-            logs.logger.error(
-                f"console didnt open after {attempts} attempts unable to input {text}"
-            )
+            logs.logger.error(f"console didnt open after {attempts} attempts unable to input {text}")
             break
 
     if is_open():
@@ -239,8 +229,6 @@ def close_console(middle):
     utils.press_key("Enter")
 
     if middle:
-        logs.logger.warning(
-            "middle console open if this is happening alot something should be changed"
-        )
+        logs.logger.warning("middle console open if this is happening alot something should be changed")
         time.sleep(0.1)
         utils.press_key("Enter")

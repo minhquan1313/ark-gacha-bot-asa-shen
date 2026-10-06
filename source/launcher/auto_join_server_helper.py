@@ -55,10 +55,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.worker_finished.connect(self._on_worker_finished)
 
     def _build_ui(self):
-        self.description = QLabel(
-            "Enter a server number and this tool will retry the existing join flow "
-            "until the player is back in-server or you stop it."
-        )
+        self.description = QLabel("Enter a server number and this tool will retry the existing join flow until the player is back in-server or you stop it.")
         self.description.setObjectName("MutedCopy")
         self.description.setWordWrap(True)
         self.content_layout.addWidget(self.description)
@@ -73,11 +70,7 @@ class AutoJoinServerHelper(WorkerHelperWindow):
         self.server_field.setEditable(True)
         self.server_field.setPlaceholderText(settings.server_number)
         self.server_field.addItems(load_auto_join_servers())
-        initial_server = (
-            self.server_field.itemText(self.server_field.count() - 1)
-            if self.server_field.count()
-            else settings.server_number
-        )
+        initial_server = self.server_field.itemText(self.server_field.count() - 1) if self.server_field.count() else settings.server_number
         self.server_field.setCurrentText(initial_server)
         self.server_field.item_remove_requested.connect(self._delete_saved_server)
         line_edit = self.server_field.lineEdit()

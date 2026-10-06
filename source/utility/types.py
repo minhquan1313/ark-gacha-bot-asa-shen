@@ -6,6 +6,13 @@ class ObjectAim(TypedDict):
     pitch: float
 
 
+class ObjectTurn(TypedDict, total=False):
+    up: float
+    down: float
+    left: float
+    right: float
+
+
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 
@@ -49,6 +56,7 @@ class CrafterStorageState(DediStorageState):
 
 
 class CraftRoute(DepositRouteBase):
+    delay: int
     crafters: list[CrafterStorageState]
 
 

@@ -73,18 +73,12 @@ def main():
 
 
 if __name__ == "__main__":
-    root = (
-        Path(sys.executable).resolve().parent
-        if getattr(sys, "frozen", False)
-        else Path(__file__).resolve().parent
-    )
+    root = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
     # Windowed Python and packaged executables have no console streams.
     if sys.stdout is None or sys.stderr is None:
         log_directory = root / "source" / "logs"
         log_directory.mkdir(parents=True, exist_ok=True)
-        startup_log = (log_directory / "launcher_startup.log").open(
-            "a", encoding="utf-8", buffering=1
-        )
+        startup_log = (log_directory / "launcher_startup.log").open("a", encoding="utf-8", buffering=1)
         if sys.stdout is None:
             sys.stdout = startup_log
         if sys.stderr is None:

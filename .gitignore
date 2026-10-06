@@ -1,4 +1,5 @@
 /venv
+.artifacts/
 .update_check.json
 .update_check.json.*.tmp
 launcher_logs/
@@ -18,3 +19,6 @@ logs.txt
 plan.drawio
 source/logs/launcher_startup.log
 source/logs/updater.log
+
+json_files/*
+!json_files/template_settings/

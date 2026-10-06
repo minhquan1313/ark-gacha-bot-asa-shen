@@ -30,9 +30,7 @@ def get_pixel_loc(location):
 
 
 def is_server_full():
-    return recon_utils.check_template_no_bounds(
-        "server_full", 0.7
-    ) or recon_utils.check_template_no_bounds("server_full_2", 0.7)
+    return recon_utils.check_template_no_bounds("server_full", 0.7) or recon_utils.check_template_no_bounds("server_full_2", 0.7)
 
 
 def is_red_fail():

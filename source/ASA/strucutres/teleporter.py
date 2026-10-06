@@ -10,9 +10,7 @@ from source.logs import gachalogs as logs
 from source.utility import template, utils, utils_simple, variables, windows
 
 _last_teleporter_name: str = ""
-_suicide_recovery_allowed = ContextVar(
-    "teleporter_suicide_recovery_allowed", default=True
-)
+_suicide_recovery_allowed = ContextVar("teleporter_suicide_recovery_allowed", default=True)
 
 
 @contextmanager
@@ -27,10 +25,7 @@ def prevent_suicide_recovery():
 
 def _stop_for_manual_recovery(reason: str):
     """Return to the main menu and stop without destructive teleport recovery."""
-    message = (
-        f"Teleport stopped: {reason}. Manual recovery required; "
-        "suicide recovery is disabled."
-    )
+    message = f"Teleport stopped: {reason}. Manual recovery required; suicide recovery is disabled."
     logs.logger.error(message)
     try:
         console.console_exit_mainmenu()
@@ -55,9 +50,7 @@ def open():
 
     while not is_open() and not dl():
         attempts += 1
-        logs.logger.debug(
-            f"trying to open teleporter {attempts} / {source.ASA.config.teleporter_open_attempts}"
-        )
+        logs.logger.debug(f"trying to open teleporter {attempts} / {source.ASA.config.teleporter_open_attempts}")
 
         dl2 = utils_simple.get_default_clock(3)
         while not dl2() and not is_open():
@@ -77,9 +70,7 @@ def open():
             return True
 
         if dl():
-            logs.logger.error(
-                f"unable to open up the teleporter after {source.ASA.config.teleporter_open_attempts} attempts, eating implant and trying to reset"
-            )
+            logs.logger.error(f"unable to open up the teleporter after {source.ASA.config.teleporter_open_attempts} attempts, eating implant and trying to reset")
             if not allow_suicide:
                 _stop_for_manual_recovery("teleporter did not open")
 
@@ -105,9 +96,7 @@ def close():
 
     while is_open():
         attempts += 1
-        logs.logger.debug(
-            f"trying to close the teleporter {attempts} / {source.ASA.config.teleporter_close_attempts}"
-        )
+        logs.logger.debug(f"trying to close the teleporter {attempts} / {source.ASA.config.teleporter_close_attempts}")
         windows.click(
             variables.get_pixel_loc("back_button_tp_x"),
             variables.get_pixel_loc("back_button_tp_y"),
@@ -117,9 +106,7 @@ def close():
             return time.sleep(0.3)
 
         if attempts >= source.ASA.config.teleporter_close_attempts:
-            logs.logger.error(
-                f"unable to close the teleporter after {source.ASA.config.teleporter_close_attempts} attempts"
-            )
+            logs.logger.error(f"unable to close the teleporter after {source.ASA.config.teleporter_close_attempts} attempts")
             break
 
 
@@ -147,9 +134,7 @@ def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
     if not player_state.human.on_tp:
         # I'm not sure when this if will be called, but I'll keep it here because the original code already include it
         if not allow_suicide:
-            _stop_for_manual_recovery(
-                "reaching the teleporter requires bed fast travel"
-            )
+            _stop_for_manual_recovery("reaching the teleporter requires bed fast travel")
         look_down_teleport()
         bed.fast_travel(fallback_bed_name)
         time.sleep(0.2)
@@ -165,9 +150,7 @@ def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
         while True:
             if dl():
                 if not allow_suicide:
-                    _stop_for_manual_recovery(
-                        "teleporter destination list did not load"
-                    )
+                    _stop_for_manual_recovery("teleporter destination list did not load")
                 player_state.reset_state()
                 time.sleep(0.3)
 
@@ -194,18 +177,14 @@ def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
                     detected = True
                     break
                 else:
-                    logs.logger.warning(
-                        "orange pixel for teleporter ready not found - list not loaded"
-                    )
+                    logs.logger.warning("orange pixel for teleporter ready not found - list not loaded")
                     if allow_suicide:
                         player_state.check_disconnected()
 
             if detected:
                 break
 
-            time.sleep(
-                0.3
-            )  # preventing the orange text from the starting teleport screen messing things up
+            time.sleep(0.3)  # preventing the orange text from the starting teleport screen messing things up
 
         counter = 0
         while template.check_template_no_bounds("search", 0.7):
@@ -216,6 +195,7 @@ def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
                 variables.get_pixel_loc("search_bar_bed_y"),
             )  # im lazy this is the same position as the teleporter search bar
 
+            logs.logger.debug(f'Writing "{teleporter_name}" to search')
             utils.ctrl_a()
             utils.write(teleporter_name)
             time.sleep(0.5)
@@ -229,16 +209,11 @@ def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
                 variables.get_pixel_loc("first_bed_slot_x"),
                 variables.get_pixel_loc("first_bed_slot_y"),
             )
-            if (
-                template.template_await_true(template.check_teleporter_orange, 0.5)
-                or dl()
-            ):
+            if template.template_await_true(template.check_teleporter_orange, 0.5) or dl():
                 break
 
         if not template.check_teleporter_orange():
-            logs.logger.warning(
-                "orange pixel for teleporter ready not found likely already on the tp we are just exiting the tp treating it as the tp we should be on"
-            )
+            logs.logger.warning("orange pixel for teleporter ready not found likely already on the tp we are just exiting the tp treating it as the tp we should be on")
             close()  # closing out as either the TP couldnt be found however we still want to change to the station yaw so we still continue
         else:
             windows.click(
@@ -260,8 +235,6 @@ def teleport_not_default(teleporter_name: str, fallback_bed_name=None):
             close()
             time.sleep(0.5)
             # DONE
-        if (
-            settings.singleplayer
-        ):  # single player for some reason changes view angles when you tp
+        if settings.singleplayer:  # single player for some reason changes view angles when you tp
             utils.current_pitch = 0
             look_down_teleport()

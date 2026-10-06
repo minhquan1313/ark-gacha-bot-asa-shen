@@ -81,9 +81,7 @@ def template_await_false(func, sleep_amount: float, *args):
 
 
 def get_region_roi(region):
-    return screen.get_screen_roi(
-        region["start_x"], region["start_y"], region["width"], region["height"]
-    )
+    return screen.get_screen_roi(region["start_x"], region["start_y"], region["width"], region["height"])
 
 
 def check_template(item: RoiRegionReconKey, threshold: float):
@@ -110,11 +108,7 @@ def check_template(item: RoiRegionReconKey, threshold: float):
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    if IS_DEBUG and (
-        DEBUG_ITEM is None
-        or item == DEBUG_ITEM
-        or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)
-    ):
+    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)):
         import winsound
         from pathlib import Path
 
@@ -178,11 +172,7 @@ def check_template_no_bounds(item: RoiRegionReconKey, threshold: float):
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     # DEBUG
-    if IS_DEBUG and (
-        DEBUG_ITEM is None
-        or item == DEBUG_ITEM
-        or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)
-    ):
+    if IS_DEBUG and (DEBUG_ITEM is None or item == DEBUG_ITEM or (isinstance(DEBUG_ITEM, list) and item in DEBUG_ITEM)):
         import winsound
         from pathlib import Path
 
@@ -232,9 +222,7 @@ def template_sleep(template: RoiRegionReconKey, threshold: float, sleep_amount: 
     return check_template(template, threshold)
 
 
-def template_sleep_no_bounds(
-    template: RoiRegionReconKey, threshold: float, sleep_amount: float
-):
+def template_sleep_no_bounds(template: RoiRegionReconKey, threshold: float, sleep_amount: float):
     count = 0
     while not check_template_no_bounds(template, threshold):
         if count >= sleep_amount * 10:  #  seconds of sleep
@@ -245,9 +233,7 @@ def template_sleep_no_bounds(
 
 
 # oposite of the function above mainly to check if inventory is still open
-def window_still_open(
-    template: RoiRegionReconKey, threshold: float, sleep_amount: float
-):
+def window_still_open(template: RoiRegionReconKey, threshold: float, sleep_amount: float):
     count = 0
     while check_template(template, threshold):
         if count >= sleep_amount * 10:  #  seconds of sleep
@@ -258,9 +244,7 @@ def window_still_open(
 
 
 # oposite of the function above mainly to check if inventory is still open
-def window_still_open_no_bounds(
-    template: RoiRegionReconKey, threshold: float, sleep_amount: float
-):
+def window_still_open_no_bounds(template: RoiRegionReconKey, threshold: float, sleep_amount: float):
     count = 0
     while check_template_no_bounds(template, threshold):
         if count >= sleep_amount * 10:  #  seconds of sleep

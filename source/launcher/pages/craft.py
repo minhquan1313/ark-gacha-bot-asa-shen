@@ -1,18 +1,31 @@
+from functools import partial
+
+from PySide6.QtWidgets import QFrame, QLineEdit, QPushButton
+
 from source.gacha_bot.craft_config import (
     default_craft_route,
     default_crafter,
     load_craft_config,
     save_craft_config,
 )
+from source.launcher.components.dedi_editor import DediRouteEditor
+from source.launcher.components.settings_actions import SettingsHoverActions
+from source.launcher.components.settings_sections import (
+    RouteSettingsRow,
+    SettingsActionButton,
+    SettingsSectionCard,
+    SettingsSubheading,
+    settings_icon,
+    settings_label,
+)
 from source.launcher.pages.common import (
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
     QWidget,
-    _counted_title,
     default_dedi_item,
-    setting_label,
 )
+from source.launcher.settings_theme import ENTRY_ROW_GAP, ENTRY_ROW_PADDING_Y
 
 
 class CraftPagesMixin:
@@ -28,111 +41,141 @@ class CraftPagesMixin:
             self.dialog("Invalid Craft Config", str(exc), "error")
 
     def _render_craft_group(self):
-        """Build the Craft settings page using the existing route controls."""
+        """Present Craft as one approved cover section with independently timed entries."""
         self._ensure_craft_config()
-        if not hasattr(self, "deposit_route_card_expanded"):
-            self.deposit_route_card_expanded = {}
         routes = self.craft_config["generalCraftData"]
-        heading = QLabel(_counted_title("CRAFT SETTINGS", len(routes)))
-        heading.setObjectName("SectionHeading")
-        self.settings_form_layout.addWidget(heading, 0, 0, 1, 3)
-        state, template_name, error = self._add_template_selector("CRAFT")
+        previous = getattr(self, "_craft_expanded", {})
+        self._craft_expanded = {id(route): previous.get(id(route), (route, False)) for route in routes}
+        outer, state = self._approved_settings_content("CRAFT")
         content = QWidget()
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
-        self.settings_form_layout.addWidget(content, 1, 0, 1, 4)
-        self._style_template_collection(content, state, template_name, error)
-        title = QLabel(_counted_title("GENERAL CRAFT", len(routes)))
-        title.setObjectName("PanelTitle")
-        layout.addWidget(title)
-        delay = QHBoxLayout()
-        delay_label = QLabel(setting_label("craft_delay"))
-        delay_label.setObjectName("FormLabel")
-        delay.addWidget(delay_label)
-        delay.addWidget(
-            self._setting_field_container(
-                self._setting_field("craft_delay"),
-                state,
-                template_name,
-                error,
-                True,
-            ),
-            1,
+        outer.addWidget(content)
+        self._style_template_collection(content, *state)
+        section = SettingsSectionCard(
+            f"Craft settings ({len(routes)})",
+            "Manage your crafting automation settings.",
+            "craft",
+            "craft",
         )
-        layout.addLayout(delay)
-        for index, route in enumerate(routes):
-            layout.addWidget(self._craft_route_card(route, index))
-        add = self._button("ADD CRAFT", "secondary")
+        add = SettingsActionButton("Add craft", "plus")
         add.clicked.connect(self.add_craft_route)
-        layout.addWidget(add)
-        layout.addStretch()
+        section.header.layout().addWidget(SettingsHoverActions(section, add, "Add craft", "Craft actions"))
+        for index, route in enumerate(routes):
+            section.body.addWidget(self._craft_route_card(route, index))
+        if not routes:
+            section.body.addWidget(settings_label("No craft entries configured. Use Add craft to create one."))
+        layout.addWidget(section)
 
     def _craft_route_card(self, route: dict, index: int):
-        """Edit crafters sharing a teleport and crafted-item dedicated storage."""
-        card, layout = self._deposit_route_card(
-            _counted_title(
-                f"CRAFT {index + 1}",
-                len(route["dedi"]["items"]) + len(route["crafters"]),
-            ),
-            lambda checked=False, i=index: self.remove_craft_route(i),
-            lambda checked=False, i=index: self.open_deposit_helper("craft", i),
+        """Reuse summary, coordinate editors and existing Craft callbacks."""
+
+        def expanded(checked: bool):
+            """Retain expansion without depending on an editable teleport name."""
+            self._craft_expanded[id(route)] = (route, checked)
+
+        card = DediRouteEditor(
+            route,
+            "craft",
+            index,
+            self._craft_expanded[id(route)][1],
+            expanded,
+            lambda checked=False: self.open_deposit_helper("craft", index),
+            lambda checked=False: self.remove_craft_route(index),
         )
-        self._add_route_teleport_field(layout, route)
-        self._add_route_check_interval_field(layout, route)
-        self._add_deposit_subheading(layout, "CRAFTERS", len(route["crafters"]))
+        body = card.body_layout
+        body.addWidget(SettingsSubheading("Settings", "sliders"))
+        settings = RouteSettingsRow(
+            [
+                self._dedi_editor_field(route, "teleport", "Teleport", self.update_deposit_text, card),
+                self._dedi_editor_field(route, "delay", "Delay", self.update_craft_delay, card),
+                self._dedi_editor_field(
+                    route,
+                    "check_on_every_dedi",
+                    "Check dedi",
+                    self.update_deposit_int,
+                    card,
+                ),
+            ]
+        )
+        settings.setObjectName("CraftEntrySettings")
+        body.addWidget(settings)
+        crafter_panel = QFrame()
+        crafter_panel.setObjectName("DediGrinderCard")
+        crafters = QVBoxLayout(crafter_panel)
+        crafters.setContentsMargins(12, 10, 12, 10)
+        crafters.setSpacing(ENTRY_ROW_GAP)
+        crafters.addWidget(SettingsSubheading(f"Crafters ({len(route['crafters'])})", "craft"))
         for crafter_index, crafter in enumerate(route["crafters"]):
-            crafter_label = QLabel(f"CRAFTER {crafter_index + 1}")
-            crafter_label.setObjectName("FormLabel")
-            layout.addWidget(crafter_label)
-            aim = QHBoxLayout()
-            self._add_yaw_pitch_fields(aim, crafter)
-            aim.addWidget(self._crouch_switch(crafter))
-            remove = self._icon_button("icon.trash_junk", "Remove crafter", "danger")
-            remove.clicked.connect(
-                lambda checked=False, r=index, i=crafter_index: self.remove_crafter(
-                    r, i
-                )
+            wrapper = QFrame()
+            wrapper.setObjectName("CraftCrafter")
+            rows = QVBoxLayout(wrapper)
+            rows.setContentsMargins(0, 0, 0, ENTRY_ROW_PADDING_Y)
+            rows.setSpacing(0)
+            aim = self._dedi_point_editor(
+                crafter,
+                crafter_index,
+                partial(self.remove_crafter, index, crafter_index),
             )
-            aim.addWidget(remove)
-            layout.addLayout(aim)
+            aim.separator = False
+            for button in aim.findChildren(QPushButton):
+                button.setToolTip("Remove crafter")
+            rows.addWidget(aim)
             item_row = QHBoxLayout()
-            item_label = QLabel("Craft:")
-            item_label.setObjectName("FormLabel")
-            item_row.addWidget(item_label)
-            field = self._deposit_line_edit(crafter["item"])
-            field.editingFinished.connect(
-                lambda value=crafter, editor=field: self.update_deposit_text(
-                    value, "item", editor
-                )
-            )
-            item_row.addWidget(field, 1)
-            layout.addLayout(item_row)
-        add_crafter = self._button("ADD CRAFTER", "secondary")
-        add_crafter.clicked.connect(lambda checked=False, i=index: self.add_crafter(i))
-        layout.addWidget(add_crafter)
-        self._add_deposit_subheading(
-            layout, "CRAFTED ITEMS DEDIS", len(route["dedi"]["items"])
-        )
+            item_row.setContentsMargins(28, 0, 8, 0)
+            item_row.setSpacing(8)
+            symbol = QLabel()
+            symbol.setPixmap(settings_icon("cube").pixmap(24, 24))
+            symbol.setFixedSize(34, 24)
+            item_row.addWidget(symbol)
+            item_field = self._dedi_editor_field(crafter, "item", "Craft", self.update_deposit_text)
+            item_field.label.setFixedWidth(40)
+            item_row.addWidget(item_field, 1)
+            rows.addLayout(item_row)
+            if crafter_index:
+                separator = QFrame()
+                separator.setFixedHeight(1)
+                separator.setStyleSheet("background: #14516A; border: none;")
+                crafters.addWidget(separator)
+            crafters.addWidget(wrapper)
+        add_crafter = SettingsActionButton("Add crafter", "plus")
+        add_crafter.clicked.connect(lambda checked=False: self.add_crafter(index))
+        crafters.addWidget(add_crafter)
+        body.addWidget(crafter_panel)
+        body.addWidget(SettingsSubheading("Dedi", "cube"))
+        dedis = QVBoxLayout()
+        dedis.setSpacing(ENTRY_ROW_GAP)
         for item_index, item in enumerate(route["dedi"]["items"]):
-            layout.addLayout(
-                self._dedi_row(
-                    item,
-                    lambda checked=False, r=index, i=item_index: self.remove_craft_dedi(
-                        r, i
-                    ),
-                )
-            )
-        add = self._button("ADD DEDI", "secondary")
-        add.clicked.connect(lambda checked=False, i=index: self.add_craft_dedi(i))
-        layout.addWidget(add)
+            dedis.addWidget(self._dedi_point_editor(item, item_index, partial(self.remove_craft_dedi, index, item_index)))
+        body.addLayout(dedis)
+        add = SettingsActionButton("Add dedi", "plus")
+        add.clicked.connect(lambda checked=False: self.add_craft_dedi(index))
+        body.addWidget(add)
         return card
+
+    def update_craft_delay(self, route: dict, key: str, field: QLineEdit):
+        """Validate a non-negative interval and restore the editor on save failure."""
+        previous = route[key]
+        try:
+            value = int(field.text())
+            if value < 0:
+                raise ValueError
+        except ValueError:
+            field.setText(str(previous))
+            self.dialog(
+                "Invalid Craft Delay",
+                "Delay must be a non-negative integer in seconds.",
+                "error",
+            )
+            return
+        route[key] = value
+        if not self.save_craft_routes():
+            route[key] = previous
+            field.setText(str(previous))
 
     def add_crafter(self, index: int):
         """Add another crafter at the entry's shared teleport."""
-        self.craft_config["generalCraftData"][index]["crafters"].append(
-            default_crafter()
-        )
+        self.craft_config["generalCraftData"][index]["crafters"].append(default_crafter())
         self.save_craft_routes()
         self._render_settings_group("CRAFT")
 
@@ -167,9 +210,7 @@ class CraftPagesMixin:
 
     def add_craft_dedi(self, index: int):
         """Append an output dedi to one crafter."""
-        self.craft_config["generalCraftData"][index]["dedi"]["items"].append(
-            default_dedi_item()
-        )
+        self.craft_config["generalCraftData"][index]["dedi"]["items"].append(default_dedi_item())
         self.save_craft_routes()
         self._render_settings_group("CRAFT")
 

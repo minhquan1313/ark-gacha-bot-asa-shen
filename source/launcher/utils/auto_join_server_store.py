@@ -54,9 +54,7 @@ def load_auto_join_afk_join(path: str | Path = AUTO_JOIN_SERVER_FILE):
     return value if isinstance(value, bool) else DEFAULT_AFK_JOIN
 
 
-def save_auto_join_servers(
-    servers: list[str], path: str | Path = AUTO_JOIN_SERVER_FILE
-):
+def save_auto_join_servers(servers: list[str], path: str | Path = AUTO_JOIN_SERVER_FILE):
     """Save normalized, unique auto-join server history."""
     normalized = _normalize_servers(servers)
     afk_join = load_auto_join_afk_join(path)
