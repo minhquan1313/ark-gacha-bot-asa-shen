@@ -8,10 +8,11 @@ from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy, QTextBrowser, QVBoxLayout, QWidget
 
 from source.launcher.components.browser_layout import BROWSER_STYLE
+from source.launcher.components.cover_painting import paint_header_overlay
 from source.launcher.components.dashboard import line_icon
 from source.launcher.components.popout import POPOUT_OPEN_MS, AnimatedPopout
 from source.launcher.components.settings_sections import SettingsActionButton
-from source.launcher.config.constants import ASSETS
+from source.launcher.config.constants import ABOUT_OVERLAY_COLOR, ABOUT_OVERLAY_STOPS, ASSETS
 from source.launcher.dashboard_theme import PALETTE, asset_path
 
 # Shared contour geometry, in logical pixels.
@@ -52,6 +53,7 @@ class IllustratedPanel(QFrame):
     def __init__(self, slot: str, fallback: str):
         """Build the widgets and keep callbacks connected to existing application behavior."""
         super().__init__()
+        self.artwork_slot = slot
         path = asset_path(ASSETS[slot])
         self.art = QPixmap(path if Path(path).is_file() else asset_path(ASSETS[fallback]))
         self._cache = None
@@ -108,6 +110,15 @@ class IllustratedPanel(QFrame):
         path.closeSubpath()
         return path
 
+    def _paint_artwork_overlay(self, painter: QPainter):
+        """Apply the independently configured top-to-bottom artwork dimming stops."""
+        shade = QLinearGradient(0, 0, 0, self.height())
+        for position, opacity in ABOUT_OVERLAY_STOPS[self.artwork_slot]:
+            color = QColor(ABOUT_OVERLAY_COLOR)
+            color.setAlphaF(opacity)
+            shade.setColorAt(position, color)
+        painter.fillRect(self.rect(), shade)
+
     def paintEvent(self, event: QEvent):
         """Paint cached artwork or current animation progress without changing layout."""
         position = self._prepare_art()
@@ -117,10 +128,7 @@ class IllustratedPanel(QFrame):
         p.setClipPath(path)
         p.fillRect(self.rect(), QColor("#03111b"))
         p.drawPixmap(position, self.scaled)
-        shade = QLinearGradient(0, 0, 0, self.height())
-        shade.setColorAt(0, QColor(0, 9, 16, 155))
-        shade.setColorAt(1, QColor(0, 9, 16, 235))
-        p.fillRect(self.rect(), shade)
+        self._paint_artwork_overlay(p)
         p.setClipping(False)
         p.setPen(QPen(QColor(PALETTE["cyan"]), 1))
         p.drawPath(path)
@@ -129,9 +137,13 @@ class IllustratedPanel(QFrame):
 class AboutHero(IllustratedPanel):
     """An integrated curved lower extension aligned with the real panel gap."""
 
+    def _paint_artwork_overlay(self, painter: QPainter):
+        """Match Settings and browser headers while preserving the curved clip."""
+        paint_header_overlay(painter, QRectF(self.rect()))
+
     def __init__(self):
         """Build the widgets and keep callbacks connected to existing application behavior."""
-        super().__init__("about.hero", "settings.breadcrumb")
+        super().__init__("about.breadcrumb", "settings.breadcrumb")
         self.dip_center = 0.0
         self.setFixedHeight(128)
         box = QVBoxLayout(self)
@@ -168,7 +180,7 @@ class AboutHero(IllustratedPanel):
         p.setClipPath(path)
         p.fillRect(self.rect(), QColor("#03111b"))
         p.drawPixmap(position, self.scaled)
-        p.fillRect(self.rect(), QColor(0, 9, 16, 155))
+        self._paint_artwork_overlay(p)
         p.setClipping(False)
         p.setPen(QPen(QColor(PALETTE["cyan"]), 1))
         p.drawPath(path)
@@ -503,7 +515,7 @@ class CombinedAboutPage(QWidget):
         self.scroll.setWidget(self.content)
         self.scroll.viewport().installEventFilter(self)
         self.left = IllustratedPanel("about.update", "settings.render")
-        self.right = IllustratedPanel("about.illustration", "settings.server")
+        self.right = IllustratedPanel("about.about", "settings.server")
         for panel in (self.left, self.right):
             panel.setParent(self.content)
         self.left_heading = self._heading(self.left, "update", "System Update", "Keep your Shen GBot up to date")
@@ -584,7 +596,7 @@ class CombinedAboutPage(QWidget):
         row.setSpacing(14)
         row.addWidget(symbol(icon, 38))
         copy = QVBoxLayout()
-        copy.setSpacing(2)
+        copy.setSpacing(0)
         copy.addWidget(label(title, "heading"))
         sub = label(subtitle, "muted")
         copy.addWidget(sub)

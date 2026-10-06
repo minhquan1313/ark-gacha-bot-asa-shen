@@ -77,7 +77,7 @@ class SettingsUnitControl(QWidget):
 
 
 class CoverFrame(QFrame):
-    """Render a subdued crop inside a frame whose layout determines its size."""
+    """Cover the header with proportional artwork, cropping overflow centrally."""
 
     def __init__(self, cover: str):
         super().__init__()
@@ -100,9 +100,6 @@ class CoverFrame(QFrame):
             selected = ASSETS["dashboard"]
         self.cover_asset = selected
         self.art = QPixmap(asset_path(selected))
-        if selected == ASSETS["dashboard"] and not self.art.isNull():
-            # Use a quiet city crop without the tool covers' baked-in titles.
-            self.art = self.art.copy(20, 20, round(self.art.width() * 0.48), self.art.height() - 40)
         self._cache_key = None
         self._scaled = QPixmap()
 
@@ -125,8 +122,8 @@ class CoverFrame(QFrame):
             self._scaled.setDevicePixelRatio(ratio)
             self._cache_key = key
         position = QPointF(
-            art_bounds.right() - self._scaled.width() / ratio,
-            (art_bounds.height() - self._scaled.height() / ratio) / 2,
+            art_bounds.left() + (art_bounds.width() - self._scaled.width() / ratio) / 2,
+            art_bounds.top() + (art_bounds.height() - self._scaled.height() / ratio) / 2,
         )
         painter = QPainter(self)
         with painted_cover(

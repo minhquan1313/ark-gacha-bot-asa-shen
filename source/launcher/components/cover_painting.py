@@ -8,6 +8,16 @@ from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen,
 from source.launcher.config.constants import COVER_OVERLAY_COLOR, COVER_OVERLAY_STOPS
 
 
+def paint_header_overlay(painter: QPainter, bounds: QRectF):
+    """Apply the shared left-to-right Settings header readability gradient."""
+    shade = QLinearGradient(bounds.topLeft(), bounds.topRight())
+    for stop, opacity in COVER_OVERLAY_STOPS:
+        color = QColor(COVER_OVERLAY_COLOR)
+        color.setAlphaF(opacity)
+        shade.setColorAt(stop, color)
+    painter.fillRect(bounds, shade)
+
+
 @contextmanager
 def painted_cover(
     painter: QPainter,
@@ -60,12 +70,7 @@ def painted_cover(
     painter.setOpacity(1.0)
     if not artwork.isNull():
         painter.drawPixmap(position, artwork)
-    shade = QLinearGradient(artwork_bounds.topLeft(), artwork_bounds.topRight())
-    for stop, opacity in COVER_OVERLAY_STOPS:
-        color = QColor(COVER_OVERLAY_COLOR)
-        color.setAlphaF(opacity)
-        shade.setColorAt(stop, color)
-    painter.fillRect(artwork_bounds, shade)
+    paint_header_overlay(painter, artwork_bounds)
     painter.restore()
     try:
         yield

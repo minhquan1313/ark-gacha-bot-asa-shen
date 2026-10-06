@@ -126,6 +126,7 @@ class task_scheduler(metaclass=SingletonMeta):
         self.emit_queue_snapshot()
 
     def run(self):
+        time.sleep(0.2)  # Allow time for the main thread to focus to ark first(in case of main menu, player not joined server yet)
         while True:
             current_time = time.time()
 

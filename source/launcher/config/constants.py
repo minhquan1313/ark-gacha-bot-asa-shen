@@ -160,19 +160,36 @@ BUTTON_STYLES = {
 
 # Horizontal positions and dark-overlay opacities, both from 0.0 to 1.0.
 # Edit these values to tune all cover/header images together.
-COVER_OVERLAY_STOPS = ((0.0, 0.70), (0.5, 0.50), (1.0, 0.05))
+COVER_OVERLAY_STOPS = ((0.0, 1.00), (0.3, 0.60), (0.5, 0.10), (1.0, 0.00))
 # COVER_OVERLAY_STOPS = ((0.0, 0.50), (0.5, 0.20), (1.0, 0.05))
 COVER_OVERLAY_COLOR = "#03121E"
+
+# About content artwork: (vertical position, dark-overlay opacity), both 0.0–1.0.
+# The About header uses COVER_OVERLAY_STOPS horizontally, like Settings.
+# Position 0 is the top, 1 is the bottom. Opacity 0 leaves art clear; 1 hides it.
+# Add intermediate stops to shape the fade; each image can be tuned independently.
+ABOUT_OVERLAY_COLOR = COVER_OVERLAY_COLOR
+ABOUT_OVERLAY_STOPS = {  # From top to bottom
+    "about.about": ((0.0, 0.0), (0.4, 0.0), (0.8, 0.9), (1.0, 1.0)),
+    "about.update": ((0.0, 0.0), (0.3, 0.0), (0.6, 0.9), (1.0, 1.0)),
+    "about.quote": ((0.0, 8.0), (0.3, 0.8), (0.8, 0.0), (1.0, 0.0)),
+}
 
 TOGGLE_TRANSITION_MS = 220
 
 ASSETS = {
-    "about.hero": "assets/app/image/about/hero.png",
+    "about.breadcrumb": "assets/app/image/about/breadcrumb.png",
     "about.update": "assets/app/image/about/update.png",
-    "about.illustration": "assets/app/image/about/illustration.png",
+    "about.about": "assets/app/image/about/hero.png",
     "about.quote": "assets/app/image/about/quote.png",
     #
     "tools.cover": "assets/app/image/tools.png",
+    "tool.auto_feed": "assets/app/image/auto_feed.png",
+    "tool.auto_fertilizer": "assets/app/image/auto_fertilizer.png",
+    "tool.auto_fishing": "assets/app/image/auto_fishing.png",
+    "tool.auto_join": "assets/app/image/auto_join.png",
+    "tool.switch_steam": "assets/app/image/switch_steam.png",
+    "tool.transfer_server": "assets/app/image/transfer_server.png",
     #
     "btemplates.cover": "assets/app/image/build_templates.png",
     "btemplates.blueprint": "assets/app/image/build_templates_blueprint.svg",
@@ -185,7 +202,7 @@ ASSETS = {
     "settings.breadcrumb": "assets/app/image/settings/breadcrumb.png",
     "settings.breadcrumb.server": "assets/app/image/settings/breadcrumb_server.png",
     "settings.breadcrumb.stations": "assets/app/image/settings/breadcrumb_stations.png",
-    "settings.breadcrumb.pego": "assets/app/image/settings/breadcrumb_pego.png",
+    "settings.breadcrumb.pego": "assets/app/image/settings/breadcrumb_pego.png",  #
     "settings.breadcrumb.dedi": "assets/app/image/settings/breadcrumb_dedi.png",
     "settings.breadcrumb.gacha": "assets/app/image/settings/breadcrumb_gacha.png",
     "settings.breadcrumb.craft": "assets/app/image/settings/breadcrumb_craft.png",
@@ -270,12 +287,6 @@ ASSETS = {
     "icon.double_chevron": "assets/app/icons/double_chevron.svg",
     "icon.chevron_down": "assets/app/icons/chevron_down.svg",
     #
-    "tool.auto_feed": "assets/app/image/auto_feed.png",
-    "tool.auto_fertilizer": "assets/app/image/auto_fertilizer.png",
-    "tool.auto_fishing": "assets/app/image/auto_fishing.png",
-    "tool.auto_join": "assets/app/image/auto_join.png",
-    "tool.switch_steam": "assets/app/image/switch_steam.png",
-    "tool.transfer_server": "assets/app/image/transfer_server.png",
 }
 
 AUTO_KEYS_REPEAT_ACTIONS = ("Fire", "Use", "DropItem", "Crouch", "Jump")
