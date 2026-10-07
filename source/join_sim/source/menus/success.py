@@ -17,7 +17,11 @@ def has_logs():
 
 
 def download():
-    return recon_utils.check_template_no_bounds("download", 0.7)
+    return (
+        recon_utils.check_template_no_bounds("download", 0.7)
+        or recon_utils.check_template_no_bounds("download_1_character", 0.7)
+        or recon_utils.check_template_no_bounds("download_1_character_grey", 0.7)
+    )
 
 
 was_has_logs = False
@@ -28,7 +32,7 @@ def joined_server():
     was_has_logs = False
 
     if bed_spawn() or download():
-        logs.logger.debug("bed spawn or download detected!")
+        logs.logger.debug("Bed spawn or download detected!")
         join_sim.should_click = True
         return True
 
@@ -37,6 +41,6 @@ def joined_server():
     if has_logs():
         join_sim.should_click = True
         was_has_logs = True
-        logs.logger.debug("tribe log detected")
+        logs.logger.debug("Tribe log detected")
         return True
     return False

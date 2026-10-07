@@ -238,6 +238,8 @@ RoiRegionReconKey: TypeAlias = Literal[
     "connection_timeout",
     "search",
     "download",
+    "download_1_character",
+    "download_1_character_grey",
     "beds_title",
     "tribelog_check",
     "network_failure",

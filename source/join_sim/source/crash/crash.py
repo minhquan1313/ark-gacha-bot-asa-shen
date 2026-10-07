@@ -13,19 +13,34 @@ from source.utility import ark_input, template, utils_simple, windows
 crash_process: psutil.Process | None = None
 BATTL_EYE_REQUIRED_WINDOW_TITLE = "BattlEye Required"
 
+was_last_crash_battleye = False
+
+
+def detect_battle_eye():
+    global was_last_crash_battleye
+
+    if windows.find_window_by_title(BATTL_EYE_REQUIRED_WINDOW_TITLE):
+        logs.logger.critical("Detected Battle eye request", stack_info=True)
+        was_last_crash_battleye = True
+        join_sim.should_click = True
+        return True
+    else:
+        return False
+
 
 def detect_crash():
     global crash_process
+    global was_last_crash_battleye
+
     for proc in psutil.process_iter(attrs=["name", "exe"]):
         if proc.info["name"] == "CrashReportClient.exe":
             crash_process = proc
             logs.logger.critical("Crash detected", stack_info=True)
+            was_last_crash_battleye = False
             join_sim.should_click = True
             return True
     try:
-        if windows.find_window_by_title(BATTL_EYE_REQUIRED_WINDOW_TITLE):
-            logs.logger.critical("Crash detected", stack_info=True)
-            join_sim.should_click = True
+        if detect_battle_eye():
             return True
         if not windows.ark_hwnd():
             logs.logger.critical("ARK window was not found; treating as crashed")
@@ -73,7 +88,7 @@ def _process_running(process_name):
 
 def _wait_for_usable_ark_window():
     """Wait until ARK has a valid window, then focus it and skip the intro."""
-    dl = utils_simple.get_default_clock(60)
+    dl = utils_simple.get_default_clock()
     last_error: RuntimeError | None = None
 
     while not dl():

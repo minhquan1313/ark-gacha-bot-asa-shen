@@ -45,6 +45,8 @@ should_click = True
 
 def join_round(server: str):
     global should_click
+    global was_in_mainmenu
+
     if should_click:
         # This click will skip game intro
         ark_input.click(2, 2)
@@ -56,10 +58,9 @@ def join_round(server: str):
 
     if not is_menu():
         time.sleep(0.5)
-        logs.logger.debug("joined server")
+        logs.logger.debug("Maybe joined server...")
         return success.joined_server()  # if we arent in the menu we need to restart
 
-    global was_in_mainmenu
     was_in_mainmenu = True
 
     if not recon_utils.template_await_false(is_logging_in, 10.0):
@@ -75,6 +76,8 @@ def join_round(server: str):
 
     if join_game_menu.click_join_game():
         time.sleep(0.5)
+    if was_logging_in:
+        time.sleep(3)
 
     if multiplayer_menu.join_server(server):
         should_click = False

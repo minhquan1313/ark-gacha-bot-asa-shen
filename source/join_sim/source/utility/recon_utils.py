@@ -28,6 +28,8 @@ location: dict[RoiRegionReconKey, RoiRegion] = {
     "connection_timeout": {"start_x": 768, "start_y": 345, "width": 150, "height": 42},
     "search": {"start_x": 1575, "start_y": 183, "width": 75, "height": 30},
     "download": {"start_x": 400, "start_y": 900, "width": 250, "height": 40},
+    "download_1_character": {"start_x": 325, "start_y": 900, "width": 250, "height": 70},
+    "download_1_character_grey": {"start_x": 325, "start_y": 900, "width": 250, "height": 70},
     "beds_title": {"start_x": 75, "start_y": 75, "width": 555, "height": 135},
     "tribelog_check": {"start_x": 680, "start_y": 26, "width": 574, "height": 113},
     "network_failure": {"start_x": 787, "start_y": 337, "width": 225, "height": 53},

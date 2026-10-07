@@ -6,6 +6,7 @@ from source.ASA.player import console, player_inventory, player_state
 from source.ASA.strucutres import bed, teleporter
 from source.gacha_bot import render
 from source.join_sim.source import main
+from source.join_sim.source.crash import crash
 from source.join_sim.source.menus import success
 from source.logs import gachalogs as logs
 from source.utility import ark_input, template, utils, utils_simple, windows
@@ -217,7 +218,7 @@ def transfer_timer_handle(should_go_tekpod=True):
 
 
 def sign_of_uploaded():
-    return bed.is_open_respawn() or main.is_menu()
+    return bed.is_open_respawn() or main.is_menu() or crash.detect_battle_eye()
 
 
 def do_join_server(server: str, *, should_go_tekpod=True):

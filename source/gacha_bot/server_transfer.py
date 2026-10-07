@@ -11,6 +11,7 @@ from source.ASA.strucutres import bed, inventory, teleporter
 from source.gacha_bot import render
 from source.join_sim.source import main as join_main
 from source.join_sim.source.auto_join import run_auto_join_server
+from source.join_sim.source.crash import crash
 from source.join_sim.source.menus import success
 from source.launcher.ark_game_setup import (
     ARK_PROCESS_NAME,
@@ -28,7 +29,7 @@ from source.launcher.utils.deposit_helper_capture import focus_game_window
 from source.launcher.utils.steam_switch import switch_steam_account
 from source.launcher.utils.system import validate_ark_window
 from source.logs import gachalogs as logs
-from source.utility import template, utils, utils_simple
+from source.utility import template, utils, utils_simple, variables, windows
 from source.utility.structures.dedi import dedi
 from source.utility.structures.transmitter import transmitter
 from source.utility.types import (
@@ -1116,7 +1117,17 @@ def wait_for_bed_screen():
             return True
 
         if success.download():
-            raise RuntimeError("Can't select character to spawn, please fix it yourself")
+            if not crash.was_last_crash_battleye:
+                raise RuntimeError("Can't select character to spawn, please fix it yourself")
+            else:
+                logs.logger.warning("Allow downloading player - crashed due to battle eye shit")
+                while success.download():
+                    windows.click(
+                        variables.get_pixel_loc("download_player_x"),
+                        variables.get_pixel_loc("download_player_y"),
+                    )
+                    time.sleep(0.5)
+                time.sleep(3)
 
         if player_state.check_disconnected():
             dl.reset()
