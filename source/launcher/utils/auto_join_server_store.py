@@ -13,6 +13,9 @@ def _load_data(path: str | Path):
     try:
         with path.open("r", encoding="utf-8") as file:
             data = json.load(file)
+    except FileNotFoundError:
+        _write_data([], DEFAULT_AFK_JOIN, path)
+        return {"last_join": [], "afk_join": DEFAULT_AFK_JOIN}
     except (OSError, UnicodeError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -49,7 +52,7 @@ def load_auto_join_servers(path: str | Path = AUTO_JOIN_SERVER_FILE):
 
 
 def load_auto_join_afk_join(path: str | Path = AUTO_JOIN_SERVER_FILE):
-    """Load the persisted AFK Join preference, defaulting to enabled."""
+    """Load the persisted AFK Join preference, defaulting to disabled."""
     value = _load_data(path).get("afk_join", DEFAULT_AFK_JOIN)
     return value if isinstance(value, bool) else DEFAULT_AFK_JOIN
 

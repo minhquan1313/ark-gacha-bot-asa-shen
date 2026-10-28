@@ -1,12 +1,11 @@
-import json
+from source.launcher.utils.settings_store import load_settings
 
 # TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
 # TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
 # TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
 # TO INPUT SETTINGS RUN MAIN.PY OR GO TO JSON_FILES/SETTINGS.JSON
 
-with open("json_files/settings.json", "r", encoding="utf-8") as f:
-    data = json.load(f)
+data = load_settings()
 
 ping: int = int(data["ping"])
 station_yaw: float = data["station_yaw"]

@@ -76,7 +76,7 @@ def save_gacha_collect_config(entries, path=GACHA_COLLECT_CONFIG_PATH):
 def load_pego_config(path=PEGO_CONFIG_PATH, create_missing=True):
     path = Path(path)
     if not path.exists():
-        entries = [default_pego_entry()]
+        entries = []
         if create_missing:
             save_pego_config(entries, path)
         return entries

@@ -1,10 +1,20 @@
 """Shen GBot launcher UI package."""
 
 import sys
+from importlib import import_module
 
-from source.launcher.components import helper_window
-from source.launcher.utils import deposit_helper_capture, system
+_COMPATIBILITY_MODULES = {
+    "helper_window": "source.launcher.components.helper_window",
+    "deposit_helper_capture": "source.launcher.utils.deposit_helper_capture",
+    "system": "source.launcher.utils.system",
+}
 
-sys.modules.setdefault(__name__ + ".deposit_helper_capture", deposit_helper_capture)
-sys.modules.setdefault(__name__ + ".helper_window", helper_window)
-sys.modules.setdefault(__name__ + ".system", system)
+
+def __getattr__(name: str):
+    """Load legacy module aliases on demand so config imports do not initialize UI."""
+    if name not in _COMPATIBILITY_MODULES:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(_COMPATIBILITY_MODULES[name])
+    globals()[name] = module
+    sys.modules.setdefault(f"{__name__}.{name}", module)
+    return module
