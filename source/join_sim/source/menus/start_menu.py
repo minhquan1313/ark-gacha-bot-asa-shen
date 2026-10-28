@@ -2,7 +2,7 @@ import time
 
 from source.join_sim.source.logs import logger as logs
 from source.join_sim.source.utility import recon_utils
-from source.utility import ark_input, windows
+from source.utility import windows
 
 buttons = {
     "accept_x": 941,
@@ -51,7 +51,8 @@ def click_start():
         time.sleep(0.2)
 
     logs.logger.debug("clicking start")
-    ark_input.click(get_pixel_loc("accept_x"), get_pixel_loc("accept_y"))  # doesnt effect anything for backup
+    windows.move_mouse(2, 2)
+    windows.click(get_pixel_loc("accept_x"), get_pixel_loc("accept_y"))  # doesnt effect anything for backup
     windows.click(get_pixel_loc("start_x"), get_pixel_loc("start_y"))
     recon_utils.window_still_open_no_bounds("join_last_session", 0.7, 1)
     return True

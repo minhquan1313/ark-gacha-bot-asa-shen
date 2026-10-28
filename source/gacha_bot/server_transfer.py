@@ -11,9 +11,11 @@ from source.ASA.strucutres import bed, inventory, teleporter
 from source.gacha_bot import render
 from source.join_sim.source import main as join_main
 from source.join_sim.source.auto_join import run_auto_join_server
+from source.join_sim.source.crash import crash
 from source.join_sim.source.menus import success
 from source.launcher.ark_game_setup import (
     ARK_PROCESS_NAME,
+    kill_running_ark,
     launch_ark_through_steam,
 )
 from source.launcher.config.transfer_helper_config import (
@@ -28,7 +30,7 @@ from source.launcher.utils.deposit_helper_capture import focus_game_window
 from source.launcher.utils.steam_switch import switch_steam_account
 from source.launcher.utils.system import validate_ark_window
 from source.logs import gachalogs as logs
-from source.utility import template, utils, utils_simple
+from source.utility import template, utils, utils_simple, variables, windows
 from source.utility.structures.dedi import dedi
 from source.utility.structures.transmitter import transmitter
 from source.utility.types import (
@@ -43,6 +45,7 @@ from source.utility.types import (
 )
 
 RECOVERABLE_RUNTIME_ATTEMPTS = 3
+STALE_ARK_PROCESS_EXIT_TIMEOUT_SECONDS = 5
 STEAM_DIALOG_BUTTONS = {
     "launch_option_select": {"x": 800, "y": 450},
     "launch_option_checkbox": {"x": 756, "y": 628},
@@ -63,11 +66,20 @@ class TransferTaskTracker:
         self,
         tasks: list[str],
         callback: Callable[[dict], object] | None,
+        destination_dedi_total: int = 0,
     ):
         self.tasks = list(tasks)
         self.callback = callback
         self.next_index = 0
         self.current = ""
+        self.destination_dedi_count = 0
+        self.destination_dedi_total = destination_dedi_total
+
+    def refresh_overlay_title(self, count: int, total: int):
+        """Store and publish title progress without advancing tasks."""
+        self.destination_dedi_count = count
+        self.destination_dedi_total = total
+        self._publish()
 
     def start(self, task: str):
         """Advance to an executed task, discarding skipped branch actions."""
@@ -104,6 +116,8 @@ class TransferTaskTracker:
                 "running": [{"name": self.current}] if self.current else [],
                 "active": [{"name": name, "state": "READY"} for name in upcoming],
                 "waiting": [],
+                "destination_dedi_count": self.destination_dedi_count,
+                "destination_dedi_total": self.destination_dedi_total,
             }
         )
 
@@ -294,7 +308,9 @@ def _run_transfer_helper(
     task_tracker = TransferTaskTracker(
         _pre_plan(settings, players, account_count, start_account),
         task_callback,
+        destination_dedi_total=len(dedis["destination"]["items"]),
     )
+    update_overlay_title(task_tracker, dedis)
 
     # DEBUG START
     # update_global_config(settings, "resource", _bed_name(players, 1))
@@ -477,6 +493,9 @@ def _run_transfer_helper(
                 if deposit_to_transfer_dedis(dedis, multiple_resource) is False:
                     return False
 
+            # Update overlay title such as "TransGBot[3/9]"
+            update_overlay_title(task_tracker, dedis)
+
             """
             Since we already know when all dedi is already withdrawed
             meaning no dedi left to go back to withdraw, if this is the last account
@@ -550,6 +569,8 @@ def _run_transfer_helper(
             # -=-=-=-=-=-=-=-=-=-=-=-=
             task_tracker.start(_transfer_task_label(account, "Enter Tekpod", loop_number=loop_number))
             render.enter_tekpod(allow_eat_implant=False)
+
+    update_overlay_title(task_tracker, dedis)
 
     # Everything is done, now logging back to original account, which is player 1
     if account_count > 1 and should_recovery_at_the_end:
@@ -639,6 +660,7 @@ def _run_transfer_helper(
         # # -=-=-=-=-=-=-=-=-=-=-=-=
         # task_tracker.start(_transfer_task_label(final_account, "Enter Tekpod"))
         # render.enter_tekpod(allow_eat_implant=False)
+
     logs.logger.info("Server transfer helper finished.")
     return True
 
@@ -657,10 +679,37 @@ def ensure_ark_running(
     steam = ui_coords["steam"]
 
     for attempt in range(1, attempts + 1):
-        if not _process_running(ARK_PROCESS_NAME):
-            logs.logger.info("Launching ARK through Steam.")
+        logs.logger.info(f"ARK readiness attempt {attempt}/{attempts}: checking current process state.")
+        if _process_running(ARK_PROCESS_NAME):
+            logs.logger.info("ARK process detected; validating its game window.")
+            try:
+                window_size = validate_ark_window()
+                logs.logger.info("ARK process has a usable game window.")
+                if launched:
+                    return _prepare_ark_window_for_join(window_size, steam)
+                return True
+            except RuntimeError as exc:
+                last_error = exc
+                logs.logger.warning("ARK process has no usable window; ending stale process before launch.")
+                logs.logger.info("Starting stale ARK process termination.")
+                if not kill_running_ark(STALE_ARK_PROCESS_EXIT_TIMEOUT_SECONDS):
+                    logs.logger.warning("Timed out ending stale ARK process; continuing recovery.")
+                else:
+                    logs.logger.info("Stale ARK process termination command completed.")
+                logs.logger.info("Waiting for stale ARK process to leave the process list.")
+                if _wait_for_ark_process_exit(STALE_ARK_PROCESS_EXIT_TIMEOUT_SECONDS):
+                    logs.logger.info("Stale ARK process ended before launch.")
+                else:
+                    logs.logger.warning("Stale ARK process remained after cleanup wait; launching ARK anyway.")
+                logs.logger.info("Dispatching Steam ARK launch command after stale process cleanup.")
+                launch_ark_through_steam()
+                launched = True
+
+        else:
+            logs.logger.info("No ARK process detected; dispatching Steam ARK launch command.")
             launch_ark_through_steam()
             launched = True
+        logs.logger.info(f"Steam ARK launch command dispatched; waiting up to {timeout} seconds for a usable window.")
         dl = utils_simple.get_default_clock(timeout)
         while not dl():
             if _process_running(ARK_PROCESS_NAME):
@@ -694,6 +743,16 @@ def _prepare_ark_window_for_join(
     _minimize_steam_window(steam)
     focus_game_window(center_cursor_when_switching=True)
     time.sleep(1)
+    return True
+
+
+def _wait_for_ark_process_exit(timeout_seconds: float):
+    """Wait briefly for a terminated stale ARK process to leave the process list."""
+    deadline = utils_simple.get_default_clock(timeout_seconds)
+    while _process_running(ARK_PROCESS_NAME):
+        if deadline():
+            return False
+        time.sleep(0.1)
     return True
 
 
@@ -740,6 +799,7 @@ def update_global_config(
     transmitter_teleport = _transfer_transmitter_teleport(dedis, current_server)
 
     utils.was_initialized = False
+    player_state.should_check_buff.force_timed_out()
     global_settings.bed_spawn = bed
     global_settings.ping = int(settings["ping"])
     global_settings.wait_structure_load = float(settings["structure_load_delay"])
@@ -788,7 +848,6 @@ def withdraw_from_transfer_dedis(dedis: TransferDedisConfig, account: int, *, en
     utils.zero_center()
 
     items: list[DediStorageState] = resource_route["items"]
-    almost_full = False
     for index, item in enumerate(items, 1):
         if index in list_of_withdrawed_dedi:
             continue
@@ -802,29 +861,13 @@ def withdraw_from_transfer_dedis(dedis: TransferDedisConfig, account: int, *, en
             return False
         logs.logger.debug(f"{label} transfer withdraw completed")
 
-        if almost_full:
-            # This above the g_last_check_can_transfer, just to make sure
-            # about the case of dedi has less than 300 stack, like 200 stacks
-            # which is not the maximum player can carry each time
+        if not (dedi.was_clear_dedi or dedi.was_last_dedi_empty):
             break
-        if player_inventory.g_last_check_can_transfer:
-            almost_full = True
 
-        list_of_withdrawed_dedi.add(index - 1)
-
-        # Last dedi is here, if it's last dedi and previous dedi already marked as withdrawed / empty
-        is_last_dedi = index == len(items)  # index started at 1(not 0)
-        if not is_last_dedi:
-            continue
-
-        is_last_2_dedi_checked = (index - 1) in list_of_withdrawed_dedi
-
-        if is_last_dedi and is_last_2_dedi_checked and (dedi.was_clear_dedi or dedi.was_last_dedi_empty):
-            # Last dedi didn't have any resource after take all, and cleared
-            list_of_withdrawed_dedi.add(index)
+        list_of_withdrawed_dedi.add(index)
+        if index == len(items):
             is_withdrawed_all = True
             account_detect_withdrawed_all = account
-        # player_state.reset_state()  # Close inv
 
     if not ensure_timer or not player_inventory.g_last_check_can_transfer:
         return True
@@ -843,6 +886,9 @@ def redo_withdraw_ensure_timer(
     dedis: TransferDedisConfig,
     account: int,
 ):
+    global is_withdrawed_all
+    global account_detect_withdrawed_all
+
     resource_route = dedis["resource"]
     route_teleport_name = resource_route["teleport"]
 
@@ -857,6 +903,8 @@ def redo_withdraw_ensure_timer(
                 continue
             else:
                 list_of_withdrawed_dedi.remove(index)
+                is_withdrawed_all = False
+                account_detect_withdrawed_all = None
 
         label = f"Transfer dedi {index}"
         if not dedi.open_deposit_all(route_teleport_name, item):
@@ -867,7 +915,7 @@ def redo_withdraw_ensure_timer(
     return withdraw_from_transfer_dedis(dedis, account, ensure_timer=False, should_teleport=False)
 
 
-def deposit_to_transfer_dedis(dedis: TransferDedisConfig, multiple_resource=False):
+def deposit_to_transfer_dedis(dedis: TransferDedisConfig, multiple_resource: bool = False):
     global list_of_full_dedi
 
     destination_route = dedis["destination"]
@@ -1116,7 +1164,17 @@ def wait_for_bed_screen():
             return True
 
         if success.download():
-            raise RuntimeError("Can't select character to spawn, please fix it yourself")
+            if not crash.was_last_crash_battleye:
+                raise RuntimeError("Can't select character to spawn, please fix it yourself")
+            else:
+                logs.logger.warning("Allow downloading player - crashed due to battle eye shit")
+                while success.download() or not bed.is_open_respawn():
+                    windows.click(
+                        variables.get_pixel_loc("download_player_x"),
+                        variables.get_pixel_loc("download_player_y"),
+                    )
+                    time.sleep(0.5)
+                time.sleep(3)
 
         if player_state.check_disconnected():
             dl.reset()
@@ -1163,3 +1221,9 @@ def _process_running(process_name):
         except (psutil.AccessDenied, psutil.NoSuchProcess):
             continue
     return False
+
+
+def update_overlay_title(task_tracker: TransferTaskTracker, dedis: TransferDedisConfig):
+    """Update overlay title such as "TransGBot[3/9]"."""
+    # The -1 is because the list_of_full_dedi will also contain the current dedi that was partially filled
+    task_tracker.refresh_overlay_title(max(len(list_of_full_dedi) - 1, 0), len(dedis["destination"]["items"]))

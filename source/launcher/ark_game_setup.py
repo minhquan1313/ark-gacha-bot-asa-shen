@@ -233,14 +233,23 @@ def patch_game_settings(settings_path, target_settings: dict[str, str] = TARGET_
     settings_path.write_text("\n".join(updated_lines) + "\n", encoding="utf-8")
 
 
-def kill_running_ark():
-    subprocess.run(
-        ["taskkill", "/f", "/im", ARK_PROCESS_NAME],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
+def kill_running_ark(timeout_seconds: float | None = None):
+    """End all ARK processes, optionally returning after a bounded wait."""
+    command = ["taskkill", "/f", "/im", ARK_PROCESS_NAME]
+    options = {
+        "check": False,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    }
+    if timeout_seconds is None:
+        subprocess.run(command, **options)
+        return True
+    try:
+        subprocess.run(command, timeout=timeout_seconds, **options)
+    except subprocess.TimeoutExpired:
+        return False
+    return True
 
 
 def launch_ark_through_steam():
@@ -269,7 +278,7 @@ def _prepare_and_launch_game(
         keep_primary_display_only()
     original_mode = state["display_mode"]
     apply_display_mode(DisplayMode(width=1920, height=1080, frequency=int(original_mode["frequency"])))
-    kill_running_ark()
+    # kill_running_ark()
     patch_game_settings(settings_path, target_settings)
     if input_path is not None:
         patch_game_settings(input_path, target_input_settings)

@@ -24,6 +24,7 @@ capture_dedi_deposit_grind = capture_for("dedi_deposit_grind", active=CAPTURE_DE
 
 was_clear_dedi = False
 was_last_dedi_empty = False
+was_init_dedi = False
 
 
 def get_pixel_loc(location):
@@ -87,6 +88,9 @@ def _capture_deposit():
 
 
 def ensure_has_resource():
+    global was_init_dedi
+    was_init_dedi = False
+
     if not is_open():
         return
 
@@ -109,6 +113,8 @@ def ensure_has_resource():
 
         # After deposit, change filter back to all(Reset)
         player_inventory.change_filter("all")
+
+        was_init_dedi = True
 
         if template.template_await_true(is_can_deposit, 3):
             return

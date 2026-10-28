@@ -22,6 +22,8 @@ buttons = {
     "red_okay_y": 660,
     "mod_join_x": 525,
     "mod_join_y": 937,
+    "steam_overlay_close_x": 1874,
+    "steam_overlay_close_y": 47,
 }
 
 
@@ -35,6 +37,10 @@ def is_server_full():
 
 def is_red_fail():
     return recon_utils.check_template_no_bounds("red_fail", 0.7)
+
+
+def is_steam_overlay():
+    return recon_utils.check_template_no_bounds("steam_overlay", 0.7)
 
 
 def no_sessions():
@@ -66,6 +72,17 @@ def has_failure(should_go_back=True):
 
         ark_input.click(get_pixel_loc("red_okay_x"), get_pixel_loc("red_okay_y"))
         recon_utils.window_still_open_no_bounds("red_fail", 0.7, 2)
+        time.sleep(0.3)
+
+        if should_go_back:
+            click_go_back()
+        any_failed = True
+
+    if is_steam_overlay():
+        logs.logger.debug("Steam overlay detected")
+
+        ark_input.click(get_pixel_loc("steam_overlay_close_x"), get_pixel_loc("steam_overlay_close_y"))
+        recon_utils.template_await_false(is_steam_overlay, 3)
         time.sleep(0.3)
 
         if should_go_back:

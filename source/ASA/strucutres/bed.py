@@ -19,9 +19,7 @@ def is_open_respawn():
 
 def is_open():
     # bed title is found in both death and fast travel screens and server transfer spawn screen
-    return (
-        template.check_template("beds_title", 0.7) or template.check_template("beds_title_respawn", 0.7)
-    ) and not teleporter.is_open()  # if teleporter is open then we are not in the bed spawn screen
+    return (template.check_template("beds_title", 0.7) or is_open_respawn()) and not teleporter.is_open()  # if teleporter is open then we are not in the bed spawn screen
 
 
 def is_dead():

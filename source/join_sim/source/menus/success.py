@@ -1,6 +1,5 @@
 import time
 
-from source.ASA.player import player_state
 from source.ASA.strucutres import bed
 from source.join_sim.source import main as join_sim
 from source.join_sim.source.logs import logger as logs
@@ -9,7 +8,8 @@ from source.utility import utils
 
 
 def bed_spawn():
-    return bed.is_open() if not player_state.uploaded else bed.is_open_respawn()
+    return bed.is_open_respawn()
+    # return bed.is_open() if not player_state.uploaded else bed.is_open_respawn()
 
 
 def has_logs():
@@ -17,7 +17,11 @@ def has_logs():
 
 
 def download():
-    return recon_utils.check_template_no_bounds("download", 0.7)
+    return (
+        recon_utils.check_template_no_bounds("download", 0.7)
+        or recon_utils.check_template_no_bounds("download_1_character", 0.7)
+        or recon_utils.check_template_no_bounds("download_1_character_grey", 0.7)
+    )
 
 
 was_has_logs = False
@@ -28,7 +32,7 @@ def joined_server():
     was_has_logs = False
 
     if bed_spawn() or download():
-        logs.logger.debug("bed spawn or download detected!")
+        logs.logger.debug("Bed spawn or download detected!")
         join_sim.should_click = True
         return True
 
@@ -37,6 +41,6 @@ def joined_server():
     if has_logs():
         join_sim.should_click = True
         was_has_logs = True
-        logs.logger.debug("tribe log detected")
+        logs.logger.debug("Tribe log detected")
         return True
     return False

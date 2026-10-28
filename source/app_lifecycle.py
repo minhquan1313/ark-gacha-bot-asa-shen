@@ -36,18 +36,15 @@ def cleanup_app_processes(app_id: str):
 
 
 def finish_application(root: Path, app_id: str):
-    """Clean up workers before consuming an update request and relaunching."""
+    """Clean up workers before handing update, setup and restart to the updater."""
     cleanup_app_processes(app_id)
     request = root / ".update_restart.request"
     if not request.exists():
         return
-    command = [sys.executable]
-    if not getattr(sys, "frozen", False):
-        command.append(str(root / "main.py"))
-    command.extend(sys.argv[1:])
+    command = ["cmd.exe", "/d", "/c", "call", str(root / "updater.bat"), "/update"]
     request.unlink()
     try:
-        subprocess.Popen(command, cwd=root)
+        subprocess.Popen(command, cwd=root, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except OSError:
         request.write_text("restart\n", encoding="utf-8")
         raise

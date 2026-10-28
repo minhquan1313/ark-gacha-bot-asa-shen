@@ -1,5 +1,6 @@
 @echo off
-setlocal EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions
+setlocal EnableDelayedExpansion
 
 set "MODE=%~1"
 if /I "%MODE%"=="" set "MODE=/update"
@@ -19,6 +20,11 @@ exit /b %UPDATE_EXIT%
 
 :execute
 cd /d "%~dp0"
+:: Trust this installation for all child Git commands, without changing global config.
+if not defined GIT_CONFIG_COUNT set "GIT_CONFIG_COUNT=0"
+set "GIT_CONFIG_KEY_%GIT_CONFIG_COUNT%=safe.directory"
+set "GIT_CONFIG_VALUE_%GIT_CONFIG_COUNT%=%CD:\=/%"
+set /a GIT_CONFIG_COUNT+=1 >nul
 set "BRANCH=stable_to_play"
 set "REMOTE_URL=https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git"
 
@@ -39,8 +45,9 @@ echo Checking update...
 git fetch origin "%BRANCH%"
 if errorlevel 1 goto :git_error
 
-set "UPDATE_COUNT=0"
+set "UPDATE_COUNT="
 for /f %%C in ('git rev-list --count HEAD..origin/%BRANCH%') do set "UPDATE_COUNT=%%C"
+if not defined UPDATE_COUNT goto :git_error
 
 if /I "%MODE%"=="/check" (
   echo UPDATE_MANIFEST_BEGIN
@@ -56,23 +63,18 @@ if not "!UPDATE_COUNT!"=="0" (
   )
   
   if /I not "%MODE%"=="/update" goto :usage_error
-  ::Revert local changes so git can update smoothly
-  for /f "delims=" %%F in ('git diff --name-only') do (
-    git diff --quiet HEAD..origin/%BRANCH% -- "%%F"
-    if errorlevel 1 (
-      echo Restoring conflicting local file: %%F
-      git restore --worktree --staged -- "%%F"
-      if errorlevel 1 goto :git_error
-    )
-  )
+  :: Save local edits as a backup; leave the stash unapplied to keep the latest code.
+  echo Backing up local changes, if any...
+  git stash push --include-untracked -m "GBot updater backup"
+  if errorlevel 1 goto :git_error
   
   echo Downloading update...
-  git pull origin "%BRANCH%"
+  git merge --ff-only origin/%BRANCH%
   
   if errorlevel 1 goto :git_error
   echo Update complete.
   
-  endlocal & exit /b 0
+  goto :setup_and_restart
 )
 
 if /I "%MODE%"=="/check" (
@@ -81,7 +83,18 @@ if /I "%MODE%"=="/check" (
 )
 if /I not "%MODE%"=="/update" goto :usage_error
 echo Up to date!
-endlocal & exit /b 0
+goto :setup_and_restart
+
+:setup_and_restart
+echo Installing dependencies before restart...
+call "%~dp0setup.bat" /update
+if errorlevel 1 (
+  echo Setup failed. The app was not restarted. See the update log and rerun updater.bat.
+  endlocal & exit /b 1
+)
+call "%~dp0run.bat"
+set "RESTART_EXIT=!ERRORLEVEL!"
+endlocal & exit /b %RESTART_EXIT%
 
 :usage_error
 echo Usage: updater.bat /check or updater.bat /update
@@ -89,5 +102,5 @@ endlocal & exit /b 1
 
 :git_error
 echo.
-echo Update check failed.
+echo Git update operation failed. See the error above.
 endlocal & exit /b 1

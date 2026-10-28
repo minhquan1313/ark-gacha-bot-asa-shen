@@ -6,6 +6,7 @@ from source.ASA.player import console, player_inventory, player_state
 from source.ASA.strucutres import bed, teleporter
 from source.gacha_bot import render
 from source.join_sim.source import main
+from source.join_sim.source.crash import crash
 from source.join_sim.source.menus import success
 from source.logs import gachalogs as logs
 from source.utility import ark_input, template, utils, utils_simple, windows
@@ -79,7 +80,7 @@ def is_server_list_loaded():
     return template.check_template_no_bounds("server_list_trans_loaded", 0.7)
 
 
-def is_server_join_success():
+def is_survivor_uploaded():
     return template.check_template("server_trans_uploaded", 0.9)
 
 
@@ -216,15 +217,15 @@ def transfer_timer_handle(should_go_tekpod=True):
     return True
 
 
-def sign_of_uploaded():
-    return bed.is_open_respawn() or main.is_menu()
+def is_sign_of_transfered():
+    return bed.is_open_respawn() or main.is_menu() or success.download() or crash.detect_battle_eye()
 
 
 def do_join_server(server: str, *, should_go_tekpod=True):
     if not is_open():
         time.sleep(0.5)
         logs.logger.debug("Don't detect transmitter server menu, maybe already joined server, checking...")
-        return success.joined_server()
+        return is_sign_of_transfered()
 
     dl = utils_simple.get_default_clock()
     while is_open() and not is_server_list_loaded() and not dl():
@@ -279,7 +280,7 @@ def do_join_server(server: str, *, should_go_tekpod=True):
         max_click = 2
         # Click join button again
         while not dl2():
-            if template.template_await_true(is_server_join_success, 0.8):
+            if template.template_await_true(is_survivor_uploaded, 0.8):
                 player_state.uploaded = True
                 break
 
@@ -299,7 +300,7 @@ def do_join_server(server: str, *, should_go_tekpod=True):
                 )
 
         if player_state.uploaded:
-            logs.logger.warning("Detected Survival UPLOADED")
+            logs.logger.warning("Detected Survivor UPLOADED")
 
             time.sleep(2)
 
@@ -307,34 +308,38 @@ def do_join_server(server: str, *, should_go_tekpod=True):
                 search_bar_search("Joining...")
                 ark_input.click(2, 2)
 
-            if template.template_await_true(sign_of_uploaded, 30):  # noqa: SIM103
-                # Return False intentionally to trigger one additional verification cycle.
-                return False if bed.is_open_respawn() else True  # noqa: SIM211
-            else:
-                # Return True to exit when the upload succeeded but the destination server never loaded.
-                console.console_exit_mainmenu()
-                template.template_await_true(sign_of_uploaded, 10)
+            dl2 = utils_simple.get_default_clock(30)
+            while not dl2():
+                if is_sign_of_transfered():
+                    # Return False intentionally to trigger one additional verification cycle.
+                    return False if bed.is_open_respawn() else True  # noqa: SIM211
                 time.sleep(0.5)
-                return True
-        elif sign_of_uploaded():
-            logs.logger.warning("Detected Survival UPLOADED")
+
+            # This is when survivor is uploaded but it never load the other map, need to exit to menu to manually rejoin the server.
+            console.console_exit_mainmenu()
+            template.template_await_true(is_sign_of_transfered, 10)
+            time.sleep(0.5)
+            return True
+        elif is_sign_of_transfered():
+            logs.logger.warning("Detected Survivor UPLOADED")
             player_state.uploaded = True
             return True
         else:
             has_failure()
-
             if is_open():
-                windows.click(
-                    *get_pixel_loc("first_server"),
-                )
+                windows.click(*get_pixel_loc("first_server"))
                 time.sleep(0.1)
 
-                windows.click(
-                    *get_pixel_loc("join_button"),
-                )
-            else:
-                break
+                windows.click(*get_pixel_loc("join_button"))
 
     has_failure()
+
+    # In case survivor uploaded but the bot didn't detect it
+    if not dl() and not is_open():
+        if player_state.check_disconnected():
+            return player_state.uploaded
+        if template.template_await_true(is_sign_of_transfered, 30):
+            # Return False intentionally to trigger one additional verification cycle.
+            return False if bed.is_open_respawn() else True  # noqa: SIM211
 
     return False

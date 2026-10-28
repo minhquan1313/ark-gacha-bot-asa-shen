@@ -171,18 +171,35 @@ def close():
 
 
 def search_and_transfer(item: str):
-    if is_open():
+    if not is_open():
+        return
+    search_in_object(item)
+    time.sleep(0.1)
+
+    while is_clear_search():
         search_in_object(item)
         time.sleep(0.1)
 
-        while is_clear_search():
-            search_in_object(item)
-            time.sleep(0.1)
+    transfer_all_from()
 
-        transfer_all_from()
+    wait_clear_search(3)
+    time.sleep(0.1)
 
-        wait_clear_search(3)
+
+def search_and_drop(item: str):
+    if not is_open():
+        return
+    search_in_object(item)
+    time.sleep(0.1)
+
+    while is_clear_search():
+        search_in_object(item)
         time.sleep(0.1)
+
+    drop_all_obj()
+
+    wait_clear_search(3)
+    time.sleep(0.1)
 
 
 # these functions assume that the inventory is already open

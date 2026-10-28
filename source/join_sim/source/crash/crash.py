@@ -13,19 +13,34 @@ from source.utility import ark_input, template, utils_simple, windows
 crash_process: psutil.Process | None = None
 BATTL_EYE_REQUIRED_WINDOW_TITLE = "BattlEye Required"
 
+was_last_crash_battleye = False
+
+
+def detect_battle_eye():
+    global was_last_crash_battleye
+
+    if windows.find_window_by_title(BATTL_EYE_REQUIRED_WINDOW_TITLE):
+        logs.logger.critical("Detected Battle eye request", stack_info=True)
+        was_last_crash_battleye = True
+        join_sim.should_click = True
+        return True
+    else:
+        return False
+
 
 def detect_crash():
     global crash_process
+    global was_last_crash_battleye
+
     for proc in psutil.process_iter(attrs=["name", "exe"]):
         if proc.info["name"] == "CrashReportClient.exe":
             crash_process = proc
             logs.logger.critical("Crash detected", stack_info=True)
+            was_last_crash_battleye = False
             join_sim.should_click = True
             return True
     try:
-        if windows.find_window_by_title(BATTL_EYE_REQUIRED_WINDOW_TITLE):
-            logs.logger.critical("Crash detected", stack_info=True)
-            join_sim.should_click = True
+        if detect_battle_eye():
             return True
         if not windows.ark_hwnd():
             logs.logger.critical("ARK window was not found; treating as crashed")
@@ -73,7 +88,8 @@ def _process_running(process_name):
 
 def _wait_for_usable_ark_window():
     """Wait until ARK has a valid window, then focus it and skip the intro."""
-    dl = utils_simple.get_default_clock(60)
+    dl = utils_simple.get_default_clock()
+    should_start_ark = utils_simple.get_default_clock(3)
     last_error: RuntimeError | None = None
 
     while not dl():
@@ -86,6 +102,14 @@ def _wait_for_usable_ark_window():
             except RuntimeError as exc:
                 last_error = exc
                 logs.logger.warning(f"ARK window is not ready: {exc}")
+
+        if should_start_ark() and windows.ark_hwnd() == 0:
+            # Make sure it will start ARK continuously
+            # Because Steam might block starting ARK if it didn't update the game status and still consider running
+            logs.logger.warning("ARK window not found, attempting to start ARK again")
+            ark_game_setup.launch_ark_through_steam()
+            should_start_ark.reset()
+
         time.sleep(1)
 
     if last_error is not None:
@@ -100,7 +124,7 @@ def re_open_game():
     while True:
         close_game()
         ark_game_setup.kill_running_ark()
-        time.sleep(10)
+        time.sleep(3)
         try:
             ark_game_setup.prepare_and_launch_game()
             _wait_for_usable_ark_window()

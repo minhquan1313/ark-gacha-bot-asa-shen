@@ -1,6 +1,23 @@
 {
-  "version": "1.1.0",
-  "released_at": "2026-10-06",
-  "title": "Welcome to GBot 1.1",
-  "changelog": ["Fully rework UI to version 1.1! This update brings a complete overhaul of the user interface, making it more intuitive and user-friendly.", "More optimize to GBot", "Fix some bugs of GBot"]
+  "version": "1.1.1",
+  "released_at": "2026-10-28",
+  "title": "Fixed multiple bugs and optimize 1.1.1",
+  "changelog": [
+    "Transfer tool:",
+    "  Fix transmitter detection with new CCC window behavior",
+    "  Faster restart ARK during survior upload if crash/BattleEyes detected",
+    "  Fix bot can't detect survivor uploaded due to multiple notification",
+    "  Fix rare case when tool can stall after some actions and won't go any further",
+    "  Smarter withdraw",
+    "  Fix wrong spawn due to server save make bed appear so long",
+    "  Fix rare case where ARK won't get focused on starting, and make pause feature detect wrong",
+    "Repeative restart ARK after crash",
+    "Fix search and follow actions inventory for Gacha",
+    "Fix steam overlay can rarely happen when first joining server(misclick on Join Game button vs Dragontopia DLC ads which appear late)",
+    "Add a clock between check player buff on each check state so it will skip redundant buff check",
+    "Fixed global join sim wrong bed spawn detection(server delay, which cause player to spawn at interest points instead of beds)",
+    "Stop continously restart ARK if ark process is detected via crash detect module",
+    "Fix git ownership error may appear when automatic update check",
+    "Format code :>"
+  ]
 }

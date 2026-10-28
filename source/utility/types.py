@@ -193,6 +193,7 @@ RoiRegionKey: TypeAlias = Literal[
     "transmitter_server_fail_connection",
     "transmitter_server_fail_attempting",
     "transmitter_inv",
+    "transmitter_inv_w_ccc",
     "transmitter_server_menu",
     "transmitter_server_search",
     "steam_launch_option",
@@ -238,6 +239,8 @@ RoiRegionReconKey: TypeAlias = Literal[
     "connection_timeout",
     "search",
     "download",
+    "download_1_character",
+    "download_1_character_grey",
     "beds_title",
     "tribelog_check",
     "network_failure",
@@ -249,6 +252,7 @@ RoiRegionReconKey: TypeAlias = Literal[
     "join_game_5_gen1",
     "req_mods_loading",
     "pause_menu",
+    "steam_overlay",
 ]
 
 # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

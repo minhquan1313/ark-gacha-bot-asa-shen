@@ -213,6 +213,7 @@ class RenderStation(BaseTask):
         global berry_station
         # setting to true as we will be away for mostlikly for a few hours
         berry_station = True
+        player_state.should_check_buff.force_timed_out()
 
         if not source.gacha_bot.render.render_flag:
             logs.logger.debug(f"render flag{render.render_flag} we are trying to get into the pod now")

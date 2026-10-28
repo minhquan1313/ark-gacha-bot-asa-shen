@@ -37,6 +37,8 @@ data = {
     "back_button_tp_y": 963,
     "cancel_name_tp_x": 1073,
     "cancel_name_tp_y": 760,
+    "download_player_x": 450,
+    "download_player_y": 940,
 }
 
 

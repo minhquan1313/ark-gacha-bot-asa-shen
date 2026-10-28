@@ -622,6 +622,8 @@ class ServerTransferHelper(WorkerHelperWindow):
 
         self.running_log.clear()
         self.transfer_task_snapshot = {
+            "destination_dedi_count": 0,
+            "destination_dedi_total": len(config["dedis"]["destination"]["items"]),
             "running": [{"name": "Loading server transfer modules"}],
             "active": [],
             "waiting": [],
@@ -671,6 +673,8 @@ class ServerTransferHelper(WorkerHelperWindow):
             "running": [{"name": "Preparing transfer"}],
             "active": [],
             "waiting": [],
+            "destination_dedi_count": self.transfer_task_snapshot.get("destination_dedi_count", 0),
+            "destination_dedi_total": self.transfer_task_snapshot.get("destination_dedi_total", 0),
         }
         if self.transfer_overlay is not None:
             self.transfer_overlay.stop_button.setText("STOP")
@@ -715,6 +719,7 @@ class ServerTransferHelper(WorkerHelperWindow):
             return
         try:
             if self.starting:
+                overlay.update_destination_progress(self.transfer_task_snapshot)
                 overlay.refresh_loading()
                 return
             overlay.refresh(self.transfer_task_snapshot, self.helper_log_lines)
