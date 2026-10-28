@@ -141,9 +141,9 @@ class ServerTransferHelperUiTests(unittest.TestCase):
             self.assertFalse(helper.running_widget.isHidden())
             self.assertIsNotNone(overlay)
             self.assertEqual(overlay.width(), RUNNER_WIDTH)
-            self.assertEqual(overlay.header_title.text(), "Transfer GBot")
+            self.assertEqual(overlay.header_title.text(), "TransGbot[0/0]")
             self.assertLessEqual(
-                overlay.header_title.fontMetrics().horizontalAdvance("Transfer GBot"),
+                overlay.header_title.fontMetrics().horizontalAdvance("TransGbot[0/0]"),
                 overlay.header_title.width(),
             )
             self.assertFalse(overlay.isHidden())

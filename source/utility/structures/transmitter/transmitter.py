@@ -19,7 +19,7 @@ def get_pixel_loc(location):
 
 
 def is_open():
-    return template.check_template("transmitter_inv", 0.7)
+    return template.check_template("transmitter_inv", 0.7) or template.check_template("transmitter_inv_w_ccc", 0.7)
 
 
 def is_open_ready():

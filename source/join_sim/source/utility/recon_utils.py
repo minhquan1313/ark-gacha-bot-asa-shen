@@ -34,19 +34,10 @@ location: dict[RoiRegionReconKey, RoiRegion] = {
     "tribelog_check": {"start_x": 680, "start_y": 26, "width": 574, "height": 113},
     "network_failure": {"start_x": 787, "start_y": 337, "width": 225, "height": 53},
     "is_logging": {"start_x": 65, "start_y": 75, "width": 180, "height": 60},
-    "server_list_loaded": {
-        "start_x": 90,
-        "start_y": 300,
-        "width": 40,
-        "height": 180,
-    },
-    "term_and_conditions": {
-        "start_x": 567,
-        "start_y": 307,
-        "width": 784,
-        "height": 420,
-    },
+    "server_list_loaded": {"start_x": 90, "start_y": 300, "width": 40, "height": 180},
+    "term_and_conditions": {"start_x": 567, "start_y": 307, "width": 784, "height": 420},
     "pause_menu": {"start_x": 700, "start_y": 280, "width": 520, "height": 780},
+    "steam_overlay": {"start_x": 1670, "start_y": 6, "width": 246, "height": 85},
 }
 
 
@@ -70,12 +61,12 @@ def template_await_true(func, sleep_amount: float, *args):
     return func(*args)
 
 
-def template_await_false(func, sleep_amount: float, *args):
+def template_await_false(func, timeout: float, *args):
     count = 0
     v = func(*args)
     while v:
         v = func(*args)
-        if count >= sleep_amount * 20:
+        if count >= timeout * 20:
             break
         time.sleep(0.05)
         count += 1

@@ -1,6 +1,5 @@
 import time
 
-from source.ASA.player import player_state
 from source.ASA.strucutres import bed
 from source.join_sim.source import main as join_sim
 from source.join_sim.source.logs import logger as logs
@@ -9,7 +8,8 @@ from source.utility import utils
 
 
 def bed_spawn():
-    return bed.is_open() if not player_state.uploaded else bed.is_open_respawn()
+    return bed.is_open_respawn()
+    # return bed.is_open() if not player_state.uploaded else bed.is_open_respawn()
 
 
 def has_logs():

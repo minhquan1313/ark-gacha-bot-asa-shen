@@ -400,13 +400,25 @@ class TransferRunnerOverlay(RunnerOverlay):
 
     def __init__(self, owner: object):
         super().__init__(owner)
-        self.setWindowTitle("Transfer GBot")
-        self.header_title.setText("Transfer GBot")
+        self.update_destination_progress(getattr(owner, "transfer_task_snapshot", {}))
         header_layout = self.header_frame.layout()
         if header_layout is not None:
             header_layout.setSpacing(4)
         self._resize_to_content_height()
         self._position_set()
+
+    def update_destination_progress(self, snapshot: dict):
+        """Show destination progress in both the header and window title."""
+        count = snapshot.get("destination_dedi_count", 0)
+        total = snapshot.get("destination_dedi_total", 0)
+        title = f"TransGbot[{count}/{total}]"
+        self.setWindowTitle(title)
+        self.header_title.setText(title)
+
+    def refresh(self, snapshot: dict, log_lines: list[str] | None = None):
+        """Refresh the title alongside the existing transfer task and log UI."""
+        self.update_destination_progress(snapshot)
+        super().refresh(snapshot, log_lines)
 
     def stop_program(self):
         """Delegate STOP to the transfer helper that owns the worker process."""

@@ -112,6 +112,22 @@ def search_and_transfer(item: str):
     time.sleep(0.1)
 
 
+def search_and_drop(item: str):
+    if not is_open():
+        return
+    search_in_inventory(item)
+    time.sleep(0.1)
+
+    while is_clear_search():
+        search_in_inventory(item)
+        time.sleep(0.1)
+
+    drop_all_inv()
+
+    wait_clear_search(3)
+    time.sleep(0.1)
+
+
 # these functions assume that the inventory is already open
 def search_in_inventory(item: str):
     if is_open():

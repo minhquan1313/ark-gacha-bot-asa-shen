@@ -1,15 +1,23 @@
 @echo off
+setlocal EnableExtensions
 cd /d "%~dp0"
+set "SETUP_MODE=%~1"
 
 :: check if python is installed
 echo Checking Python...
+set "PYTHON_COMMAND=python"
 python --version >nul 2>&1
 
 if errorlevel 1 (
+  set "PYTHON_COMMAND=py"
   py --version >nul 2>&1
 )
 
 if errorlevel 1 (
+  if /I "%SETUP_MODE%"=="/update" (
+    echo Python not installed. Run setup.bat manually first.
+    exit /b 1
+  )
   :: python is not installed
   echo Python not installed, downloading installer...
   powershell -c "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.1/python-3.11.1-amd64.exe' -OutFile '%TEMP%\python-3.11.1.exe'"
@@ -31,6 +39,10 @@ if errorlevel 1 (
 where git >nul 2>&1
 
 if errorlevel 1 (
+  if /I "%SETUP_MODE%"=="/update" (
+    echo Git not installed. Run setup.bat manually first.
+    exit /b 1
+  )
   echo Git not installed, downloading installer...
   powershell -c "$release = Invoke-RestMethod -Uri 'https://api.github.com/repos/git-for-windows/git/releases/latest'; $asset = $release.assets | Where-Object { $_.name -match '^Git-.*-64-bit\.exe$' } | Select-Object -First 1; if (-not $asset) { throw 'Git installer asset not found.' }; Invoke-WebRequest -Uri $asset.browser_download_url -OutFile '%TEMP%\git-installer.exe'"
   
@@ -61,10 +73,10 @@ if errorlevel 1 (
 :: create virtual environment
 if not exist "venv" (
   echo venv not exist, creating...
-  py -m venv venv
+  %PYTHON_COMMAND% -m venv venv
   if errorlevel 1 (
     echo Failed to create virtual environment with Python. Ensure Python is installed and accessible.
-    pause
+    if /I not "%SETUP_MODE%"=="/update" pause
     exit /b 1
   )
   
@@ -74,13 +86,16 @@ if not exist "venv" (
 )
 
 call venv\Scripts\activate.bat
+if errorlevel 1 exit /b 1
 
 python -m pip install --upgrade pip
+if errorlevel 1 exit /b 1
 
 echo Installing dependencies...
 python -m pip install -r requirements.txt
+if errorlevel 1 exit /b 1
 
 echo Setup finished.
-pause
+if /I not "%SETUP_MODE%"=="/update" pause
 
-exit
+exit /b 0

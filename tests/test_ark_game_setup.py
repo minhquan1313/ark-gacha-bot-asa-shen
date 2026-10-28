@@ -355,6 +355,22 @@ class ArkGameSetupTests(unittest.TestCase):
             creationflags=getattr(ark_game_setup.subprocess, "CREATE_NO_WINDOW", 0),
         )
 
+    def test_kill_running_ark_returns_false_after_timeout(self):
+        with patch(
+            "source.launcher.ark_game_setup.subprocess.run",
+            side_effect=ark_game_setup.subprocess.TimeoutExpired("taskkill", 5),
+        ) as run:
+            self.assertFalse(ark_game_setup.kill_running_ark(5))
+
+        run.assert_called_once_with(
+            ["taskkill", "/f", "/im", ark_game_setup.ARK_PROCESS_NAME],
+            timeout=5,
+            check=False,
+            stdout=ark_game_setup.subprocess.DEVNULL,
+            stderr=ark_game_setup.subprocess.DEVNULL,
+            creationflags=getattr(ark_game_setup.subprocess, "CREATE_NO_WINDOW", 0),
+        )
+
     def test_clear_restore_state_removes_state_and_backup(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

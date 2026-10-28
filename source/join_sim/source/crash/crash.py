@@ -89,6 +89,7 @@ def _process_running(process_name):
 def _wait_for_usable_ark_window():
     """Wait until ARK has a valid window, then focus it and skip the intro."""
     dl = utils_simple.get_default_clock()
+    should_start_ark = utils_simple.get_default_clock(3)
     last_error: RuntimeError | None = None
 
     while not dl():
@@ -101,6 +102,14 @@ def _wait_for_usable_ark_window():
             except RuntimeError as exc:
                 last_error = exc
                 logs.logger.warning(f"ARK window is not ready: {exc}")
+
+        if should_start_ark() and windows.ark_hwnd() == 0:
+            # Make sure it will start ARK continuously
+            # Because Steam might block starting ARK if it didn't update the game status and still consider running
+            logs.logger.warning("ARK window not found, attempting to start ARK again")
+            ark_game_setup.launch_ark_through_steam()
+            should_start_ark.reset()
+
         time.sleep(1)
 
     if last_error is not None:
@@ -115,7 +124,7 @@ def re_open_game():
     while True:
         close_game()
         ark_game_setup.kill_running_ark()
-        time.sleep(10)
+        time.sleep(3)
         try:
             ark_game_setup.prepare_and_launch_game()
             _wait_for_usable_ark_window()

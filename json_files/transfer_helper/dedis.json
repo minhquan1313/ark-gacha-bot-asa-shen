@@ -5,94 +5,17 @@
     "items": [
       {
         "location": {
-          "yaw": -169.46,
-          "pitch": -42.31
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -170.92,
-          "pitch": -16.14
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -172.26,
-          "pitch": 15.37
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 133.14,
-          "pitch": 21.49
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 132.44,
-          "pitch": -22.61
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 131.39,
-          "pitch": -37.3
+          "yaw": 111.6,
+          "pitch": -21.91
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": 75.57,
-          "pitch": -21.03
+          "yaw": 110.02,
+          "pitch": 8.72
         },
         "crouched": true
-      },
-      {
-        "location": {
-          "yaw": 75.75,
-          "pitch": -17.18
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 76.97,
-          "pitch": 12.92
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 18.7,
-          "pitch": 15.19
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 20.8,
-          "pitch": -14.38
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 18.7,
-          "pitch": -35.38
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -47.44,
-          "pitch": -7.21
-        },
-        "crouched": false
       }
     ]
   },
@@ -102,94 +25,17 @@
     "items": [
       {
         "location": {
-          "yaw": 44.68,
-          "pitch": -42.31
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 43.22,
-          "pitch": -16.14
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 41.88,
-          "pitch": 15.37
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -12.72,
-          "pitch": 21.49
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -13.42,
-          "pitch": -22.61
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -14.47,
-          "pitch": -37.3
+          "yaw": 73.34,
+          "pitch": -21.91
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": -70.29,
-          "pitch": -21.03
+          "yaw": 71.76,
+          "pitch": 8.72
         },
         "crouched": true
-      },
-      {
-        "location": {
-          "yaw": -70.11,
-          "pitch": -17.18
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -68.89,
-          "pitch": 12.92
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -127.16,
-          "pitch": 15.19
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -125.06,
-          "pitch": -14.38
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": -127.16,
-          "pitch": -35.38
-        },
-        "crouched": false
-      },
-      {
-        "location": {
-          "yaw": 166.7,
-          "pitch": -7.21
-        },
-        "crouched": false
       }
     ]
   }

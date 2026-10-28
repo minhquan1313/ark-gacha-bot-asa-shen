@@ -57,23 +57,21 @@ def drop_off_nocrop(teleporter_name: str, direction: str, collection_item: str =
             _drop_off_nocrop(teleporter_name, direction, collection_item)
         # -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
         if collection_item:
-            player_inventory.search_in_inventory(settings.berry_type)
-        player_inventory.transfer_all_inventory()
+            player_inventory.search_and_transfer(settings.berry_type)
+        else:
+            player_inventory.transfer_all_inventory()
         capture_gacha_seed_deposit(f"{teleporter_name}_{direction}")
     inventory.close()
 
 
 def _drop_off_nocrop(teleporter_name: str, direction: str, collection_item: str = ""):
-    if collection_item:
-        inventory.search_in_object(collection_item)
-    else:
-        inventory.search_in_object("pell")
-    inventory.transfer_all_from()
-    inventory.wait_clear_search()
+    item = collection_item if collection_item else "pell"
+    inventory.search_and_transfer(item)
 
     capture_gacha_overcap_before_drop(f"{teleporter_name}_{direction}")
     time.sleep(0.1)
 
     if collection_item:
-        inventory.search_in_object(settings.berry_type)
-    inventory.drop_all_obj()
+        inventory.search_and_drop(settings.berry_type)
+    else:
+        inventory.drop_all_obj()

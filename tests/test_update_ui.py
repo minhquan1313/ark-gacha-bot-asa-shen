@@ -122,6 +122,17 @@ class UpdateUiTests(unittest.TestCase):
         SettingsGUI._automatic_update_check(launcher)
         launcher._start_update_check.assert_called_once_with(automatic=True)
 
+    def test_automatic_check_failure_keeps_error_dialog(self):
+        """Continue reporting genuine background check failures through the error dialog."""
+        launcher = self.make_launcher()
+        current = UpdateManifest("1.0.0", "", "", ())
+        result = UpdateCheckResult(current, current, False, "network unavailable")
+
+        SettingsGUI._on_update_check_finished(launcher, result, True)
+
+        launcher.toast.assert_called_once_with("network unavailable", "error")
+        launcher.update_action_button.setEnabled.assert_called_with(True)
+
     def test_failed_attempt_and_manual_check_share_the_daily_schedule(self):
         launcher = self.make_launcher()
         launcher.update_check_in_progress = False

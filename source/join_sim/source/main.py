@@ -11,6 +11,7 @@ from source.join_sim.source.menus import (
     success,
 )
 from source.join_sim.source.utility import recon_utils
+from source.launcher.utils import deposit_helper_capture
 from source.utility import ark_input, utils_simple, windows
 
 was_in_mainmenu = False
@@ -49,6 +50,12 @@ def join_round(server: str):
 
     if should_click:
         # This click will skip game intro
+        try:
+            deposit_helper_capture.focus_game_window()
+        except RuntimeError:
+            logs.logger.error("Unable to focus game window")
+            return False
+
         ark_input.click(2, 2)
     else:
         ark_input.move_to(2, 2)
@@ -60,8 +67,10 @@ def join_round(server: str):
         time.sleep(0.5)
         logs.logger.debug("Maybe joined server...")
         return success.joined_server()  # if we arent in the menu we need to restart
-
     was_in_mainmenu = True
+
+    if start_menu.click_start():
+        time.sleep(0.5)
 
     if not recon_utils.template_await_false(is_logging_in, 10.0):
         if was_logging_in:
@@ -71,13 +80,8 @@ def join_round(server: str):
         logs.logger.error("Game failed to log in")
         return False
 
-    if start_menu.click_start():
-        time.sleep(0.5)
-
     if join_game_menu.click_join_game():
         time.sleep(0.5)
-    if was_logging_in:
-        time.sleep(3)
 
     if multiplayer_menu.join_server(server):
         should_click = False
