@@ -92,7 +92,7 @@ if errorlevel 1 (
   echo Setup failed. The app was not restarted. See the update log and rerun updater.bat.
   endlocal & exit /b 1
 )
-call "%~dp0run.bat"
+@REM  call "%~dp0run.bat"
 set "RESTART_EXIT=!ERRORLEVEL!"
 endlocal & exit /b %RESTART_EXIT%
 
