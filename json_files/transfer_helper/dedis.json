@@ -5,15 +5,85 @@
     "items": [
       {
         "location": {
-          "yaw": 111.6,
-          "pitch": -21.91
+          "yaw": -163.86,
+          "pitch": -20.16
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": 110.02,
-          "pitch": 8.72
+          "yaw": -169.29,
+          "pitch": 11.87
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -167.01,
+          "pitch": 18.69
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 132.27,
+          "pitch": 25.16
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 132.97,
+          "pitch": -26.28
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 132.97,
+          "pitch": -38.35
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 71.55,
+          "pitch": -20.16
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 69.97,
+          "pitch": 11.34
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 68.05,
+          "pitch": 20.44
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 22.2,
+          "pitch": 19.39
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 25.88,
+          "pitch": -12.46
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 23.95,
+          "pitch": -18.41
         },
         "crouched": true
       }
@@ -25,15 +95,85 @@
     "items": [
       {
         "location": {
-          "yaw": 73.34,
-          "pitch": -21.91
+          "yaw": 87.89,
+          "pitch": -20.16
         },
         "crouched": true
       },
       {
         "location": {
-          "yaw": 71.76,
-          "pitch": 8.72
+          "yaw": 82.46,
+          "pitch": 11.87
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": 84.74,
+          "pitch": 18.69
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 24.02,
+          "pitch": 25.16
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 24.72,
+          "pitch": -26.28
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": 24.72,
+          "pitch": -38.35
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -36.7,
+          "pitch": -20.16
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -38.28,
+          "pitch": 11.34
+        },
+        "crouched": true
+      },
+      {
+        "location": {
+          "yaw": -40.2,
+          "pitch": 20.44
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -86.05,
+          "pitch": 19.39
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -82.37,
+          "pitch": -12.46
+        },
+        "crouched": false
+      },
+      {
+        "location": {
+          "yaw": -84.3,
+          "pitch": -18.41
         },
         "crouched": true
       }
