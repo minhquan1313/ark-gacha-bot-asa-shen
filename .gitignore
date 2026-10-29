@@ -19,3 +19,5 @@ logs.txt
 plan.drawio
 source/logs/launcher_startup.log
 source/logs/updater.log
+
+json_files/*.json
