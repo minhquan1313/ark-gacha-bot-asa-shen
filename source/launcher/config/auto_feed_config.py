@@ -62,6 +62,8 @@ def load_auto_feed() -> dict:
     """Load and normalize the persisted Auto Baby Feeding configuration."""
     try:
         raw = json.loads(AUTO_FEED_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return save_auto_feed(DEFAULT_AUTO_FEED)
     except (OSError, json.JSONDecodeError):
         raw = DEFAULT_AUTO_FEED
     return normalize_auto_feed(raw)

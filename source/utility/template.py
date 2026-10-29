@@ -1,6 +1,7 @@
 import json
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from typing import TypeAlias
 
 import cv2
@@ -666,7 +667,10 @@ def get_file():
             if not data:
                 return []
             return json.loads(data)
-    except (json.JSONDecodeError, FileNotFoundError):
+    except FileNotFoundError:
+        set_bounds(130, 145)
+        return [{"upper_bound": 145, "lower_bound": 130}]
+    except json.JSONDecodeError:
         return []
 
 
@@ -679,6 +683,7 @@ def set_bounds(lower_bound: int, upper_bound: int):
     file_path = "json_files/console.json"
     new_bounds = [{"upper_bound": upper_bound, "lower_bound": lower_bound}]
 
+    Path(file_path).parent.mkdir(parents=True, exist_ok=True)
     with open(file_path, "w") as file:
         json.dump(new_bounds, file, indent=4)
 

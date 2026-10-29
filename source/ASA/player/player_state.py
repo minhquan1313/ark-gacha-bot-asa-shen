@@ -175,6 +175,7 @@ def check_state(*, crouch=True, should_replesh=True, should_wait_structure=True)
     logs.logger.debug("Checking player buff")
 
     if should_check_buff():
+        should_check_buff.reset()
         buff = buffs.check_buffs()
         type = buff.check_buffs()
         if type == 1 or source.gacha_bot.render.render_flag:

@@ -1,8 +1,15 @@
 {
-  "version": "1.1.1",
-  "released_at": "2026-10-28",
-  "title": "Fixed multiple bugs and optimize 1.1.1",
+  "version": "1.1.2",
+  "released_at": "2026-10-29",
+  "title": "Fixed multiple bugs and optimize 1.1.2",
   "changelog": [
+    "1.1.2",
+    "Minor fixes:",
+    "Pause game menu being triggered on console esc when game stall for a short duration",
+    "Added missed reset clock of should check buff from previous feature",
+    "Fix missing json files on fresh installation",
+    "---",
+    "1.1.1",
     "Transfer tool:",
     "  Fix transmitter detection with new CCC window behavior",
     "  Faster restart ARK during survior upload if crash/BattleEyes detected",

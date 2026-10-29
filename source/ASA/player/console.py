@@ -66,21 +66,26 @@ def console_reset():
     # add "?" -> "ccc?" then we submit, that's a wrong console command so it execute nothing -> SAFE RESET CONSOLE
     utils.write("?")
     time.sleep(0.1)
-
     utils.press_key("Enter")
 
     was_still_open = False
-    for _ in range(2):
-        if template.template_await_false(is_open, 0.5):
+    i = 2
+    for _ in range(i):
+        if template.template_await_false(is_open, 1):
             # MIDDLE CONSOLE IS TRIGGERED FROM THE PRESS KEY ABOVE
             # But be careful, it might still there if middle console was having value
             # ex "ccc" -> press Esc -> "" but console still there
-            utils.press_key("Escape")
-            time.sleep(0.2)
+            if _ == i - 1:
+                utils.press_key("Escape")
+            else:
+                utils.write("?")
+                time.sleep(0.1)
+                utils.press_key("Enter")
+            time.sleep(0.3)
             was_still_open = True
 
     if not was_still_open:
-        time.sleep(0.2)
+        time.sleep(0.3)
 
 
 def console_exit_mainmenu():

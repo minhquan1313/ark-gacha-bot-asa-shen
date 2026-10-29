@@ -2,6 +2,7 @@ import heapq
 import json
 import time
 from itertools import count
+from pathlib import Path
 from threading import Lock
 
 import source.gacha_bot.stations as stations
@@ -188,7 +189,12 @@ def load_resolution_data(file_path):
                 logs.logger.warning(f"warning: {file_path} is empty no tasks added.")
                 return []
             return json.loads(data)
-    except (json.JSONDecodeError, FileNotFoundError) as e:
+    except FileNotFoundError:
+        path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("[]\n", encoding="utf-8")
+        return []
+    except json.JSONDecodeError as e:
         print(f"error loading JSON from {file_path}: {e}")
         return []
 

@@ -16,6 +16,7 @@ def load_vault_items(deposit_config: DepositConfig | None = None, path: str | Pa
         if isinstance(data, list):
             items.extend(str(item).strip() for item in data if str(item).strip())
     else:
+        save_vault_items(DEFAULT_VAULT_ITEMS, path)
         items.extend(DEFAULT_VAULT_ITEMS)
 
     items.extend(_deposit_config_items(deposit_config))
