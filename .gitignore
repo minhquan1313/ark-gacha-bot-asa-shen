@@ -11,13 +11,13 @@ __pycache__
 debug_screenshots
 debug_template
 .codegraph/daemon.pid
-json_files/GameUserSettings.ini.backup
-json_files/ark_start_game_restore.json
-json_files/transfer_helper
 log.txt
 logs.txt
 plan.drawio
 source/logs/launcher_startup.log
 source/logs/updater.log
 
-json_files/*.json
+json_files/*
+!json_files/template_settings/
+json_files/template_settings/*
+!json_files/template_settings/Default_Official_GBot.json

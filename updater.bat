@@ -25,7 +25,7 @@ if not defined GIT_CONFIG_COUNT set "GIT_CONFIG_COUNT=0"
 set "GIT_CONFIG_KEY_%GIT_CONFIG_COUNT%=safe.directory"
 set "GIT_CONFIG_VALUE_%GIT_CONFIG_COUNT%=%CD:\=/%"
 set /a GIT_CONFIG_COUNT+=1 >nul
-set "BRANCH=stable_before_qml"
+set "BRANCH=stable_to_play"
 set "REMOTE_URL=https://github.com/minhquan1313/ark-gacha-bot-asa-shen.git"
 
 if not exist ".git\" (
